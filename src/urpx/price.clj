@@ -120,33 +120,46 @@
   [^LocalDate a ^LocalDate b]
   (not (.isAfter a b)))
 
-(defn- active-prices-by-pd
-  "Build a map from PriceDefinition id to the active Price (the one with the
-   most recent effective start-date that is <= `query-date`).
-
-   Effective start-date for a Price is its own :urpx/startDate, falling back
-   to its enclosing PriceSet's :urpx/startDate when present."
+(defn- scoped-prices
+  "Return a seq of [price effective-start-date] pairs for every Price under
+   `prices` whose effective start-date is <= `query-date`. Walks both the
+   flat :urpx/hasPrice list and PriceSet-nested prices; PriceSet startDate
+   scopes contained Prices when they don't carry their own."
   [prices ^LocalDate query-date]
-  (let [pairs (concat
-               ;; Flat top-level prices
-               (keep (fn [p]
-                       (when-let [sd (:urpx/startDate p)]
-                         (when (not-after? sd query-date) [p sd])))
-                     (:urpx/hasPrice prices))
-               ;; Prices nested under PriceSets (PriceSet startDate scopes the set)
-               (mapcat (fn [ps]
-                         (let [sd (:urpx/startDate ps)]
-                           (when (and sd (not-after? sd query-date))
-                             (map (fn [p] [p (or (:urpx/startDate p) sd)])
-                                  (:urpx/hasPrice ps)))))
-                       (:urpx/hasPriceSet prices)))]
-    (reduce (fn [acc [price sd]]
-              (let [pd-id (get-in price [:urpx/referencesPriceDefinition :jsonld/id])
-                    [_ existing-sd] (acc pd-id)]
-                (if (or (nil? existing-sd) (.isAfter sd existing-sd))
-                  (assoc acc pd-id [price sd])
-                  acc)))
-            {} pairs)))
+  (concat
+   (keep (fn [p]
+           (when-let [sd (:urpx/startDate p)]
+             (when (not-after? sd query-date) [p sd])))
+         (:urpx/hasPrice prices))
+   (mapcat (fn [ps]
+             (let [sd (:urpx/startDate ps)]
+               (when (and sd (not-after? sd query-date))
+                 (map (fn [p] [p (or (:urpx/startDate p) sd)])
+                      (:urpx/hasPrice ps)))))
+           (:urpx/hasPriceSet prices))))
+
+(defn- active-prices-by-pd
+  "Build a map from PriceDefinition id to the single active Price (the one
+   with the most recent effective start-date that is <= `query-date`)."
+  [prices ^LocalDate query-date]
+  (reduce (fn [acc [price sd]]
+            (let [pd-id (get-in price [:urpx/referencesPriceDefinition :jsonld/id])
+                  [_ existing-sd] (acc pd-id)]
+              (if (or (nil? existing-sd) (.isAfter sd existing-sd))
+                (assoc acc pd-id [price sd])
+                acc)))
+          {} (scoped-prices prices query-date)))
+
+(defn- all-active-prices-by-pd
+  "Build a map from PriceDefinition id to a vector of [price start-date]
+   pairs for every active Price referencing that PD. Used by modifier
+   resolution where matrix-style pricing (e.g. CPAU E-HRA) surfaces
+   multiple concurrent prices that the caller selects from."
+  [prices ^LocalDate query-date]
+  (reduce (fn [acc [price :as pair]]
+            (let [pd-id (get-in price [:urpx/referencesPriceDefinition :jsonld/id])]
+              (update acc pd-id (fnil conj []) pair)))
+          {} (scoped-prices prices query-date)))
 
 ;; ---------------------------------------------------------------------------
 ;; Service-tier lookup (block tiers, e.g. CPAU E-1 baseline / over-baseline)
@@ -308,6 +321,86 @@
       :urpx.resolved/tou-period-name   (:urpx/name tou-period)
       :urpx.resolved/tou-period-number period-num
       :urpx.resolved/ledgers           ledger-results})))
+
+;; ---------------------------------------------------------------------------
+;; Modifier resolution (URPX-yos)
+;; ---------------------------------------------------------------------------
+
+(defn- modifier-applies-to?
+  "True if `modifier` declares the rate plan @id `plan-id` in its
+   :urpx/applicableToRatePlan list. Returns true when `plan-id` is nil so
+   callers that don't have a plan id (e.g. resolving a modifier in isolation)
+   are not blocked."
+  [modifier plan-id]
+  (or (nil? plan-id)
+      (let [version (:urpx/hasRatePlanModifierVersion modifier)
+            refs    (:urpx/applicableToRatePlan version)]
+        (boolean (some #(= plan-id (:jsonld/id %)) refs)))))
+
+(defn- modifier-ledger-results
+  "Build a vector of LedgerResult entries for `modifier` at `query-date`.
+   Modifier ledgers don't go through TOU/season/serviceTier machinery; every
+   active Price for each PD is surfaced under :urpx.resolved/tiers so the
+   caller can pick (matrix-style modifiers like CPAU E-HRA expose all 16
+   prices and rely on caller selection)."
+  [modifier ^LocalDate query-date]
+  (let [version    (:urpx/hasRatePlanModifierVersion modifier)
+        billing    (get-in version [:urpx/hasPlanElements :urpx/hasBillingModel])
+        ledgers    (:urpx/hasLedger billing)
+        prices     (:urpx/hasPrices version)
+        pd->prices (all-active-prices-by-pd prices query-date)]
+    (vec
+     (for [ledger ledgers
+           :let [tier-entries
+                 (->> (:urpx/hasPriceDefinition ledger)
+                      (mapcat (fn [pd]
+                                (for [[price _] (pd->prices (:jsonld/id pd))]
+                                  {:urpx.resolved/price-definition-id (:jsonld/id pd)
+                                   :urpx.resolved/price-id            (:jsonld/id price)
+                                   :urpx.resolved/price-name          (:urpx/name price)
+                                   :urpx.resolved/unit-price          (:urpx/unitPrice price)})))
+                      vec)]
+           :when (seq tier-entries)]
+       {:urpx.resolved/ledger-id   (:jsonld/id ledger)
+        :urpx.resolved/ledger-name (:urpx/name ledger)
+        :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
+        :urpx.resolved/tiers       tier-entries}))))
+
+(defn resolve-modifier-prices
+  "Resolve every per-energy unit price that `modifier` (a coerced
+   urpx:RatePlanModifier) contributes at `zdt`.
+
+   Returns the same shape as `resolve-prices` minus the season/TOU keys
+   (modifier ledgers are flat add-ons): {:urpx.resolved/ledgers [...]}.
+
+   For matrix-style modifiers (e.g. CPAU E-HRA — a 4x4 matrix of reserve
+   level x generation tier driven by external state), every applicable
+   Price for each PriceDefinition is surfaced under :urpx.resolved/tiers.
+   The caller is responsible for selecting the active value because the
+   URPX condition vocabulary (operator + label conditionValue) is not
+   yet specified in a way that's programmatically interpretable. Filter
+   the returned :tiers vector on :urpx.resolved/price-id."
+  [modifier ^ZonedDateTime zdt]
+  {:urpx.resolved/ledgers (modifier-ledger-results modifier (.toLocalDate zdt))})
+
+(defn resolve-prices-with-modifiers
+  "Resolve prices for `rate-plan` at `zdt` and append ledger results for
+   each modifier in `modifiers` whose :urpx/applicableToRatePlan list
+   includes the base plan's @id. Modifiers whose target lists don't include
+   the plan are silently skipped — the caller decides whether to filter
+   `:urpx/isOptional` modifiers in or out before calling.
+
+   Returns the `resolve-prices` shape with :urpx.resolved/ledgers extended
+   by the modifier ledgers."
+  ([rate-plan modifiers ^ZonedDateTime zdt] (resolve-prices-with-modifiers rate-plan modifiers zdt nil))
+  ([rate-plan modifiers ^ZonedDateTime zdt opts]
+   (let [base       (resolve-prices rate-plan zdt opts)
+         plan-id    (:jsonld/id rate-plan)
+         date       (.toLocalDate zdt)
+         extra      (mapcat #(when (modifier-applies-to? % plan-id)
+                               (modifier-ledger-results % date))
+                            modifiers)]
+     (update base :urpx.resolved/ledgers (fnil into []) extra))))
 
 (defn marginal-unit-rate
   "Sum the unit prices across all ledgers, picking the LOWEST tier in each

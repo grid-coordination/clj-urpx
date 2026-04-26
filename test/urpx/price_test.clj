@@ -165,3 +165,98 @@
                             (mapv #(assoc % :urpx/dayType {:jsonld/id "urpx:nonsense"}) bs)))
           r (price/resolve-prices plan (zdt 2026 7 15 18))]
       (is (not= 1 (:urpx.resolved/tou-period-number r))))))
+
+;; ---------------------------------------------------------------------------
+;; URPX-yos — RatePlanModifier resolution
+;; ---------------------------------------------------------------------------
+
+(def cpau-eec-path
+  "../urpx/test-cases/cpau-e-eec-1-2025-09-01/data/urpx-rate-plan-modifier_cpau_e-eec-1_2025-09-01.jsonld")
+
+(def cpau-nse-path
+  "../urpx/test-cases/cpau-e-nse-1-2025-09-01/data/urpx-rate-plan-modifier_cpau_e-nse-1_2025-09-01.jsonld")
+
+(def cpau-hra-path
+  "../urpx/test-cases/cpau-e-hra-2023-01-01/data/urpx-rate-plan-modifier_cpau_e-hra_2023-01-01.jsonld")
+
+(defn- load-modifier [path]
+  (coerce/coerce-rate-plan-modifier (core/load-rate-plan path)))
+
+(deftest eec-modifier-surfaces-single-export-compensation-price
+  (testing "EEC adds a single Export Compensation ledger with one negative price"
+    (let [eec (load-modifier cpau-eec-path)
+          ;; EEC's Price startDate is 2025-09-01; query after that date.
+          {:keys [urpx.resolved/ledgers]} (price/resolve-modifier-prices eec (zdt 2026 1 15 12))]
+      (is (= 1 (count ledgers)))
+      (let [ledger (first ledgers)
+            tier   (first (:urpx.resolved/tiers ledger))]
+        (is (= "Export Electricity Compensation" (:urpx.resolved/ledger-name ledger)))
+        (is (= 1 (count (:urpx.resolved/tiers ledger))))
+        (is (= "urpx:cpau-eec-price-export-compensation" (:urpx.resolved/price-id tier)))
+        (is (= (BigDecimal. "-0.12060") (:urpx.resolved/unit-price tier)))))))
+
+(deftest nse-modifier-surfaces-single-net-surplus-price
+  (testing "NSE adds a single Net Surplus Compensation ledger with one negative price"
+    (let [nse (load-modifier cpau-nse-path)
+          ;; NSE's Price startDate is 2025-09-01; query after that date.
+          {:keys [urpx.resolved/ledgers]} (price/resolve-modifier-prices nse (zdt 2026 1 15 12))]
+      (is (= 1 (count ledgers)))
+      (let [tier (first (:urpx.resolved/tiers (first ledgers)))]
+        (is (= (BigDecimal. "-0.10120") (:urpx.resolved/unit-price tier)))))))
+
+(deftest hra-modifier-surfaces-full-4x4-matrix
+  (testing "HRA exposes all 16 matrix prices under one ledger; caller picks by id"
+    (let [hra (load-modifier cpau-hra-path)
+          {:keys [urpx.resolved/ledgers]} (price/resolve-modifier-prices hra (zdt 2026 7 15 12))]
+      (is (= 1 (count ledgers)))
+      (let [tiers (:urpx.resolved/tiers (first ledgers))]
+        (is (= 16 (count tiers)) "4 reserve levels x 4 generation tiers")
+        (is (every? #(= "urpx:cpau-hra-pd-adjustment"
+                        (:urpx.resolved/price-definition-id %))
+                    tiers)
+            "all 16 prices reference the single Hydro Rate Adjustment PD"))
+      (testing "caller-side selection: pick Reserve <=25% / Generation < 319 GWh = $0.048"
+        (let [tier (->> (:urpx.resolved/tiers (first ledgers))
+                        (filter #(= "urpx:cpau-hra-price-below-25-gen-lt319"
+                                    (:urpx.resolved/price-id %)))
+                        first)]
+          (is (= (BigDecimal. "0.048") (:urpx.resolved/unit-price tier))))))))
+
+(deftest resolve-with-modifiers-appends-modifier-ledgers
+  (testing "Base CPAU E-1 ledgers + EEC ledger appear in the combined output"
+    (let [plan (coerce/coerce-rate-plan (core/load-rate-plan cpau-e1-path))
+          eec  (load-modifier cpau-eec-path)
+          ;; Query after EEC's 2025-09-01 effective date.
+          when-zdt (zdt 2026 1 15 12)
+          base (price/resolve-prices plan when-zdt)
+          comb (price/resolve-prices-with-modifiers plan [eec] when-zdt)
+          ledger-names (mapv :urpx.resolved/ledger-name (:urpx.resolved/ledgers comb))]
+      (is (= (inc (count (:urpx.resolved/ledgers base)))
+             (count (:urpx.resolved/ledgers comb))))
+      (is (some #{"Export Electricity Compensation"} ledger-names)))))
+
+(deftest modifier-not-applicable-to-plan-is-skipped
+  (testing "A modifier whose applicableToRatePlan does not list the base plan
+            @id contributes no ledgers"
+    (let [plan (coerce/coerce-rate-plan (core/load-rate-plan cpau-e1-path))
+          eec-base (load-modifier cpau-eec-path)
+          eec (assoc-in eec-base
+                        [:urpx/hasRatePlanModifierVersion :urpx/applicableToRatePlan]
+                        [{:jsonld/id "urpx:not-this-plan"}])
+          when-zdt (zdt 2026 1 15 12)
+          base (price/resolve-prices plan when-zdt)
+          comb (price/resolve-prices-with-modifiers plan [eec] when-zdt)]
+      (is (= (count (:urpx.resolved/ledgers base))
+             (count (:urpx.resolved/ledgers comb)))))))
+
+(deftest hra-modifier-applies-to-both-cpau-e1-and-cpau-e1-tou
+  (testing "HRA's applicableToRatePlan list contains both CPAU base plans"
+    (let [hra (load-modifier cpau-hra-path)
+          plan-e1     (coerce/coerce-rate-plan (core/load-rate-plan cpau-e1-path))
+          plan-e1-tou (coerce/coerce-rate-plan (core/load-rate-plan cpau-tou-path))
+          on-e1     (price/resolve-prices-with-modifiers plan-e1     [hra] (zdt 2026 1 15 12))
+          on-e1-tou (price/resolve-prices-with-modifiers plan-e1-tou [hra] (zdt 2026 7 15 17))]
+      (is (some #(= "Hydro Rate Adjustment" (:urpx.resolved/ledger-name %))
+                (:urpx.resolved/ledgers on-e1)))
+      (is (some #(= "Hydro Rate Adjustment" (:urpx.resolved/ledger-name %))
+                (:urpx.resolved/ledgers on-e1-tou))))))

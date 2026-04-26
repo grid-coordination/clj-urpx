@@ -75,7 +75,7 @@ For block-tiered plans (e.g. CPAU E-1), each ledger's `:tiers` vector exposes ev
 
 ### Holiday calendar
 
-If a rate plan uses `urpx:holiday` day-type brackets, pass a `:holiday?` predicate (`LocalDate -> bool`) so resolution can decide which dates count. A plain set of `LocalDate`s works because sets are functions:
+URPX `TimeBracket` carries two optional booleans — `urpx:includeHolidays` and `urpx:includeNonHolidays` — that gate whether the bracket applies on holidays, non-holidays, or both (both default to `true` when omitted, matching every day). To resolve a plan that uses these gates (e.g. PG&E E-TOU-D's "weekday peak EXCLUDING holidays" pattern), pass a `:holiday?` predicate (`LocalDate -> bool`). A plain set of `LocalDate`s works because sets are functions:
 
 ```clojure
 (import '[java.time LocalDate])
@@ -96,7 +96,24 @@ If a rate plan uses `urpx:holiday` day-type brackets, pass a `:holiday?` predica
 (schedule/price-schedule plan start end la {:holiday? us-federal-2026})
 ```
 
-You can also pass any `(LocalDate -> bool)` function — e.g. wrap a calendar service. Without `:holiday?`, `urpx:holiday` brackets never match.
+You can also pass any `(LocalDate -> bool)` function — e.g. wrap a calendar service. Without `:holiday?`, every date is treated as a non-holiday — so brackets that opt out of non-holidays (`includeNonHolidays: false`, e.g. holiday-only off-peak overrides) will never match.
+
+### Modifiers
+
+`urpx:RatePlanModifier` documents (export adders, net-surplus rates, hardship/seasonal adjusters) augment a base plan. Resolve them alongside the plan with `resolve-prices-with-modifiers`:
+
+```clojure
+(def eec
+  (-> "test-cases/cpau-e-eec-1-2025-09-01/data/urpx-rate-plan-modifier_cpau_e-eec-1_2025-09-01.jsonld"
+      core/load-rate-plan
+      coerce/coerce-rate-plan-modifier))
+
+(price/resolve-prices-with-modifiers plan [eec] zdt)
+;; => the resolve-prices output, with each applicable modifier's ledgers
+;;    appended to :urpx.resolved/ledgers
+```
+
+A modifier is skipped silently when its `:urpx/applicableToRatePlan` list does not include the base plan's `@id`; `:urpx/isOptional` is informational and the caller decides whether to include the modifier in the call. Matrix-style modifiers (e.g. CPAU E-HRA — a 4×4 reserve-level × generation-tier matrix) surface every active price under one ledger entry; the caller picks the active value via `:urpx.resolved/price-id` because URPX condition vocabulary is not yet specified in a way that's programmatically interpretable.
 
 ### Sub-hour granularity
 
@@ -117,21 +134,22 @@ Adjacent steps with identical resolved ledgers are still merged, so a quarter-ho
 | `urpx.schema`    | Malli schemas for the coerced URPX entity model |
 | `urpx.coerce`    | Schema-driven coercion: strings → typed values; `validate`, `explain` |
 | `urpx.index`     | `build-index`, `resolve-ref`, `get-entity` for `@id` references |
-| `urpx.price`     | `resolve-prices`, `marginal-unit-rate` |
+| `urpx.price`     | `resolve-prices`, `resolve-modifier-prices`, `resolve-prices-with-modifiers`, `marginal-unit-rate` |
 | `urpx.schedule`  | `price-schedule`, `price-schedule-days` |
 
 ## Status
 
 Currently covered:
-- Both top-level document types: `urpx:RatePlan` (CPAU E-1 TOU, CPAU E-1 non-TOU, PG&E E-ELEC) and `urpx:RatePlanModifier` (EEC, NSE, HRA) parse, coerce, and validate
-- TOU period resolution: seasons, day-types (`urpx:allDays`, `urpx:weekday`, `urpx:weekend`, `urpx:holiday`), time-bracket containment with midnight wrap
+- Both top-level document types: `urpx:RatePlan` (CPAU E-1 TOU, CPAU E-1 non-TOU, PG&E E-ELEC, PG&E E-TOU-D) and `urpx:RatePlanModifier` (EEC, NSE, HRA) parse, coerce, and validate
+- TOU period resolution: seasons, ontology day-types (`urpx:allDays`, `urpx:weekdayDays`, `urpx:weekendDays`, `urpx:customDays`), `urpx:includeHolidays` / `urpx:includeNonHolidays` bracket gates, time-bracket containment with midnight wrap
 - Block-tier surfacing with bounds and bound operators
 - Flat per-energy charges (distribution, public benefits)
 - Active-price selection by latest `startDate ≤ query-date`, drawing from both flat top-level prices and `PriceSet`-scoped prices
+- `urpx:RatePlanModifier` resolution alongside the base plan (EEC, NSE, HRA) — modifier ledgers appended to the resolved output, with matrix-style prices surfaced for caller selection
 - Configurable schedule step (hourly default; sub-hour available via `:step`)
 
 Known gaps:
-- Price resolution against a `urpx:RatePlanModifier` — modifier schemas are in place, but combining a modifier's overrides with its base plan during resolution is not yet implemented
+- Programmatic interpretation of `urpx:Condition` operator + label `conditionValue` for matrix-style modifier price selection — currently the caller picks active values by `price-id`
 
 ## Development
 
