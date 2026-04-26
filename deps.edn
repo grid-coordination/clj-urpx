@@ -1,0 +1,29 @@
+{:paths ["src" "resources"]
+ :deps {org.clojure/clojure            {:mvn/version "1.12.3"}
+        org.clojure/data.json          {:mvn/version "2.5.1"}
+
+        ;; JSON-LD parsing
+        io.github.filip26/titanium-json-ld {:mvn/version "1.4.1"}
+
+        ;; Time
+        tick/tick                       {:mvn/version "1.0"}}
+
+ :aliases {:dev {:extra-paths ["dev"]}
+
+           :build {:deps {io.github.clojure/tools.build
+                          {:git/tag "v0.10.10" :git/sha "deedd62"}
+                          slipset/deps-deploy {:mvn/version "0.2.2"}
+                          com.dcj/codox-md {:mvn/version "0.1.0"}}
+                   :ns-default build}
+
+           :nrepl {:extra-paths ["dev"]
+                   :extra-deps {nrepl/nrepl {:mvn/version "1.6.0"}
+                                cider/cider-nrepl {:mvn/version "0.50.3"}
+                                com.dcj/clj-doc-browse {:mvn/version "0.1.0"}}
+                   :jvm-opts ["-Djdk.attach.allowAttachSelf"]
+                   :main-opts ["-m" "nrepl.cmdline" "--port" "7893"
+                               "--middleware" "[cider.nrepl/cider-middleware]"]}
+
+           :test {:extra-paths ["test"]
+                  :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
+                  :main-opts ["-m" "kaocha.runner" "--config-file" "tests.edn"]}}}
