@@ -327,3 +327,41 @@
    [:urpx/name :string]
    [:urpx/initialEffectiveDate Date]
    [:urpx/hasRatePlanVersion RatePlanVersion]])
+
+;; ---------------------------------------------------------------------------
+;; Modifier — augments / overrides parts of an existing RatePlan
+;; ---------------------------------------------------------------------------
+
+(def RatePlanModifierVersion
+  [:map
+   [:jsonld/type [:= "urpx:RatePlanModifierVersion"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/modifierIdentifier    {:optional true} :string]
+   [:urpx/modifierVersionNumber {:optional true} :string]
+   [:urpx/versionNumber         {:optional true} :string]
+   [:urpx/changeReason          {:optional true} Ref]
+   [:urpx/description           {:optional true} :string]
+   [:urpx/effectiveDateTime DateTime]
+   [:urpx/priceCurrency :string]
+   [:urpx/commodity   {:optional true} Ref]
+   [:urpx/serviceRole {:optional true} Ref]
+   [:urpx/publishedBy {:optional true} Organization]
+   [:urpx/hasDataSourceReference {:optional true} DataSourceReference]
+   [:urpx/hasEligibilityRule     {:optional true} [:vector EligibilityRule]]
+   ;; Single Ref (one base plan) or a vector of Refs (NSE/HRA modify multiple plans)
+   [:urpx/applicableToRatePlan
+    {:decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/hasPlanElements PlanElements]
+   [:urpx/hasPrices       Prices]])
+
+(def RatePlanModifier
+  [:map
+   [:jsonld/type [:= "urpx:RatePlanModifier"]]
+   [:jsonld/id {:optional true} :string]
+   [:jsonld/context {:optional true} :map]
+   [:urpx/ratePlanIdentifier :string]
+   [:urpx/name :string]
+   [:urpx/initialEffectiveDate Date]
+   [:urpx/isOptional :boolean]
+   [:urpx/hasRatePlanModifierVersion RatePlanModifierVersion]])

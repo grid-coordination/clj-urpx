@@ -87,14 +87,14 @@ For block-tiered plans (e.g. CPAU E-1), each ledger's `:tiers` vector exposes ev
 ## Status
 
 Currently covered:
-- Top-level `urpx:RatePlan` documents — CPAU E-1 TOU, CPAU E-1 (non-TOU, block-tiered), and PG&E E-ELEC fixtures all parse and validate
+- Both top-level document types: `urpx:RatePlan` (CPAU E-1 TOU, CPAU E-1 non-TOU, PG&E E-ELEC) and `urpx:RatePlanModifier` (EEC, NSE, HRA) parse, coerce, and validate
 - TOU period resolution: seasons, day-types (`urpx:allDays`, `urpx:weekday`, `urpx:weekend`), time-bracket containment with midnight wrap
 - Block-tier surfacing with bounds and bound operators
 - Flat per-energy charges (distribution, public benefits)
 - Active-price selection by latest `startDate ≤ query-date`, drawing from both flat top-level prices and `PriceSet`-scoped prices
 
-Known gaps (tracked as open issues):
-- `urpx:RatePlanModifier` documents (EEC, NSE, HRA) — distinct top-level type, not yet schema'd
+Known gaps:
+- Price resolution against a `urpx:RatePlanModifier` (the modifier schemas are in place, but combining a modifier's overrides with its base plan during resolution is not yet implemented)
 - `urpx:holiday` day-type matching (would need a holiday calendar)
 - Sub-hour TOU bracket transitions — schedule resolution is hourly
 

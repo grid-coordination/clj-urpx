@@ -114,3 +114,44 @@
             err (coerce/explain schema/RatePlan coerced)]
         (is (nil? err)
             (str path " should validate; got " (count (:errors err)) " errors"))))))
+
+(def modifier-fixtures
+  ["../urpx/test-cases/cpau-e-eec-1-2025-09-01/data/urpx-rate-plan-modifier_cpau_e-eec-1_2025-09-01.jsonld"
+   "../urpx/test-cases/cpau-e-nse-1-2025-09-01/data/urpx-rate-plan-modifier_cpau_e-nse-1_2025-09-01.jsonld"
+   "../urpx/test-cases/cpau-e-hra-2023-01-01/data/urpx-rate-plan-modifier_cpau_e-hra_2023-01-01.jsonld"])
+
+(deftest all-modifier-fixtures-validate
+  (testing "every URPX RatePlanModifier fixture coerces and validates"
+    (doseq [path modifier-fixtures]
+      (let [raw (core/load-rate-plan path)
+            coerced (coerce/coerce-rate-plan-modifier raw)
+            err (coerce/explain schema/RatePlanModifier coerced)]
+        (is (nil? err)
+            (str path " should validate; got " (count (:errors err)) " errors"))))))
+
+(deftest coerce-doc-dispatches-on-type
+  (testing "coerce-doc handles RatePlan and RatePlanModifier docs"
+    (let [base-raw (core/load-rate-plan cpau-tou-path)
+          mod-raw  (core/load-rate-plan (first modifier-fixtures))
+          base     (coerce/coerce-doc base-raw)
+          mod-doc  (coerce/coerce-doc mod-raw)]
+      (is (nil? (coerce/explain schema/RatePlan base)))
+      (is (nil? (coerce/explain schema/RatePlanModifier mod-doc)))
+      (is (nil? (coerce/coerce-doc {:jsonld/type "urpx:Unknown"}))
+          "unknown @type returns nil")))
+
+  (testing "EEC modifier carries a single applicableToRatePlan that normalizes to a vector"
+    (let [m (coerce/coerce-rate-plan-modifier
+             (core/load-rate-plan
+              "../urpx/test-cases/cpau-e-eec-1-2025-09-01/data/urpx-rate-plan-modifier_cpau_e-eec-1_2025-09-01.jsonld"))
+          refs (get-in m [:urpx/hasRatePlanModifierVersion :urpx/applicableToRatePlan])]
+      (is (vector? refs))
+      (is (= 1 (count refs)))
+      (is (= "urpx:cpau-e-1" (:jsonld/id (first refs))))))
+
+  (testing "NSE modifier applies to multiple base plans (vector preserved)"
+    (let [m (coerce/coerce-rate-plan-modifier
+             (core/load-rate-plan
+              "../urpx/test-cases/cpau-e-nse-1-2025-09-01/data/urpx-rate-plan-modifier_cpau_e-nse-1_2025-09-01.jsonld"))
+          refs (get-in m [:urpx/hasRatePlanModifierVersion :urpx/applicableToRatePlan])]
+      (is (= ["urpx:cpau-e-1" "urpx:cpau-e-1-tou"] (mapv :jsonld/id refs))))))

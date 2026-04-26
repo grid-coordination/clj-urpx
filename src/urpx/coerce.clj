@@ -28,6 +28,23 @@
   [raw]
   (coerce schema/RatePlan raw))
 
+(defn coerce-rate-plan-modifier
+  "Coerce a raw parsed URPX rate plan modifier into the typed shape described
+   by `urpx.schema/RatePlanModifier`. Modifier docs (EEC, NSE, HRA fixtures)
+   augment or override parts of an existing RatePlan; price resolution against
+   a modifier alone is not (yet) supported."
+  [raw]
+  (coerce schema/RatePlanModifier raw))
+
+(defn coerce-doc
+  "Dispatch on the document's :jsonld/type and coerce as a RatePlan or
+   RatePlanModifier. Returns nil for unknown types."
+  [raw]
+  (case (:jsonld/type raw)
+    "urpx:RatePlan"         (coerce-rate-plan raw)
+    "urpx:RatePlanModifier" (coerce-rate-plan-modifier raw)
+    nil))
+
 (defn validate
   "Validate `value` against `schema`. Returns true on success."
   [schema value]
