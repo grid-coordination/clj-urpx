@@ -18,4 +18,4 @@ Early development. See the [URPX specification](https://github.com/urpx-org/urpx
 
 ## License
 
-Copyright (c) 2026 Clark Communications Corporation. MIT License.
+Copyright (c) 2026 Clark Communications Corporation. [MIT License](LICENSE).
