@@ -113,19 +113,22 @@
 
 (deftest schedule-passes-holiday-predicate-through
   (testing ":holiday? in opts reaches resolve-prices via the schedule"
+    ;; Switch the first Summer Peak bracket to a holiday-only override:
+    ;; weekdayDays + includeHolidays:true + includeNonHolidays:false. With no
+    ;; :holiday? predicate it never matches; with the date marked as a
+    ;; holiday, it does.
     (let [plan-base (coerce/coerce-rate-plan (core/load-rate-plan cpau-tou-path))
-          ;; Reuse the price-test helper concept: switch one bracket's dayType
-          ;; to urpx:holiday and verify the holiday set propagates.
-          plan      (assoc-in plan-base
-                              [:urpx/hasRatePlanVersion
-                               :urpx/hasPlanElements
-                               :urpx/hasBillingModel
-                               :urpx/hasTOUSchedule
-                               :urpx/hasTOUTier 0
-                               :urpx/hasTOUPeriod 0
-                               :urpx/hasTimeBracket 0
-                               :urpx/dayType]
-                              {:jsonld/id "urpx:holiday"})
+          plan      (update-in plan-base
+                               [:urpx/hasRatePlanVersion
+                                :urpx/hasPlanElements
+                                :urpx/hasBillingModel
+                                :urpx/hasTOUSchedule
+                                :urpx/hasTOUTier 0
+                                :urpx/hasTOUPeriod 0
+                                :urpx/hasTimeBracket 0]
+                               #(merge % {:urpx/dayType            {:jsonld/id "urpx:weekdayDays"}
+                                          :urpx/includeHolidays    true
+                                          :urpx/includeNonHolidays false}))
           start (start-of-day 2026 7 15)
           end   (start-of-day 2026 7 16)
           sch-no-holiday (schedule/price-schedule plan start end la-zone)

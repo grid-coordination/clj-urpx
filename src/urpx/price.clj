@@ -14,9 +14,12 @@
       (recurring fixed charges like a monthly customer charge — these are
       subscription-style and don't apply to instantaneous lookup).
 
-  Day types honored: urpx:allDays, urpx:weekday, urpx:weekend, urpx:holiday.
-  Holiday matching requires the caller to pass a `:holiday?` predicate
-  (LocalDate -> bool); without it, urpx:holiday brackets never match."
+  Day types honored (URPX ontology): urpx:allDays, urpx:weekdayDays,
+  urpx:weekendDays, urpx:customDays. Holiday inclusion is expressed by the
+  TimeBracket's optional urpx:includeHolidays / urpx:includeNonHolidays
+  booleans (both default to true when omitted). Holiday detection itself
+  requires the caller to pass a `:holiday?` predicate (LocalDate -> bool);
+  without it, every date is treated as a non-holiday."
   (:import [java.time DayOfWeek LocalDate LocalTime ZonedDateTime]))
 
 ;; ---------------------------------------------------------------------------
@@ -30,21 +33,41 @@
 (def ^:private weekend-set
   #{DayOfWeek/SATURDAY DayOfWeek/SUNDAY})
 
-(defn- day-matches?
-  "True if `day-type-id` (the :jsonld/id of a urpx:DayType reference) matches
-   the given date.
-
-   `holiday?` is an optional (LocalDate -> bool) predicate. A plain set of
-   LocalDates works because sets are functions. Unknown day types match
-   permissively (true) so plans using vocabulary outside our supported set
-   still resolve."
-  [day-type-id ^LocalDate date ^DayOfWeek dow holiday?]
+(defn- day-of-week-matches?
+  "True if `day-type-id` (the :jsonld/id of a urpx:DayType reference) accepts
+   the given day-of-week. Recognized values come from the URPX ontology
+   (urpx:allDays, urpx:weekdayDays, urpx:weekendDays, urpx:customDays). A
+   bracket without dayType is permissive. Unknown values return false so
+   misspellings or out-of-vocabulary day types fail loudly instead of
+   silently matching every day."
+  [day-type-id ^DayOfWeek dow]
   (case day-type-id
-    "urpx:allDays" true
-    "urpx:weekday" (boolean (weekday-set dow))
-    "urpx:weekend" (boolean (weekend-set dow))
-    "urpx:holiday" (boolean (and holiday? (holiday? date)))
-    true))
+    "urpx:allDays"     true
+    "urpx:weekdayDays" (boolean (weekday-set dow))
+    "urpx:weekendDays" (boolean (weekend-set dow))
+    ;; customDays semantics are not yet specified in URPX; treat permissively
+    ;; until the ontology defines a calendar-of-custom-days property.
+    "urpx:customDays"  true
+    nil                true
+    false))
+
+(defn- holiday-status-matches?
+  "True if the bracket's urpx:includeHolidays / urpx:includeNonHolidays gate
+   accepts the date's holiday status. Both properties default to true when
+   omitted, so a bracket that specifies neither matches both holidays and
+   non-holidays (the implicit URPX default). Without a `holiday?` predicate
+   the date is treated as a non-holiday."
+  [bracket ^LocalDate date holiday?]
+  (let [holiday (boolean (and holiday? (holiday? date)))
+        accept  (if holiday
+                  (:urpx/includeHolidays bracket)
+                  (:urpx/includeNonHolidays bracket))]
+    (not (false? accept))))
+
+(defn- bracket-matches-day?
+  [bracket ^LocalDate date ^DayOfWeek dow holiday?]
+  (and (day-of-week-matches? (get-in bracket [:urpx/dayType :jsonld/id]) dow)
+       (holiday-status-matches? bracket date holiday?)))
 
 ;; ---------------------------------------------------------------------------
 ;; Time-bracket containment
@@ -83,7 +106,7 @@
        (when (some
               (fn [bracket]
                 (and (= season-id (get-in bracket [:urpx/appliesInSeason :jsonld/id]))
-                     (day-matches? (get-in bracket [:urpx/dayType :jsonld/id]) date dow holiday?)
+                     (bracket-matches-day? bracket date dow holiday?)
                      (time-in-bracket? t bracket)))
               (:urpx/hasTimeBracket period))
          period))
@@ -183,10 +206,12 @@
    (a java.time.ZonedDateTime in the rate plan's local timezone).
 
    Optional `opts` map:
-     :holiday?  predicate `(LocalDate -> bool)` used to decide whether the
-                query date hits a urpx:holiday day-type bracket. A plain set
-                of LocalDates works (sets are functions). When omitted,
-                urpx:holiday brackets never match.
+     :holiday?  predicate `(LocalDate -> bool)` used to evaluate a bracket's
+                urpx:includeHolidays / urpx:includeNonHolidays gates. A plain
+                set of LocalDates works (sets are functions). When omitted,
+                every date is treated as a non-holiday — so brackets that
+                opt out of non-holidays (urpx:includeNonHolidays = false,
+                e.g. holiday-only off-peak overrides) will never match.
 
    Examples of `:holiday?`:
 

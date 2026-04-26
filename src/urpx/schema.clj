@@ -139,8 +139,10 @@
    [:jsonld/type [:= "urpx:TimeBracket"]]
    [:urpx/startTime Time]
    [:urpx/endTime Time]
-   [:urpx/appliesInSeason {:optional true} Ref]
-   [:urpx/dayType         {:optional true} Ref]])
+   [:urpx/appliesInSeason     {:optional true} Ref]
+   [:urpx/dayType             {:optional true} Ref]
+   [:urpx/includeHolidays     {:optional true} :boolean]
+   [:urpx/includeNonHolidays  {:optional true} :boolean]])
 
 (def TOUPeriod
   [:map

@@ -107,42 +107,61 @@
            (price/marginal-unit-rate r)))))
 
 ;; ---------------------------------------------------------------------------
-;; URPX-ayf — urpx:holiday day-type matching
+;; URPX-oc2 — dayType vocabulary + holiday inclusion (PG&E E-TOU-D)
 ;; ---------------------------------------------------------------------------
 
-(defn- with-holiday-bracket
-  "Mutate the CPAU TOU plan's first Summer Peak TimeBracket to carry
-   :urpx/dayType urpx:holiday, so we can exercise holiday matching against
-   real-shaped data (no fixture ships with urpx:holiday yet)."
-  [plan]
-  (assoc-in plan
-            [:urpx/hasRatePlanVersion
-             :urpx/hasPlanElements
-             :urpx/hasBillingModel
-             :urpx/hasTOUSchedule
-             :urpx/hasTOUTier 0
-             :urpx/hasTOUPeriod 0
-             :urpx/hasTimeBracket 0
-             :urpx/dayType]
-            {:jsonld/id "urpx:holiday"}))
+(def pge-e-tou-d-path
+  "../urpx/test-cases/pge-e-tou-d-tou-holiday-2026-03-01/data/urpx-rate-plan_pge_e-tou-d-tou-holiday_2026-03-01.jsonld")
 
-(deftest holiday-day-type-requires-holiday-predicate
-  (let [plan    (with-holiday-bracket
-                  (coerce/coerce-rate-plan (core/load-rate-plan cpau-tou-path)))
-        ;; Wed Jul 15 2026 17:00 — Summer Peak hour, with the bracket dayType
-        ;; switched to urpx:holiday.
-        when-zdt (zdt 2026 7 15 17)
-        date     (java.time.LocalDate/of 2026 7 15)]
-    (testing "no :holiday? -> urpx:holiday brackets never match"
-      (let [r (price/resolve-prices plan when-zdt)]
-        (is (nil? (:urpx.resolved/tou-period-name r)))))
-    (testing "set of LocalDates as :holiday? -> bracket matches when included"
-      (let [r (price/resolve-prices plan when-zdt {:holiday? #{date}})]
-        (is (= "Summer Peak" (:urpx.resolved/tou-period-name r)))
-        (is (= 1 (:urpx.resolved/tou-period-number r)))))
-    (testing "predicate fn :holiday? also works"
-      (let [r (price/resolve-prices plan when-zdt {:holiday? (fn [^java.time.LocalDate d] (= d date))})]
-        (is (= "Summer Peak" (:urpx.resolved/tou-period-name r)))))
-    (testing "non-matching :holiday? leaves the bracket inactive"
-      (let [r (price/resolve-prices plan when-zdt {:holiday? #{(java.time.LocalDate/of 2026 12 25)}})]
-        (is (nil? (:urpx.resolved/tou-period-name r)))))))
+;; E-TOU-D TOUPeriod numbering (from the fixture):
+;;   1 = Summer Peak (weekdayDays + includeHolidays:false)
+;;   2 = Winter Peak (weekdayDays + includeHolidays:false)
+;;   3 = Summer Off-Peak (weekdayDays plain + weekday holiday-window override + weekendDays)
+;;   4 = Winter Off-Peak (same shape as Summer Off-Peak)
+
+(deftest e-tou-d-weekday-evening-is-summer-peak
+  (testing "Wed 2026-07-15 18:00 — Summer Peak (weekdayDays + includeHolidays:false)"
+    (let [plan (coerce/coerce-rate-plan (core/load-rate-plan pge-e-tou-d-path))
+          r (price/resolve-prices plan (zdt 2026 7 15 18))]
+      (is (= 1 (:urpx.resolved/tou-period-number r))))))
+
+(deftest e-tou-d-weekend-evening-is-summer-off-peak
+  (testing "Sat 2026-07-04 18:00 — weekendDays bracket wins; not Summer Peak
+            (regression: would previously fall into permissive :else true and
+            wrongly match the weekdayDays peak bracket)."
+    (let [plan (coerce/coerce-rate-plan (core/load-rate-plan pge-e-tou-d-path))
+          r (price/resolve-prices plan (zdt 2026 7 4 18))]
+      (is (= 3 (:urpx.resolved/tou-period-number r))))))
+
+(deftest e-tou-d-holiday-on-weekday-is-winter-off-peak
+  (testing "Mon 2027-01-18 (MLK Day) 18:00 — peak window is suppressed by
+            includeHolidays:false; the off-peak holiday-window override
+            (includeHolidays:true + includeNonHolidays:false) takes over."
+    (let [plan      (coerce/coerce-rate-plan (core/load-rate-plan pge-e-tou-d-path))
+          mlk       (java.time.LocalDate/of 2027 1 18)
+          when-zdt  (zdt 2027 1 18 18)
+          r         (price/resolve-prices plan when-zdt {:holiday? #{mlk}})]
+      (is (= 4 (:urpx.resolved/tou-period-number r))))))
+
+(deftest e-tou-d-no-holiday-predicate-treats-day-as-non-holiday
+  (testing "Same Mon 2027-01-18 18:00 with no holiday? predicate — date is
+            treated as non-holiday, so the peak window matches as on any weekday."
+    (let [plan (coerce/coerce-rate-plan (core/load-rate-plan pge-e-tou-d-path))
+          r    (price/resolve-prices plan (zdt 2027 1 18 18))]
+      (is (= 2 (:urpx.resolved/tou-period-number r))))))
+
+(deftest unknown-day-type-fails-loud
+  (testing "An out-of-vocabulary dayType returns no match (no silent fallthrough)."
+    (let [plan-base (coerce/coerce-rate-plan (core/load-rate-plan pge-e-tou-d-path))
+          plan (update-in plan-base
+                          [:urpx/hasRatePlanVersion
+                           :urpx/hasPlanElements
+                           :urpx/hasBillingModel
+                           :urpx/hasTOUSchedule
+                           :urpx/hasTOUTier 0
+                           :urpx/hasTOUPeriod 0
+                           :urpx/hasTimeBracket]
+                          (fn [bs]
+                            (mapv #(assoc % :urpx/dayType {:jsonld/id "urpx:nonsense"}) bs)))
+          r (price/resolve-prices plan (zdt 2026 7 15 18))]
+      (is (not= 1 (:urpx.resolved/tou-period-number r))))))
