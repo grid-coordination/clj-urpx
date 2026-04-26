@@ -195,10 +195,27 @@
     {:decode/urpx-jsonld single-or-vec->vec}
     [:vector PriceDefinition]]])
 
+(def ServiceTier
+  "A block-usage tier (e.g. CPAU E-1's baseline tier 1 / over-baseline tier 2).
+   The bounds are interpreted with the matching :urpx/...BoundOperator vocab IRIs."
+  [:map
+   [:jsonld/type [:= "urpx:ServiceTier"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/serviceTierNumber Int]
+   [:urpx/name {:optional true} :string]
+   [:urpx/description {:optional true} :string]
+   [:urpx/referencesMetricInput {:optional true} Ref]
+   [:urpx/lowerBound {:optional true} Decimal]
+   [:urpx/upperBound {:optional true} Decimal]
+   [:urpx/lowerBoundOperator {:optional true} Ref]
+   [:urpx/upperBoundOperator {:optional true} Ref]
+   [:urpx/hasCalculationMethod {:optional true} CalculationMethod]])
+
 (def BillingModel
   [:map
    [:jsonld/type [:= "urpx:BillingModel"]]
    [:urpx/hasTOUSchedule {:optional true} TOUSchedule]
+   [:urpx/hasServiceTier {:optional true} [:vector ServiceTier]]
    [:urpx/hasLedger [:vector Ledger]]])
 
 (def PlanElements
