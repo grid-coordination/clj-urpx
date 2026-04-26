@@ -5,6 +5,9 @@
         ;; JSON-LD parsing
         com.apicatalog/titanium-json-ld {:mvn/version "1.6.0"}
 
+        ;; Schema validation and coercion
+        metosin/malli                  {:mvn/version "0.20.1"}
+
         ;; Time
         tick/tick                       {:mvn/version "1.0"}}
 
