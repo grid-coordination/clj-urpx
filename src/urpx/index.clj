@@ -1,0 +1,64 @@
+(ns urpx.index
+  "Build and query an entity index for URPX documents.
+
+  URPX JSON-LD documents are graphs: most entities carry a :jsonld/id and refer
+  to other entities by reference shape `{:jsonld/id \"urpx:foo\"}`. Coercion
+  leaves these references intact; consumers dereference them on demand against
+  an index keyed by id string.
+
+  Note: many references point to vocabulary IRIs in the URPX ontology
+  (e.g. urpx:peakTier, urpx:allDays, urpx:bundledLedger) rather than entities
+  defined in the document. Those lookups return nil — callers distinguish
+  internal refs (resolve to a node) from vocabulary terms (do not).")
+
+(defn- index-walk
+  "Reduce over `node`, accumulating {id -> node} for every map that carries
+   both a :jsonld/id and a :jsonld/type. The :jsonld/type requirement
+   distinguishes real entities from bare references ({:jsonld/id \"...\"})
+   that point to vocabulary IRIs or other entities — only the entity
+   definition gets indexed, not the references to it."
+  [acc node]
+  (cond
+    (map? node)
+    (let [acc (if (and (:jsonld/id node) (:jsonld/type node))
+                (assoc acc (:jsonld/id node) node)
+                acc)]
+      (reduce-kv (fn [a _ v] (index-walk a v)) acc node))
+
+    (sequential? node)
+    (reduce index-walk acc node)
+
+    :else acc))
+
+(defn build-index
+  "Walk a URPX document (raw or coerced) and return a map from id string to
+   the entity node bearing that id. Suitable input: anything `urpx.core/load-rate-plan`
+   or `urpx.coerce/coerce-rate-plan` produces."
+  [doc]
+  (index-walk {} doc))
+
+(defn ref?
+  "True if `v` looks like a JSON-LD @id reference — a map with a :jsonld/id
+   but no :jsonld/type. (Real entities carry both; references carry only :jsonld/id.)"
+  [v]
+  (and (map? v)
+       (contains? v :jsonld/id)
+       (not (contains? v :jsonld/type))))
+
+(defn resolve-ref
+  "Given an `index` and either a Ref map ({:jsonld/id \"urpx:foo\"}) or an id string,
+   return the indexed entity, or nil if not found.
+
+   Returns nil for vocabulary IRIs that don't correspond to a node in the document."
+  [index ref-or-id]
+  (cond
+    (string? ref-or-id) (get index ref-or-id)
+    (ref? ref-or-id)    (get index (:jsonld/id ref-or-id))
+    :else nil))
+
+(defn get-entity
+  "Look up an entity directly by id string. Same as `(resolve-ref index id)`
+   when the input is a string, but with a clearer name when the call site
+   already has the bare id."
+  [index id]
+  (get index id))
