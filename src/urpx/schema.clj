@@ -6,24 +6,90 @@
     - urpx.schema    — coerced shape: typed Clojure values (BigDecimal, LocalDate,
                        LocalTime, LocalDateTime, Duration, integer month numbers).
 
-  Coercion (URPX-p2y) attaches decoders that turn the raw layer into shapes
-  conforming to these schemas. Reference resolution (URPX-ej9) keeps :jsonld/id
+  Schemas carry `:decode/urpx-jsonld` decoders that turn the raw parser output
+  (strings) into the typed shape described here. The transformer is built and
+  applied in `urpx.coerce`. Reference resolution (URPX-ej9) keeps :jsonld/id
   references intact; consumers dereference via an entity index.
 
   Schemas are bare def vars referenced by symbol — there is no central registry."
   (:import [java.math BigDecimal]
-           [java.time Duration LocalDate LocalDateTime LocalTime]))
+           [java.time Duration LocalDate LocalDateTime LocalTime Period]))
+
+;; ---------------------------------------------------------------------------
+;; Decoder helpers (consumed by `:decode/urpx-jsonld` properties below)
+;; ---------------------------------------------------------------------------
+
+(defn- ->decimal  [v] (if (string? v) (BigDecimal. ^String v) v))
+(defn- ->date     [v] (if (string? v) (LocalDate/parse v) v))
+(defn- ->datetime [v] (if (string? v) (LocalDateTime/parse v) v))
+(defn- ->time     [v] (if (string? v) (LocalTime/parse v) v))
+(defn- ->duration
+  "Parse an ISO 8601 duration string. Time-based durations (containing 'T',
+   e.g. PT1H30M) become java.time.Duration; date-based durations (e.g. P1M, P1Y)
+   become java.time.Period."
+  [v]
+  (cond
+    (not (string? v)) v
+    (.contains ^String v "T") (Duration/parse v)
+    :else (Period/parse v)))
+
+(defn- ->g-month
+  "xsd:gMonth strings look like '--06'. Strip the leading '--' and parse to int."
+  [v]
+  (cond
+    (int? v) v
+    (and (string? v) (.startsWith ^String v "--")) (Long/parseLong (subs v 2))
+    (string? v) (Long/parseLong v)
+    :else v))
+
+(defn- ->long [v] (if (string? v) (Long/parseLong v) v))
+
+(defn- single-or-vec->vec
+  "URPX allows certain has-* fields to hold a single map or a vector of maps;
+   normalize to a vector so downstream consumers see one shape."
+  [v]
+  (cond
+    (nil? v)    v
+    (vector? v) v
+    (map? v)    [v]
+    :else (vec v)))
 
 ;; ---------------------------------------------------------------------------
 ;; Primitive predicates
 ;; ---------------------------------------------------------------------------
 
-(def Decimal      [:fn {:error/message "should be a BigDecimal"}    #(instance? BigDecimal %)])
-(def Date         [:fn {:error/message "should be a LocalDate"}     #(instance? LocalDate %)])
-(def DateTime     [:fn {:error/message "should be a LocalDateTime"} #(instance? LocalDateTime %)])
-(def Time         [:fn {:error/message "should be a LocalTime"}     #(instance? LocalTime %)])
-(def IsoDuration  [:fn {:error/message "should be a Duration"}      #(instance? Duration %)])
-(def MonthNumber  [:and :int [:>= 1] [:<= 12]])
+(def Decimal
+  [:fn {:error/message "should be a BigDecimal"
+        :decode/urpx-jsonld ->decimal}
+   #(instance? BigDecimal %)])
+
+(def Date
+  [:fn {:error/message "should be a LocalDate"
+        :decode/urpx-jsonld ->date}
+   #(instance? LocalDate %)])
+
+(def DateTime
+  [:fn {:error/message "should be a LocalDateTime"
+        :decode/urpx-jsonld ->datetime}
+   #(instance? LocalDateTime %)])
+
+(def Time
+  [:fn {:error/message "should be a LocalTime"
+        :decode/urpx-jsonld ->time}
+   #(instance? LocalTime %)])
+
+(def IsoDuration
+  [:fn {:error/message "should be a Duration or Period"
+        :decode/urpx-jsonld ->duration}
+   #(or (instance? Duration %) (instance? Period %))])
+
+(def MonthNumber
+  [:and {:decode/urpx-jsonld ->g-month}
+   :int [:>= 1] [:<= 12]])
+
+(def Int
+  "An xsd:integer field — JSON parser may produce long already, but tolerate strings."
+  [:and {:decode/urpx-jsonld ->long} :int])
 
 ;; ---------------------------------------------------------------------------
 ;; JSON-LD building blocks
@@ -81,7 +147,7 @@
    [:jsonld/type [:= "urpx:TOUPeriod"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/name :string]
-   [:urpx/touPeriodNumber :int]
+   [:urpx/touPeriodNumber Int]
    [:urpx/hasTimeBracket [:vector TimeBracket]]])
 
 (def TOUTier
@@ -89,7 +155,7 @@
    [:jsonld/type [:= "urpx:TOUTier"]]
    [:urpx/tierSourceName :string]
    [:urpx/touTierStandardName {:optional true} Ref]
-   [:urpx/touTierNumber :int]
+   [:urpx/touTierNumber Int]
    [:urpx/hasTOUPeriod [:vector TOUPeriod]]])
 
 (def TOUSchedule
@@ -112,7 +178,7 @@
    [:urpx/chargeType    {:optional true} Ref]
    [:urpx/chargeCategory {:optional true} Ref]
    [:urpx/billPortion   {:optional true} Ref]
-   [:urpx/touPeriodNumber {:optional true} :int]
+   [:urpx/touPeriodNumber {:optional true} Int]
    [:urpx/baseQuantity    {:optional true} Decimal]
    [:urpx/hasCalculationMethod {:optional true} CalculationMethod]])
 
@@ -123,9 +189,11 @@
    [:urpx/name :string]
    [:urpx/ledgerType {:optional true} Ref]
    [:urpx/referencesMetricInput {:optional true} Ref]
-   ;; URPX allows a single PriceDefinition or a vector — we normalize to a vector
-   ;; during coercion (URPX-p2y).
-   [:urpx/hasPriceDefinition [:vector PriceDefinition]]])
+   ;; URPX allows a single PriceDefinition or a vector; the decoder normalizes
+   ;; either form to a vector before descending.
+   [:urpx/hasPriceDefinition
+    {:decode/urpx-jsonld single-or-vec->vec}
+    [:vector PriceDefinition]]])
 
 (def BillingModel
   [:map
@@ -183,7 +251,7 @@
   [:map
    [:jsonld/type [:= "urpx:PriceSet"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/name :string]
+   [:urpx/name {:optional true} :string]
    [:urpx/startDate Date]
    [:urpx/hasPrice [:vector Price]]])
 
@@ -212,13 +280,15 @@
    [:jsonld/type [:= "urpx:DataSourceReference"]]
    [:urpx/url      {:optional true} :string]
    [:urpx/fileName {:optional true} :string]
-   [:urpx/mediaType {:optional true} :string]])
+   ;; Some publishers give the IANA media type as a string ("application/pdf"),
+   ;; others use a URPX vocabulary IRI as a Ref ({:jsonld/id "urpx:applicationPdf"}).
+   [:urpx/mediaType {:optional true} [:or :string Ref]]])
 
 (def RatePlanVersion
   [:map
    [:jsonld/type [:= "urpx:RatePlanVersion"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/versionNumber  :string]
+   [:urpx/versionNumber  {:optional true} :string]
    [:urpx/changeReason   {:optional true} Ref]
    [:urpx/description    {:optional true} :string]
    [:urpx/effectiveDateTime DateTime]
