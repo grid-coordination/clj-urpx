@@ -2,8 +2,8 @@
   "Generate contiguous price-interval schedules from a coerced URPX rate plan.
 
   `price-schedule` walks a [start, end) instant window in the rate plan's
-  local timezone, hour by hour, calls `urpx.price/resolve-prices` at each
-  step, and merges adjacent steps whose ledger resolutions are identical.
+  local timezone, calls `urpx.price/resolve-prices` at each step, and
+  merges adjacent steps whose ledger resolutions are identical.
 
   Output is a vector of interval maps each carrying `:tick/beginning` and
   `:tick/end` (java.time.Instants) plus the full `urpx.price` resolved
@@ -11,9 +11,9 @@
   consumer like the price-server's TariffFetcher, which can extract a
   single $/kWh value per interval via `urpx.price/marginal-unit-rate`.
 
-  Granularity is hourly. URPX rate plans seen so far align TOU bracket
-  transitions to whole hours; finer-grained transitions would need a
-  smaller step (not yet exposed)."
+  Default step is 1 hour, anchored to the start-of-hour of `start`. Pass
+  `{:step (Duration/ofMinutes 15)}` etc. for finer granularity when a rate
+  plan defines sub-hour TOU bracket transitions."
   (:require [urpx.price :as price])
   (:import [java.time Duration Instant ZonedDateTime ZoneId]
            [java.time.temporal ChronoUnit]))
@@ -22,13 +22,13 @@
   ^ZonedDateTime [^ZonedDateTime zdt]
   (.truncatedTo zdt ChronoUnit/HOURS))
 
-(defn- hour-zdts
-  "Lazy seq of ZonedDateTimes at the start of each hour from `start` (inclusive,
-   truncated to the hour) up to but not including `end`."
-  [^Instant start ^Instant end ^ZoneId zone]
-  (let [first-hour (hour-start (.atZone start zone))
-        end-zdt    (.atZone end zone)]
-    (->> (iterate #(.plusHours ^ZonedDateTime % 1) first-hour)
+(defn- step-zdts
+  "Lazy seq of ZonedDateTimes at each `step` from `start` (truncated to its
+   start-of-hour) up to but not including `end`."
+  [^Instant start ^Instant end ^ZoneId zone ^Duration step]
+  (let [first-zdt (hour-start (.atZone start zone))
+        end-zdt   (.atZone end zone)]
+    (->> (iterate #(.plus ^ZonedDateTime % step) first-zdt)
          (take-while #(.isBefore ^ZonedDateTime % end-zdt)))))
 
 (defn- same-ledgers?
@@ -58,18 +58,28 @@
       :tick/end                 Instant
       :urpx.interval/resolved   <full price/resolve-prices result>}
 
-   Adjacent hours with identical ledger resolution are merged."
-  [rate-plan ^Instant start ^Instant end ^ZoneId zone]
-  (let [hours (hour-zdts start end zone)
-        hourly (mapv (fn [^ZonedDateTime zdt]
-                       {:tick/beginning         (.toInstant zdt)
-                        :tick/end               (.toInstant (.plusHours zdt 1))
-                        :urpx.interval/resolved (price/resolve-prices rate-plan zdt)})
-                     hours)]
-    (merge-adjacent hourly)))
+   Adjacent steps with identical ledger resolution are merged.
+
+   Optional `opts` map:
+     :step      java.time.Duration — granularity at which the window is
+                walked. Default: `(Duration/ofHours 1)`. Use a smaller
+                step for plans with sub-hour TOU bracket transitions.
+     :holiday?  predicate `(LocalDate -> bool)` passed through to
+                `urpx.price/resolve-prices` (matches urpx:holiday brackets)."
+  ([rate-plan start end zone] (price-schedule rate-plan start end zone nil))
+  ([rate-plan ^Instant start ^Instant end ^ZoneId zone opts]
+   (let [step  (or (:step opts) (Duration/ofHours 1))
+         steps (step-zdts start end zone step)
+         hourly (mapv (fn [^ZonedDateTime zdt]
+                        {:tick/beginning         (.toInstant zdt)
+                         :tick/end               (.toInstant (.plus zdt step))
+                         :urpx.interval/resolved (price/resolve-prices rate-plan zdt opts)})
+                      steps)]
+     (merge-adjacent hourly))))
 
 (defn price-schedule-days
   "Convenience: generate a `price-schedule` covering `days` days starting from
-   `start`."
-  [rate-plan ^Instant start days ^ZoneId zone]
-  (price-schedule rate-plan start (.plus start (Duration/ofDays days)) zone))
+   `start`. Accepts the same `opts` as `price-schedule`."
+  ([rate-plan start days zone] (price-schedule-days rate-plan start days zone nil))
+  ([rate-plan ^Instant start days ^ZoneId zone opts]
+   (price-schedule rate-plan start (.plus start (Duration/ofDays days)) zone opts)))

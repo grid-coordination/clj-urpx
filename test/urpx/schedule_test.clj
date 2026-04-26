@@ -92,3 +92,52 @@
         (let [rate (price/marginal-unit-rate (:urpx.interval/resolved iv))]
           (is (instance? BigDecimal rate))
           (is (pos? rate)))))))
+
+;; ---------------------------------------------------------------------------
+;; URPX-8lf — sub-hour step configuration
+;; ---------------------------------------------------------------------------
+
+(deftest sub-hour-step-still-merges-equivalent-steps
+  (testing "a 15-minute step on CPAU TOU still collapses to the same 5 TOU intervals"
+    (let [plan  (coerce/coerce-rate-plan (core/load-rate-plan cpau-tou-path))
+          start (start-of-day 2026 7 15)
+          end   (start-of-day 2026 7 16)
+          opts  {:step (Duration/ofMinutes 15)}
+          hourly-sch  (schedule/price-schedule plan start end la-zone)
+          quarter-sch (schedule/price-schedule plan start end la-zone opts)]
+      (is (= (count hourly-sch) (count quarter-sch))
+          "both step sizes resolve to the same number of merged intervals
+           because all TOU bracket transitions are hour-aligned")
+      (is (= (mapv :tick/beginning hourly-sch) (mapv :tick/beginning quarter-sch)))
+      (is (= (mapv :tick/end hourly-sch) (mapv :tick/end quarter-sch))))))
+
+(deftest schedule-passes-holiday-predicate-through
+  (testing ":holiday? in opts reaches resolve-prices via the schedule"
+    (let [plan-base (coerce/coerce-rate-plan (core/load-rate-plan cpau-tou-path))
+          ;; Reuse the price-test helper concept: switch one bracket's dayType
+          ;; to urpx:holiday and verify the holiday set propagates.
+          plan      (assoc-in plan-base
+                              [:urpx/hasRatePlanVersion
+                               :urpx/hasPlanElements
+                               :urpx/hasBillingModel
+                               :urpx/hasTOUSchedule
+                               :urpx/hasTOUTier 0
+                               :urpx/hasTOUPeriod 0
+                               :urpx/hasTimeBracket 0
+                               :urpx/dayType]
+                              {:jsonld/id "urpx:holiday"})
+          start (start-of-day 2026 7 15)
+          end   (start-of-day 2026 7 16)
+          sch-no-holiday (schedule/price-schedule plan start end la-zone)
+          sch-holiday    (schedule/price-schedule plan start end la-zone
+                                                  {:holiday? #{(LocalDate/of 2026 7 15)}})]
+      (testing "without :holiday?, no interval reports Summer Peak"
+        (is (not-any? #(= "Summer Peak"
+                          (get-in % [:urpx.interval/resolved
+                                     :urpx.resolved/tou-period-name]))
+                      sch-no-holiday)))
+      (testing "with :holiday? matching the date, an interval reports Summer Peak"
+        (is (some #(= "Summer Peak"
+                      (get-in % [:urpx.interval/resolved
+                                 :urpx.resolved/tou-period-name]))
+                  sch-holiday))))))

@@ -14,8 +14,9 @@
       (recurring fixed charges like a monthly customer charge — these are
       subscription-style and don't apply to instantaneous lookup).
 
-  Day types currently honored: urpx:allDays, urpx:weekday, urpx:weekend.
-  Holiday matching (urpx:holiday) is not implemented."
+  Day types honored: urpx:allDays, urpx:weekday, urpx:weekend, urpx:holiday.
+  Holiday matching requires the caller to pass a `:holiday?` predicate
+  (LocalDate -> bool); without it, urpx:holiday brackets never match."
   (:import [java.time DayOfWeek LocalDate LocalTime ZonedDateTime]))
 
 ;; ---------------------------------------------------------------------------
@@ -31,13 +32,18 @@
 
 (defn- day-matches?
   "True if `day-type-id` (the :jsonld/id of a urpx:DayType reference) matches
-   the day-of-week. Unknown day types match permissively (true)."
-  [day-type-id ^DayOfWeek dow]
+   the given date.
+
+   `holiday?` is an optional (LocalDate -> bool) predicate. A plain set of
+   LocalDates works because sets are functions. Unknown day types match
+   permissively (true) so plans using vocabulary outside our supported set
+   still resolve."
+  [day-type-id ^LocalDate date ^DayOfWeek dow holiday?]
   (case day-type-id
     "urpx:allDays" true
     "urpx:weekday" (boolean (weekday-set dow))
     "urpx:weekend" (boolean (weekend-set dow))
-    "urpx:holiday" false
+    "urpx:holiday" (boolean (and holiday? (holiday? date)))
     true))
 
 ;; ---------------------------------------------------------------------------
@@ -67,17 +73,17 @@
     (some (fn [s] (when (some #{m} (:urpx/month s)) s)) seasons)))
 
 (defn- find-tou-period
-  "Find the TOUPeriod whose TimeBracket matches the given season, day-of-week,
-   and local-time. Walks every tier's periods (the tier hierarchy is for
-   classification — what matters for resolution is the bracket match)."
-  [tou-schedule season-id ^LocalTime t ^DayOfWeek dow]
+  "Find the TOUPeriod whose TimeBracket matches the given season, date,
+   day-of-week, and local-time. Walks every tier's periods (the tier hierarchy
+   is for classification — what matters for resolution is the bracket match)."
+  [tou-schedule season-id ^LocalDate date ^LocalTime t ^DayOfWeek dow holiday?]
   (when tou-schedule
     (some
      (fn [period]
        (when (some
               (fn [bracket]
                 (and (= season-id (get-in bracket [:urpx/appliesInSeason :jsonld/id]))
-                     (day-matches? (get-in bracket [:urpx/dayType :jsonld/id]) dow)
+                     (day-matches? (get-in bracket [:urpx/dayType :jsonld/id]) date dow holiday?)
                      (time-in-bracket? t bracket)))
               (:urpx/hasTimeBracket period))
          period))
@@ -176,6 +182,31 @@
   "Resolve all per-energy unit prices that apply to `rate-plan` at `zdt`
    (a java.time.ZonedDateTime in the rate plan's local timezone).
 
+   Optional `opts` map:
+     :holiday?  predicate `(LocalDate -> bool)` used to decide whether the
+                query date hits a urpx:holiday day-type bracket. A plain set
+                of LocalDates works (sets are functions). When omitted,
+                urpx:holiday brackets never match.
+
+   Examples of `:holiday?`:
+
+     ;; Static set — quickest to set up:
+     (def us-federal-2026
+       #{(LocalDate/of 2026 1 1)    ; New Year's Day
+         (LocalDate/of 2026 1 19)   ; Martin Luther King Jr. Day
+         (LocalDate/of 2026 2 16)   ; Presidents Day
+         (LocalDate/of 2026 5 25)   ; Memorial Day
+         (LocalDate/of 2026 6 19)   ; Juneteenth
+         (LocalDate/of 2026 7 3)    ; Independence Day (observed)
+         (LocalDate/of 2026 9 7)    ; Labor Day
+         (LocalDate/of 2026 11 11)  ; Veterans Day
+         (LocalDate/of 2026 11 26)  ; Thanksgiving
+         (LocalDate/of 2026 12 25)})  ; Christmas
+     (resolve-prices plan zdt {:holiday? us-federal-2026})
+
+     ;; Composed predicate — if you maintain a calendar elsewhere:
+     (resolve-prices plan zdt {:holiday? (fn [d] (calendar/observed? :us-federal d))})
+
    Returns:
      {:urpx.resolved/season-name      String or nil
       :urpx.resolved/tou-period-name  String or nil
@@ -203,52 +234,55 @@
    For non-tiered ledgers, :tiers has a single entry with no tier-* keys.
    For block-tiered ledgers (e.g. CPAU E-1), :tiers carries every tier sorted
    by tier-number — the caller chooses based on cumulative billing-period usage."
-  [rate-plan ^ZonedDateTime zdt]
-  (let [version       (:urpx/hasRatePlanVersion rate-plan)
-        plan-elements (:urpx/hasPlanElements version)
-        seasons       (:urpx/hasSeasons plan-elements)
-        billing       (:urpx/hasBillingModel plan-elements)
-        ledgers       (:urpx/hasLedger billing)
-        tou-schedule  (:urpx/hasTOUSchedule billing)
-        tiers-by-num  (service-tiers-by-number billing)
-        prices        (:urpx/hasPrices version)
+  ([rate-plan zdt] (resolve-prices rate-plan zdt nil))
+  ([rate-plan ^ZonedDateTime zdt opts]
+   (let [version       (:urpx/hasRatePlanVersion rate-plan)
+         plan-elements (:urpx/hasPlanElements version)
+         seasons       (:urpx/hasSeasons plan-elements)
+         billing       (:urpx/hasBillingModel plan-elements)
+         ledgers       (:urpx/hasLedger billing)
+         tou-schedule  (:urpx/hasTOUSchedule billing)
+         tiers-by-num  (service-tiers-by-number billing)
+         prices        (:urpx/hasPrices version)
+         holiday?      (:holiday? opts)
 
-        date          (.toLocalDate zdt)
-        local-time    (.toLocalTime zdt)
-        dow           (.getDayOfWeek zdt)
+         date          (.toLocalDate zdt)
+         local-time    (.toLocalTime zdt)
+         dow           (.getDayOfWeek zdt)
 
-        season        (season-of seasons date)
-        tou-period    (find-tou-period tou-schedule (:jsonld/id season) local-time dow)
-        period-num    (:urpx/touPeriodNumber tou-period)
+         season        (season-of seasons date)
+         tou-period    (find-tou-period tou-schedule (:jsonld/id season)
+                                        date local-time dow holiday?)
+         period-num    (:urpx/touPeriodNumber tou-period)
 
-        pd->price     (active-prices-by-pd prices date)
+         pd->price     (active-prices-by-pd prices date)
 
-        ledger-results
-        (vec
-         (for [ledger ledgers
-               :let [tier-entries
-                     (->> (:urpx/hasPriceDefinition ledger)
-                          (filter #(pd-active-at-tou? % period-num))
-                          (keep (fn [pd]
-                                  (when-let [[price _] (pd->price (:jsonld/id pd))]
-                                    (merge
-                                     {:urpx.resolved/price-definition-id (:jsonld/id pd)
-                                      :urpx.resolved/price-id            (:jsonld/id price)
-                                      :urpx.resolved/price-name          (:urpx/name price)
-                                      :urpx.resolved/unit-price          (:urpx/unitPrice price)}
-                                     (tier-info pd (tiers-by-num (:urpx/serviceTierNumber pd)))))))
-                          (sort-by #(or (:urpx.resolved/tier-number %) 0))
-                          vec)]
-               :when (seq tier-entries)]
-           {:urpx.resolved/ledger-id   (:jsonld/id ledger)
-            :urpx.resolved/ledger-name (:urpx/name ledger)
-            :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
-            :urpx.resolved/tiers       tier-entries}))]
+         ledger-results
+         (vec
+          (for [ledger ledgers
+                :let [tier-entries
+                      (->> (:urpx/hasPriceDefinition ledger)
+                           (filter #(pd-active-at-tou? % period-num))
+                           (keep (fn [pd]
+                                   (when-let [[price _] (pd->price (:jsonld/id pd))]
+                                     (merge
+                                      {:urpx.resolved/price-definition-id (:jsonld/id pd)
+                                       :urpx.resolved/price-id            (:jsonld/id price)
+                                       :urpx.resolved/price-name          (:urpx/name price)
+                                       :urpx.resolved/unit-price          (:urpx/unitPrice price)}
+                                      (tier-info pd (tiers-by-num (:urpx/serviceTierNumber pd)))))))
+                           (sort-by #(or (:urpx.resolved/tier-number %) 0))
+                           vec)]
+                :when (seq tier-entries)]
+            {:urpx.resolved/ledger-id   (:jsonld/id ledger)
+             :urpx.resolved/ledger-name (:urpx/name ledger)
+             :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
+             :urpx.resolved/tiers       tier-entries}))]
 
-    {:urpx.resolved/season-name       (:urpx/seasonName season)
-     :urpx.resolved/tou-period-name   (:urpx/name tou-period)
-     :urpx.resolved/tou-period-number period-num
-     :urpx.resolved/ledgers           ledger-results}))
+     {:urpx.resolved/season-name       (:urpx/seasonName season)
+      :urpx.resolved/tou-period-name   (:urpx/name tou-period)
+      :urpx.resolved/tou-period-number period-num
+      :urpx.resolved/ledgers           ledger-results})))
 
 (defn marginal-unit-rate
   "Sum the unit prices across all ledgers, picking the LOWEST tier in each

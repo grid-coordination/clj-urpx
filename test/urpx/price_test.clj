@@ -105,3 +105,44 @@
                (.add (BigDecimal. "0.09593"))
                (.add (BigDecimal. "0.00604")))
            (price/marginal-unit-rate r)))))
+
+;; ---------------------------------------------------------------------------
+;; URPX-ayf — urpx:holiday day-type matching
+;; ---------------------------------------------------------------------------
+
+(defn- with-holiday-bracket
+  "Mutate the CPAU TOU plan's first Summer Peak TimeBracket to carry
+   :urpx/dayType urpx:holiday, so we can exercise holiday matching against
+   real-shaped data (no fixture ships with urpx:holiday yet)."
+  [plan]
+  (assoc-in plan
+            [:urpx/hasRatePlanVersion
+             :urpx/hasPlanElements
+             :urpx/hasBillingModel
+             :urpx/hasTOUSchedule
+             :urpx/hasTOUTier 0
+             :urpx/hasTOUPeriod 0
+             :urpx/hasTimeBracket 0
+             :urpx/dayType]
+            {:jsonld/id "urpx:holiday"}))
+
+(deftest holiday-day-type-requires-holiday-predicate
+  (let [plan    (with-holiday-bracket
+                  (coerce/coerce-rate-plan (core/load-rate-plan cpau-tou-path)))
+        ;; Wed Jul 15 2026 17:00 — Summer Peak hour, with the bracket dayType
+        ;; switched to urpx:holiday.
+        when-zdt (zdt 2026 7 15 17)
+        date     (java.time.LocalDate/of 2026 7 15)]
+    (testing "no :holiday? -> urpx:holiday brackets never match"
+      (let [r (price/resolve-prices plan when-zdt)]
+        (is (nil? (:urpx.resolved/tou-period-name r)))))
+    (testing "set of LocalDates as :holiday? -> bracket matches when included"
+      (let [r (price/resolve-prices plan when-zdt {:holiday? #{date}})]
+        (is (= "Summer Peak" (:urpx.resolved/tou-period-name r)))
+        (is (= 1 (:urpx.resolved/tou-period-number r)))))
+    (testing "predicate fn :holiday? also works"
+      (let [r (price/resolve-prices plan when-zdt {:holiday? (fn [^java.time.LocalDate d] (= d date))})]
+        (is (= "Summer Peak" (:urpx.resolved/tou-period-name r)))))
+    (testing "non-matching :holiday? leaves the bracket inactive"
+      (let [r (price/resolve-prices plan when-zdt {:holiday? #{(java.time.LocalDate/of 2026 12 25)}})]
+        (is (nil? (:urpx.resolved/tou-period-name r)))))))

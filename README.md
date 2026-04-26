@@ -73,6 +73,42 @@ URPX is an [LF Energy](https://lfenergy.org/) open standard for exchanging utili
 
 For block-tiered plans (e.g. CPAU E-1), each ledger's `:tiers` vector exposes every tier with its `:tier-lower-bound`, `:tier-upper-bound`, and `:unit-price` — the caller selects the active tier from cumulative billing-period usage.
 
+### Holiday calendar
+
+If a rate plan uses `urpx:holiday` day-type brackets, pass a `:holiday?` predicate (`LocalDate -> bool`) so resolution can decide which dates count. A plain set of `LocalDate`s works because sets are functions:
+
+```clojure
+(import '[java.time LocalDate])
+
+(def us-federal-2026
+  #{(LocalDate/of 2026 1 1)    ; New Year's Day
+    (LocalDate/of 2026 1 19)   ; Martin Luther King Jr. Day
+    (LocalDate/of 2026 2 16)   ; Presidents Day
+    (LocalDate/of 2026 5 25)   ; Memorial Day
+    (LocalDate/of 2026 6 19)   ; Juneteenth
+    (LocalDate/of 2026 7 3)    ; Independence Day (observed)
+    (LocalDate/of 2026 9 7)    ; Labor Day
+    (LocalDate/of 2026 11 11)  ; Veterans Day
+    (LocalDate/of 2026 11 26)  ; Thanksgiving
+    (LocalDate/of 2026 12 25)})  ; Christmas
+
+(price/resolve-prices plan zdt {:holiday? us-federal-2026})
+(schedule/price-schedule plan start end la {:holiday? us-federal-2026})
+```
+
+You can also pass any `(LocalDate -> bool)` function — e.g. wrap a calendar service. Without `:holiday?`, `urpx:holiday` brackets never match.
+
+### Sub-hour granularity
+
+`price-schedule` walks at hourly steps by default. For rate plans that define sub-hour TOU bracket transitions, pass `:step`:
+
+```clojure
+(import '[java.time Duration])
+(schedule/price-schedule plan start end la {:step (Duration/ofMinutes 15)})
+```
+
+Adjacent steps with identical resolved ledgers are still merged, so a quarter-hour walk across an hour-aligned plan produces the same merged intervals as the hourly walk.
+
 ## Namespace overview
 
 | Namespace        | Purpose |
@@ -88,15 +124,14 @@ For block-tiered plans (e.g. CPAU E-1), each ledger's `:tiers` vector exposes ev
 
 Currently covered:
 - Both top-level document types: `urpx:RatePlan` (CPAU E-1 TOU, CPAU E-1 non-TOU, PG&E E-ELEC) and `urpx:RatePlanModifier` (EEC, NSE, HRA) parse, coerce, and validate
-- TOU period resolution: seasons, day-types (`urpx:allDays`, `urpx:weekday`, `urpx:weekend`), time-bracket containment with midnight wrap
+- TOU period resolution: seasons, day-types (`urpx:allDays`, `urpx:weekday`, `urpx:weekend`, `urpx:holiday`), time-bracket containment with midnight wrap
 - Block-tier surfacing with bounds and bound operators
 - Flat per-energy charges (distribution, public benefits)
 - Active-price selection by latest `startDate ≤ query-date`, drawing from both flat top-level prices and `PriceSet`-scoped prices
+- Configurable schedule step (hourly default; sub-hour available via `:step`)
 
 Known gaps:
-- Price resolution against a `urpx:RatePlanModifier` (the modifier schemas are in place, but combining a modifier's overrides with its base plan during resolution is not yet implemented)
-- `urpx:holiday` day-type matching (would need a holiday calendar)
-- Sub-hour TOU bracket transitions — schedule resolution is hourly
+- Price resolution against a `urpx:RatePlanModifier` — modifier schemas are in place, but combining a modifier's overrides with its base plan during resolution is not yet implemented
 
 ## Development
 
