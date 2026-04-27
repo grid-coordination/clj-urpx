@@ -153,7 +153,7 @@ Adjacent steps with identical resolved ledgers are still merged, so a quarter-ho
 
 | Namespace        | Purpose |
 |------------------|---------|
-| `urpx.core`      | Raw JSON-LD parsing (`load-rate-plan`, `parse-rate-plan`) |
+| `urpx.core`          | JSON-LD parsing and loading (`parse-rate-plan`, `load-rate-plan`, `parse-graph`, `load-graph`) |
 | `urpx.schema`    | Malli schemas for the coerced URPX entity model |
 | `urpx.coerce`    | Schema-driven coercion: strings → typed values; `validate`, `explain` |
 | `urpx.index`     | `build-index`, `resolve-ref`, `get-entity` for `@id` references |

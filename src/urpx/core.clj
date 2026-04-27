@@ -48,12 +48,52 @@
    Returns a Clojure map with keys converted to namespaced keywords:
    prefixed CURIEs (e.g. 'urpx:name') become :urpx/name; JSON-LD reserved keys
    ('@id', '@type', '@context') become :jsonld/id, :jsonld/type, :jsonld/context.
-   String values (including CURIE references) are left unchanged."
+   String values (including CURIE references) are left unchanged.
+
+   This is a raw parser — it does not unwrap a top-level @graph container. Use
+   `parse-graph` / `load-graph` for documents that bundle multiple entities."
   [src]
   (with-open [r (io/reader src)]
     (transform-keys (json/read r))))
 
-(defn load-rate-plan
-  "Load a URPX rate plan from a file path. Convenience wrapper around `parse-rate-plan`."
+(defn parse-graph
+  "Parse a URPX JSON-LD document and return a vector of every top-level entity.
+
+   - Documents with a top-level `@graph` yield the graph contents (a vector
+     of entity maps), e.g. a base RatePlan + its sibling RatePlanModifier
+     bundled together.
+   - Single-entity documents yield a one-element vector containing the
+     entity itself.
+
+   Always returns a vector so callers can use the same code path for both
+   shapes; dispatch on each entity's `:jsonld/type` to decide what to do
+   with it (e.g. via `urpx.coerce/coerce-doc`)."
+  [src]
+  (let [parsed (parse-rate-plan src)]
+    (if-let [g (:jsonld/graph parsed)]
+      (vec g)
+      [parsed])))
+
+(defn load-graph
+  "Load a URPX JSON-LD document from a file path. See `parse-graph`."
   [path]
-  (parse-rate-plan (io/file path)))
+  (parse-graph (io/file path)))
+
+(defn load-rate-plan
+  "Load a URPX rate plan from a file path. The document may contain either a
+   single top-level urpx:RatePlan or a `@graph` array bundling the plan with
+   sibling entities (RatePlanModifier, ProgramEnrollment, etc.). In the
+   `@graph` case the unique urpx:RatePlan is returned; zero or more than one
+   urpx:RatePlan in a single document is an error — use `load-graph` to
+   inspect such documents directly."
+  [path]
+  (let [entities (load-graph path)
+        plans (filter #(= "urpx:RatePlan" (:jsonld/type %)) entities)]
+    (case (count plans)
+      0 (throw (ex-info "No urpx:RatePlan entity in document"
+                        {:path path
+                         :entity-types (mapv :jsonld/type entities)}))
+      1 (first plans)
+      (throw (ex-info "Multiple urpx:RatePlan entities in @graph; use load-graph to disambiguate"
+                      {:path path
+                       :rate-plan-ids (mapv :jsonld/id plans)})))))
