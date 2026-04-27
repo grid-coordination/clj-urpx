@@ -84,6 +84,18 @@ For block-tiered plans (e.g. CPAU E-1), each ledger's `:tiers` vector exposes ev
 
 When neither is available, an `ex-info` is thrown rather than silently falling back to the system default. `resolve-prices` takes a `ZonedDateTime` directly, so its zone always comes from the caller.
 
+For documents that omit `urpx:timezoneIdentifier`, the optional `urpx.tz-inference/infer-zone` helper does best-effort inference from the publishing utility (`urpx:eiaId`, `urpx:legalName`). It returns `nil` for unknown or multi-zone utilities so the caller fails loudly rather than silently picking one. Inference is **opt-in** — `price-schedule` does not call it automatically; compose at the call site:
+
+```clojure
+(require '[urpx.tz-inference :as tz])
+(let [zone (or (some-> plan :urpx/timezoneIdentifier ZoneId/of)
+               (:zone (tz/infer-zone plan))
+               (throw (ex-info "no timezone for this plan" {})))]
+  (schedule/price-schedule plan start end zone))
+```
+
+The shipped lookup tables only cover utilities used by the test suite; production deployments should supply their own (`:eia-id->zone` / `:legal-name->zone` opts).
+
 ### Holiday calendar
 
 URPX `TimeBracket` carries two optional booleans — `urpx:includeHolidays` and `urpx:includeNonHolidays` — that gate whether the bracket applies on holidays, non-holidays, or both (both default to `true` when omitted, matching every day). To resolve a plan that uses these gates (e.g. PG&E E-TOU-D's "weekday peak EXCLUDING holidays" pattern), pass a `:holiday?` predicate (`LocalDate -> bool`). A plain set of `LocalDate`s works because sets are functions:
@@ -145,8 +157,9 @@ Adjacent steps with identical resolved ledgers are still merged, so a quarter-ho
 | `urpx.schema`    | Malli schemas for the coerced URPX entity model |
 | `urpx.coerce`    | Schema-driven coercion: strings → typed values; `validate`, `explain` |
 | `urpx.index`     | `build-index`, `resolve-ref`, `get-entity` for `@id` references |
-| `urpx.price`     | `resolve-prices`, `resolve-modifier-prices`, `resolve-prices-with-modifiers`, `marginal-unit-rate` |
-| `urpx.schedule`  | `price-schedule`, `price-schedule-days` |
+| `urpx.price`         | `resolve-prices`, `resolve-modifier-prices`, `resolve-prices-with-modifiers`, `marginal-unit-rate` |
+| `urpx.schedule`      | `price-schedule`, `price-schedule-days` |
+| `urpx.tz-inference`  | `infer-zone` (opt-in fallback when `urpx:timezoneIdentifier` is absent) |
 
 ## Status
 
