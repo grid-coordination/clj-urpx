@@ -165,6 +165,7 @@
    [:jsonld/type [:= "urpx:TOUSchedule"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/referencesMetricInput Ref]
+   [:urpx/hasCalendar {:optional true} Ref]
    [:urpx/hasTOUTier [:vector TOUTier]]])
 
 (def CalculationMethod
@@ -220,11 +221,40 @@
    [:urpx/hasServiceTier {:optional true} [:vector ServiceTier]]
    [:urpx/hasLedger [:vector Ledger]]])
 
+(def Holiday
+  "A single named holiday in a urpx:HolidayCalendar. URPX permits the
+   observance to be expressed as either a literal date (urpx:holidayDate,
+   year-specific) or a free-form rule string (urpx:holidayRule, recurring).
+   urpx:observanceRule (a Ref to urpx:actualDateObservance / urpx:nearestWeekdayObservance /
+   urpx:mondayIfWeekendObservance / urpx:fridayIfWeekendObservance) optionally
+   shifts the observance date when it falls on a weekend."
+  [:map
+   [:jsonld/type [:= "urpx:Holiday"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/holidayName    {:optional true} :string]
+   [:urpx/holidayDate    {:optional true} Date]
+   [:urpx/holidayRule    {:optional true} :string]
+   [:urpx/observanceRule {:optional true} Ref]])
+
+(def HolidayCalendar
+  "A bundle of urpx:Holiday entries attached to a PlanElements (and optionally
+   referenced from a TOUSchedule via urpx:hasCalendar). When attached, the
+   calendar is the canonical holiday set for the rate plan — consumers can
+   derive a (LocalDate -> bool) predicate from it via urpx.holidays/derive-predicate
+   instead of supplying one out-of-band."
+  [:map
+   [:jsonld/type [:= "urpx:HolidayCalendar"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/hasHoliday
+    {:decode/urpx-jsonld single-or-vec->vec}
+    [:vector Holiday]]])
+
 (def PlanElements
   [:map
    [:jsonld/type [:= "urpx:PlanElements"]]
-   [:urpx/hasSeasons     {:optional true} [:vector Season]]
-   [:urpx/hasMetricInput {:optional true} [:vector MetricInput]]
+   [:urpx/hasSeasons         {:optional true} [:vector Season]]
+   [:urpx/hasMetricInput     {:optional true} [:vector MetricInput]]
+   [:urpx/hasHolidayCalendar {:optional true} HolidayCalendar]
    [:urpx/hasBillingModel BillingModel]])
 
 ;; ---------------------------------------------------------------------------

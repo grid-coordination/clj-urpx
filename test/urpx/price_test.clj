@@ -133,12 +133,54 @@
           r         (price/resolve-prices plan when-zdt {:holiday? #{mlk}})]
       (is (= 4 (:urpx.resolved/tou-period-number r))))))
 
-(deftest e-tou-d-no-holiday-predicate-treats-day-as-non-holiday
-  (testing "Same Mon 2027-01-18 18:00 with no holiday? predicate — date is
-            treated as non-holiday, so the peak window matches as on any weekday."
+(deftest e-tou-d-mlk-not-in-embedded-calendar
+  (testing "Mon 2027-01-18 (MLK Day) 18:00 with no :holiday? — the embedded
+            HolidayCalendar is auto-derived but does NOT list MLK, so this
+            Monday matches the peak window like any other weekday."
     (let [plan (fixtures/load-rate-plan "pge-e-tou-d-tou-holiday-2026-03-01")
           r    (price/resolve-prices plan (zdt 2027 1 18 18))]
       (is (= 2 (:urpx.resolved/tou-period-number r))))))
+
+;; ---------------------------------------------------------------------------
+;; URPX-f9x — derive holiday set from embedded urpx:HolidayCalendar
+;; ---------------------------------------------------------------------------
+
+(deftest e-tou-d-derived-calendar-recognizes-memorial-day
+  (testing "Mon 2026-05-25 (Memorial Day, Last Mon May) 18:00 with no :holiday? —
+            the embedded HolidayCalendar derives Memorial Day, so the Winter
+            peak window is suppressed; the off-peak holiday-window override
+            takes over."
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-d-tou-holiday-2026-03-01")
+          r    (price/resolve-prices plan (zdt 2026 5 25 18))]
+      (is (= 4 (:urpx.resolved/tou-period-number r))
+          "Winter Off-Peak (4) — derived holiday suppresses Winter Peak (2)"))))
+
+(deftest e-tou-d-derived-calendar-recognizes-labor-day
+  (testing "Mon 2026-09-07 (Labor Day, 1st Mon Sep) 18:00 — Summer; derived
+            calendar suppresses Summer Peak in favor of Summer Off-Peak."
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-d-tou-holiday-2026-03-01")
+          r    (price/resolve-prices plan (zdt 2026 9 7 18))]
+      (is (= 3 (:urpx.resolved/tou-period-number r))))))
+
+(deftest e-tou-d-explicit-holiday-overrides-derived
+  (testing "Explicit :holiday? in opts overrides the embedded calendar — pass
+            a constantly-false predicate and Memorial Day matches the peak
+            window like any other Monday."
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-d-tou-holiday-2026-03-01")
+          r    (price/resolve-prices plan (zdt 2026 5 25 18)
+                                     {:holiday? (constantly false)})]
+      (is (= 2 (:urpx.resolved/tou-period-number r))
+          "Winter Peak (2) — explicit :holiday? wins"))))
+
+(deftest no-embedded-calendar-keeps-fallback-behavior
+  (testing "Plans without urpx:HolidayCalendar still get the historical
+            'every date is a non-holiday' fallback when :holiday? is omitted."
+    (let [plan (fixtures/load-rate-plan "cpau-e-1-tou-2026-01-01")
+          ;; CPAU E-1 TOU has no holiday-aware brackets, so this just verifies
+          ;; the resolution still works without throwing on a plan that lacks
+          ;; a HolidayCalendar.
+          r    (price/resolve-prices plan (zdt 2026 7 15 17))]
+      (is (= "Summer Peak" (:urpx.resolved/tou-period-name r))))))
 
 (deftest unknown-day-type-fails-loud
   (testing "An out-of-vocabulary dayType returns no match (no silent fallthrough)."

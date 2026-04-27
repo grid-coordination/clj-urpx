@@ -17,9 +17,18 @@
   Day types honored (URPX ontology): urpx:allDays, urpx:weekdayDays,
   urpx:weekendDays, urpx:customDays. Holiday inclusion is expressed by the
   TimeBracket's optional urpx:includeHolidays / urpx:includeNonHolidays
-  booleans (both default to true when omitted). Holiday detection itself
-  requires the caller to pass a `:holiday?` predicate (LocalDate -> bool);
-  without it, every date is treated as a non-holiday."
+  booleans (both default to true when omitted). Holiday detection sources,
+  in priority order:
+
+    1. Explicit `:holiday?` predicate in opts (highest precedence — overrides).
+    2. The plan's embedded urpx:HolidayCalendar, derived via
+       `urpx.holidays/derive-predicate`.
+    3. Fallback: every date treated as a non-holiday.
+
+  Plans without a HolidayCalendar and called without `:holiday?` retain the
+  pre-existing 'every date is a non-holiday' fallback — so brackets that
+  opt out of non-holidays (urpx:includeNonHolidays = false) will never match."
+  (:require [urpx.holidays :as holidays])
   (:import [java.time DayOfWeek LocalDate LocalTime ZonedDateTime]))
 
 ;; ---------------------------------------------------------------------------
@@ -244,13 +253,19 @@
      :holiday?  predicate `(LocalDate -> bool)` used to evaluate a bracket's
                 urpx:includeHolidays / urpx:includeNonHolidays gates. A plain
                 set of LocalDates works (sets are functions). When omitted,
-                every date is treated as a non-holiday — so brackets that
-                opt out of non-holidays (urpx:includeNonHolidays = false,
-                e.g. holiday-only off-peak overrides) will never match.
+                a predicate is derived from the plan's embedded
+                urpx:HolidayCalendar via `urpx.holidays/derive-predicate`;
+                if neither is available, every date is treated as a
+                non-holiday — so brackets that opt out of non-holidays
+                (urpx:includeNonHolidays = false, e.g. holiday-only off-peak
+                overrides) will never match.
 
    Examples of `:holiday?`:
 
-     ;; Static set — quickest to set up:
+     ;; Most rate plans embed urpx:HolidayCalendar — no opts needed:
+     (resolve-prices plan zdt)
+
+     ;; Static set — overrides any embedded calendar:
      (def us-federal-2026
        #{(LocalDate/of 2026 1 1)    ; New Year's Day
          (LocalDate/of 2026 1 19)   ; Martin Luther King Jr. Day
@@ -304,7 +319,8 @@
          tou-schedule  (:urpx/hasTOUSchedule billing)
          tiers-by-num  (service-tiers-by-number billing)
          prices        (:urpx/hasPrices version)
-         holiday?      (:holiday? opts)
+         holiday?      (or (:holiday? opts)
+                           (holidays/derive-predicate rate-plan))
 
          date          (.toLocalDate zdt)
          local-time    (.toLocalTime zdt)
