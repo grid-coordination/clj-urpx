@@ -1,17 +1,14 @@
 (ns urpx.core-test
   (:require [clojure.test :refer [deftest is testing]]
-            [clojure.java.io :as io]
-            [urpx.core :as core]))
-
-(def cpau-tou-path
-  "../urpx/test-cases/cpau-e-1-tou-2026-01-01/data/urpx-rate-plan_cpau_e-1-tou_2026-01-01.jsonld")
+            [urpx.core :as core]
+            [urpx.test-fixtures :as fixtures]))
 
 (deftest cpau-tou-fixture-available
-  (is (.exists (io/file cpau-tou-path))
-      "CPAU E-1 TOU JSON-LD fixture must exist at ../urpx (sibling repo)"))
+  (is (some? (fixtures/fixture-resource "cpau-e-1-tou-2026-01-01"))
+      "CPAU E-1 TOU JSON-LD fixture must be on the classpath"))
 
 (deftest load-rate-plan-cpau-tou
-  (let [plan (core/load-rate-plan cpau-tou-path)]
+  (let [plan (fixtures/load-raw "cpau-e-1-tou-2026-01-01")]
 
     (testing "top-level rate plan identity"
       (is (= "urpx:RatePlan" (:jsonld/type plan)))

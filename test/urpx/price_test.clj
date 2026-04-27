@@ -1,16 +1,9 @@
 (ns urpx.price-test
   (:require [clojure.test :refer [deftest is testing]]
-            [urpx.core :as core]
-            [urpx.coerce :as coerce]
-            [urpx.price :as price])
+            [urpx.price :as price]
+            [urpx.test-fixtures :as fixtures])
   (:import [java.math BigDecimal]
            [java.time ZonedDateTime ZoneId]))
-
-(def cpau-tou-path
-  "../urpx/test-cases/cpau-e-1-tou-2026-01-01/data/urpx-rate-plan_cpau_e-1-tou_2026-01-01.jsonld")
-
-(def cpau-e1-path
-  "../urpx/test-cases/cpau-e-1-2025-07-01/data/urpx-rate-plan_cpau_e-1_2025-07-01.jsonld")
 
 (def la-zone (ZoneId/of "America/Los_Angeles"))
 
@@ -23,7 +16,7 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest cpau-tou-summer-peak
-  (let [plan (coerce/coerce-rate-plan (core/load-rate-plan cpau-tou-path))
+  (let [plan (fixtures/load-rate-plan "cpau-e-1-tou-2026-01-01")
         ;; July 15, 2026 at 17:00 — Summer (Jun-Sep), peak hour (16:00-21:00)
         r (price/resolve-prices plan (zdt 2026 7 15 17))]
     (is (= "Summer" (:urpx.resolved/season-name r)))
@@ -46,7 +39,7 @@
              (price/marginal-unit-rate r))))))
 
 (deftest cpau-tou-winter-super-off-peak
-  (let [plan (coerce/coerce-rate-plan (core/load-rate-plan cpau-tou-path))
+  (let [plan (fixtures/load-rate-plan "cpau-e-1-tou-2026-01-01")
         ;; January 15, 2026 at 12:00 — Winter (Oct-May), super off-peak (09:00-15:00)
         r (price/resolve-prices plan (zdt 2026 1 15 12))]
     (is (= "Winter" (:urpx.resolved/season-name r)))
@@ -59,7 +52,7 @@
 
 (deftest cpau-tou-summer-off-peak-wraps-midnight
   (testing "off-peak bracket 21:00-09:00 wraps midnight; both 22:00 and 06:00 hit it"
-    (let [plan (coerce/coerce-rate-plan (core/load-rate-plan cpau-tou-path))
+    (let [plan (fixtures/load-rate-plan "cpau-e-1-tou-2026-01-01")
           late (price/resolve-prices plan (zdt 2026 7 15 22))
           early (price/resolve-prices plan (zdt 2026 7 15 6))]
       (is (= "Summer Off-Peak" (:urpx.resolved/tou-period-name late)))
@@ -67,7 +60,7 @@
 
 (deftest cpau-tou-skips-customer-charge
   (testing "monthly customer-charge ledger is excluded from per-instant resolution"
-    (let [plan (coerce/coerce-rate-plan (core/load-rate-plan cpau-tou-path))
+    (let [plan (fixtures/load-rate-plan "cpau-e-1-tou-2026-01-01")
           r (price/resolve-prices plan (zdt 2026 7 15 17))
           names (set (map :urpx.resolved/ledger-name (:urpx.resolved/ledgers r)))]
       (is (not (contains? names "Customer Charge"))))))
@@ -78,7 +71,7 @@
 
 (deftest cpau-e1-block-tiers-surface-all-prices
   (testing "block-tiered ledgers expose every tier with its bounds and unit-price"
-    (let [plan (coerce/coerce-rate-plan (core/load-rate-plan cpau-e1-path))
+    (let [plan (fixtures/load-rate-plan "cpau-e-1-2025-07-01")
           r (price/resolve-prices plan (zdt 2025 8 1 12))
           commodity (->> (:urpx.resolved/ledgers r)
                          (some #(when (= "Commodity (Supply)" (:urpx.resolved/ledger-name %)) %)))
@@ -98,7 +91,7 @@
         (is (some? (:urpx.resolved/tier-upper-bound-operator t2)))))))
 
 (deftest cpau-e1-marginal-rate-uses-lowest-tier
-  (let [plan (coerce/coerce-rate-plan (core/load-rate-plan cpau-e1-path))
+  (let [plan (fixtures/load-rate-plan "cpau-e-1-2025-07-01")
         r (price/resolve-prices plan (zdt 2025 8 1 12))]
     ;; Commodity tier 1 0.10373 + Distribution tier 1 0.09593 + Public Benefits 0.00604
     (is (= (-> (BigDecimal. "0.10373")
@@ -110,9 +103,6 @@
 ;; URPX-oc2 — dayType vocabulary + holiday inclusion (PG&E E-TOU-D)
 ;; ---------------------------------------------------------------------------
 
-(def pge-e-tou-d-path
-  "../urpx/test-cases/pge-e-tou-d-tou-holiday-2026-03-01/data/urpx-rate-plan_pge_e-tou-d-tou-holiday_2026-03-01.jsonld")
-
 ;; E-TOU-D TOUPeriod numbering (from the fixture):
 ;;   1 = Summer Peak (weekdayDays + includeHolidays:false)
 ;;   2 = Winter Peak (weekdayDays + includeHolidays:false)
@@ -121,7 +111,7 @@
 
 (deftest e-tou-d-weekday-evening-is-summer-peak
   (testing "Wed 2026-07-15 18:00 — Summer Peak (weekdayDays + includeHolidays:false)"
-    (let [plan (coerce/coerce-rate-plan (core/load-rate-plan pge-e-tou-d-path))
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-d-tou-holiday-2026-03-01")
           r (price/resolve-prices plan (zdt 2026 7 15 18))]
       (is (= 1 (:urpx.resolved/tou-period-number r))))))
 
@@ -129,7 +119,7 @@
   (testing "Sat 2026-07-04 18:00 — weekendDays bracket wins; not Summer Peak
             (regression: would previously fall into permissive :else true and
             wrongly match the weekdayDays peak bracket)."
-    (let [plan (coerce/coerce-rate-plan (core/load-rate-plan pge-e-tou-d-path))
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-d-tou-holiday-2026-03-01")
           r (price/resolve-prices plan (zdt 2026 7 4 18))]
       (is (= 3 (:urpx.resolved/tou-period-number r))))))
 
@@ -137,7 +127,7 @@
   (testing "Mon 2027-01-18 (MLK Day) 18:00 — peak window is suppressed by
             includeHolidays:false; the off-peak holiday-window override
             (includeHolidays:true + includeNonHolidays:false) takes over."
-    (let [plan      (coerce/coerce-rate-plan (core/load-rate-plan pge-e-tou-d-path))
+    (let [plan      (fixtures/load-rate-plan "pge-e-tou-d-tou-holiday-2026-03-01")
           mlk       (java.time.LocalDate/of 2027 1 18)
           when-zdt  (zdt 2027 1 18 18)
           r         (price/resolve-prices plan when-zdt {:holiday? #{mlk}})]
@@ -146,13 +136,13 @@
 (deftest e-tou-d-no-holiday-predicate-treats-day-as-non-holiday
   (testing "Same Mon 2027-01-18 18:00 with no holiday? predicate — date is
             treated as non-holiday, so the peak window matches as on any weekday."
-    (let [plan (coerce/coerce-rate-plan (core/load-rate-plan pge-e-tou-d-path))
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-d-tou-holiday-2026-03-01")
           r    (price/resolve-prices plan (zdt 2027 1 18 18))]
       (is (= 2 (:urpx.resolved/tou-period-number r))))))
 
 (deftest unknown-day-type-fails-loud
   (testing "An out-of-vocabulary dayType returns no match (no silent fallthrough)."
-    (let [plan-base (coerce/coerce-rate-plan (core/load-rate-plan pge-e-tou-d-path))
+    (let [plan-base (fixtures/load-rate-plan "pge-e-tou-d-tou-holiday-2026-03-01")
           plan (update-in plan-base
                           [:urpx/hasRatePlanVersion
                            :urpx/hasPlanElements
@@ -170,21 +160,9 @@
 ;; URPX-yos — RatePlanModifier resolution
 ;; ---------------------------------------------------------------------------
 
-(def cpau-eec-path
-  "../urpx/test-cases/cpau-e-eec-1-2025-09-01/data/urpx-rate-plan-modifier_cpau_e-eec-1_2025-09-01.jsonld")
-
-(def cpau-nse-path
-  "../urpx/test-cases/cpau-e-nse-1-2025-09-01/data/urpx-rate-plan-modifier_cpau_e-nse-1_2025-09-01.jsonld")
-
-(def cpau-hra-path
-  "../urpx/test-cases/cpau-e-hra-2023-01-01/data/urpx-rate-plan-modifier_cpau_e-hra_2023-01-01.jsonld")
-
-(defn- load-modifier [path]
-  (coerce/coerce-rate-plan-modifier (core/load-rate-plan path)))
-
 (deftest eec-modifier-surfaces-single-export-compensation-price
   (testing "EEC adds a single Export Compensation ledger with one negative price"
-    (let [eec (load-modifier cpau-eec-path)
+    (let [eec (fixtures/load-rate-plan-modifier "cpau-e-eec-1-2025-09-01")
           ;; EEC's Price startDate is 2025-09-01; query after that date.
           {:keys [urpx.resolved/ledgers]} (price/resolve-modifier-prices eec (zdt 2026 1 15 12))]
       (is (= 1 (count ledgers)))
@@ -197,7 +175,7 @@
 
 (deftest nse-modifier-surfaces-single-net-surplus-price
   (testing "NSE adds a single Net Surplus Compensation ledger with one negative price"
-    (let [nse (load-modifier cpau-nse-path)
+    (let [nse (fixtures/load-rate-plan-modifier "cpau-e-nse-1-2025-09-01")
           ;; NSE's Price startDate is 2025-09-01; query after that date.
           {:keys [urpx.resolved/ledgers]} (price/resolve-modifier-prices nse (zdt 2026 1 15 12))]
       (is (= 1 (count ledgers)))
@@ -206,7 +184,7 @@
 
 (deftest hra-modifier-surfaces-full-4x4-matrix
   (testing "HRA exposes all 16 matrix prices under one ledger; caller picks by id"
-    (let [hra (load-modifier cpau-hra-path)
+    (let [hra (fixtures/load-rate-plan-modifier "cpau-e-hra-2023-01-01")
           {:keys [urpx.resolved/ledgers]} (price/resolve-modifier-prices hra (zdt 2026 7 15 12))]
       (is (= 1 (count ledgers)))
       (let [tiers (:urpx.resolved/tiers (first ledgers))]
@@ -224,8 +202,8 @@
 
 (deftest resolve-with-modifiers-appends-modifier-ledgers
   (testing "Base CPAU E-1 ledgers + EEC ledger appear in the combined output"
-    (let [plan (coerce/coerce-rate-plan (core/load-rate-plan cpau-e1-path))
-          eec  (load-modifier cpau-eec-path)
+    (let [plan (fixtures/load-rate-plan "cpau-e-1-2025-07-01")
+          eec  (fixtures/load-rate-plan-modifier "cpau-e-eec-1-2025-09-01")
           ;; Query after EEC's 2025-09-01 effective date.
           when-zdt (zdt 2026 1 15 12)
           base (price/resolve-prices plan when-zdt)
@@ -238,8 +216,8 @@
 (deftest modifier-not-applicable-to-plan-is-skipped
   (testing "A modifier whose applicableToRatePlan does not list the base plan
             @id contributes no ledgers"
-    (let [plan (coerce/coerce-rate-plan (core/load-rate-plan cpau-e1-path))
-          eec-base (load-modifier cpau-eec-path)
+    (let [plan (fixtures/load-rate-plan "cpau-e-1-2025-07-01")
+          eec-base (fixtures/load-rate-plan-modifier "cpau-e-eec-1-2025-09-01")
           eec (assoc-in eec-base
                         [:urpx/hasRatePlanModifierVersion :urpx/applicableToRatePlan]
                         [{:jsonld/id "urpx:not-this-plan"}])
@@ -251,9 +229,9 @@
 
 (deftest hra-modifier-applies-to-both-cpau-e1-and-cpau-e1-tou
   (testing "HRA's applicableToRatePlan list contains both CPAU base plans"
-    (let [hra (load-modifier cpau-hra-path)
-          plan-e1     (coerce/coerce-rate-plan (core/load-rate-plan cpau-e1-path))
-          plan-e1-tou (coerce/coerce-rate-plan (core/load-rate-plan cpau-tou-path))
+    (let [hra (fixtures/load-rate-plan-modifier "cpau-e-hra-2023-01-01")
+          plan-e1     (fixtures/load-rate-plan "cpau-e-1-2025-07-01")
+          plan-e1-tou (fixtures/load-rate-plan "cpau-e-1-tou-2026-01-01")
           on-e1     (price/resolve-prices-with-modifiers plan-e1     [hra] (zdt 2026 1 15 12))
           on-e1-tou (price/resolve-prices-with-modifiers plan-e1-tou [hra] (zdt 2026 7 15 17))]
       (is (some #(= "Hydro Rate Adjustment" (:urpx.resolved/ledger-name %))

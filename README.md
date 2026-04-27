@@ -34,7 +34,7 @@ URPX is an [LF Energy](https://lfenergy.org/) open standard for exchanging utili
 
 ;; 1. Load and coerce a URPX rate plan document
 (def plan
-  (-> "test-cases/cpau-e-1-tou-2026-01-01/data/urpx-rate-plan_cpau_e-1-tou_2026-01-01.jsonld"
+  (-> "path/to/urpx-rate-plan.jsonld"
       core/load-rate-plan
       coerce/coerce-rate-plan))
 
@@ -104,7 +104,7 @@ You can also pass any `(LocalDate -> bool)` function — e.g. wrap a calendar se
 
 ```clojure
 (def eec
-  (-> "test-cases/cpau-e-eec-1-2025-09-01/data/urpx-rate-plan-modifier_cpau_e-eec-1_2025-09-01.jsonld"
+  (-> "path/to/urpx-rate-plan-modifier.jsonld"
       core/load-rate-plan
       coerce/coerce-rate-plan-modifier))
 

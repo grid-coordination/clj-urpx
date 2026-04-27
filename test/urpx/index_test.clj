@@ -1,11 +1,7 @@
 (ns urpx.index-test
   (:require [clojure.test :refer [deftest is testing]]
-            [urpx.core :as core]
-            [urpx.coerce :as coerce]
-            [urpx.index :as index]))
-
-(def cpau-tou-path
-  "../urpx/test-cases/cpau-e-1-tou-2026-01-01/data/urpx-rate-plan_cpau_e-1-tou_2026-01-01.jsonld")
+            [urpx.index :as index]
+            [urpx.test-fixtures :as fixtures]))
 
 (deftest ref-predicate
   (is (index/ref? {:jsonld/id "urpx:foo"}))
@@ -31,7 +27,7 @@
       (is (nil? (idx "ref-only"))))))
 
 (deftest build-index-on-cpau-tou
-  (let [coerced (coerce/coerce-rate-plan (core/load-rate-plan cpau-tou-path))
+  (let [coerced (fixtures/load-rate-plan "cpau-e-1-tou-2026-01-01")
         idx (index/build-index coerced)]
     (testing "every entity that has a :jsonld/id is reachable by id"
       (is (some? (idx "urpx:cpau-e-1-tou")) "top-level RatePlan")

@@ -1,0 +1,4 @@
+SPDX-FileCopyrightText: Flux Tailor LLC
+SPDX-License-Identifier: Apache-2.0
+SPDX-Transition-License-After-Draft: CDLA-Permissive-2.0
+Comment: URPX project test-case dataset, vendored into clj-urpx for hermetic test runs. Will transition to CDLA-Permissive-2.0 when URPX is accepted as a Working Group Draft. See test/resources/urpx-fixtures/FIXTURES.md for upstream pinning.
