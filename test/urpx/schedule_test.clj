@@ -137,3 +137,38 @@
                       (get-in % [:urpx.interval/resolved
                                  :urpx.resolved/tou-period-name]))
                   sch-holiday))))))
+
+;; ---------------------------------------------------------------------------
+;; URPX-5xx — read timezone from the rate plan
+;; ---------------------------------------------------------------------------
+
+(deftest schedule-defaults-zone-from-plan-timezone-identifier
+  (testing "When the rate plan declares urpx:timezoneIdentifier, callers can
+            omit the zone arg and the schedule walks in that zone. Same plan
+            with an explicit zone produces the same schedule."
+    (let [plan      (assoc (fixtures/load-rate-plan "cpau-e-1-tou-2026-01-01")
+                           :urpx/timezoneIdentifier "America/Los_Angeles")
+          start     (start-of-day 2026 7 15)
+          end       (start-of-day 2026 7 16)
+          from-plan (schedule/price-schedule plan start end)
+          explicit  (schedule/price-schedule plan start end la-zone)]
+      (is (= explicit from-plan)
+          "no-zone arity matches explicit zone arity when the plan declares the same zone"))))
+
+(deftest schedule-throws-when-no-zone-and-plan-has-none
+  (testing "Plan without urpx:timezoneIdentifier and no explicit zone raises
+            a clear error rather than silently picking system default."
+    (let [plan  (fixtures/load-rate-plan "cpau-e-1-tou-2026-01-01") ; no timezoneIdentifier
+          start (start-of-day 2026 7 15)
+          end   (start-of-day 2026 7 16)]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"Cannot determine timezone"
+                            (schedule/price-schedule plan start end))))))
+
+(deftest schedule-days-also-defaults-zone-from-plan
+  (testing "price-schedule-days mirrors price-schedule's zone defaulting"
+    (let [plan  (assoc (fixtures/load-rate-plan "cpau-e-1-tou-2026-01-01")
+                       :urpx/timezoneIdentifier "America/Los_Angeles")
+          start (start-of-day 2026 7 15)]
+      (is (= (schedule/price-schedule-days plan start 1 la-zone)
+             (schedule/price-schedule-days plan start 1))))))

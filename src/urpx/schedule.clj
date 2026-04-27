@@ -18,6 +18,22 @@
   (:import [java.time Duration Instant ZonedDateTime ZoneId]
            [java.time.temporal ChronoUnit]))
 
+(defn- plan-zone
+  "Return the java.time.ZoneId declared by the rate plan's
+   urpx:timezoneIdentifier (an IANA zone string, e.g. \"America/Los_Angeles\"),
+   or nil when the plan does not declare one."
+  ^ZoneId [rate-plan]
+  (when-let [tz (:urpx/timezoneIdentifier rate-plan)]
+    (ZoneId/of tz)))
+
+(defn- resolve-zone
+  "Pick a zone for `rate-plan`: the explicit `zone` if non-nil, else the plan's
+   declared timezone. Throws when neither is available."
+  ^ZoneId [rate-plan ^ZoneId zone]
+  (or zone (plan-zone rate-plan)
+      (throw (ex-info "Cannot determine timezone: no :zone arg and rate plan has no urpx:timezoneIdentifier"
+                      {:plan-id (:jsonld/id rate-plan)}))))
+
 (defn- hour-start
   ^ZonedDateTime [^ZonedDateTime zdt]
   (.truncatedTo zdt ChronoUnit/HOURS))
@@ -51,7 +67,7 @@
    intervals))
 
 (defn price-schedule
-  "Generate a vector of merged price intervals across `[start, end)` in `zone`.
+  "Generate a vector of merged price intervals across `[start, end)`.
 
    Each entry is:
      {:tick/beginning           Instant
@@ -60,16 +76,22 @@
 
    Adjacent steps with identical ledger resolution are merged.
 
+   `zone` (a java.time.ZoneId) is optional when `rate-plan` declares
+   `urpx:timezoneIdentifier`; pass `nil` to use the plan's declared
+   timezone. An ex-info is thrown when neither is available.
+
    Optional `opts` map:
      :step      java.time.Duration — granularity at which the window is
                 walked. Default: `(Duration/ofHours 1)`. Use a smaller
                 step for plans with sub-hour TOU bracket transitions.
      :holiday?  predicate `(LocalDate -> bool)` passed through to
-                `urpx.price/resolve-prices` (matches urpx:holiday brackets)."
+                `urpx.price/resolve-prices`."
+  ([rate-plan start end] (price-schedule rate-plan start end nil nil))
   ([rate-plan start end zone] (price-schedule rate-plan start end zone nil))
-  ([rate-plan ^Instant start ^Instant end ^ZoneId zone opts]
-   (let [step  (or (:step opts) (Duration/ofHours 1))
-         steps (step-zdts start end zone step)
+  ([rate-plan ^Instant start ^Instant end zone opts]
+   (let [zone   (resolve-zone rate-plan zone)
+         step   (or (:step opts) (Duration/ofHours 1))
+         steps  (step-zdts start end zone step)
          hourly (mapv (fn [^ZonedDateTime zdt]
                         {:tick/beginning         (.toInstant zdt)
                          :tick/end               (.toInstant (.plus zdt step))
@@ -79,7 +101,9 @@
 
 (defn price-schedule-days
   "Convenience: generate a `price-schedule` covering `days` days starting from
-   `start`. Accepts the same `opts` as `price-schedule`."
+   `start`. Accepts the same `opts` as `price-schedule` and the same
+   plan-or-explicit zone resolution."
+  ([rate-plan start days] (price-schedule-days rate-plan start days nil nil))
   ([rate-plan start days zone] (price-schedule-days rate-plan start days zone nil))
-  ([rate-plan ^Instant start days ^ZoneId zone opts]
+  ([rate-plan ^Instant start days zone opts]
    (price-schedule rate-plan start (.plus start (Duration/ofDays days)) zone opts)))

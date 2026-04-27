@@ -331,6 +331,8 @@
    [:urpx/ratePlanIdentifier :string]
    [:urpx/name :string]
    [:urpx/initialEffectiveDate Date]
+   ;; IANA timezone identifier (e.g. "America/Los_Angeles"). Optional in URPX.
+   [:urpx/timezoneIdentifier {:optional true} :string]
    [:urpx/hasRatePlanVersion RatePlanVersion]])
 
 ;; ---------------------------------------------------------------------------
@@ -368,5 +370,6 @@
    [:urpx/ratePlanIdentifier :string]
    [:urpx/name :string]
    [:urpx/initialEffectiveDate Date]
+   [:urpx/timezoneIdentifier {:optional true} :string]
    [:urpx/isOptional :boolean]
    [:urpx/hasRatePlanModifierVersion RatePlanModifierVersion]])

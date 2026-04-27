@@ -73,6 +73,17 @@ URPX is an [LF Energy](https://lfenergy.org/) open standard for exchanging utili
 
 For block-tiered plans (e.g. CPAU E-1), each ledger's `:tiers` vector exposes every tier with its `:tier-lower-bound`, `:tier-upper-bound`, and `:unit-price` — the caller selects the active tier from cumulative billing-period usage.
 
+### Timezone
+
+`price-schedule` and `price-schedule-days` need a `ZoneId` to walk a window in local time. When the rate plan declares `urpx:timezoneIdentifier` (an IANA string, e.g. `"America/Los_Angeles"`), the zone arg can be omitted:
+
+```clojure
+(schedule/price-schedule-days plan start 1)            ; uses plan's declared zone
+(schedule/price-schedule-days plan start 1 la)         ; explicit override
+```
+
+When neither is available, an `ex-info` is thrown rather than silently falling back to the system default. `resolve-prices` takes a `ZonedDateTime` directly, so its zone always comes from the caller.
+
 ### Holiday calendar
 
 URPX `TimeBracket` carries two optional booleans — `urpx:includeHolidays` and `urpx:includeNonHolidays` — that gate whether the bracket applies on holidays, non-holidays, or both (both default to `true` when omitted, matching every day). To resolve a plan that uses these gates (e.g. PG&E E-TOU-D's "weekday peak EXCLUDING holidays" pattern), pass a `:holiday?` predicate (`LocalDate -> bool`). A plain set of `LocalDate`s works because sets are functions:
