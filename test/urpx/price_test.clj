@@ -260,3 +260,129 @@
                 (:urpx.resolved/ledgers on-e1)))
       (is (some #(= "Hydro Rate Adjustment" (:urpx.resolved/ledger-name %))
                 (:urpx.resolved/ledgers on-e1-tou))))))
+
+;; ---------------------------------------------------------------------------
+;; URPX-gog — multiple tier-Prices sharing a single PriceDefinition
+;; ---------------------------------------------------------------------------
+;;
+;; PG&E E-1's Conservation Incentive Adjustment ledger is the canonical
+;; example: one PriceDefinition (pge:pd-cia) with multiple Prices, where each
+;; Price (not the PD) carries the urpx:serviceTierNumber. The fixture below is
+;; a minimal stand-in built directly in the post-coerce shape — three tiers,
+;; one shared PD, no TOU machinery.
+
+(defn- shared-pd-tier-fixture
+  "Return a coerced RatePlan with one ledger backed by a single PriceDefinition
+   and three Prices, each carrying its own :urpx/serviceTierNumber."
+  []
+  {:jsonld/type "urpx:RatePlan"
+   :jsonld/id   "urpx:test-shared-pd"
+   :urpx/ratePlanIdentifier "TEST-SHARED-PD"
+   :urpx/name "Shared-PD tier-stratified test plan"
+   :urpx/initialEffectiveDate (java.time.LocalDate/of 2026 1 1)
+   :urpx/hasRatePlanVersion
+   {:jsonld/type "urpx:RatePlanVersion"
+    :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
+    :urpx/priceCurrency "USD"
+    :urpx/hasPlanElements
+    {:jsonld/type "urpx:PlanElements"
+     :urpx/hasBillingModel
+     {:jsonld/type "urpx:BillingModel"
+      :urpx/hasServiceTier
+      [{:jsonld/type "urpx:ServiceTier"
+        :urpx/serviceTierNumber 1
+        :urpx/name "Tier 1 (within baseline)"
+        :urpx/lowerBound (BigDecimal. "0")
+        :urpx/upperBound (BigDecimal. "100")}
+       {:jsonld/type "urpx:ServiceTier"
+        :urpx/serviceTierNumber 2
+        :urpx/name "Tier 2 (101-400% of baseline)"
+        :urpx/lowerBound (BigDecimal. "100")
+        :urpx/upperBound (BigDecimal. "400")}
+       {:jsonld/type "urpx:ServiceTier"
+        :urpx/serviceTierNumber 3
+        :urpx/name "Tier 2 Continued (over 400%)"
+        :urpx/lowerBound (BigDecimal. "400")}]
+      :urpx/hasLedger
+      [{:jsonld/type "urpx:Ledger"
+        :jsonld/id "test:ledger-cia"
+        :urpx/name "Conservation Incentive Adjustment"
+        :urpx/ledgerType {:jsonld/id "urpx:bundledLedger"}
+        :urpx/hasPriceDefinition
+        [{:jsonld/type "urpx:PriceDefinition"
+          :jsonld/id "test:pd-cia"
+          :urpx/name "CIA"}]}]}}
+    :urpx/hasPrices
+    {:jsonld/type "urpx:Prices"
+     :urpx/hasPrice
+     [{:jsonld/type "urpx:Price"
+       :jsonld/id "test:price-cia-t1"
+       :urpx/name "CIA Tier 1"
+       :urpx/unitPrice (BigDecimal. "-0.04052")
+       :urpx/referencesPriceDefinition {:jsonld/id "test:pd-cia"}
+       :urpx/startDate (java.time.LocalDate/of 2026 1 1)
+       :urpx/serviceTierNumber 1}
+      {:jsonld/type "urpx:Price"
+       :jsonld/id "test:price-cia-t2"
+       :urpx/name "CIA Tier 2"
+       :urpx/unitPrice (BigDecimal. "0.04089")
+       :urpx/referencesPriceDefinition {:jsonld/id "test:pd-cia"}
+       :urpx/startDate (java.time.LocalDate/of 2026 1 1)
+       :urpx/serviceTierNumber 2}
+      {:jsonld/type "urpx:Price"
+       :jsonld/id "test:price-cia-t2c"
+       :urpx/name "CIA Tier 2 Continued"
+       :urpx/unitPrice (BigDecimal. "0.04089")
+       :urpx/referencesPriceDefinition {:jsonld/id "test:pd-cia"}
+       :urpx/startDate (java.time.LocalDate/of 2026 1 1)
+       :urpx/serviceTierNumber 3}]}}})
+
+(deftest shared-pd-surfaces-every-tier-price
+  (testing "All three Prices sharing one PD surface as separate tier entries,
+            sorted by tier-number, each with the matching ServiceTier metadata"
+    (let [r (price/resolve-prices (shared-pd-tier-fixture) (zdt 2026 6 15 12))
+          ledger (->> (:urpx.resolved/ledgers r)
+                      (some #(when (= "Conservation Incentive Adjustment"
+                                      (:urpx.resolved/ledger-name %)) %)))
+          tiers (:urpx.resolved/tiers ledger)]
+      (is (some? ledger) "the CIA ledger appears in the resolved output")
+      (is (= 3 (count tiers)) "all three tier-prices surface")
+      (is (= [1 2 3] (mapv :urpx.resolved/tier-number tiers))
+          "tiers are sorted by tier-number")
+      (is (= [(BigDecimal. "-0.04052")
+              (BigDecimal. "0.04089")
+              (BigDecimal. "0.04089")]
+             (mapv :urpx.resolved/unit-price tiers))
+          "each tier surfaces its own unit-price, not the most-recent winner")
+      (is (= ["Tier 1 (within baseline)"
+              "Tier 2 (101-400% of baseline)"
+              "Tier 2 Continued (over 400%)"]
+             (mapv :urpx.resolved/tier-name tiers))
+          "ServiceTier metadata is attached via the Price's serviceTierNumber"))))
+
+(deftest temporal-versioning-still-picks-latest
+  (testing "Two Prices on the same (PD, serviceTierNumber) with different
+            startDates collapse to the latest — temporal versioning regression
+            check after switching active-prices-by-pd to multi-valued."
+    (let [base (shared-pd-tier-fixture)
+          ;; Add a NEWER tier-1 price (same PD, same tier, later startDate)
+          plan (update-in base
+                          [:urpx/hasRatePlanVersion :urpx/hasPrices :urpx/hasPrice]
+                          conj
+                          {:jsonld/type "urpx:Price"
+                           :jsonld/id "test:price-cia-t1-v2"
+                           :urpx/name "CIA Tier 1 (revised)"
+                           :urpx/unitPrice (BigDecimal. "-0.05000")
+                           :urpx/referencesPriceDefinition {:jsonld/id "test:pd-cia"}
+                           :urpx/startDate (java.time.LocalDate/of 2026 4 1)
+                           :urpx/serviceTierNumber 1})
+          r (price/resolve-prices plan (zdt 2026 6 15 12))
+          tiers (->> (:urpx.resolved/ledgers r)
+                     (some #(when (= "Conservation Incentive Adjustment"
+                                     (:urpx.resolved/ledger-name %)) %))
+                     :urpx.resolved/tiers)
+          tier-1 (->> tiers (some #(when (= 1 (:urpx.resolved/tier-number %)) %)))]
+      (is (= 3 (count tiers)) "still 3 tiers — the newer t1 replaced the older")
+      (is (= "test:price-cia-t1-v2" (:urpx.resolved/price-id tier-1))
+          "the newer-startDate Price wins for tier 1")
+      (is (= (BigDecimal. "-0.05000") (:urpx.resolved/unit-price tier-1))))))

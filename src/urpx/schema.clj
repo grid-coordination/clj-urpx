@@ -264,7 +264,10 @@
    [:urpx/name :string]
    [:urpx/unitPrice Decimal]
    [:urpx/referencesPriceDefinition Ref]
-   [:urpx/startDate {:optional true} Date]])
+   [:urpx/startDate {:optional true} Date]
+   ;; Tier-stratified pricing where many Prices share a single PriceDefinition
+   ;; and each Price carries its own tier number (PG&E E-1 CIA shape).
+   [:urpx/serviceTierNumber {:optional true} Int]])
 
 (def PriceSet
   [:map

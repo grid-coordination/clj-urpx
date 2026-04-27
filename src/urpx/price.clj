@@ -139,16 +139,33 @@
            (:urpx/hasPriceSet prices))))
 
 (defn- active-prices-by-pd
-  "Build a map from PriceDefinition id to the single active Price (the one
-   with the most recent effective start-date that is <= `query-date`)."
+  "Build a map from PriceDefinition id to a vector of currently-active
+   [price start-date] pairs. Within each PD, prices are deduped by the
+   composite key `(price-definition-id, serviceTierNumber)` so that two
+   distinct concrete patterns coexist without conflict:
+
+     - Tier-stratified pricing (PG&E E-1 CIA): one PriceDefinition with
+       multiple Prices, each carrying its own urpx:serviceTierNumber. Every
+       tier's Price surfaces under one PD because the keys differ.
+     - Temporal versioning: a single (PD, serviceTierNumber) key with
+       multiple Prices over time — the one with the latest effective
+       start-date wins.
+
+   For non-tiered ledgers (one PD, one Price, no serviceTierNumber) the
+   returned vector has a single entry."
   [prices ^LocalDate query-date]
-  (reduce (fn [acc [price sd]]
-            (let [pd-id (get-in price [:urpx/referencesPriceDefinition :jsonld/id])
-                  [_ existing-sd] (acc pd-id)]
-              (if (or (nil? existing-sd) (.isAfter sd existing-sd))
-                (assoc acc pd-id [price sd])
-                acc)))
-          {} (scoped-prices prices query-date)))
+  (let [latest-per-key
+        (reduce (fn [acc [price sd]]
+                  (let [k [(get-in price [:urpx/referencesPriceDefinition :jsonld/id])
+                           (:urpx/serviceTierNumber price)]
+                        [_ existing-sd] (acc k)]
+                    (if (or (nil? existing-sd) (.isAfter sd existing-sd))
+                      (assoc acc k [price sd])
+                      acc)))
+                {} (scoped-prices prices query-date))]
+    (reduce-kv (fn [acc [pd-id _] pair]
+                 (update acc pd-id (fnil conj []) pair))
+               {} latest-per-key)))
 
 (defn- all-active-prices-by-pd
   "Build a map from PriceDefinition id to a vector of [price start-date]
@@ -173,27 +190,32 @@
         (:urpx/hasServiceTier billing-model)))
 
 (defn- tier-info
-  "Pull tier metadata from a PriceDefinition + matching ServiceTier into the
-   resolved-entry shape. Returns an empty map when the PD is not block-tiered."
-  [pd service-tier]
-  (cond-> {}
-    (:urpx/serviceTierNumber pd)
-    (assoc :urpx.resolved/tier-number (:urpx/serviceTierNumber pd))
+  "Pull tier metadata for a (PD, Price) pair into the resolved-entry shape.
+   The serviceTierNumber may live on the Price (PG&E-style: many tier-Prices
+   share one PD) or on the PD (CPAU-style: one PD per tier). The Price's
+   number wins when both are present. Returns an empty map when the entry
+   isn't block-tiered."
+  [pd price tiers-by-num]
+  (let [tier-num     (or (:urpx/serviceTierNumber price) (:urpx/serviceTierNumber pd))
+        service-tier (when tier-num (tiers-by-num tier-num))]
+    (cond-> {}
+      tier-num
+      (assoc :urpx.resolved/tier-number tier-num)
 
-    service-tier
-    (merge (cond-> {}
-             (:urpx/name service-tier)
-             (assoc :urpx.resolved/tier-name (:urpx/name service-tier))
-             (:urpx/lowerBound service-tier)
-             (assoc :urpx.resolved/tier-lower-bound (:urpx/lowerBound service-tier))
-             (:urpx/upperBound service-tier)
-             (assoc :urpx.resolved/tier-upper-bound (:urpx/upperBound service-tier))
-             (:urpx/lowerBoundOperator service-tier)
-             (assoc :urpx.resolved/tier-lower-bound-operator
-                    (:urpx/lowerBoundOperator service-tier))
-             (:urpx/upperBoundOperator service-tier)
-             (assoc :urpx.resolved/tier-upper-bound-operator
-                    (:urpx/upperBoundOperator service-tier))))))
+      service-tier
+      (merge (cond-> {}
+               (:urpx/name service-tier)
+               (assoc :urpx.resolved/tier-name (:urpx/name service-tier))
+               (:urpx/lowerBound service-tier)
+               (assoc :urpx.resolved/tier-lower-bound (:urpx/lowerBound service-tier))
+               (:urpx/upperBound service-tier)
+               (assoc :urpx.resolved/tier-upper-bound (:urpx/upperBound service-tier))
+               (:urpx/lowerBoundOperator service-tier)
+               (assoc :urpx.resolved/tier-lower-bound-operator
+                      (:urpx/lowerBoundOperator service-tier))
+               (:urpx/upperBoundOperator service-tier)
+               (assoc :urpx.resolved/tier-upper-bound-operator
+                      (:urpx/upperBoundOperator service-tier)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Per-instant applicability of a PriceDefinition
@@ -293,7 +315,7 @@
                                         date local-time dow holiday?)
          period-num    (:urpx/touPeriodNumber tou-period)
 
-         pd->price     (active-prices-by-pd prices date)
+         pd->prices    (active-prices-by-pd prices date)
 
          ledger-results
          (vec
@@ -301,14 +323,14 @@
                 :let [tier-entries
                       (->> (:urpx/hasPriceDefinition ledger)
                            (filter #(pd-active-at-tou? % period-num))
-                           (keep (fn [pd]
-                                   (when-let [[price _] (pd->price (:jsonld/id pd))]
-                                     (merge
-                                      {:urpx.resolved/price-definition-id (:jsonld/id pd)
-                                       :urpx.resolved/price-id            (:jsonld/id price)
-                                       :urpx.resolved/price-name          (:urpx/name price)
-                                       :urpx.resolved/unit-price          (:urpx/unitPrice price)}
-                                      (tier-info pd (tiers-by-num (:urpx/serviceTierNumber pd)))))))
+                           (mapcat (fn [pd]
+                                     (for [[price _] (pd->prices (:jsonld/id pd))]
+                                       (merge
+                                        {:urpx.resolved/price-definition-id (:jsonld/id pd)
+                                         :urpx.resolved/price-id            (:jsonld/id price)
+                                         :urpx.resolved/price-name          (:urpx/name price)
+                                         :urpx.resolved/unit-price          (:urpx/unitPrice price)}
+                                        (tier-info pd price tiers-by-num)))))
                            (sort-by #(or (:urpx.resolved/tier-number %) 0))
                            vec)]
                 :when (seq tier-entries)]
