@@ -36,7 +36,10 @@ URPX is an [LF Energy](https://lfenergy.org/) open standard for exchanging utili
          '[urpx.schedule :as schedule])
 (import '[java.time LocalDate ZoneId ZonedDateTime])
 
-;; 1. Load and coerce a URPX rate plan document
+;; 1. Load and coerce a URPX rate plan document. v0.2.0 documents are
+;;    typically @graph bundles holding a urpx:RatePlan plus sibling
+;;    urpx:RatePlanModifier and metadata entities; load-rate-plan picks
+;;    the unique RatePlan from the bundle.
 (def plan
   (-> "path/to/urpx-rate-plan.jsonld"
       core/load-rate-plan
@@ -47,35 +50,33 @@ URPX is an [LF Energy](https://lfenergy.org/) open standard for exchanging utili
 (price/resolve-prices plan (ZonedDateTime/of 2026 7 15 17 0 0 0 la))
 ;; =>
 ;; {:urpx.resolved/season-name        "Summer"
-;;  :urpx.resolved/tou-period-name    "Summer Peak"
+;;  :urpx.resolved/tou-period-name    "Summer Peak Period"
 ;;  :urpx.resolved/tou-period-number  1
 ;;  :urpx.resolved/ledgers
-;;  [{:urpx.resolved/ledger-name "Commodity (Supply)"
+;;  [{:urpx.resolved/ledger-name "Energy Supply Prices"
 ;;    :urpx.resolved/tiers
-;;    [{:urpx.resolved/price-name "Commodity Summer Peak"
-;;      :urpx.resolved/unit-price 0.23354M}]}
-;;   {:urpx.resolved/ledger-name "Distribution (Delivery)"
-;;    :urpx.resolved/tiers [{:urpx.resolved/unit-price 0.09351M ...}]}
-;;   {:urpx.resolved/ledger-name "Public Benefits"
-;;    :urpx.resolved/tiers [{:urpx.resolved/unit-price 0.00604M ...}]}]}
+;;    [{:urpx.resolved/price-name "Generation Summer Peak"
+;;      :urpx.resolved/unit-price 0.20782M ...}
+;;     {:urpx.resolved/price-name "Bundled Power Charge Indifference Adjustment"
+;;      :urpx.resolved/unit-price -0.01011M ...}]}
+;;   {:urpx.resolved/ledger-name "Energy Delivery Prices"
+;;    :urpx.resolved/tiers [{:urpx.resolved/unit-price 0.20388M ...} ...]}
+;;   {:urpx.resolved/ledger-name "Adjustment Prices" ...}]}
 
 ;; 3. Marginal $/kWh — sum of the lowest-tier unit-price across all ledgers
-(price/marginal-unit-rate *1)   ;; => 0.33309M
+(price/marginal-unit-rate *1)
 
 ;; 4. Generate a day's worth of natural TOU intervals
 (def start (.toInstant (.atStartOfDay (LocalDate/of 2026 7 15) la)))
 (schedule/price-schedule-days plan start 1 la)
 ;; =>
-;; [{:tick/beginning #inst "2026-07-15T07:00:00Z"  ; midnight LA
-;;   :tick/end       #inst "2026-07-15T16:00:00Z"  ; 09:00 LA
-;;   :urpx.interval/resolved {... "Summer Off-Peak" ...}}
-;;  {... 09:00–15:00 "Summer Super Off-Peak"   $0.16645/kWh ...}
-;;  {... 15:00–16:00 "Summer Off-Peak"         $0.18204/kWh ...}
-;;  {... 16:00–21:00 "Summer Peak"             $0.33309/kWh ...}
-;;  {... 21:00–24:00 "Summer Off-Peak"         $0.18204/kWh ...}]
+;; [{:tick/beginning #inst "..." :tick/end #inst "..."
+;;   :urpx.interval/resolved {... "Summer Off-Peak Period" ...}}
+;;  {... 16:00–21:00 "Summer Peak Period" ...}
+;;  {... 21:00–24:00 "Summer Off-Peak Period" ...}]
 ```
 
-For block-tiered plans (e.g. CPAU E-1), each ledger's `:tiers` vector exposes every tier with its `:tier-lower-bound`, `:tier-upper-bound`, and `:unit-price` — the caller selects the active tier from cumulative billing-period usage.
+For block-tiered plans (e.g. PG&E E-1), each ledger's `:tiers` vector exposes every tier with its `:tier-lower-bound`, `:tier-upper-bound`, and `:unit-price` — the caller selects the active tier from cumulative billing-period usage.
 
 ### Timezone
 
@@ -88,7 +89,7 @@ For block-tiered plans (e.g. CPAU E-1), each ledger's `:tiers` vector exposes ev
 
 When neither is available, an `ex-info` is thrown rather than silently falling back to the system default. `resolve-prices` takes a `ZonedDateTime` directly, so its zone always comes from the caller.
 
-For documents that omit `urpx:timezoneIdentifier`, the optional `urpx.tz-inference/infer-zone` helper does best-effort inference from the publishing utility (`urpx:eiaId`, `urpx:legalName`). It returns `nil` for unknown or multi-zone utilities so the caller fails loudly rather than silently picking one. Inference is **opt-in** — `price-schedule` does not call it automatically; compose at the call site:
+For documents that omit `urpx:timezoneIdentifier`, the optional `urpx.tz-inference/infer-zone` helper does best-effort inference from the publishing utility's `urpx:legalName` (and a caller-supplied `urpx:eiaId` table when available). It returns `nil` for unknown or multi-zone utilities so the caller fails loudly rather than silently picking one. Inference is **opt-in** — `price-schedule` does not call it automatically; compose at the call site:
 
 ```clojure
 (require '[urpx.tz-inference :as tz])
@@ -127,20 +128,22 @@ You can also pass any `(LocalDate -> bool)` function — e.g. wrap a calendar se
 
 ### Modifiers
 
-`urpx:RatePlanModifier` documents (export adders, net-surplus rates, hardship/seasonal adjusters) augment a base plan. Resolve them alongside the plan with `resolve-prices-with-modifiers`:
+`urpx:RatePlanModifier` documents (vintage-PCIA adders, export-compensation adjusters, etc.) augment a base plan. v0.2.0 typically bundles a base plan and its modifiers in a single `@graph` document; pull the modifier with `core/load-graph`:
 
 ```clojure
-(def eec
-  (-> "path/to/urpx-rate-plan-modifier.jsonld"
-      core/load-rate-plan
-      coerce/coerce-rate-plan-modifier))
+(def entities (core/load-graph "path/to/urpx-rate-plan.jsonld"))
+(def modifier
+  (->> entities
+       (filter #(= "urpx:RatePlanModifier" (:jsonld/type %)))
+       first
+       coerce/coerce-rate-plan-modifier))
 
-(price/resolve-prices-with-modifiers plan [eec] zdt)
+(price/resolve-prices-with-modifiers plan [modifier] zdt)
 ;; => the resolve-prices output, with each applicable modifier's ledgers
 ;;    appended to :urpx.resolved/ledgers
 ```
 
-A modifier is skipped silently when its `:urpx/applicableToRatePlan` list does not include the base plan's `@id`; `:urpx/isOptional` is informational and the caller decides whether to include the modifier in the call. Matrix-style modifiers (e.g. CPAU E-HRA — a 4×4 reserve-level × generation-tier matrix) surface every active price under one ledger entry; the caller picks the active value via `:urpx.resolved/price-id` because URPX condition vocabulary is not yet specified in a way that's programmatically interpretable.
+A modifier is skipped silently when its `:urpx/applicableToRatePlan` list does not include the base plan's `@id`. Matrix-style modifiers (e.g. PG&E vintage-PCIA — one ledger with a price per departure-vintage year) surface every active price under one ledger entry; the caller picks the active value via `:urpx.resolved/price-id` (each Price's `urpx:hasApplicabilityGroup` carries the v0.2.0 `urpx:ConditionExpression` that names the dimension being matched).
 
 ### Sub-hour granularity
 
@@ -167,17 +170,21 @@ Adjacent steps with identical resolved ledgers are still merged, so a quarter-ho
 
 ## Status
 
+Targets **URPX v0.2.0-candidate**.
+
 Currently covered:
-- Both top-level document types: `urpx:RatePlan` (CPAU E-1 TOU, CPAU E-1 non-TOU, PG&E E-ELEC, PG&E E-TOU-D) and `urpx:RatePlanModifier` (EEC, NSE, HRA) parse, coerce, and validate
+- Both top-level document types: `urpx:RatePlan` and `urpx:RatePlanModifier` parse, coerce, and validate against v0.2.0 Malli schemas — vendored fixtures cover PG&E E-1 (block-tiered), E-TOU-C (simple TOU), E-TOU-D (TOU + holiday calendar), and EV2, each bundled with a sibling vintage-PCIA modifier in a JSON-LD `@graph`
+- v0.2.0 `urpx:ConditionExpression` tree (Comparison/Boolean nodes with Object/Datatype/Custom operand leaves) parses and coerces; recursive operands are validated through a local Malli registry
+- v0.2.0 `BillingModel.hasPriceDefinition` traversal (PD now lives at the BillingModel level with `referencesLedger` pointing back) for price resolution
 - TOU period resolution: seasons, ontology day-types (`urpx:allDays`, `urpx:weekdayDays`, `urpx:weekendDays`, `urpx:customDays`), `urpx:includeHolidays` / `urpx:includeNonHolidays` bracket gates, time-bracket containment with midnight wrap
-- Block-tier surfacing with bounds and bound operators
-- Flat per-energy charges (distribution, public benefits)
+- Block-tier surfacing via the v0.2.0 `urpx:ServiceTiers` container — every tier surfaces with its bounds and bound operators
 - Active-price selection by latest `startDate ≤ query-date`, drawing from both flat top-level prices and `PriceSet`-scoped prices
-- `urpx:RatePlanModifier` resolution alongside the base plan (EEC, NSE, HRA) — modifier ledgers appended to the resolved output, with matrix-style prices surfaced for caller selection
+- Modifier resolution alongside the base plan (vintage-PCIA pattern: many Prices share one PD, each carrying its own `urpx:hasApplicabilityGroup`)
 - Configurable schedule step (hourly default; sub-hour available via `:step`)
 
 Known gaps:
-- Programmatic interpretation of `urpx:Condition` operator + label `conditionValue` for matrix-style modifier price selection — currently the caller picks active values by `price-id`
+- Programmatic interpretation of `urpx:ConditionExpression` for active-tier selection in matrix-style modifiers — currently the caller picks the active value by `price-id` after walking the condition tree itself
+- Some v0.2.0 SHACL classes (`urpx:RateCase`, `urpx:Scenario`, etc.) are accepted as Refs/optional fields but not deeply modeled; expand as consumers need them
 
 ## Development
 

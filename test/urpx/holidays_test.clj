@@ -11,16 +11,16 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest derive-predicate-returns-nil-when-no-calendar
-  (let [plan (fixtures/load-rate-plan "cpau-e-1-tou-2026-01-01")]
-    (is (nil? (holidays/derive-predicate plan))
-        "Plans without :urpx/hasHolidayCalendar should have no derived predicate")))
+  (testing "PG&E E-1 has no embedded HolidayCalendar"
+    (let [plan (fixtures/load-rate-plan "pge-e-1-2026-03-01")]
+      (is (nil? (holidays/derive-predicate plan))))))
 
 (deftest derive-predicate-recognizes-fixture-holidays-2026
-  (let [plan (fixtures/load-rate-plan "pge-e-tou-d-tou-holiday-2026-03-01")
+  (let [plan (fixtures/load-rate-plan "pge-e-tou-d-2026-03-27")
         h?   (holidays/derive-predicate plan)]
     (is (some? h?) "fixture embeds a HolidayCalendar")
     (testing "Nth-weekday holidays — 2026"
-      (is (h? (ld 2026 2 16))  "Presidents Day = 3rd Mon Feb 2026")
+      (is (h? (ld 2026 2 16))  "President's Day = 3rd Mon Feb 2026")
       (is (h? (ld 2026 5 25))  "Memorial Day = Last Mon May 2026")
       (is (h? (ld 2026 9 7))   "Labor Day = 1st Mon Sep 2026")
       (is (h? (ld 2026 11 26)) "Thanksgiving = 4th Thu Nov 2026"))
@@ -37,9 +37,9 @@
 
 (deftest derive-predicate-handles-multiple-years
   (testing "year-specific computation: same rules, different year, different dates"
-    (let [plan (fixtures/load-rate-plan "pge-e-tou-d-tou-holiday-2026-03-01")
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-d-2026-03-27")
           h?   (holidays/derive-predicate plan)]
-      (is (h? (ld 2027 2 15)) "Presidents Day = 3rd Mon Feb 2027")
+      (is (h? (ld 2027 2 15)) "President's Day = 3rd Mon Feb 2027")
       (is (h? (ld 2027 5 31)) "Memorial Day = Last Mon May 2027")
       (is (h? (ld 2027 9 6))  "Labor Day = 1st Mon Sep 2027")
       ;; Jan 1 2027 = Friday — actual date observance
@@ -51,7 +51,7 @@
 (deftest mlk-not-in-pge-fixture
   (testing "MLK Day is NOT in PG&E E-TOU-D's holiday list — derived predicate
             correctly returns false for it"
-    (let [plan (fixtures/load-rate-plan "pge-e-tou-d-tou-holiday-2026-03-01")
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-d-2026-03-27")
           h?   (holidays/derive-predicate plan)]
       (is (not (h? (ld 2026 1 19))))
       (is (not (h? (ld 2027 1 18)))))))
@@ -99,13 +99,14 @@
   (testing "urpx:mondayIfWeekendObservance: Sat → Mon, Sun → Mon"
     (let [plan (calendar-plan
                 [{:jsonld/type "urpx:Holiday"
+                  :urpx/holidayName "Independence Day"
                   :urpx/holidayRule "July 4"
                   :urpx/observanceRule {:jsonld/id "urpx:mondayIfWeekendObservance"}}])
           h? (holidays/derive-predicate plan)]
       ;; Sat Jul 4 2026 → observed Mon Jul 6
       (is (h? (ld 2026 7 6)))
       (is (not (h? (ld 2026 7 4))))
-      ;; Sun Jul 4 2027 → observed Mon Jul 5? Jul 4 2027 actually = Sunday
+      ;; Sun Jul 4 2027 → observed Mon Jul 5
       (is (h? (ld 2027 7 5)))
       (is (not (h? (ld 2027 7 4)))))))
 
@@ -113,6 +114,7 @@
   (testing "urpx:fridayIfWeekendObservance: Sat → Fri, Sun → Fri"
     (let [plan (calendar-plan
                 [{:jsonld/type "urpx:Holiday"
+                  :urpx/holidayName "Independence Day"
                   :urpx/holidayRule "July 4"
                   :urpx/observanceRule {:jsonld/id "urpx:fridayIfWeekendObservance"}}])
           h? (holidays/derive-predicate plan)]
@@ -143,6 +145,7 @@
   (testing "Some months have a fifth occurrence of a given weekday"
     (let [plan (calendar-plan
                 [{:jsonld/type "urpx:Holiday"
+                  :urpx/holidayName "Fifth Friday"
                   :urpx/holidayRule "Fifth Friday in January"}])
           h? (holidays/derive-predicate plan)]
       ;; January 2026 has Fridays on 2, 9, 16, 23, 30 — 5th = Jan 30

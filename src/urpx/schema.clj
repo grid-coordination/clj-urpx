@@ -1,5 +1,5 @@
 (ns urpx.schema
-  "Malli schemas for URPX entities, describing the coerced shape.
+  "Malli schemas for URPX v0.2.0 entities, describing the coerced shape.
 
   Two-layer model (mirroring the clj-oa3 pattern):
     - urpx.core      — raw parse: JSON-LD with namespaced keys, all string values.
@@ -8,10 +8,12 @@
 
   Schemas carry `:decode/urpx-jsonld` decoders that turn the raw parser output
   (strings) into the typed shape described here. The transformer is built and
-  applied in `urpx.coerce`. Reference resolution (URPX-ej9) keeps :jsonld/id
-  references intact; consumers dereference via an entity index.
+  applied in `urpx.coerce`. Reference resolution keeps :jsonld/id references
+  intact; consumers dereference via an entity index.
 
-  Schemas are bare def vars referenced by symbol — there is no central registry."
+  Schemas are bare def vars referenced by symbol — there is no central registry
+  except inside ConditionExpression, where the recursive Comparison/Boolean
+  operand tree uses a local Malli registry."
   (:import [java.math BigDecimal]
            [java.time Duration LocalDate LocalDateTime LocalTime Period]))
 
@@ -115,7 +117,8 @@
    [:jsonld/type [:= "urpx:Season"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/seasonName :string]
-   [:urpx/month [:vector MonthNumber]]])
+   [:urpx/month {:optional true} [:vector MonthNumber]]
+   [:urpx/yearlyRecurrence {:optional true} :boolean]])
 
 (def MetricSpecification
   [:map
@@ -123,7 +126,8 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/measurementKind {:optional true} Ref]
    [:urpx/unitOfMeasure   {:optional true} Ref]
-   [:urpx/flowDirection   {:optional true} Ref]])
+   [:urpx/flowDirection   {:optional true} Ref]
+   [:urpx/intervalDuration {:optional true} IsoDuration]])
 
 (def MetricInput
   [:map
@@ -132,6 +136,8 @@
    [:urpx/name :string]
    [:urpx/metricInputType Ref]
    [:urpx/hasMetricSpecification {:optional true} MetricSpecification]
+   ;; In v0.2.0 profileMetricProperty is a Ref to a vocabulary IRI
+   ;; (e.g. urpx:meterCount, urpx:departureVintage).
    [:urpx/profileMetricProperty  {:optional true} Ref]])
 
 (def TimeBracket
@@ -139,8 +145,9 @@
    [:jsonld/type [:= "urpx:TimeBracket"]]
    [:urpx/startTime Time]
    [:urpx/endTime Time]
+   ;; v0.2.0 SHACL: dayType is required (was optional in v0.1.x).
+   [:urpx/dayType Ref]
    [:urpx/appliesInSeason     {:optional true} Ref]
-   [:urpx/dayType             {:optional true} Ref]
    [:urpx/includeHolidays     {:optional true} :boolean]
    [:urpx/includeNonHolidays  {:optional true} :boolean]])
 
@@ -150,12 +157,15 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/name :string]
    [:urpx/touPeriodNumber Int]
+   [:urpx/priority   {:optional true} Int]
+   [:urpx/startDate  {:optional true} Date]
+   [:urpx/endDate    {:optional true} Date]
    [:urpx/hasTimeBracket [:vector TimeBracket]]])
 
 (def TOUTier
   [:map
    [:jsonld/type [:= "urpx:TOUTier"]]
-   [:urpx/tierSourceName :string]
+   [:urpx/tierSourceName {:optional true} :string]
    [:urpx/touTierStandardName {:optional true} Ref]
    [:urpx/touTierNumber Int]
    [:urpx/hasTOUPeriod [:vector TOUPeriod]]])
@@ -164,84 +174,124 @@
   [:map
    [:jsonld/type [:= "urpx:TOUSchedule"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/referencesMetricInput Ref]
+   [:urpx/name {:optional true} :string]
+   ;; v0.2.0 SHACL: referencesMetricInput is a required vector (min 1, no max).
+   [:urpx/referencesMetricInput
+    {:decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
    [:urpx/hasCalendar {:optional true} Ref]
    [:urpx/hasTOUTier [:vector TOUTier]]])
 
 (def CalculationMethod
   [:map
    [:jsonld/type [:= "urpx:CalculationMethod"]]
+   [:urpx/name {:optional true} :string]
+   [:urpx/description {:optional true} :string]
    [:urpx/intervalDuration {:optional true} IsoDuration]])
 
-(def PriceDefinition
-  [:map
-   [:jsonld/type [:= "urpx:PriceDefinition"]]
-   [:jsonld/id {:optional true} :string]
-   [:urpx/name :string]
-   [:urpx/chargeType    {:optional true} Ref]
-   [:urpx/chargeCategory {:optional true} Ref]
-   [:urpx/billPortion   {:optional true} Ref]
-   [:urpx/touPeriodNumber {:optional true} Int]
-   [:urpx/baseQuantity    {:optional true} Decimal]
-   [:urpx/hasCalculationMethod {:optional true} CalculationMethod]])
-
 (def Ledger
+  "v0.2.0: Ledger no longer carries hasPriceDefinition. PriceDefinitions
+   live at BillingModel.hasPriceDefinition with PriceDefinition.referencesLedger
+   pointing back to one of the BillingModel.hasLedger entries."
   [:map
    [:jsonld/type [:= "urpx:Ledger"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/name :string]
+   [:urpx/description {:optional true} :string]
    [:urpx/ledgerType {:optional true} Ref]
-   [:urpx/referencesMetricInput {:optional true} Ref]
-   ;; URPX allows a single PriceDefinition or a vector; the decoder normalizes
-   ;; either form to a vector before descending.
-   [:urpx/hasPriceDefinition
-    {:decode/urpx-jsonld single-or-vec->vec}
-    [:vector PriceDefinition]]])
+   [:urpx/referencesMetricInput
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/settlementInterval {:optional true} IsoDuration]])
+
+(def PriceDefinition
+  "v0.2.0: PriceDefinition gains required referencesLedger plus many properties
+   that used to live on Price (priceCurrency, primaryChargeType,
+   referencesServiceTier, referencesTouPeriod, serviceTierNumber, …). One PD
+   can govern many Prices via Price.referencesPriceDefinition."
+  [:map
+   [:jsonld/type [:= "urpx:PriceDefinition"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/name :string]
+   [:urpx/description {:optional true} :string]
+   [:urpx/chargeType    {:optional true} Ref]
+   [:urpx/chargeCategory {:optional true} Ref]
+   [:urpx/billPortion   {:optional true} Ref]
+   [:urpx/commodity     {:optional true} Ref]
+   [:urpx/priceCurrency {:optional true} :string]
+   [:urpx/primaryChargeType {:optional true} Ref]
+   ;; v0.2.0: required, single. PD points to its parent Ledger.
+   [:urpx/referencesLedger Ref]
+   [:urpx/referencesMetricInput
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/referencesServiceTier {:optional true} Ref]
+   [:urpx/referencesTouPeriod   {:optional true} Ref]
+   [:urpx/serviceTierNumber {:optional true} Int]
+   [:urpx/touPeriodNumber   {:optional true} Int]
+   [:urpx/baseQuantity      {:optional true} Decimal]
+   [:urpx/hasCalculationMethod {:optional true} CalculationMethod]
+   [:urpx/hasRateCase
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]])
 
 (def ServiceTier
-  "A block-usage tier (e.g. CPAU E-1's baseline tier 1 / over-baseline tier 2).
-   The bounds are interpreted with the matching :urpx/...BoundOperator vocab IRIs."
+  "v0.2.0: lowerBound, lowerBoundOperator, upperBound, upperBoundOperator,
+   serviceTierNumber are all required (were optional in v0.1.x). ServiceTier
+   no longer carries description, referencesMetricInput, or
+   hasCalculationMethod — those moved to the parent ServiceTiers container."
   [:map
    [:jsonld/type [:= "urpx:ServiceTier"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/serviceTierNumber Int]
    [:urpx/name {:optional true} :string]
-   [:urpx/description {:optional true} :string]
-   [:urpx/referencesMetricInput {:optional true} Ref]
-   [:urpx/lowerBound {:optional true} Decimal]
-   [:urpx/upperBound {:optional true} Decimal]
-   [:urpx/lowerBoundOperator {:optional true} Ref]
-   [:urpx/upperBoundOperator {:optional true} Ref]
-   [:urpx/hasCalculationMethod {:optional true} CalculationMethod]])
+   [:urpx/lowerBound Decimal]
+   [:urpx/upperBound Decimal]
+   [:urpx/lowerBoundOperator Ref]
+   [:urpx/upperBoundOperator Ref]])
+
+(def ServiceTiers
+  "v0.2.0: NEW container that holds the block-tier vector. Carries the
+   referencesMetricInput pointer that used to live on individual ServiceTiers
+   in v0.1.x."
+  [:map
+   [:jsonld/type [:= "urpx:ServiceTiers"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/referencesMetricInput
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/hasServiceTier [:vector ServiceTier]]])
 
 (def BillingModel
+  "v0.2.0: hasPriceDefinition is required (min 1) and lives at this level
+   (not inside Ledger). hasServiceTiers is the new singular container — the
+   v0.1.x BillingModel.hasServiceTier vector is gone."
   [:map
    [:jsonld/type [:= "urpx:BillingModel"]]
-   [:urpx/hasTOUSchedule {:optional true} TOUSchedule]
-   [:urpx/hasServiceTier {:optional true} [:vector ServiceTier]]
-   [:urpx/hasLedger [:vector Ledger]]])
+   [:urpx/prorationMethod {:optional true} :string]
+   [:urpx/hasTOUSchedule  {:optional true} TOUSchedule]
+   [:urpx/hasServiceTiers {:optional true} ServiceTiers]
+   [:urpx/hasLedger
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ledger]]
+   [:urpx/hasPriceDefinition
+    {:decode/urpx-jsonld single-or-vec->vec}
+    [:vector PriceDefinition]]])
 
 (def Holiday
-  "A single named holiday in a urpx:HolidayCalendar. URPX permits the
-   observance to be expressed as either a literal date (urpx:holidayDate,
-   year-specific) or a free-form rule string (urpx:holidayRule, recurring).
-   urpx:observanceRule (a Ref to urpx:actualDateObservance / urpx:nearestWeekdayObservance /
-   urpx:mondayIfWeekendObservance / urpx:fridayIfWeekendObservance) optionally
-   shifts the observance date when it falls on a weekend."
+  "v0.2.0: holidayName is required. Observance can be a literal date
+   (urpx:holidayDate) or a free-form rule string (urpx:holidayRule);
+   urpx:observanceRule (Ref) optionally shifts the date when it lands on a
+   weekend."
   [:map
    [:jsonld/type [:= "urpx:Holiday"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/holidayName    {:optional true} :string]
+   [:urpx/holidayName    :string]
    [:urpx/holidayDate    {:optional true} Date]
    [:urpx/holidayRule    {:optional true} :string]
    [:urpx/observanceRule {:optional true} Ref]])
 
 (def HolidayCalendar
-  "A bundle of urpx:Holiday entries attached to a PlanElements (and optionally
-   referenced from a TOUSchedule via urpx:hasCalendar). When attached, the
-   calendar is the canonical holiday set for the rate plan — consumers can
-   derive a (LocalDate -> bool) predicate from it via urpx.holidays/derive-predicate
-   instead of supplying one out-of-band."
   [:map
    [:jsonld/type [:= "urpx:HolidayCalendar"]]
    [:jsonld/id {:optional true} :string]
@@ -253,116 +303,363 @@
   [:map
    [:jsonld/type [:= "urpx:PlanElements"]]
    [:urpx/hasSeasons         {:optional true} [:vector Season]]
-   [:urpx/hasMetricInput     {:optional true} [:vector MetricInput]]
+   [:urpx/hasMetricInput     [:vector MetricInput]]
    [:urpx/hasHolidayCalendar {:optional true} HolidayCalendar]
    [:urpx/hasBillingModel BillingModel]])
 
 ;; ---------------------------------------------------------------------------
-;; Eligibility
+;; Conditions (v0.2.0)
+;;
+;; Condition trees replace the v0.1.x Condition / ApplicabilityConstraint
+;; vocabulary. Three operand-leaf shapes (Object, Datatype, Custom) plus
+;; two recursive node shapes (Comparison, Boolean) compose into a single
+;; ConditionExpression entry point.
 ;; ---------------------------------------------------------------------------
 
-(def Condition
+(def ObjectOperandNode
+  "Ref-valued operand. sh:xone in SHACL constrains exactly one of
+   conditionProperty, referencesValue, or referencesMetricInput to be present;
+   we don't enforce that here — let pyshacl be the strict validator."
   [:map
-   [:jsonld/type [:= "urpx:Condition"]]
+   [:jsonld/type [:= "urpx:ObjectOperandNode"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/conditionType :string]
-   [:urpx/operator Ref]
-   [:urpx/conditionValue :string]])
+   [:urpx/conditionProperty    {:optional true} Ref]
+   [:urpx/referencesValue      {:optional true} Ref]
+   [:urpx/referencesMetricInput {:optional true} Ref]])
+
+(def DatatypeOperandNode
+  "Typed-literal operand. Carries optional conditionProperty (a Ref) and one
+   typed value field. SHACL's sh:xone enforces 'exactly one value field'; the
+   coercer simply decodes whichever is present."
+  [:map
+   [:jsonld/type [:= "urpx:DatatypeOperandNode"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/conditionProperty    {:optional true} Ref]
+   [:urpx/referencesMetricInput {:optional true} Ref]
+   [:urpx/booleanValue  {:optional true} :boolean]
+   [:urpx/dateValue     {:optional true} Date]
+   [:urpx/dateTimeValue {:optional true} DateTime]
+   [:urpx/decimalValue  {:optional true} Decimal]
+   [:urpx/durationValue {:optional true} IsoDuration]
+   [:urpx/gMonthValue   {:optional true} MonthNumber]
+   [:urpx/integerValue  {:optional true} Int]
+   [:urpx/stringValue   {:optional true} :string]
+   [:urpx/timeValue     {:optional true} Time]])
+
+(def CustomOperandNode
+  "Like DatatypeOperandNode but with a free-form `customConditionProperty`
+   string in lieu of a Ref-valued conditionProperty. Useful when the
+   condition property isn't yet in the URPX vocabulary (e.g. PG&E's
+   `departureVintage`)."
+  [:map
+   [:jsonld/type [:= "urpx:CustomOperandNode"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/customConditionProperty {:optional true} :string]
+   [:urpx/referencesMetricInput   {:optional true} Ref]
+   [:urpx/booleanValue  {:optional true} :boolean]
+   [:urpx/dateValue     {:optional true} Date]
+   [:urpx/dateTimeValue {:optional true} DateTime]
+   [:urpx/decimalValue  {:optional true} Decimal]
+   [:urpx/durationValue {:optional true} IsoDuration]
+   [:urpx/gMonthValue   {:optional true} MonthNumber]
+   [:urpx/integerValue  {:optional true} Int]
+   [:urpx/stringValue   {:optional true} :string]
+   [:urpx/timeValue     {:optional true} Time]])
+
+(def ConditionExpression
+  "Recursive condition tree. Uses a local Malli registry to express the
+   ComparisonNode / BooleanOperationNode mutual recursion.
+
+   Tree shape:
+     ConditionExpression.rootNode → ComparisonNode | BooleanOperationNode
+     ComparisonNode.{leftOperand,rightOperand} → any operand (recursively)
+     BooleanOperationNode.operandNodes → vector of operands
+
+   Where 'operand' is one of: ObjectOperandNode, DatatypeOperandNode,
+   CustomOperandNode, ComparisonNode, BooleanOperationNode."
+  [:schema
+   {:registry
+    {::Operand
+     [:multi {:dispatch :jsonld/type}
+      ["urpx:ObjectOperandNode"     ObjectOperandNode]
+      ["urpx:DatatypeOperandNode"   DatatypeOperandNode]
+      ["urpx:CustomOperandNode"     CustomOperandNode]
+      ["urpx:ComparisonNode"        [:ref ::ComparisonNode]]
+      ["urpx:BooleanOperationNode"  [:ref ::BooleanOperationNode]]]
+     ::ComparisonNode
+     [:map
+      [:jsonld/type [:= "urpx:ComparisonNode"]]
+      [:jsonld/id   {:optional true} :string]
+      [:urpx/name   {:optional true} :string]
+      [:urpx/description {:optional true} :string]
+      [:urpx/logicExpression {:optional true} :string]
+      [:urpx/operator Ref]
+      [:urpx/leftOperand  [:ref ::Operand]]
+      [:urpx/rightOperand [:ref ::Operand]]]
+     ::BooleanOperationNode
+     [:map
+      [:jsonld/type [:= "urpx:BooleanOperationNode"]]
+      [:jsonld/id   {:optional true} :string]
+      [:urpx/logicExpression {:optional true} :string]
+      [:urpx/operator Ref]
+      [:urpx/operandNodes
+       {:decode/urpx-jsonld single-or-vec->vec}
+       [:vector [:ref ::Operand]]]]}}
+   [:map
+    [:jsonld/type [:= "urpx:ConditionExpression"]]
+    [:jsonld/id   {:optional true} :string]
+    [:urpx/rootNode
+     [:multi {:dispatch :jsonld/type}
+      ["urpx:ComparisonNode"       [:ref ::ComparisonNode]]
+      ["urpx:BooleanOperationNode" [:ref ::BooleanOperationNode]]]]]])
+
+(def ApplicabilityGroup
+  "Container for cross-cutting applicability conditions; carried on
+   Price/PriceSet to express things like income-tier eligibility.
+   Extra geographic/customer fields exist in v0.2.0 SHACL but most fixtures
+   only carry name + hasConditionExpression."
+  [:map
+   [:jsonld/type [:= "urpx:ApplicabilityGroup"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/name {:optional true} :string]
+   [:urpx/applicabilityLogic    {:optional true} :string]
+   [:urpx/hasConditionExpression {:optional true} ConditionExpression]])
+
+(def ApplicabilityRule
+  [:map
+   [:jsonld/type [:= "urpx:ApplicabilityRule"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/name {:optional true} :string]
+   [:urpx/month {:optional true} [:vector MonthNumber]]
+   [:urpx/hasConditionExpression {:optional true} ConditionExpression]])
+
+;; ---------------------------------------------------------------------------
+;; Eligibility (v0.2.0 — closed shape, ConditionExpression-driven)
+;; ---------------------------------------------------------------------------
 
 (def CustomerProfile
+  "v0.2.0: greatly expanded; we list the few properties we currently consume
+   plus hasCustomerKind which is the canonical test-case dispatch in the
+   fixtures."
   [:map
    [:jsonld/type [:= "urpx:CustomerProfile"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/hasCustomerKind {:optional true} Ref]])
+   [:urpx/hasCustomerKind    {:optional true} Ref]
+   [:urpx/hasCustomerSubKind {:optional true} Ref]
+   [:urpx/entityType         {:optional true} Ref]])
+
+(def Scenario
+  "v0.2.0: NEW. EligibilityRule.hasCustomerProfile moved here. SHACL's sh:or
+   constraint requires either hasCustomerProfile xor hasServicePointProfile;
+   we treat both as optional."
+  [:map
+   [:jsonld/type [:= "urpx:Scenario"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/hasCustomerProfile {:optional true} CustomerProfile]
+   [:urpx/hasServicePointProfile {:optional true} Ref]])
 
 (def EligibilityRule
+  "v0.2.0: closed shape. hasCustomerProfile is gone (moved to Scenario).
+   hasConditionExpression is the only required body field."
   [:map
    [:jsonld/type [:= "urpx:EligibilityRule"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/hasCustomerProfile {:optional true} CustomerProfile]
-   [:urpx/logicExpression    {:optional true} :string]
-   [:urpx/hasCondition       {:optional true} [:vector Condition]]])
+   [:urpx/name {:optional true} :string]
+   [:urpx/description {:optional true} :string]
+   [:urpx/hasConditionExpression ConditionExpression]
+   [:urpx/hasDataSourceReference
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]])
 
 ;; ---------------------------------------------------------------------------
 ;; Prices
 ;; ---------------------------------------------------------------------------
 
 (def Price
+  "v0.2.0: many new optional value fields (adder, amount, basePrice,
+   basedOnPrice, currentPrice, multiplier) and metadata
+   (hasApplicabilityGroup, hasRateCase, …). referencesPriceDefinition is
+   sh:maxCount 1 (still required in practice for any per-energy price)."
   [:map
    [:jsonld/type [:= "urpx:Price"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/name :string]
-   [:urpx/unitPrice Decimal]
+   [:urpx/name {:optional true} :string]
+   [:urpx/description {:optional true} :string]
+   [:urpx/unitPrice  {:optional true} Decimal]
+   [:urpx/amount     {:optional true} Decimal]
+   [:urpx/basePrice  {:optional true} Decimal]
+   [:urpx/currentPrice {:optional true} Decimal]
+   [:urpx/adder      {:optional true} Decimal]
+   [:urpx/multiplier {:optional true} Decimal]
+   [:urpx/baseQuantity {:optional true} Decimal]
+   [:urpx/priceCurrency {:optional true} :string]
    [:urpx/referencesPriceDefinition Ref]
-   [:urpx/startDate {:optional true} Date]
-   ;; Tier-stratified pricing where many Prices share a single PriceDefinition
-   ;; and each Price carries its own tier number (PG&E E-1 CIA shape).
-   [:urpx/serviceTierNumber {:optional true} Int]])
+   [:urpx/referencesServiceTier {:optional true} Ref]
+   [:urpx/referencesTouPeriod   {:optional true} Ref]
+   [:urpx/serviceTierNumber {:optional true} Int]
+   [:urpx/touPeriodNumber   {:optional true} Int]
+   [:urpx/startDate     {:optional true} Date]
+   [:urpx/startDateTime {:optional true} DateTime]
+   [:urpx/endDate       {:optional true} Date]
+   [:urpx/endDateTime   {:optional true} DateTime]
+   [:urpx/appliesInSeason
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/hasApplicabilityGroup {:optional true} ApplicabilityGroup]
+   [:urpx/hasApplicabilityRule
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector ApplicabilityRule]]
+   [:urpx/hasCalculationMethod {:optional true} CalculationMethod]
+   [:urpx/hasRateCase
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]])
 
 (def PriceSet
   [:map
    [:jsonld/type [:= "urpx:PriceSet"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/name {:optional true} :string]
-   [:urpx/startDate Date]
+   [:urpx/description {:optional true} :string]
+   [:urpx/startDate     {:optional true} Date]
+   [:urpx/startDateTime {:optional true} DateTime]
+   [:urpx/endDate       {:optional true} Date]
+   [:urpx/endDateTime   {:optional true} DateTime]
+   [:urpx/touPeriodNumber {:optional true} Int]
+   [:urpx/serviceTierNumber {:optional true} Int]
+   [:urpx/referencesPriceDefinition {:optional true} Ref]
+   [:urpx/hasApplicabilityGroup {:optional true} ApplicabilityGroup]
    [:urpx/hasPrice [:vector Price]]])
 
 (def Prices
   [:map
    [:jsonld/type [:= "urpx:Prices"]]
-   ;; Flat prices (e.g. Customer Charge, Distribution) live here.
    [:urpx/hasPrice    {:optional true} [:vector Price]]
-   ;; TOU price sets keyed by start date live here.
    [:urpx/hasPriceSet {:optional true} [:vector PriceSet]]])
 
 ;; ---------------------------------------------------------------------------
-;; Top level
+;; Top-level metadata
 ;; ---------------------------------------------------------------------------
 
 (def Organization
+  "v0.2.0: legalName is now optional; organizationType is required.
+   urpx:eiaId is gone — utility identifiers now live under hasIdentity →
+   urpx:OrganizationIdentity (not modeled here yet)."
   [:map
    [:jsonld/type [:= "urpx:Organization"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/legalName :string]
-   [:urpx/eiaId            {:optional true} :string]
-   [:urpx/organizationType {:optional true} Ref]])
+   [:urpx/legalName       {:optional true} :string]
+   [:urpx/alternateName   {:optional true} :string]
+   [:urpx/organizationType Ref]])
+
+(def TariffBookReference
+  [:map
+   [:jsonld/type [:= "urpx:TariffBookReference"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/pageStart {:optional true} Int]
+   [:urpx/pageEnd   {:optional true} Int]
+   [:urpx/leafStart {:optional true} :string]
+   [:urpx/leafEnd   {:optional true} :string]])
 
 (def DataSourceReference
+  "v0.2.0: many new optional fields. mediaType is now Ref-only (no longer
+   string); we list the most commonly populated fields."
   [:map
    [:jsonld/type [:= "urpx:DataSourceReference"]]
-   [:urpx/url      {:optional true} :string]
-   [:urpx/fileName {:optional true} :string]
-   ;; Some publishers give the IANA media type as a string ("application/pdf"),
-   ;; others use a URPX vocabulary IRI as a Ref ({:jsonld/id "urpx:applicationPdf"}).
-   [:urpx/mediaType {:optional true} [:or :string Ref]]])
+   [:jsonld/id {:optional true} :string]
+   [:urpx/name {:optional true} :string]
+   [:urpx/description {:optional true} :string]
+   [:urpx/url       {:optional true} :string]
+   [:urpx/accessURL {:optional true} :string]
+   [:urpx/fileName  {:optional true} :string]
+   [:urpx/mediaType {:optional true} Ref]
+   [:urpx/dataSourceType  {:optional true} Ref]
+   [:urpx/dateRetrieved   {:optional true} Date]
+   [:urpx/dateReceived    {:optional true} Date]
+   [:urpx/datePublished   {:optional true} Date]
+   [:urpx/effectiveDate   {:optional true} Date]
+   [:urpx/expirationDate  {:optional true} Date]
+   [:urpx/pageStart {:optional true} Int]
+   [:urpx/pageEnd   {:optional true} Int]
+   [:urpx/hasTariffBookReference {:optional true} TariffBookReference]])
+
+(def RateCase
+  "v0.2.0: NEW. Identifies the regulatory proceeding that authorized a
+   PriceDefinition / RatePlanVersion / Price / PriceSet."
+  [:map
+   [:jsonld/type [:= "urpx:RateCase"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/name {:optional true} :string]
+   [:urpx/description {:optional true} :string]
+   [:urpx/caseNumber :string]
+   [:urpx/url        :string]
+   [:urpx/priority   {:optional true} Int]])
+
+;; ---------------------------------------------------------------------------
+;; Plan and version
+;; ---------------------------------------------------------------------------
 
 (def RatePlanVersion
+  "v0.2.0: changeReason, serviceRole, publishedBy are now required; gains
+   customerChoice, isDefault, hasModifierOptions, hasRateCase, supersedes,
+   plus a set of date/dateTime metadata fields. We list the fields we
+   currently consume plus the headline metadata."
   [:map
    [:jsonld/type [:= "urpx:RatePlanVersion"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/versionNumber  {:optional true} :string]
-   [:urpx/changeReason   {:optional true} Ref]
-   [:urpx/description    {:optional true} :string]
+   [:urpx/version       {:optional true} :string]
+   [:urpx/versionNumber {:optional true} :string]
+   [:urpx/changeReason  {:optional true} Ref]
+   [:urpx/changeDescription {:optional true} :string]
+   [:urpx/description   {:optional true} :string]
    [:urpx/effectiveDateTime DateTime]
-   [:urpx/priceCurrency  :string]
-   [:urpx/commodity      {:optional true} Ref]
-   [:urpx/serviceRole    {:optional true} Ref]
-   [:urpx/publishedBy    {:optional true} Organization]
-   [:urpx/hasDataSourceReference {:optional true} DataSourceReference]
-   [:urpx/hasEligibilityRule     {:optional true} [:vector EligibilityRule]]
+   [:urpx/effectiveDate     {:optional true} Date]
+   [:urpx/expirationDate    {:optional true} Date]
+   [:urpx/expirationDateTime {:optional true} DateTime]
+   [:urpx/datePublished     {:optional true} Date]
+   [:urpx/dateTimePublished {:optional true} DateTime]
+   [:urpx/dateApproved      {:optional true} Date]
+   [:urpx/dateTimeApproved  {:optional true} DateTime]
+   [:urpx/priceCurrency     {:optional true} :string]
+   [:urpx/commodity         {:optional true} Ref]
+   [:urpx/serviceRole       {:optional true} Ref]
+   [:urpx/customerChoice    {:optional true} Ref]
+   [:urpx/isDefault         {:optional true} :boolean]
+   [:urpx/minimumTenure     {:optional true} IsoDuration]
+   [:urpx/url               {:optional true} :string]
+   [:urpx/publishedBy {:optional true} Organization]
+   [:urpx/supersedes  {:optional true} Ref]
+   [:urpx/hasDataSourceReference
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector DataSourceReference]]
+   [:urpx/hasEligibilityRule
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector EligibilityRule]]
+   [:urpx/hasRateCase
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/observesHoliday
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
    [:urpx/hasPlanElements PlanElements]
    [:urpx/hasPrices       Prices]])
 
 (def RatePlan
+  "v0.2.0: ratePlanUniqueIdentifier is required (replaces v0.1.x
+   ratePlanIdentifier). RatePlan gains many optional date/metadata fields;
+   we list the ones the tests / consumers care about."
   [:map
    [:jsonld/type [:= "urpx:RatePlan"]]
    [:jsonld/id {:optional true} :string]
    [:jsonld/context {:optional true} :map]
-   [:urpx/ratePlanIdentifier :string]
+   [:urpx/ratePlanUniqueIdentifier :string]
    [:urpx/name :string]
    [:urpx/initialEffectiveDate Date]
-   ;; IANA timezone identifier (e.g. "America/Los_Angeles"). Optional in URPX.
+   [:urpx/effectiveDate {:optional true} Date]
+   [:urpx/expirationDate {:optional true} Date]
    [:urpx/timezoneIdentifier {:optional true} :string]
+   [:urpx/priceCurrency {:optional true} :string]
+   [:urpx/url           {:optional true} :string]
+   [:urpx/version       {:optional true} :string]
    [:urpx/hasRatePlanVersion RatePlanVersion]])
 
 ;; ---------------------------------------------------------------------------
@@ -370,36 +667,59 @@
 ;; ---------------------------------------------------------------------------
 
 (def RatePlanModifierVersion
+  "v0.2.0: changeReason, serviceRole, publishedBy, modifierVersionNumber are
+   now required. modifierIdentifier is gone — it moved to RatePlanModifier as
+   modifierUniqueIdentifier."
   [:map
    [:jsonld/type [:= "urpx:RatePlanModifierVersion"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/modifierIdentifier    {:optional true} :string]
-   [:urpx/modifierVersionNumber {:optional true} :string]
-   [:urpx/versionNumber         {:optional true} :string]
-   [:urpx/changeReason          {:optional true} Ref]
-   [:urpx/description           {:optional true} :string]
+   [:urpx/modifierVersionNumber :string]
+   [:urpx/version    {:optional true} :string]
+   [:urpx/changeReason  {:optional true} Ref]
+   [:urpx/changeDescription {:optional true} :string]
+   [:urpx/description {:optional true} :string]
    [:urpx/effectiveDateTime DateTime]
-   [:urpx/priceCurrency :string]
+   [:urpx/effectiveDate {:optional true} Date]
+   [:urpx/expirationDate {:optional true} Date]
+   [:urpx/expirationDateTime {:optional true} DateTime]
+   [:urpx/priceCurrency {:optional true} :string]
    [:urpx/commodity   {:optional true} Ref]
    [:urpx/serviceRole {:optional true} Ref]
+   [:urpx/modifierType     {:optional true} Ref]
+   [:urpx/modifierCategory {:optional true} Ref]
    [:urpx/publishedBy {:optional true} Organization]
-   [:urpx/hasDataSourceReference {:optional true} DataSourceReference]
-   [:urpx/hasEligibilityRule     {:optional true} [:vector EligibilityRule]]
-   ;; Single Ref (one base plan) or a vector of Refs (NSE/HRA modify multiple plans)
+   [:urpx/supersedes  {:optional true} Ref]
+   [:urpx/hasDataSourceReference
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector DataSourceReference]]
+   [:urpx/hasEligibilityRule
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector EligibilityRule]]
+   [:urpx/hasRateCase
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   ;; Single Ref (one base plan) or a vector of Refs (NSE/HRA-style modifiers)
    [:urpx/applicableToRatePlan
     {:decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/applicableToRatePlanVersion
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
    [:urpx/hasPlanElements PlanElements]
    [:urpx/hasPrices       Prices]])
 
 (def RatePlanModifier
+  "v0.2.0: modifierUniqueIdentifier is required (was per-version in v0.1.x).
+   urpx:isOptional is gone."
   [:map
    [:jsonld/type [:= "urpx:RatePlanModifier"]]
    [:jsonld/id {:optional true} :string]
    [:jsonld/context {:optional true} :map]
-   [:urpx/ratePlanIdentifier :string]
+   [:urpx/modifierUniqueIdentifier :string]
    [:urpx/name :string]
    [:urpx/initialEffectiveDate Date]
    [:urpx/timezoneIdentifier {:optional true} :string]
-   [:urpx/isOptional :boolean]
+   [:urpx/priceCurrency      {:optional true} :string]
+   [:urpx/url                {:optional true} :string]
+   [:urpx/version            {:optional true} :string]
    [:urpx/hasRatePlanModifierVersion RatePlanModifierVersion]])

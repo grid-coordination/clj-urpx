@@ -3,69 +3,37 @@
             [urpx.core :as core]
             [urpx.test-fixtures :as fixtures]))
 
-(deftest cpau-tou-fixture-available
-  (is (some? (fixtures/fixture-resource "cpau-e-1-tou-2026-01-01"))
-      "CPAU E-1 TOU JSON-LD fixture must be on the classpath"))
+(deftest pge-fixture-available
+  (is (some? (fixtures/fixture-resource "pge-e-1-2026-03-01"))
+      "PG&E E-1 v0.2.0 fixture must be on the classpath"))
 
-(deftest load-rate-plan-cpau-tou
-  (let [plan (fixtures/load-raw "cpau-e-1-tou-2026-01-01")]
+(deftest load-graph-pge-e-1
+  (testing "PG&E E-1 fixture is a multi-entity @graph bundle"
+    (let [entities (fixtures/load-graph "pge-e-1-2026-03-01")
+          types (mapv :jsonld/type entities)]
+      (is (some #{"urpx:RatePlan"} types))
+      (is (some #{"urpx:RatePlanModifier"} types))
+      (is (some #{"urpx:TariffPublication"} types)
+          "PG&E filings carry a TariffPublication entity in the @graph")
+      (is (some #{"urpx:ProgramEnrollment"} types)
+          "PG&E E-1 references named programs (CARE, FERA, CCA, DA, TBS)"))))
 
-    (testing "top-level rate plan identity"
+(deftest load-rate-plan-pge-e-1
+  (testing "raw load_rate_plan extracts the unique urpx:RatePlan"
+    (let [path (.getPath (fixtures/fixture-resource "pge-e-1-2026-03-01"))
+          plan (core/load-rate-plan path)]
       (is (= "urpx:RatePlan" (:jsonld/type plan)))
-      (is (= "urpx:cpau-e-1-tou" (:jsonld/id plan)))
-      (is (= "E-1 TOU" (:urpx/ratePlanIdentifier plan)))
-      (is (= "2026-01-01" (:urpx/initialEffectiveDate plan))))
-
-    (testing "JSON-LD @context preserved"
-      (is (map? (:jsonld/context plan)))
-      (is (= "https://schema.urpx.org/" (get-in plan [:jsonld/context :urpx]))))
-
-    (testing "rate plan version"
-      (let [version (:urpx/hasRatePlanVersion plan)]
-        (is (= "urpx:RatePlanVersion" (:jsonld/type version)))
-        (is (= "2026-01-01" (:urpx/versionNumber version)))
-        (is (= "USD" (:urpx/priceCurrency version)))
-        (is (= {:jsonld/id "urpx:electricity"} (:urpx/commodity version)))))
-
-    (testing "seasons"
-      (let [seasons (get-in plan [:urpx/hasRatePlanVersion
-                                  :urpx/hasPlanElements
-                                  :urpx/hasSeasons])]
-        (is (= 2 (count seasons)))
-        (is (= #{"Summer" "Winter"} (set (map :urpx/seasonName seasons))))
-        (let [summer (first (filter #(= "Summer" (:urpx/seasonName %)) seasons))]
-          (is (= ["--06" "--07" "--08" "--09"] (:urpx/month summer))))))
-
-    (testing "TOU schedule with tiers and time brackets"
-      (let [tiers (get-in plan [:urpx/hasRatePlanVersion
+      (is (= "pge:e-1" (:jsonld/id plan)))
+      (testing "v0.2.0: ratePlanUniqueIdentifier is the unique-id field (string, raw)"
+        (is (= "E-1" (:urpx/ratePlanUniqueIdentifier plan))))
+      (testing "v0.2.0 BillingModel.hasPriceDefinition lives at the BillingModel level"
+        (let [pds (get-in plan [:urpx/hasRatePlanVersion
                                 :urpx/hasPlanElements
                                 :urpx/hasBillingModel
-                                :urpx/hasTOUSchedule
-                                :urpx/hasTOUTier])]
-        (is (= 3 (count tiers)))
-        (is (= #{"Peak" "Off-Peak" "Super Off-Peak"}
-               (set (map :urpx/tierSourceName tiers))))
-        (let [peak (first (filter #(= "Peak" (:urpx/tierSourceName %)) tiers))
-              summer-peak (first (:urpx/hasTOUPeriod peak))
-              brackets (:urpx/hasTimeBracket summer-peak)]
-          (is (= 1 (:urpx/touTierNumber peak)))
-          (is (= "Summer Peak" (:urpx/name summer-peak)))
-          (is (= 1 (count brackets)))
-          (is (= "16:00:00" (:urpx/startTime (first brackets))))
-          (is (= "21:00:00" (:urpx/endTime (first brackets)))))))
-
-    (testing "prices include flat and TOU price sets"
-      (let [prices (get-in plan [:urpx/hasRatePlanVersion :urpx/hasPrices])
-            flat (:urpx/hasPrice prices)
-            sets (:urpx/hasPriceSet prices)]
-        (is (= 3 (count flat)))
-        (is (= #{"Customer Charge" "Distribution" "Public Benefits"}
-               (set (map :urpx/name flat))))
-        (is (= 1 (count sets)))
-        (is (= 6 (count (:urpx/hasPrice (first sets)))))
-        (let [summer-peak (first (filter #(= "Commodity Summer Peak" (:urpx/name %))
-                                         (:urpx/hasPrice (first sets))))]
-          (is (= "0.23354" (:urpx/unitPrice summer-peak))))))))
+                                :urpx/hasPriceDefinition])]
+          (is (vector? pds))
+          (is (every? #(some? (get-in % [:urpx/referencesLedger :jsonld/id])) pds)
+              "every PD references its parent Ledger"))))))
 
 (deftest prefixed-key-conversion
   (testing "via parse-rate-plan on a small inline document"
@@ -79,7 +47,7 @@
              parsed)))))
 
 ;; ---------------------------------------------------------------------------
-;; URPX-zvl — JSON-LD @graph container handling
+;; @graph container handling
 ;; ---------------------------------------------------------------------------
 
 (defn- reader [^String s]
@@ -87,7 +55,7 @@
 
 (def single-entity-doc
   "{\"@type\":\"urpx:RatePlan\",\"@id\":\"x:plan\",
-    \"urpx:ratePlanIdentifier\":\"P1\",\"urpx:name\":\"Plan One\",
+    \"urpx:ratePlanUniqueIdentifier\":\"P1\",\"urpx:name\":\"Plan One\",
     \"urpx:initialEffectiveDate\":\"2026-01-01\"}")
 
 (def graph-with-plan-and-modifier
@@ -96,10 +64,10 @@
       {\"@type\":\"urpx:ProgramEnrollment\",\"@id\":\"x:program-care\",
        \"urpx:programName\":\"CARE\"},
       {\"@type\":\"urpx:RatePlan\",\"@id\":\"x:plan\",
-       \"urpx:ratePlanIdentifier\":\"P1\",\"urpx:name\":\"Plan One\",
+       \"urpx:ratePlanUniqueIdentifier\":\"P1\",\"urpx:name\":\"Plan One\",
        \"urpx:initialEffectiveDate\":\"2026-01-01\"},
       {\"@type\":\"urpx:RatePlanModifier\",\"@id\":\"x:mod\",
-       \"urpx:ratePlanIdentifier\":\"M1\",\"urpx:name\":\"Modifier\",
+       \"urpx:modifierUniqueIdentifier\":\"M1\",\"urpx:name\":\"Modifier\",
        \"urpx:initialEffectiveDate\":\"2026-01-01\"}
     ]}")
 
@@ -114,10 +82,10 @@
   "{\"@context\":{\"urpx\":\"https://schema.urpx.org/\"},
     \"@graph\":[
       {\"@type\":\"urpx:RatePlan\",\"@id\":\"x:plan-a\",
-       \"urpx:ratePlanIdentifier\":\"PA\",\"urpx:name\":\"Plan A\",
+       \"urpx:ratePlanUniqueIdentifier\":\"PA\",\"urpx:name\":\"Plan A\",
        \"urpx:initialEffectiveDate\":\"2026-01-01\"},
       {\"@type\":\"urpx:RatePlan\",\"@id\":\"x:plan-b\",
-       \"urpx:ratePlanIdentifier\":\"PB\",\"urpx:name\":\"Plan B\",
+       \"urpx:ratePlanUniqueIdentifier\":\"PB\",\"urpx:name\":\"Plan B\",
        \"urpx:initialEffectiveDate\":\"2026-01-01\"}
     ]}")
 
@@ -143,9 +111,6 @@
       (is (= 3 (count (:jsonld/graph parsed))))
       (is (nil? (:jsonld/type parsed))
           "the wrapper has @context + @graph but no @type"))))
-
-;; load-rate-plan goes through io/file, so the StringReader-based fixtures need
-;; a tiny detour: write them to temp files and load from there.
 
 (defn- with-temp-jsonld
   "Write `s` to a temp .jsonld file and run `f` against the path; cleans up."

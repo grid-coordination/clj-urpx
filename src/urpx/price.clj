@@ -192,11 +192,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- service-tiers-by-number
-  "Index ServiceTier entities (from BillingModel.hasServiceTier) by their
-   :urpx/serviceTierNumber. Empty map when the plan is not block-tiered."
+  "Index ServiceTier entities (from BillingModel.hasServiceTiers.hasServiceTier)
+   by their :urpx/serviceTierNumber. Empty map when the plan is not block-tiered."
   [billing-model]
   (into {} (map (juxt :urpx/serviceTierNumber identity))
-        (:urpx/hasServiceTier billing-model)))
+        (get-in billing-model [:urpx/hasServiceTiers :urpx/hasServiceTier])))
 
 (defn- tier-info
   "Pull tier metadata for a (PD, Price) pair into the resolved-entry shape.
@@ -332,13 +332,16 @@
          period-num    (:urpx/touPeriodNumber tou-period)
 
          pd->prices    (active-prices-by-pd prices date)
+         pds           (:urpx/hasPriceDefinition billing)
+         pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
 
          ledger-results
          (vec
           (for [ledger ledgers
-                :let [tier-entries
-                      (->> (:urpx/hasPriceDefinition ledger)
-                           (filter #(pd-active-at-tou? % period-num))
+                :let [ledger-pds (->> (pds-by-ledger (:jsonld/id ledger))
+                                      (filter #(pd-active-at-tou? % period-num)))
+                      tier-entries
+                      (->> ledger-pds
                            (mapcat (fn [pd]
                                      (for [[price _] (pd->prices (:jsonld/id pd))]
                                        (merge
@@ -386,11 +389,13 @@
         billing    (get-in version [:urpx/hasPlanElements :urpx/hasBillingModel])
         ledgers    (:urpx/hasLedger billing)
         prices     (:urpx/hasPrices version)
-        pd->prices (all-active-prices-by-pd prices query-date)]
+        pd->prices (all-active-prices-by-pd prices query-date)
+        pds        (:urpx/hasPriceDefinition billing)
+        pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)]
     (vec
      (for [ledger ledgers
            :let [tier-entries
-                 (->> (:urpx/hasPriceDefinition ledger)
+                 (->> (pds-by-ledger (:jsonld/id ledger))
                       (mapcat (fn [pd]
                                 (for [[price _] (pd->prices (:jsonld/id pd))]
                                   {:urpx.resolved/price-definition-id (:jsonld/id pd)
@@ -425,8 +430,7 @@
   "Resolve prices for `rate-plan` at `zdt` and append ledger results for
    each modifier in `modifiers` whose :urpx/applicableToRatePlan list
    includes the base plan's @id. Modifiers whose target lists don't include
-   the plan are silently skipped — the caller decides whether to filter
-   `:urpx/isOptional` modifiers in or out before calling.
+   the plan are silently skipped.
 
    Returns the `resolve-prices` shape with :urpx.resolved/ledgers extended
    by the modifier ledgers."
