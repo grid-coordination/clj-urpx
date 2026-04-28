@@ -233,7 +233,20 @@
    [:urpx/hasCalculationMethod {:optional true} CalculationMethod]
    [:urpx/hasRateCase
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
-    [:vector Ref]]])
+    [:vector Ref]]
+   ;; ApplicabilityRule's full shape is defined further down in the Conditions
+   ;; section; we inline a minimal version here so the gMonth decoder for
+   ;; :urpx/month attaches without forward-ref gymnastics. The fuller shape
+   ;; (with ConditionExpression) is referenced from Price.hasApplicabilityRule.
+   [:urpx/hasApplicabilityRule
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector
+     [:map
+      [:jsonld/type {:optional true} :string]
+      [:jsonld/id   {:optional true} :string]
+      [:urpx/name   {:optional true} :string]
+      [:urpx/month  {:optional true} [:vector MonthNumber]]
+      [:urpx/hasConditionExpression {:optional true} :any]]]]])
 
 (def ServiceTier
   "v0.2.0: lowerBound, lowerBoundOperator, upperBound, upperBoundOperator,

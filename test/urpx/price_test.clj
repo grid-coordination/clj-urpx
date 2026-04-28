@@ -35,6 +35,21 @@
     (is (= 4 (:urpx.resolved/tou-period-number r))
         "TOU period 4 = Winter Off-Peak Period")))
 
+(deftest e-tou-c-climate-credit-month-gated
+  (testing "URPX-axn: PriceDefinition.hasApplicabilityRule.month gates resolution.
+            E-TOU-C's Climate Credit PD is restricted to April + October; it must
+            NOT appear in July resolution and MUST appear in April/October."
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          july    (price/resolve-prices plan (zdt 2026 7 15 17))
+          april   (price/resolve-prices plan (zdt 2026 4 15 17))
+          october (price/resolve-prices plan (zdt 2026 10 15 17))]
+      (is (nil? (ledger-by-name july "California Climate Credit"))
+          "July is outside the [April, October] applicability window")
+      (is (some? (ledger-by-name april "California Climate Credit"))
+          "April is in the window")
+      (is (some? (ledger-by-name october "California Climate Credit"))
+          "October is in the window"))))
+
 (deftest e-tou-c-off-peak-wraps-midnight
   (testing "off-peak bracket 21:00-00:00 wraps midnight; both 22:00 and 06:00 hit off-peak"
     (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")

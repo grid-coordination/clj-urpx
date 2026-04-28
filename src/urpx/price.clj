@@ -241,6 +241,23 @@
     (nil? (:urpx/touPeriodNumber pd)) true
     :else (= (:urpx/touPeriodNumber pd) resolved-period-num)))
 
+(defn- pd-active-in-month?
+  "True if `pd`'s urpx:hasApplicabilityRule constraints (if any) admit the
+   query date's month-of-year. Each rule that carries a non-empty
+   urpx:month list contributes a conjunctive constraint; a rule without
+   urpx:month is permissive at this layer (any urpx:hasConditionExpression
+   gating is deferred — see URPX-axn). PDs without applicability rules
+   are always month-active."
+  [pd ^java.time.LocalDate date]
+  (let [rules (:urpx/hasApplicabilityRule pd)]
+    (or (empty? rules)
+        (let [m (.getMonthValue date)]
+          (every? (fn [rule]
+                    (let [months (:urpx/month rule)]
+                      (or (empty? months)
+                          (some #{m} months))))
+                  rules)))))
+
 ;; ---------------------------------------------------------------------------
 ;; Public API
 ;; ---------------------------------------------------------------------------
@@ -339,7 +356,8 @@
          (vec
           (for [ledger ledgers
                 :let [ledger-pds (->> (pds-by-ledger (:jsonld/id ledger))
-                                      (filter #(pd-active-at-tou? % period-num)))
+                                      (filter #(and (pd-active-at-tou? % period-num)
+                                                    (pd-active-in-month? % date))))
                       tier-entries
                       (->> ledger-pds
                            (mapcat (fn [pd]
