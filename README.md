@@ -172,6 +172,8 @@ Adjacent steps with identical resolved ledgers are still merged, so a quarter-ho
 
 Targets **URPX v0.2.0-candidate**.
 
+Test fixtures are vendored from [urpx-tariffs](https://github.com/grid-coordination/urpx-tariffs) (the production rate-plan filings repo) at pinned commits — see [`test/resources/urpx-fixtures/FIXTURES.md`](test/resources/urpx-fixtures/FIXTURES.md) for the table and the re-sync workflow.
+
 Currently covered:
 - Both top-level document types: `urpx:RatePlan` and `urpx:RatePlanModifier` parse, coerce, and validate against v0.2.0 Malli schemas — vendored fixtures cover PG&E E-1 (block-tiered), E-TOU-C (simple TOU), E-TOU-D (TOU + holiday calendar), and EV2, each bundled with a sibling vintage-PCIA modifier in a JSON-LD `@graph`
 - v0.2.0 `urpx:ConditionExpression` tree (Comparison/Boolean nodes with Object/Datatype/Custom operand leaves) parses and coerces; recursive operands are validated through a local Malli registry
