@@ -35,6 +35,47 @@
     (is (= 4 (:urpx.resolved/tou-period-number r))
         "TOU period 4 = Winter Off-Peak Period")))
 
+(deftest resolved-ledgers-carry-metric-input-info
+  (testing "URPX-046: each resolved Ledger surfaces its MetricInput-derived
+            type, measurementKind, and unitOfMeasure so consumers can
+            distinguish energy ledgers from per-meter / per-household
+            service-charge ledgers."
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          ;; April includes the Climate Credit ledger (per URPX-axn fix)
+          r (price/resolve-prices plan (zdt 2026 4 15 17))
+          energy (ledger-by-name r "Energy Supply Prices")
+          credit (ledger-by-name r "California Climate Credit")]
+      (is (some? energy))
+      (is (= "urpx:measuredMetricInput"
+             (get-in energy [:urpx.resolved/metric-input-type :jsonld/id])))
+      (is (= "urpx:energy"
+             (get-in energy [:urpx.resolved/measurement-kind :jsonld/id])))
+      (is (= "urpx:kWh"
+             (get-in energy [:urpx.resolved/unit-of-measure :jsonld/id])))
+      (testing "profile-metric ledgers (e.g. household-count) carry the type
+                but no measurementKind"
+        (is (some? credit))
+        (is (= "urpx:profileMetricInput"
+               (get-in credit [:urpx.resolved/metric-input-type :jsonld/id])))
+        (is (nil? (get-in credit [:urpx.resolved/measurement-kind :jsonld/id])))))))
+
+(deftest marginal-unit-rate-excludes-non-energy-ledgers
+  (testing "URPX-046: marginal-unit-rate must exclude ledgers whose
+            MetricInput is not energy-shaped (urpx:profileMetricInput,
+            non-energy measurementKind, or no measurementKind)."
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          ;; April resolution carries the Climate Credit ledger (-36.18 per
+          ;; household). Without the energy filter, marginal sum would be
+          ;; dominated by the credit's magnitude.
+          april (price/resolve-prices plan (zdt 2026 4 15 17))
+          rate  (price/marginal-unit-rate april)]
+      (is (instance? java.math.BigDecimal rate))
+      ;; Sanity: a residential $/kWh for E-TOU-C is in the [0, 1] range.
+      ;; Pre-fix this was ~-35.88; post-fix it's ~0.29.
+      (is (pos? rate))
+      (is (< rate (BigDecimal. "1.0"))
+          "marginal $/kWh from energy-only ledgers should be a sane rate"))))
+
 (deftest e-tou-c-climate-credit-month-gated
   (testing "URPX-axn: PriceDefinition.hasApplicabilityRule.month gates resolution.
             E-TOU-C's Climate Credit PD is restricted to April + October; it must

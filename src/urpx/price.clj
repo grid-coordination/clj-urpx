@@ -241,6 +241,34 @@
     (nil? (:urpx/touPeriodNumber pd)) true
     :else (= (:urpx/touPeriodNumber pd) resolved-period-num)))
 
+(defn- mi-by-id
+  "Index PlanElements.hasMetricInput by :jsonld/id. Used to decorate each
+   resolved Ledger with its MetricInput's type, measurementKind, and
+   unitOfMeasure — without this, marginal-unit-rate can't tell a per-kWh
+   energy ledger from a per-meter or per-household service-charge ledger."
+  [plan-elements]
+  (into {} (map (juxt :jsonld/id identity))
+        (:urpx/hasMetricInput plan-elements)))
+
+(defn- ledger-metric-info
+  "Return the resolved-shape keys that describe `ledger`'s referenced
+   MetricInput. Looks up the first :urpx/referencesMetricInput Ref against
+   `mi-index` (a {id -> MetricInput} map). Missing fields are simply
+   omitted; consumers that need a particular dimension (e.g. energy-only
+   marginal sums) test on what's present."
+  [ledger mi-index]
+  (let [mi-id (some-> ledger :urpx/referencesMetricInput first :jsonld/id)
+        mi    (when mi-id (mi-index mi-id))
+        spec  (:urpx/hasMetricSpecification mi)]
+    (cond-> {}
+      mi-id (assoc :urpx.resolved/metric-input-id mi-id)
+      (:urpx/metricInputType mi)
+      (assoc :urpx.resolved/metric-input-type (:urpx/metricInputType mi))
+      (:urpx/measurementKind spec)
+      (assoc :urpx.resolved/measurement-kind (:urpx/measurementKind spec))
+      (:urpx/unitOfMeasure spec)
+      (assoc :urpx.resolved/unit-of-measure (:urpx/unitOfMeasure spec)))))
+
 (defn- pd-active-in-month?
   "True if `pd`'s urpx:hasApplicabilityRule constraints (if any) admit the
    query date's month-of-year. Each rule that carries a non-empty
@@ -306,10 +334,16 @@
       :urpx.resolved/ledgers          [LedgerResult]}
 
    where each LedgerResult is:
-     {:urpx.resolved/ledger-id    String
-      :urpx.resolved/ledger-name  String
-      :urpx.resolved/ledger-type  Ref
-      :urpx.resolved/tiers        [TierResult]}
+     {:urpx.resolved/ledger-id           String
+      :urpx.resolved/ledger-name         String
+      :urpx.resolved/ledger-type         Ref
+      :urpx.resolved/metric-input-id     String  (when the ledger references one)
+      :urpx.resolved/metric-input-type   Ref     (e.g. urpx:measuredMetricInput)
+      :urpx.resolved/measurement-kind    Ref     (e.g. urpx:energy — present when
+                                                  the MetricInput carries one;
+                                                  marginal-unit-rate filters on this)
+      :urpx.resolved/unit-of-measure     Ref     (e.g. urpx:kWh)
+      :urpx.resolved/tiers               [TierResult]}
 
    and each TierResult is:
      {:urpx.resolved/price-definition-id String
@@ -351,6 +385,7 @@
          pd->prices    (active-prices-by-pd prices date)
          pds           (:urpx/hasPriceDefinition billing)
          pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
+         mi-index      (mi-by-id plan-elements)
 
          ledger-results
          (vec
@@ -371,10 +406,11 @@
                            (sort-by #(or (:urpx.resolved/tier-number %) 0))
                            vec)]
                 :when (seq tier-entries)]
-            {:urpx.resolved/ledger-id   (:jsonld/id ledger)
-             :urpx.resolved/ledger-name (:urpx/name ledger)
-             :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
-             :urpx.resolved/tiers       tier-entries}))]
+            (merge {:urpx.resolved/ledger-id   (:jsonld/id ledger)
+                    :urpx.resolved/ledger-name (:urpx/name ledger)
+                    :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
+                    :urpx.resolved/tiers       tier-entries}
+                   (ledger-metric-info ledger mi-index))))]
 
      {:urpx.resolved/season-name       (:urpx/seasonName season)
       :urpx.resolved/tou-period-name   (:urpx/name tou-period)
@@ -404,12 +440,14 @@
    prices and rely on caller selection)."
   [modifier ^LocalDate query-date]
   (let [version    (:urpx/hasRatePlanModifierVersion modifier)
-        billing    (get-in version [:urpx/hasPlanElements :urpx/hasBillingModel])
+        plan-elts  (:urpx/hasPlanElements version)
+        billing    (:urpx/hasBillingModel plan-elts)
         ledgers    (:urpx/hasLedger billing)
         prices     (:urpx/hasPrices version)
         pd->prices (all-active-prices-by-pd prices query-date)
         pds        (:urpx/hasPriceDefinition billing)
-        pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)]
+        pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
+        mi-index   (mi-by-id plan-elts)]
     (vec
      (for [ledger ledgers
            :let [tier-entries
@@ -422,10 +460,11 @@
                                    :urpx.resolved/unit-price          (:urpx/unitPrice price)})))
                       vec)]
            :when (seq tier-entries)]
-       {:urpx.resolved/ledger-id   (:jsonld/id ledger)
-        :urpx.resolved/ledger-name (:urpx/name ledger)
-        :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
-        :urpx.resolved/tiers       tier-entries}))))
+       (merge {:urpx.resolved/ledger-id   (:jsonld/id ledger)
+               :urpx.resolved/ledger-name (:urpx/name ledger)
+               :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
+               :urpx.resolved/tiers       tier-entries}
+              (ledger-metric-info ledger mi-index))))))
 
 (defn resolve-modifier-prices
   "Resolve every per-energy unit price that `modifier` (a coerced
@@ -463,16 +502,26 @@
      (update base :urpx.resolved/ledgers (fnil into []) extra))))
 
 (defn marginal-unit-rate
-  "Sum the unit prices across all ledgers, picking the LOWEST tier in each
-   block-tiered ledger as the marginal rate at the start of a billing period.
+  "Sum the unit prices across all **energy** ledgers, picking the LOWEST tier
+   in each block-tiered ledger as the marginal $/kWh at the start of a billing
+   period.
+
+   A ledger is treated as energy iff its referenced MetricInput's
+   urpx:measurementKind is urpx:energy. Per-meter, per-customer, per-day, or
+   per-month service charges (urpx:profileMetricInput, or non-energy
+   measurementKinds) are excluded — they have a different shape and don't
+   belong in a $/kWh sum.
 
    Useful for price signaling: when you don't know a customer's usage but want
    a single $/kWh number, this is the marginal rate at zero baseline usage."
   [resolved]
   (reduce
    (fn [^java.math.BigDecimal acc ledger]
-     (if-let [first-tier (first (:urpx.resolved/tiers ledger))]
-       (.add acc ^java.math.BigDecimal (:urpx.resolved/unit-price first-tier))
+     (if (and (= "urpx:energy"
+                 (get-in ledger [:urpx.resolved/measurement-kind :jsonld/id]))
+              (seq (:urpx.resolved/tiers ledger)))
+       (.add acc ^java.math.BigDecimal
+             (:urpx.resolved/unit-price (first (:urpx.resolved/tiers ledger))))
        acc))
    0M
    (:urpx.resolved/ledgers resolved)))
