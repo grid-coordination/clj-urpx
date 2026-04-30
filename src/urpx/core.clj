@@ -97,3 +97,24 @@
       (throw (ex-info "Multiple urpx:RatePlan entities in @graph; use load-graph to disambiguate"
                       {:path path
                        :rate-plan-ids (mapv :jsonld/id plans)})))))
+
+(defn load-rate-plan-modifier
+  "Load a URPX rate plan modifier from a file path. Parallel to `load-rate-plan`
+   for filings whose primary entity is a urpx:RatePlanModifier — either as the
+   document's sole entity (standalone modifier filing) or as one of several
+   entities under `@graph` (e.g. PG&E-style filings that bundle a base RatePlan
+   with sibling modifiers).
+
+   The unique urpx:RatePlanModifier is returned; zero or more than one is an
+   error — use `load-graph` to inspect ambiguous documents directly."
+  [path]
+  (let [entities (load-graph path)
+        modifiers (filter #(= "urpx:RatePlanModifier" (:jsonld/type %)) entities)]
+    (case (count modifiers)
+      0 (throw (ex-info "No urpx:RatePlanModifier entity in document"
+                        {:path path
+                         :entity-types (mapv :jsonld/type entities)}))
+      1 (first modifiers)
+      (throw (ex-info "Multiple urpx:RatePlanModifier entities in @graph; use load-graph to disambiguate"
+                      {:path path
+                       :modifier-ids (mapv :jsonld/id modifiers)})))))

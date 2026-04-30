@@ -171,4 +171,10 @@
       (is (m/validate s/RatePlanModifier modifier))
       (testing "missing modifierUniqueIdentifier rejected"
         (is (not (m/validate s/RatePlanModifier
-                             (dissoc modifier :urpx/modifierUniqueIdentifier))))))))
+                             (dissoc modifier :urpx/modifierUniqueIdentifier)))))
+      (testing "URPX-g7z: applicableToRatePlan is optional per SHACL — standalone
+                modifier filings without it must still validate"
+        (let [standalone (assoc modifier
+                                :urpx/hasRatePlanModifierVersion
+                                (dissoc version :urpx/applicableToRatePlan))]
+          (is (m/validate s/RatePlanModifier standalone)))))))

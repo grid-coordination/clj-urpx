@@ -89,6 +89,22 @@
        \"urpx:initialEffectiveDate\":\"2026-01-01\"}
     ]}")
 
+(def standalone-modifier-doc
+  "{\"@type\":\"urpx:RatePlanModifier\",\"@id\":\"x:mod\",
+    \"urpx:modifierUniqueIdentifier\":\"M1\",\"urpx:name\":\"Standalone Modifier\",
+    \"urpx:initialEffectiveDate\":\"2026-01-01\"}")
+
+(def graph-with-two-modifiers
+  "{\"@context\":{\"urpx\":\"https://schema.urpx.org/\"},
+    \"@graph\":[
+      {\"@type\":\"urpx:RatePlanModifier\",\"@id\":\"x:mod-a\",
+       \"urpx:modifierUniqueIdentifier\":\"MA\",\"urpx:name\":\"Modifier A\",
+       \"urpx:initialEffectiveDate\":\"2026-01-01\"},
+      {\"@type\":\"urpx:RatePlanModifier\",\"@id\":\"x:mod-b\",
+       \"urpx:modifierUniqueIdentifier\":\"MB\",\"urpx:name\":\"Modifier B\",
+       \"urpx:initialEffectiveDate\":\"2026-01-01\"}
+    ]}")
+
 (deftest parse-graph-single-entity-doc
   (testing "A document with no @graph yields a one-element vector containing the entity"
     (let [entities (core/parse-graph (reader single-entity-doc))]
@@ -155,3 +171,42 @@
                                       entities))]
           (is (some? modifier))
           (is (= "x:mod" (:jsonld/id modifier))))))))
+
+;; ---------------------------------------------------------------------------
+;; load-rate-plan-modifier (URPX-g7z) — standalone & bundled modifier filings
+;; ---------------------------------------------------------------------------
+
+(deftest load-rate-plan-modifier-standalone
+  (testing "URPX-g7z: a document whose sole entity is urpx:RatePlanModifier
+            (no @graph wrapper) — the CPAU E-2-G shape"
+    (with-temp-jsonld standalone-modifier-doc
+      (fn [path]
+        (let [m (core/load-rate-plan-modifier path)]
+          (is (= "urpx:RatePlanModifier" (:jsonld/type m)))
+          (is (= "x:mod" (:jsonld/id m))))))))
+
+(deftest load-rate-plan-modifier-from-bundled-graph
+  (testing "When @graph carries a unique urpx:RatePlanModifier alongside a
+            base RatePlan (PG&E-style bundling), load-rate-plan-modifier
+            returns the modifier"
+    (with-temp-jsonld graph-with-plan-and-modifier
+      (fn [path]
+        (let [m (core/load-rate-plan-modifier path)]
+          (is (= "urpx:RatePlanModifier" (:jsonld/type m)))
+          (is (= "x:mod" (:jsonld/id m))))))))
+
+(deftest load-rate-plan-modifier-throws-on-no-modifier
+  (testing "load-rate-plan-modifier throws when no urpx:RatePlanModifier is present"
+    (with-temp-jsonld graph-with-no-plan
+      (fn [path]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"No urpx:RatePlanModifier entity"
+                              (core/load-rate-plan-modifier path)))))))
+
+(deftest load-rate-plan-modifier-throws-on-multiple-modifiers
+  (testing "load-rate-plan-modifier throws when @graph carries more than one modifier"
+    (with-temp-jsonld graph-with-two-modifiers
+      (fn [path]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"Multiple urpx:RatePlanModifier entities"
+                              (core/load-rate-plan-modifier path)))))))

@@ -726,9 +726,12 @@
    [:urpx/hasRateCase
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
-   ;; Single Ref (one base plan) or a vector of Refs (NSE/HRA-style modifiers)
+   ;; Single Ref (one base plan) or a vector of Refs (NSE/HRA-style modifiers).
+   ;; Optional per SHACL (sh:minCount 0): standalone modifier filings whose
+   ;; target linkage isn't yet expressed in-document (CPAU E-2-G shape, URPX-g7z)
+   ;; carry no applicableToRatePlan and rely on consumer-side composition.
    [:urpx/applicableToRatePlan
-    {:decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
    [:urpx/applicableToRatePlanVersion
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
