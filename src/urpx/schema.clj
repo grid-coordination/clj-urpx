@@ -234,6 +234,13 @@
    [:urpx/hasRateCase
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
+   ;; v0.2.0 SHACL: PriceDefinitionShape allows urpx:appliesInSeason → Season
+   ;; (sh:minCount 0, sh:class urpx:Season). Used for non-TOU seasonal pricing
+   ;; where the seasonal partition isn't carried by a TOUPeriod indirection
+   ;; (e.g. CPAU E-2: flat $/kWh per Summer/Winter, no TOU within periods).
+   [:urpx/appliesInSeason
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
    ;; ApplicabilityRule's full shape is defined further down in the Conditions
    ;; section; we inline a minimal version here so the gMonth decoder for
    ;; :urpx/month attaches without forward-ref gymnastics. The fuller shape

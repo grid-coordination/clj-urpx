@@ -132,8 +132,14 @@
 (defn- scoped-prices
   "Return a seq of [price effective-start-date] pairs for every Price under
    `prices` whose effective start-date is <= `query-date`. Walks both the
-   flat :urpx/hasPrice list and PriceSet-nested prices; PriceSet startDate
-   scopes contained Prices when they don't carry their own."
+   flat :urpx/hasPrice list and PriceSet-nested prices.
+
+   Per URPX SHACL, PriceSet.startDate is optional (sh:minCount 0). When the
+   PriceSet carries one, it acts as the date floor for any contained Price
+   that does not declare its own; when the PriceSet omits it, each contained
+   Price must carry its own urpx:startDate (CPAU E-2 shape). A PriceSet
+   whose startDate is in the future drops the whole set; otherwise contained
+   Prices are walked individually and admitted by their own effective dates."
   [prices ^LocalDate query-date]
   (concat
    (keep (fn [p]
@@ -141,10 +147,12 @@
              (when (not-after? sd query-date) [p sd])))
          (:urpx/hasPrice prices))
    (mapcat (fn [ps]
-             (let [sd (:urpx/startDate ps)]
-               (when (and sd (not-after? sd query-date))
-                 (map (fn [p] [p (or (:urpx/startDate p) sd)])
-                      (:urpx/hasPrice ps)))))
+             (let [ps-sd (:urpx/startDate ps)]
+               (when (or (nil? ps-sd) (not-after? ps-sd query-date))
+                 (keep (fn [p]
+                         (when-let [sd (or (:urpx/startDate p) ps-sd)]
+                           (when (not-after? sd query-date) [p sd])))
+                       (:urpx/hasPrice ps)))))
            (:urpx/hasPriceSet prices))))
 
 (defn- active-prices-by-pd
@@ -286,6 +294,27 @@
                           (some #{m} months))))
                   rules)))))
 
+(defn- pd-active-in-season?
+  "True if `pd`'s urpx:appliesInSeason refs (if any) admit the query date's
+   month-of-year. Each ref is resolved via `seasons-by-id` to a Season; the
+   Season's urpx:month list is the gate. Multiple refs are disjunctive (any
+   admitting season is enough). PDs without urpx:appliesInSeason are always
+   season-active.
+
+   This complements `pd-active-in-month?` to support non-TOU seasonal pricing
+   (URPX-2nk) — where the seasonal partition isn't carried by a TOUPeriod
+   indirection (no TOU schedule), so the only month-gating signal is the
+   PD → Season pointer plus Season.month."
+  [pd seasons-by-id ^java.time.LocalDate date]
+  (let [refs (:urpx/appliesInSeason pd)]
+    (or (empty? refs)
+        (let [m (.getMonthValue date)]
+          (boolean
+           (some (fn [ref]
+                   (when-let [season (seasons-by-id (:jsonld/id ref))]
+                     (some #{m} (:urpx/month season))))
+                 refs))))))
+
 ;; ---------------------------------------------------------------------------
 ;; Public API
 ;; ---------------------------------------------------------------------------
@@ -365,6 +394,7 @@
    (let [version       (:urpx/hasRatePlanVersion rate-plan)
          plan-elements (:urpx/hasPlanElements version)
          seasons       (:urpx/hasSeasons plan-elements)
+         seasons-by-id (into {} (map (juxt :jsonld/id identity)) seasons)
          billing       (:urpx/hasBillingModel plan-elements)
          ledgers       (:urpx/hasLedger billing)
          tou-schedule  (:urpx/hasTOUSchedule billing)
@@ -392,7 +422,8 @@
           (for [ledger ledgers
                 :let [ledger-pds (->> (pds-by-ledger (:jsonld/id ledger))
                                       (filter #(and (pd-active-at-tou? % period-num)
-                                                    (pd-active-in-month? % date))))
+                                                    (pd-active-in-month? % date)
+                                                    (pd-active-in-season? % seasons-by-id date))))
                       tier-entries
                       (->> ledger-pds
                            (mapcat (fn [pd]

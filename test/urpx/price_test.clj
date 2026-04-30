@@ -397,3 +397,172 @@
       (is (= 3 (count tiers)))
       (is (= "test:price-cia-t1-v2" (:urpx.resolved/price-id tier-1)))
       (is (= (BigDecimal. "-0.05000") (:urpx.resolved/unit-price tier-1))))))
+
+;; ---------------------------------------------------------------------------
+;; Non-TOU seasonal pricing — PriceDefinition.appliesInSeason → Season.month
+;; (URPX-2nk; CPAU E-2 shape)
+;; ---------------------------------------------------------------------------
+
+(defn- non-tou-seasonal-fixture
+  "A coerced RatePlan modeled on CPAU Schedule E-2 (effective 2025-07-01):
+   non-TOU two-season pricing where PriceDefinitions point at Seasons via
+   urpx:appliesInSeason and the seasonal partition lives entirely in the
+   Season month lists (no TOUSchedule indirection). Used to exercise the
+   PD.appliesInSeason → Season.month month-gating path independently of
+   any vendored fixture's evolution."
+  []
+  {:jsonld/type "urpx:RatePlan"
+   :jsonld/id   "urpx:test-cpau-e-2"
+   :urpx/ratePlanUniqueIdentifier "TEST-CPAU-E-2"
+   :urpx/name "Non-TOU two-season test plan"
+   :urpx/initialEffectiveDate (java.time.LocalDate/of 2025 7 1)
+   :urpx/hasRatePlanVersion
+   {:jsonld/type "urpx:RatePlanVersion"
+    :urpx/effectiveDateTime (java.time.LocalDateTime/of 2025 7 1 0 0)
+    :urpx/priceCurrency "USD"
+    :urpx/hasPlanElements
+    {:jsonld/type "urpx:PlanElements"
+     :urpx/hasSeasons
+     [{:jsonld/type "urpx:Season"
+       :jsonld/id "test:season-summer"
+       :urpx/seasonName "Summer"
+       :urpx/yearlyRecurrence true
+       :urpx/month [5 6 7 8 9 10]}
+      {:jsonld/type "urpx:Season"
+       :jsonld/id "test:season-winter"
+       :urpx/seasonName "Winter"
+       :urpx/yearlyRecurrence true
+       :urpx/month [11 12 1 2 3 4]}]
+     :urpx/hasMetricInput
+     [{:jsonld/type "urpx:MetricInput"
+       :jsonld/id "test:mi-energy"
+       :urpx/name "kWh"
+       :urpx/metricInputType {:jsonld/id "urpx:profileMetricInput"}
+       :urpx/hasMetricSpecification
+       {:jsonld/type "urpx:MetricSpecification"
+        :urpx/measurementKind {:jsonld/id "urpx:energy"}
+        :urpx/unitOfMeasure   {:jsonld/id "urpx:kWh"}}}]
+     :urpx/hasBillingModel
+     {:jsonld/type "urpx:BillingModel"
+      :urpx/hasLedger
+      [{:jsonld/type "urpx:Ledger"
+        :jsonld/id "test:ledger-commodity"
+        :urpx/name "Commodity"
+        :urpx/ledgerType {:jsonld/id "urpx:supplyLedger"}
+        :urpx/referencesMetricInput [{:jsonld/id "test:mi-energy"}]}
+       {:jsonld/type "urpx:Ledger"
+        :jsonld/id "test:ledger-distribution"
+        :urpx/name "Distribution"
+        :urpx/ledgerType {:jsonld/id "urpx:distributionLedger"}
+        :urpx/referencesMetricInput [{:jsonld/id "test:mi-energy"}]}
+       {:jsonld/type "urpx:Ledger"
+        :jsonld/id "test:ledger-public-benefits"
+        :urpx/name "Public Benefits"
+        :urpx/ledgerType {:jsonld/id "urpx:bundledLedger"}
+        :urpx/referencesMetricInput [{:jsonld/id "test:mi-energy"}]}]
+      :urpx/hasPriceDefinition
+      [{:jsonld/type "urpx:PriceDefinition"
+        :jsonld/id "test:pd-commodity-summer"
+        :urpx/name "Commodity Summer"
+        :urpx/appliesInSeason [{:jsonld/id "test:season-summer"}]
+        :urpx/referencesLedger {:jsonld/id "test:ledger-commodity"}}
+       {:jsonld/type "urpx:PriceDefinition"
+        :jsonld/id "test:pd-commodity-winter"
+        :urpx/name "Commodity Winter"
+        :urpx/appliesInSeason [{:jsonld/id "test:season-winter"}]
+        :urpx/referencesLedger {:jsonld/id "test:ledger-commodity"}}
+       {:jsonld/type "urpx:PriceDefinition"
+        :jsonld/id "test:pd-distribution-summer"
+        :urpx/name "Distribution Summer"
+        :urpx/appliesInSeason [{:jsonld/id "test:season-summer"}]
+        :urpx/referencesLedger {:jsonld/id "test:ledger-distribution"}}
+       {:jsonld/type "urpx:PriceDefinition"
+        :jsonld/id "test:pd-distribution-winter"
+        :urpx/name "Distribution Winter"
+        :urpx/appliesInSeason [{:jsonld/id "test:season-winter"}]
+        :urpx/referencesLedger {:jsonld/id "test:ledger-distribution"}}
+       {:jsonld/type "urpx:PriceDefinition"
+        :jsonld/id "test:pd-public-benefits-summer"
+        :urpx/name "Public Benefits Summer"
+        :urpx/appliesInSeason [{:jsonld/id "test:season-summer"}]
+        :urpx/referencesLedger {:jsonld/id "test:ledger-public-benefits"}}
+       {:jsonld/type "urpx:PriceDefinition"
+        :jsonld/id "test:pd-public-benefits-winter"
+        :urpx/name "Public Benefits Winter"
+        :urpx/appliesInSeason [{:jsonld/id "test:season-winter"}]
+        :urpx/referencesLedger {:jsonld/id "test:ledger-public-benefits"}}]}}
+    :urpx/hasPrices
+    {:jsonld/type "urpx:Prices"
+     ;; CPAU E-2 wraps its Prices in a PriceSet that DOES NOT carry a
+     ;; urpx:startDate (per-Price startDates are the date floor). Keep that
+     ;; shape here so the fixture exercises URPX-453 alongside URPX-2nk.
+     :urpx/hasPriceSet
+     [{:jsonld/type "urpx:PriceSet"
+       :jsonld/id "test:price-set"
+       :urpx/hasPrice
+       [{:jsonld/type "urpx:Price" :jsonld/id "test:price-commodity-summer"
+         :urpx/name "Commodity Summer" :urpx/unitPrice (BigDecimal. "0.15075")
+         :urpx/referencesPriceDefinition {:jsonld/id "test:pd-commodity-summer"}
+         :urpx/startDate (java.time.LocalDate/of 2025 7 1)}
+        {:jsonld/type "urpx:Price" :jsonld/id "test:price-commodity-winter"
+         :urpx/name "Commodity Winter" :urpx/unitPrice (BigDecimal. "0.09334")
+         :urpx/referencesPriceDefinition {:jsonld/id "test:pd-commodity-winter"}
+         :urpx/startDate (java.time.LocalDate/of 2025 7 1)}
+        {:jsonld/type "urpx:Price" :jsonld/id "test:price-distribution-summer"
+         :urpx/name "Distribution Summer" :urpx/unitPrice (BigDecimal. "0.10806")
+         :urpx/referencesPriceDefinition {:jsonld/id "test:pd-distribution-summer"}
+         :urpx/startDate (java.time.LocalDate/of 2025 7 1)}
+        {:jsonld/type "urpx:Price" :jsonld/id "test:price-distribution-winter"
+         :urpx/name "Distribution Winter" :urpx/unitPrice (BigDecimal. "0.07352")
+         :urpx/referencesPriceDefinition {:jsonld/id "test:pd-distribution-winter"}
+         :urpx/startDate (java.time.LocalDate/of 2025 7 1)}
+        {:jsonld/type "urpx:Price" :jsonld/id "test:price-public-benefits-summer"
+         :urpx/name "Public Benefits Summer" :urpx/unitPrice (BigDecimal. "0.00604")
+         :urpx/referencesPriceDefinition {:jsonld/id "test:pd-public-benefits-summer"}
+         :urpx/startDate (java.time.LocalDate/of 2025 7 1)}
+        {:jsonld/type "urpx:Price" :jsonld/id "test:price-public-benefits-winter"
+         :urpx/name "Public Benefits Winter" :urpx/unitPrice (BigDecimal. "0.00604")
+         :urpx/referencesPriceDefinition {:jsonld/id "test:pd-public-benefits-winter"}
+         :urpx/startDate (java.time.LocalDate/of 2025 7 1)}]}]}}})
+
+(deftest non-tou-seasonal-summer-resolves-summer-pds-only
+  (testing "URPX-2nk: PDs with appliesInSeason → Summer match in July; Winter
+            PDs are gated out via Season.month, not via hasApplicabilityRule."
+    (let [plan (non-tou-seasonal-fixture)
+          r    (price/resolve-prices plan (zdt 2026 7 15 17))
+          ledgers (:urpx.resolved/ledgers r)
+          price-ids (set (mapcat #(map :urpx.resolved/price-id (:urpx.resolved/tiers %)) ledgers))]
+      (is (= 3 (count ledgers)) "one tier-entry-bearing ledger per energy component")
+      (is (contains? price-ids "test:price-commodity-summer"))
+      (is (contains? price-ids "test:price-distribution-summer"))
+      (is (contains? price-ids "test:price-public-benefits-summer"))
+      (is (not (contains? price-ids "test:price-commodity-winter")))
+      (is (not (contains? price-ids "test:price-distribution-winter")))
+      (is (not (contains? price-ids "test:price-public-benefits-winter"))))))
+
+(deftest non-tou-seasonal-winter-resolves-winter-pds-only
+  (testing "URPX-2nk: January (in the Winter season month list) resolves only
+            the Winter-keyed PDs."
+    (let [plan (non-tou-seasonal-fixture)
+          r    (price/resolve-prices plan (zdt 2026 1 15 12))
+          price-ids (set (mapcat #(map :urpx.resolved/price-id (:urpx.resolved/tiers %))
+                                 (:urpx.resolved/ledgers r)))]
+      (is (contains? price-ids "test:price-commodity-winter"))
+      (is (contains? price-ids "test:price-distribution-winter"))
+      (is (contains? price-ids "test:price-public-benefits-winter"))
+      (is (not (contains? price-ids "test:price-commodity-summer")))
+      (is (not (contains? price-ids "test:price-distribution-summer"))))))
+
+(deftest non-tou-seasonal-marginal-rate-matches-summer-total
+  (testing "URPX-2nk: marginal-unit-rate sums the three Summer energy ledgers
+            to the published $0.26485/kWh CPAU E-2 Summer total."
+    (let [plan (non-tou-seasonal-fixture)
+          r    (price/resolve-prices plan (zdt 2026 7 15 17))
+          rate (price/marginal-unit-rate r)]
+      (is (= (BigDecimal. "0.26485") rate)))))
+
+(deftest non-tou-seasonal-marginal-rate-matches-winter-total
+  (let [plan (non-tou-seasonal-fixture)
+        r    (price/resolve-prices plan (zdt 2026 1 15 12))
+        rate (price/marginal-unit-rate r)]
+    (is (= (BigDecimal. "0.17290") rate))))
