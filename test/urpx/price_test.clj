@@ -218,7 +218,7 @@
                           [:urpx/hasRatePlanVersion
                            :urpx/hasPlanElements
                            :urpx/hasBillingModel
-                           :urpx/hasTOUSchedule
+                           :urpx/hasTOUSchedule 0
                            :urpx/hasTOUTier 0
                            :urpx/hasTOUPeriod 0
                            :urpx/hasTimeBracket]

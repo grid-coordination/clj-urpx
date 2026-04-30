@@ -106,10 +106,15 @@
 
 (defn- find-tou-period
   "Find the TOUPeriod whose TimeBracket matches the given season, date,
-   day-of-week, and local-time. Walks every tier's periods (the tier hierarchy
-   is for classification — what matters for resolution is the bracket match)."
-  [tou-schedule season-id ^LocalDate date ^LocalTime t ^DayOfWeek dow holiday?]
-  (when tou-schedule
+   day-of-week, and local-time across every TOUSchedule in `tou-schedules`.
+   Walks every tier's periods (the tier hierarchy is for classification —
+   what matters for resolution is the bracket match).
+
+   BillingModel.hasTOUSchedule is a vector (URPX-qb5): one schedule per
+   MetricInput when the filing TOU-zones multiple metrics. The first
+   bracket-matching period across all schedules wins."
+  [tou-schedules season-id ^LocalDate date ^LocalTime t ^DayOfWeek dow holiday?]
+  (when (seq tou-schedules)
     (some
      (fn [period]
        (when (some
@@ -119,7 +124,9 @@
                      (time-in-bracket? t bracket)))
               (:urpx/hasTimeBracket period))
          period))
-     (mapcat :urpx/hasTOUPeriod (:urpx/hasTOUTier tou-schedule)))))
+     (mapcat (fn [schedule]
+               (mapcat :urpx/hasTOUPeriod (:urpx/hasTOUTier schedule)))
+             tou-schedules))))
 
 ;; ---------------------------------------------------------------------------
 ;; Active-price lookup
@@ -397,7 +404,7 @@
          seasons-by-id (into {} (map (juxt :jsonld/id identity)) seasons)
          billing       (:urpx/hasBillingModel plan-elements)
          ledgers       (:urpx/hasLedger billing)
-         tou-schedule  (:urpx/hasTOUSchedule billing)
+         tou-schedules (:urpx/hasTOUSchedule billing)
          tiers-by-num  (service-tiers-by-number billing)
          prices        (:urpx/hasPrices version)
          holiday?      (or (:holiday? opts)
@@ -408,7 +415,7 @@
          dow           (.getDayOfWeek zdt)
 
          season        (season-of seasons date)
-         tou-period    (find-tou-period tou-schedule (:jsonld/id season)
+         tou-period    (find-tou-period tou-schedules (:jsonld/id season)
                                         date local-time dow holiday?)
          period-num    (:urpx/touPeriodNumber tou-period)
 
