@@ -665,6 +665,15 @@
    [:urpx/hasRateCase
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
+   ;; URPX Decisions #084 + #090: RPV-side pointers to optional Modifier(s)
+   ;; and ModifierVersion(s). Both 0..None in SHACL — surfaced here so
+   ;; coerce yields them as vectors of Ref maps (URPX-1nq).
+   [:urpx/hasModifierOptions
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/hasModifierVersionOptions
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
    [:urpx/observesHoliday
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]

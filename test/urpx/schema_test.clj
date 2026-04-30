@@ -6,6 +6,7 @@
   describe. Here we exercise the schemas directly with hand-built typed values."
   (:require [clojure.test :refer [deftest is testing]]
             [malli.core :as m]
+            [urpx.coerce :as coerce]
             [urpx.schema :as s])
   (:import [java.math BigDecimal]
            [java.time Duration LocalDate LocalDateTime LocalTime]))
@@ -145,6 +146,52 @@
         (is (not (m/validate s/RatePlan (dissoc plan :urpx/ratePlanUniqueIdentifier)))))
       (testing "missing version rejected"
         (is (not (m/validate s/RatePlan (dissoc plan :urpx/hasRatePlanVersion))))))))
+
+(deftest rate-plan-version-modifier-options
+  (testing "URPX-1nq / Decisions #084 + #090: RatePlanVersion accepts
+            hasModifierOptions and hasModifierVersionOptions, both as vectors
+            of Refs (single-or-vec→vec normalizes the JSON-LD shape)."
+    (let [version-base {:jsonld/type "urpx:RatePlanVersion"
+                        :urpx/effectiveDateTime (LocalDateTime/of 2026 3 1 0 0)
+                        :urpx/hasPlanElements
+                        {:jsonld/type "urpx:PlanElements"
+                         :urpx/hasMetricInput
+                         [{:jsonld/type "urpx:MetricInput"
+                           :urpx/name "kWh"
+                           :urpx/metricInputType {:jsonld/id "urpx:measuredMetricInput"}}]
+                         :urpx/hasBillingModel
+                         {:jsonld/type "urpx:BillingModel"
+                          :urpx/hasPriceDefinition []}}
+                        :urpx/hasPrices {:jsonld/type "urpx:Prices"}}
+          version-with-options
+          (assoc version-base
+                 :urpx/hasModifierOptions
+                 [{:jsonld/id "pge:e-1-vintage-pcia"}]
+                 :urpx/hasModifierVersionOptions
+                 [{:jsonld/id "pge:e-1-vintage-pcia-2026-03-01"}])]
+      (is (m/validate s/RatePlanVersion version-with-options))
+      (testing "still validates without the new properties (both optional)"
+        (is (m/validate s/RatePlanVersion version-base)))))
+  (testing "single-or-vec decoder normalizes a single Ref to a one-element vector"
+    (let [raw {:jsonld/type "urpx:RatePlanVersion"
+               :urpx/effectiveDateTime "2026-03-01T00:00:00"
+               :urpx/hasModifierOptions {:jsonld/id "pge:e-1-vintage-pcia"}
+               :urpx/hasModifierVersionOptions {:jsonld/id "pge:e-1-vintage-pcia-2026-03-01"}
+               :urpx/hasPlanElements
+               {:jsonld/type "urpx:PlanElements"
+                :urpx/hasMetricInput
+                [{:jsonld/type "urpx:MetricInput"
+                  :urpx/name "kWh"
+                  :urpx/metricInputType {:jsonld/id "urpx:measuredMetricInput"}}]
+                :urpx/hasBillingModel
+                {:jsonld/type "urpx:BillingModel"
+                 :urpx/hasPriceDefinition []}}
+               :urpx/hasPrices {:jsonld/type "urpx:Prices"}}
+          coerced (coerce/coerce s/RatePlanVersion raw)]
+      (is (= [{:jsonld/id "pge:e-1-vintage-pcia"}]
+             (:urpx/hasModifierOptions coerced)))
+      (is (= [{:jsonld/id "pge:e-1-vintage-pcia-2026-03-01"}]
+             (:urpx/hasModifierVersionOptions coerced))))))
 
 (deftest rate-plan-modifier-no-isOptional
   (testing "v0.2.0: RatePlanModifier no longer has urpx:isOptional and uses
