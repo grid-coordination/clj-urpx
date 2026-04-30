@@ -105,6 +105,37 @@
        \"urpx:initialEffectiveDate\":\"2026-01-01\"}
     ]}")
 
+(def urpx-document-with-plan
+  "{\"@context\":{\"urpx\":\"https://schema.urpx.org/\"},
+    \"@type\":\"urpx:URPXDocument\",\"@id\":\"x:doc\",
+    \"urpx:targetURPXVersion\":\"https://example.com/urpx-v0.2.0\",
+    \"urpx:hasRatePlan\":{
+      \"@type\":\"urpx:RatePlan\",\"@id\":\"x:plan\",
+      \"urpx:ratePlanUniqueIdentifier\":\"P1\",\"urpx:name\":\"Plan One\",
+      \"urpx:initialEffectiveDate\":\"2026-01-01\"}}")
+
+(def urpx-document-with-plan-and-modifier
+  "{\"@context\":{\"urpx\":\"https://schema.urpx.org/\"},
+    \"@type\":\"urpx:URPXDocument\",\"@id\":\"x:doc\",
+    \"urpx:targetURPXVersion\":\"https://example.com/urpx-v0.2.0\",
+    \"urpx:hasRatePlan\":{
+      \"@type\":\"urpx:RatePlan\",\"@id\":\"x:plan\",
+      \"urpx:ratePlanUniqueIdentifier\":\"P1\",\"urpx:name\":\"Plan One\",
+      \"urpx:initialEffectiveDate\":\"2026-01-01\"},
+    \"urpx:hasRatePlanModifier\":{
+      \"@type\":\"urpx:RatePlanModifier\",\"@id\":\"x:mod\",
+      \"urpx:modifierUniqueIdentifier\":\"M1\",\"urpx:name\":\"Modifier\",
+      \"urpx:initialEffectiveDate\":\"2026-01-01\"}}")
+
+(def urpx-document-with-standalone-modifier
+  "{\"@context\":{\"urpx\":\"https://schema.urpx.org/\"},
+    \"@type\":\"urpx:URPXDocument\",\"@id\":\"x:doc\",
+    \"urpx:targetURPXVersion\":\"https://example.com/urpx-v0.2.0\",
+    \"urpx:hasRatePlanModifier\":{
+      \"@type\":\"urpx:RatePlanModifier\",\"@id\":\"x:mod\",
+      \"urpx:modifierUniqueIdentifier\":\"M1\",\"urpx:name\":\"Standalone Modifier\",
+      \"urpx:initialEffectiveDate\":\"2026-01-01\"}}")
+
 (deftest parse-graph-single-entity-doc
   (testing "A document with no @graph yields a one-element vector containing the entity"
     (let [entities (core/parse-graph (reader single-entity-doc))]
@@ -210,3 +241,44 @@
         (is (thrown-with-msg? clojure.lang.ExceptionInfo
                               #"Multiple urpx:RatePlanModifier entities"
                               (core/load-rate-plan-modifier path)))))))
+
+;; ---------------------------------------------------------------------------
+;; URPXDocument wrapper traversal (URPX-8hq)
+;; ---------------------------------------------------------------------------
+
+(deftest load-rate-plan-descends-into-urpx-document
+  (testing "URPX-8hq: a v0.2.0 URPXDocument-wrapped filing — load-rate-plan
+            traverses urpx:hasRatePlan to find the inner plan"
+    (with-temp-jsonld urpx-document-with-plan
+      (fn [path]
+        (let [plan (core/load-rate-plan path)]
+          (is (= "urpx:RatePlan" (:jsonld/type plan)))
+          (is (= "x:plan" (:jsonld/id plan))))))))
+
+(deftest load-rate-plan-modifier-descends-into-urpx-document
+  (testing "URPX-8hq: load-rate-plan-modifier traverses urpx:hasRatePlanModifier
+            on a URPXDocument-wrapped filing"
+    (with-temp-jsonld urpx-document-with-plan-and-modifier
+      (fn [path]
+        (let [m (core/load-rate-plan-modifier path)]
+          (is (= "urpx:RatePlanModifier" (:jsonld/type m)))
+          (is (= "x:mod" (:jsonld/id m))))))))
+
+(deftest load-rate-plan-modifier-from-standalone-urpx-document
+  (testing "URPX-8hq: a URPXDocument carrying only a hasRatePlanModifier
+            (no hasRatePlan) — the wrapped equivalent of a standalone modifier
+            filing — yields the modifier via load-rate-plan-modifier"
+    (with-temp-jsonld urpx-document-with-standalone-modifier
+      (fn [path]
+        (let [m (core/load-rate-plan-modifier path)]
+          (is (= "urpx:RatePlanModifier" (:jsonld/type m)))
+          (is (= "x:mod" (:jsonld/id m))))))))
+
+(deftest load-rate-plan-still-throws-on-urpx-document-without-plan
+  (testing "URPX-8hq: a URPXDocument with no inner urpx:RatePlan still
+            errors clearly (the modifier-only doc isn't a base plan)"
+    (with-temp-jsonld urpx-document-with-standalone-modifier
+      (fn [path]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"No urpx:RatePlan entity"
+                              (core/load-rate-plan path)))))))
