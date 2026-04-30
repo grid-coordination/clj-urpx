@@ -763,3 +763,50 @@
    [:urpx/url                {:optional true} :string]
    [:urpx/version            {:optional true} :string]
    [:urpx/hasRatePlanModifierVersion RatePlanModifierVersion]])
+
+;; ---------------------------------------------------------------------------
+;; URPXDocument — top-level wrapper carrying ontology-version metadata
+;; ---------------------------------------------------------------------------
+
+(def URPXDocument
+  "URPX v0.2.0 Decision #103: every urpx:URPXDocument carries a required
+   urpx:targetURPXVersion (xsd:anyURI) declaring the ontology version the
+   document was authored against. URPXDocumentShape (SHACL) lists many
+   optional metadata fields (dateCreated, version, hasRatePlan,
+   hasRatePlanModifier, hasTariffPublication, …) — we model only the
+   required field plus the headline payload pointers; additional metadata
+   flows through unvalidated.
+
+   Filings that aren't URPXDocument-wrapped (raw RatePlan, raw
+   RatePlanModifier, or a JSON-LD `@graph` doc with no urpx:URPXDocument
+   @type) bypass this shape — its target is the v0.2.0 wrapper class
+   itself, not every URPX serialization."
+  [:map
+   [:jsonld/type [:= "urpx:URPXDocument"]]
+   [:jsonld/id {:optional true} :string]
+   [:jsonld/context {:optional true} :map]
+   [:urpx/targetURPXVersion :string]
+   [:urpx/name              {:optional true} :string]
+   [:urpx/description       {:optional true} :string]
+   [:urpx/version           {:optional true} :string]
+   [:urpx/url               {:optional true} :string]
+   [:urpx/timezoneIdentifier {:optional true} :string]
+   [:urpx/priceCurrency     {:optional true} :string]
+   [:urpx/dateCreated       {:optional true} Date]
+   [:urpx/dateTimeCreated   {:optional true} DateTime]
+   [:urpx/effectiveDate     {:optional true} Date]
+   [:urpx/effectiveDateTime {:optional true} DateTime]
+   [:urpx/expirationDate    {:optional true} Date]
+   [:urpx/expirationDateTime {:optional true} DateTime]
+   ;; Payload pointers — embedded entity (full RatePlan / RatePlanModifier)
+   ;; or a Ref by @id. Inner entities should be validated against their own
+   ;; schemas separately; here we only check the wrapper-level metadata.
+   [:urpx/hasRatePlan
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector :map]]
+   [:urpx/hasRatePlanModifier
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector :map]]
+   [:urpx/hasTariffPublication
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector :map]]])

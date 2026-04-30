@@ -36,13 +36,23 @@
   [raw]
   (coerce schema/RatePlanModifier raw))
 
+(defn coerce-urpx-document
+  "Coerce a raw parsed URPX document wrapper into the typed shape described
+   by `urpx.schema/URPXDocument`. Validates the document-level metadata
+   (urpx:targetURPXVersion, dates, version, …) — inner urpx:hasRatePlan /
+   urpx:hasRatePlanModifier payloads are passed through as raw maps and
+   should be coerced + validated against their own schemas separately."
+  [raw]
+  (coerce schema/URPXDocument raw))
+
 (defn coerce-doc
-  "Dispatch on the document's :jsonld/type and coerce as a RatePlan or
-   RatePlanModifier. Returns nil for unknown types."
+  "Dispatch on the document's :jsonld/type and coerce as a RatePlan,
+   RatePlanModifier, or URPXDocument wrapper. Returns nil for unknown types."
   [raw]
   (case (:jsonld/type raw)
     "urpx:RatePlan"         (coerce-rate-plan raw)
     "urpx:RatePlanModifier" (coerce-rate-plan-modifier raw)
+    "urpx:URPXDocument"     (coerce-urpx-document raw)
     nil))
 
 (defn validate

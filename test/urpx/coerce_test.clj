@@ -142,3 +142,45 @@
           plan (core/load-rate-plan path)]
       (is (= "urpx:RatePlan" (:jsonld/type plan)))
       (is (= "pge:e-1" (:jsonld/id plan))))))
+
+;; ---------------------------------------------------------------------------
+;; URPXDocument wrapper (URPX-1ii / Decision #103)
+;; ---------------------------------------------------------------------------
+
+(def ^:private valid-urpx-document-raw
+  {:jsonld/type "urpx:URPXDocument"
+   :jsonld/id   "ex:doc"
+   :urpx/targetURPXVersion
+   "https://github.com/urpx-org/urpx/raw/v0.2.0/ontology/urpx-ontology.ttl"
+   :urpx/hasRatePlan
+   {:jsonld/type "urpx:RatePlan" :jsonld/id "ex:plan"}})
+
+(deftest urpx-document-validates-with-target-version
+  (testing "URPX-1ii: a URPXDocument carrying urpx:targetURPXVersion validates"
+    (let [coerced (coerce/coerce-urpx-document valid-urpx-document-raw)]
+      (is (nil? (coerce/explain schema/URPXDocument coerced)))
+      (testing "single hasRatePlan map is normalized to a vector"
+        (is (vector? (:urpx/hasRatePlan coerced)))
+        (is (= 1 (count (:urpx/hasRatePlan coerced))))))))
+
+(deftest urpx-document-rejected-when-target-version-missing
+  (testing "URPX-1ii / Decision #103: missing urpx:targetURPXVersion fails
+            Malli validation — corpus filings retrofit must add the field."
+    (let [no-version (dissoc valid-urpx-document-raw :urpx/targetURPXVersion)
+          coerced (coerce/coerce-urpx-document no-version)
+          err (coerce/explain schema/URPXDocument coerced)]
+      (is (some? err) "validation must fail")
+      (is (some #(= [:urpx/targetURPXVersion] (:in %)) (:errors err))
+          "the explanation must point at urpx:targetURPXVersion"))))
+
+(deftest urpx-document-rejected-when-target-version-not-string
+  (testing "targetURPXVersion must be a string (xsd:anyURI in SHACL)"
+    (let [bad (assoc valid-urpx-document-raw :urpx/targetURPXVersion 42)
+          err (coerce/explain schema/URPXDocument
+                              (coerce/coerce-urpx-document bad))]
+      (is (some? err)))))
+
+(deftest coerce-doc-dispatches-on-urpx-document
+  (testing "URPX-1ii: coerce-doc routes urpx:URPXDocument through coerce-urpx-document"
+    (let [coerced (coerce/coerce-doc valid-urpx-document-raw)]
+      (is (nil? (coerce/explain schema/URPXDocument coerced))))))
