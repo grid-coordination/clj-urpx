@@ -1,5 +1,6 @@
 (ns urpx.core-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.data.json :as json]
+            [clojure.test :refer [deftest is testing]]
             [urpx.core :as core]
             [urpx.test-fixtures :as fixtures]))
 
@@ -38,7 +39,10 @@
 (deftest prefixed-key-conversion
   (testing "via parse-rate-plan on a small inline document"
     (let [src (java.io.StringReader.
-               "{\"@id\":\"urpx:foo\",\"@type\":\"urpx:Thing\",\"urpx:name\":\"x\",\"plain\":1}")
+               (json/write-str {"@id" "urpx:foo"
+                                "@type" "urpx:Thing"
+                                "urpx:name" "x"
+                                "plain" 1}))
           parsed (core/parse-rate-plan src)]
       (is (= {:jsonld/id "urpx:foo"
               :jsonld/type "urpx:Thing"
@@ -49,96 +53,103 @@
 ;; ---------------------------------------------------------------------------
 ;; @graph container handling
 ;; ---------------------------------------------------------------------------
+;;
+;; Fixtures are defined as Clojure data with string keys (matching the JSON-LD
+;; property names) and serialized to JSON via clojure.data.json/write-str at
+;; test time. Avoids the eye-bleed of escaped JSON-in-string literals.
 
-(defn- reader [^String s]
-  (java.io.StringReader. s))
+(defn- jsonld-reader
+  "Serialize `edn` to JSON and wrap in a StringReader (urpx.core/parse-* accept readers)."
+  [edn]
+  (java.io.StringReader. (json/write-str edn)))
+
+(defn- with-temp-jsonld
+  "Serialize `edn` to a temp .jsonld file, run `f` against the path; cleans up."
+  [edn f]
+  (let [tmp (java.io.File/createTempFile "urpx-test-" ".jsonld")]
+    (try
+      (spit tmp (json/write-str edn))
+      (f (.getAbsolutePath tmp))
+      (finally (.delete tmp)))))
+
+(def context
+  {"urpx" "https://schema.urpx.org/"})
 
 (def single-entity-doc
-  "{\"@type\":\"urpx:RatePlan\",\"@id\":\"x:plan\",
-    \"urpx:ratePlanUniqueIdentifier\":\"P1\",\"urpx:name\":\"Plan One\",
-    \"urpx:initialEffectiveDate\":\"2026-01-01\"}")
+  {"@type" "urpx:RatePlan"
+   "@id" "x:plan"
+   "urpx:ratePlanUniqueIdentifier" "P1"
+   "urpx:name" "Plan One"
+   "urpx:initialEffectiveDate" "2026-01-01"})
+
+(def program-care
+  {"@type" "urpx:ProgramEnrollment"
+   "@id" "x:program-care"
+   "urpx:programName" "CARE"})
+
+(def plan-one
+  {"@type" "urpx:RatePlan"
+   "@id" "x:plan"
+   "urpx:ratePlanUniqueIdentifier" "P1"
+   "urpx:name" "Plan One"
+   "urpx:initialEffectiveDate" "2026-01-01"})
+
+(def modifier-m1
+  {"@type" "urpx:RatePlanModifier"
+   "@id" "x:mod"
+   "urpx:modifierUniqueIdentifier" "M1"
+   "urpx:name" "Modifier"
+   "urpx:initialEffectiveDate" "2026-01-01"})
 
 (def graph-with-plan-and-modifier
-  "{\"@context\":{\"urpx\":\"https://schema.urpx.org/\"},
-    \"@graph\":[
-      {\"@type\":\"urpx:ProgramEnrollment\",\"@id\":\"x:program-care\",
-       \"urpx:programName\":\"CARE\"},
-      {\"@type\":\"urpx:RatePlan\",\"@id\":\"x:plan\",
-       \"urpx:ratePlanUniqueIdentifier\":\"P1\",\"urpx:name\":\"Plan One\",
-       \"urpx:initialEffectiveDate\":\"2026-01-01\"},
-      {\"@type\":\"urpx:RatePlanModifier\",\"@id\":\"x:mod\",
-       \"urpx:modifierUniqueIdentifier\":\"M1\",\"urpx:name\":\"Modifier\",
-       \"urpx:initialEffectiveDate\":\"2026-01-01\"}
-    ]}")
+  {"@context" context
+   "@graph" [program-care plan-one modifier-m1]})
 
 (def graph-with-no-plan
-  "{\"@context\":{\"urpx\":\"https://schema.urpx.org/\"},
-    \"@graph\":[
-      {\"@type\":\"urpx:ProgramEnrollment\",\"@id\":\"x:program-care\",
-       \"urpx:programName\":\"CARE\"}
-    ]}")
+  {"@context" context
+   "@graph" [program-care]})
 
 (def graph-with-two-plans
-  "{\"@context\":{\"urpx\":\"https://schema.urpx.org/\"},
-    \"@graph\":[
-      {\"@type\":\"urpx:RatePlan\",\"@id\":\"x:plan-a\",
-       \"urpx:ratePlanUniqueIdentifier\":\"PA\",\"urpx:name\":\"Plan A\",
-       \"urpx:initialEffectiveDate\":\"2026-01-01\"},
-      {\"@type\":\"urpx:RatePlan\",\"@id\":\"x:plan-b\",
-       \"urpx:ratePlanUniqueIdentifier\":\"PB\",\"urpx:name\":\"Plan B\",
-       \"urpx:initialEffectiveDate\":\"2026-01-01\"}
-    ]}")
+  {"@context" context
+   "@graph" [{"@type" "urpx:RatePlan" "@id" "x:plan-a"
+              "urpx:ratePlanUniqueIdentifier" "PA" "urpx:name" "Plan A"
+              "urpx:initialEffectiveDate" "2026-01-01"}
+             {"@type" "urpx:RatePlan" "@id" "x:plan-b"
+              "urpx:ratePlanUniqueIdentifier" "PB" "urpx:name" "Plan B"
+              "urpx:initialEffectiveDate" "2026-01-01"}]})
 
 (def standalone-modifier-doc
-  "{\"@type\":\"urpx:RatePlanModifier\",\"@id\":\"x:mod\",
-    \"urpx:modifierUniqueIdentifier\":\"M1\",\"urpx:name\":\"Standalone Modifier\",
-    \"urpx:initialEffectiveDate\":\"2026-01-01\"}")
+  (assoc modifier-m1 "urpx:name" "Standalone Modifier"))
 
 (def graph-with-two-modifiers
-  "{\"@context\":{\"urpx\":\"https://schema.urpx.org/\"},
-    \"@graph\":[
-      {\"@type\":\"urpx:RatePlanModifier\",\"@id\":\"x:mod-a\",
-       \"urpx:modifierUniqueIdentifier\":\"MA\",\"urpx:name\":\"Modifier A\",
-       \"urpx:initialEffectiveDate\":\"2026-01-01\"},
-      {\"@type\":\"urpx:RatePlanModifier\",\"@id\":\"x:mod-b\",
-       \"urpx:modifierUniqueIdentifier\":\"MB\",\"urpx:name\":\"Modifier B\",
-       \"urpx:initialEffectiveDate\":\"2026-01-01\"}
-    ]}")
+  {"@context" context
+   "@graph" [{"@type" "urpx:RatePlanModifier" "@id" "x:mod-a"
+              "urpx:modifierUniqueIdentifier" "MA" "urpx:name" "Modifier A"
+              "urpx:initialEffectiveDate" "2026-01-01"}
+             {"@type" "urpx:RatePlanModifier" "@id" "x:mod-b"
+              "urpx:modifierUniqueIdentifier" "MB" "urpx:name" "Modifier B"
+              "urpx:initialEffectiveDate" "2026-01-01"}]})
 
 (def urpx-document-with-plan
-  "{\"@context\":{\"urpx\":\"https://schema.urpx.org/\"},
-    \"@type\":\"urpx:URPXDocument\",\"@id\":\"x:doc\",
-    \"urpx:targetURPXVersion\":\"https://example.com/urpx-v0.2.0\",
-    \"urpx:hasRatePlan\":{
-      \"@type\":\"urpx:RatePlan\",\"@id\":\"x:plan\",
-      \"urpx:ratePlanUniqueIdentifier\":\"P1\",\"urpx:name\":\"Plan One\",
-      \"urpx:initialEffectiveDate\":\"2026-01-01\"}}")
+  {"@context" context
+   "@type" "urpx:URPXDocument"
+   "@id" "x:doc"
+   "urpx:targetURPXVersion" "https://example.com/urpx-v0.2.0"
+   "urpx:hasRatePlan" plan-one})
 
 (def urpx-document-with-plan-and-modifier
-  "{\"@context\":{\"urpx\":\"https://schema.urpx.org/\"},
-    \"@type\":\"urpx:URPXDocument\",\"@id\":\"x:doc\",
-    \"urpx:targetURPXVersion\":\"https://example.com/urpx-v0.2.0\",
-    \"urpx:hasRatePlan\":{
-      \"@type\":\"urpx:RatePlan\",\"@id\":\"x:plan\",
-      \"urpx:ratePlanUniqueIdentifier\":\"P1\",\"urpx:name\":\"Plan One\",
-      \"urpx:initialEffectiveDate\":\"2026-01-01\"},
-    \"urpx:hasRatePlanModifier\":{
-      \"@type\":\"urpx:RatePlanModifier\",\"@id\":\"x:mod\",
-      \"urpx:modifierUniqueIdentifier\":\"M1\",\"urpx:name\":\"Modifier\",
-      \"urpx:initialEffectiveDate\":\"2026-01-01\"}}")
+  (assoc urpx-document-with-plan "urpx:hasRatePlanModifier" modifier-m1))
 
 (def urpx-document-with-standalone-modifier
-  "{\"@context\":{\"urpx\":\"https://schema.urpx.org/\"},
-    \"@type\":\"urpx:URPXDocument\",\"@id\":\"x:doc\",
-    \"urpx:targetURPXVersion\":\"https://example.com/urpx-v0.2.0\",
-    \"urpx:hasRatePlanModifier\":{
-      \"@type\":\"urpx:RatePlanModifier\",\"@id\":\"x:mod\",
-      \"urpx:modifierUniqueIdentifier\":\"M1\",\"urpx:name\":\"Standalone Modifier\",
-      \"urpx:initialEffectiveDate\":\"2026-01-01\"}}")
+  {"@context" context
+   "@type" "urpx:URPXDocument"
+   "@id" "x:doc"
+   "urpx:targetURPXVersion" "https://example.com/urpx-v0.2.0"
+   "urpx:hasRatePlanModifier" (assoc modifier-m1 "urpx:name" "Standalone Modifier")})
 
 (deftest parse-graph-single-entity-doc
   (testing "A document with no @graph yields a one-element vector containing the entity"
-    (let [entities (core/parse-graph (reader single-entity-doc))]
+    (let [entities (core/parse-graph (jsonld-reader single-entity-doc))]
       (is (vector? entities))
       (is (= 1 (count entities)))
       (is (= "urpx:RatePlan" (:jsonld/type (first entities))))
@@ -146,27 +157,18 @@
 
 (deftest parse-graph-multi-entity-doc
   (testing "A document with @graph yields the graph contents as a vector"
-    (let [entities (core/parse-graph (reader graph-with-plan-and-modifier))]
+    (let [entities (core/parse-graph (jsonld-reader graph-with-plan-and-modifier))]
       (is (= 3 (count entities)))
       (is (= ["urpx:ProgramEnrollment" "urpx:RatePlan" "urpx:RatePlanModifier"]
              (mapv :jsonld/type entities))))))
 
 (deftest parse-rate-plan-leaves-graph-untouched
   (testing "parse-rate-plan is the raw parser; @graph stays under :jsonld/graph"
-    (let [parsed (core/parse-rate-plan (reader graph-with-plan-and-modifier))]
+    (let [parsed (core/parse-rate-plan (jsonld-reader graph-with-plan-and-modifier))]
       (is (vector? (:jsonld/graph parsed)))
       (is (= 3 (count (:jsonld/graph parsed))))
       (is (nil? (:jsonld/type parsed))
           "the wrapper has @context + @graph but no @type"))))
-
-(defn- with-temp-jsonld
-  "Write `s` to a temp .jsonld file and run `f` against the path; cleans up."
-  [s f]
-  (let [tmp (java.io.File/createTempFile "urpx-test-" ".jsonld")]
-    (try
-      (spit tmp s)
-      (f (.getAbsolutePath tmp))
-      (finally (.delete tmp)))))
 
 (deftest load-rate-plan-unwraps-graph-with-unique-plan
   (testing "When @graph contains exactly one urpx:RatePlan, load-rate-plan returns it"
