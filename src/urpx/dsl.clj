@@ -25,10 +25,106 @@
   Nil-stripping: kwargs whose value is `nil` are dropped before coercion,
   so `(builder :urpx/foo (when condition x))` cleanly omits the field
   rather than producing a present-but-nil entry that would fail validation.
-  Explicit `false` is preserved (boolean fields aren't stripped)."
+  Explicit `false` is preserved (boolean fields aren't stripped).
+
+  Local-symbol refs (URPX-8fo): inside a `dsl-scope`, builders accept an
+  optional leading qualified-keyword as the entity's local @id, and
+  qualified-keyword values in kwarg positions resolve to {:jsonld/id ...}
+  maps via the scope's registry. Outside `dsl-scope`, builders ignore the
+  local-id machinery and only accept canonical kwargs."
   (:require [malli.core :as m]
             [urpx.coerce :as coerce]
             [urpx.schema :as schema]))
+
+;; ---------------------------------------------------------------------------
+;; Local-symbol refs (URPX-8fo) — dsl-scope + registry
+;; ---------------------------------------------------------------------------
+
+(def ^:dynamic ^:private *local-refs*
+  "Holds the volatile map of {qualified-keyword → @id-string} for the
+   currently-active `dsl-scope`; nil outside any scope. The dynamic var
+   is just the indirection that lets builders find the registry without
+   an explicit arg — actual mutation happens to the volatile inside it,
+   which is born when the scope opens and dies when it closes (no shared
+   mutable state escapes)."
+  nil)
+
+(defn- in-scope? [] (some? *local-refs*))
+
+(defmacro dsl-scope
+  "Establish a local-symbol-ref scope. Inside the body, builders accept an
+   optional leading qualified-keyword argument as the entity's local @id
+   (registered in the scope), and qualified-keyword values in kwarg
+   positions resolve to {:jsonld/id ...} maps via the registry.
+
+   Resolution is eager (declare-before-reference): a reference to an
+   undeclared keyword throws ex-info. Multiple declarations of the same
+   keyword also throw.
+
+   Implementation: the scope binds `*local-refs*` to a fresh `volatile!`
+   holding a persistent map. Builders mutate it via `vswap!` during the
+   scope's evaluation; nothing outside the body's dynamic extent ever
+   sees the volatile, and the scope returns a regular immutable result."
+  [& body]
+  `(binding [*local-refs* (volatile! {})]
+     ~@body))
+
+(defn- ->local-id
+  "Project a qualified keyword to a string @id form. The default is the
+   keyword's local name (`::summer` → \"summer\"); collision with an
+   existing declaration in the registry throws."
+  [sym]
+  (name sym))
+
+(defn- register-local-id! [sym]
+  (let [id (->local-id sym)]
+    (when (contains? @*local-refs* sym)
+      (throw (ex-info (str "DSL local ref already declared: " sym)
+                      {:sym sym :existing (get @*local-refs* sym)})))
+    (vswap! *local-refs* assoc sym id)
+    id))
+
+(defn- resolve-local-ref [sym]
+  (if-let [id (get @*local-refs* sym)]
+    {:jsonld/id id}
+    (throw (ex-info (str "DSL local ref not declared: " sym)
+                    {:sym sym :declared (keys @*local-refs*)}))))
+
+(defn- resolve-refs-in-value
+  "Walk a kwarg value and replace qualified-keyword leaves (treated as
+   local-ref intents) with {:jsonld/id ...} maps from the registry. Vectors
+   are walked element-wise; other shapes pass through unchanged."
+  [v]
+  (cond
+    (qualified-keyword? v) (resolve-local-ref v)
+    (vector? v)            (mapv resolve-refs-in-value v)
+    :else                  v))
+
+(defn- local-id-arg?
+  "True if `v` looks like a DSL local-id: a qualified keyword whose
+   namespace is NOT 'urpx' or 'jsonld' (those are reserved for kwarg keys
+   in URPX schemas, e.g. :urpx/seasonName, :jsonld/id). Inside `dsl-scope`,
+   a leading keyword that passes this test is treated as the entity's
+   local @id rather than the first kwarg key.
+
+   Constraint: kwarg keys outside the urpx/jsonld namespaces aren't
+   supported in builder calls (use the trailing-map form to pass them)."
+  [v]
+  (and (qualified-keyword? v)
+       (not (#{"urpx" "jsonld"} (namespace v)))))
+
+(defn- normalize-args
+  "Split a builder's varargs into [local-id-or-nil opts-map]. Local-id only
+   activates inside `dsl-scope`. Trailing-map and alternating-kvs forms both
+   produce the same opts map."
+  [args]
+  (let [[local-id args*] (if (and (in-scope?) (local-id-arg? (first args)))
+                           [(first args) (rest args)]
+                           [nil args])
+        opts (if (and (= 1 (count args*)) (map? (first args*)))
+               (first args*)
+               (apply hash-map args*))]
+    [local-id opts]))
 
 (defn entity-type
   "Extract the @type literal (e.g. \"urpx:Season\") from a Malli entity
@@ -52,6 +148,10 @@
      - Accepts kwargs (or a trailing map per Clojure 1.11+ unification) of
        canonical :urpx/* keys; the entity's :jsonld/type is set automatically
        from the schema.
+     - Inside a `dsl-scope` (URPX-8fo), accepts an optional leading
+       qualified-keyword as the entity's local @id (registered in the scope's
+       registry); qualified-keyword values in kwarg positions resolve to
+       Ref maps via the same registry.
      - Drops kwargs whose value is nil so optional fields can be supplied
        conditionally without producing present-but-nil entries.
      - Runs urpx.coerce/coerce against the schema — already-typed values pass
@@ -67,8 +167,18 @@
     (when-not t
       (throw (ex-info "make-builder: schema must have a :jsonld/type [:= ...] entry"
                       {:schema (m/form schema)})))
-    (fn build [& {:as opts}]
-      (let [raw (assoc (strip-nils opts) :jsonld/type t)
+    (fn build [& args]
+      (let [[local-id-arg opts] (normalize-args args)
+            ;; Register the local-id BEFORE resolving the rest of the opts —
+            ;; an entity can't reference itself, but registering early keeps
+            ;; the registry consistent if any value resolution were to look
+            ;; back at the in-progress entity.
+            id (when local-id-arg (register-local-id! local-id-arg))
+            opts* (if (in-scope?)
+                    (into {} (map (fn [[k v]] [k (resolve-refs-in-value v)])) opts)
+                    opts)
+            raw (cond-> (assoc (strip-nils opts*) :jsonld/type t)
+                  id (assoc :jsonld/id id))
             coerced (coerce/coerce schema raw)]
         (when-let [err (coerce/explain schema coerced)]
           (throw (ex-info (str "DSL builder produced an invalid " t)
