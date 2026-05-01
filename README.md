@@ -10,6 +10,8 @@ Clojure library for [URPX](https://lfenergy.org/projects/utility-rate-plan-excha
 
 URPX is an [LF Energy](https://lfenergy.org/) open standard for exchanging utility rate plan information using semantic web technologies (RDF, OWL, SHACL, JSON-LD). It enables precise, machine-readable data exchange between utilities, regulators, vendors, and researchers.
 
+The standard's source of truth — ontology, SHACL shapes, JSON-LD context, decision log, tutorial, and reference test cases — lives at [github.com/urpx-org/urpx](https://github.com/urpx-org/urpx). This library targets the same version-pinned ontology snapshot that fixtures cite via `urpx:targetURPXVersion`.
+
 ## What does this library do?
 
 - **Parse** URPX JSON-LD rate plan documents into Clojure data structures
@@ -17,6 +19,7 @@ URPX is an [LF Energy](https://lfenergy.org/) open standard for exchanging utili
 - **Resolve** the per-ledger, per-tier prices that apply at a given instant in a given timezone — TOU period, season, day-of-week, midnight-wrapping brackets, block-tier ladders
 - **Generate** contiguous price-interval schedules suitable for [OpenADR 3](https://www.openadr.org/) events
 - **Emit** URPX JSON-LD from coerced Clojure entities (the inverse of parse + coerce) — useful for round-trip validation and programmatic authoring of URPX documents
+- **Author** URPX entities idiomatically in Clojure via `urpx.dsl` — per-entity builders with auto-coercion, validation-on-construct, and local-symbol refs scoped via `dsl-scope`
 
 ## Installation
 
@@ -104,7 +107,13 @@ The shipped lookup tables only cover utilities used by the test suite; productio
 
 ### Holiday calendar
 
-URPX `TimeBracket` carries two optional booleans — `urpx:includeHolidays` and `urpx:includeNonHolidays` — that gate whether the bracket applies on holidays, non-holidays, or both (both default to `true` when omitted, matching every day). To resolve a plan that uses these gates (e.g. PG&E E-TOU-D's "weekday peak EXCLUDING holidays" pattern), pass a `:holiday?` predicate (`LocalDate -> bool`). A plain set of `LocalDate`s works because sets are functions:
+URPX `TimeBracket` carries two optional booleans — `urpx:includeHolidays` and `urpx:includeNonHolidays` — that gate whether the bracket applies on holidays, non-holidays, or both (both default to `true` when omitted, matching every day). For plans that use these gates (e.g. PG&E E-TOU-D's "weekday peak EXCLUDING holidays" pattern), the resolver picks a holiday predicate in this order:
+
+1. **Explicit `:holiday?` in opts** — caller-supplied predicate `(LocalDate -> bool)` always wins.
+2. **Embedded `urpx:HolidayCalendar`** — if the plan declares one (PG&E E-TOU-D and several CPAU filings do), `urpx.holidays/derive-predicate` builds a predicate from the calendar's `urpx:Holiday` entries (literal dates plus rule-based descriptions like "fourth Thursday of November"). No caller setup required.
+3. **Fallback** — only when both of the above are absent: every date is treated as a non-holiday. Brackets that opt out of non-holidays (`includeNonHolidays: false`, e.g. holiday-only off-peak overrides) will never match.
+
+A caller-supplied `:holiday?` overrides any embedded calendar — useful when you need a different jurisdiction's holiday set or want to inject a calendar service:
 
 ```clojure
 (import '[java.time LocalDate])
@@ -125,26 +134,32 @@ URPX `TimeBracket` carries two optional booleans — `urpx:includeHolidays` and 
 (schedule/price-schedule plan start end la {:holiday? us-federal-2026})
 ```
 
-You can also pass any `(LocalDate -> bool)` function — e.g. wrap a calendar service. Without `:holiday?`, every date is treated as a non-holiday — so brackets that opt out of non-holidays (`includeNonHolidays: false`, e.g. holiday-only off-peak overrides) will never match.
+A plain set of `LocalDate`s works because sets are functions; you can also pass any `(LocalDate -> bool)` function — e.g. one that delegates to an external calendar service.
 
 ### Modifiers
 
-`urpx:RatePlanModifier` documents (vintage-PCIA adders, export-compensation adjusters, etc.) augment a base plan. v0.2.0 typically bundles a base plan and its modifiers in a single `@graph` document; pull the modifier with `core/load-graph`:
+`urpx:RatePlanModifier` documents (vintage-PCIA adders, export-compensation adjusters, etc.) augment a base plan. They appear in three packaging shapes — the loader handles all three transparently:
+
+- **`@graph` bundle**: a single document holds a base `urpx:RatePlan` plus one or more sibling modifiers (PG&E filings).
+- **URPXDocument wrapper**: a `urpx:URPXDocument` whose `urpx:hasRatePlanModifier` points at the modifier (v0.2.0 wrapper class).
+- **Standalone filing**: a document whose only entity is `urpx:RatePlanModifier` (CPAU E-2-G shape — modifier-only filings whose target linkage is expressed by consumer-side composition).
+
+Pull the modifier with `core/load-rate-plan-modifier`, parallel to `load-rate-plan`:
 
 ```clojure
-(def entities (core/load-graph "path/to/urpx-rate-plan.jsonld"))
 (def modifier
-  (->> entities
-       (filter #(= "urpx:RatePlanModifier" (:jsonld/type %)))
-       first
-       coerce/coerce-rate-plan-modifier))
+  (-> "path/to/urpx-rate-plan-modifier.jsonld"
+      core/load-rate-plan-modifier
+      coerce/coerce-rate-plan-modifier))
 
 (price/resolve-prices-with-modifiers plan [modifier] zdt)
 ;; => the resolve-prices output, with each applicable modifier's ledgers
 ;;    appended to :urpx.resolved/ledgers
 ```
 
-A modifier is skipped silently when its `:urpx/applicableToRatePlan` list does not include the base plan's `@id`. Matrix-style modifiers (e.g. PG&E vintage-PCIA — one ledger with a price per departure-vintage year) surface every active price under one ledger entry; the caller picks the active value via `:urpx.resolved/price-id` (each Price's `urpx:hasApplicabilityGroup` carries the v0.2.0 `urpx:ConditionExpression` that names the dimension being matched).
+`urpx:applicableToRatePlan` (modifier → base plan linkage) is optional per URPX SHACL — bundled modifiers usually declare it, standalone ones may not. `resolve-prices-with-modifiers` only includes modifiers whose `applicableToRatePlan` list contains the base plan's `@id`; modifiers without an applicableToRatePlan are skipped on the assumption that their applicability is decided externally. Pass them explicitly (or trim the list yourself) when you've verified the target.
+
+Matrix-style modifiers (e.g. PG&E vintage-PCIA — one ledger with a price per departure-vintage year) surface every active price under one ledger entry; the caller picks the active value via `:urpx.resolved/price-id` (each Price's `urpx:hasApplicabilityGroup` carries the v0.2.0 `urpx:ConditionExpression` that names the dimension being matched).
 
 ### Sub-hour granularity
 
@@ -316,15 +331,15 @@ Currently covered:
 
 Known gaps:
 - Programmatic interpretation of `urpx:ConditionExpression` for active-tier selection in matrix-style modifiers — currently the caller picks the active value by `price-id` after walking the condition tree itself
-- Some v0.2.0 SHACL classes (`urpx:RateCase`, `urpx:Scenario`, etc.) are accepted as Refs/optional fields but not deeply modeled; expand as consumers need them
+- A handful of v0.2.0 SHACL classes that appear as references but aren't deeply modeled — `urpx:TariffPublication`, `urpx:ProgramEnrollment`, `urpx:ServicePointProfile`, plus the non-RatePlan URPXDocument subclasses (`urpx:TariffStatementDocument`, `urpx:DERExportsDocument`, `urpx:HighlyDynamicPricesDocument`, `urpx:SupplyChargesDocument`). They round-trip correctly as opaque maps via `:map`-typed payload pointers; deeper modeling (named builders, validation) lands as consumers need it.
 
-## Development
+## Contributing
 
-```bash
-clojure -M:test                 # run tests (Kaocha)
-clojure -M:nrepl                # nREPL on the port written to .nrepl-port
-clj-kondo --lint src test       # lint
-```
+Issues, Discussions, and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow (and the dev commands: tests, lint, nREPL). In short:
+
+- **Questions, API/design discussion, vocabulary gaps** → [Discussions](https://github.com/grid-coordination/clj-urpx/discussions)
+- **Confirmed bugs, schema/resolver fixes, doc errors** → [Issues](https://github.com/grid-coordination/clj-urpx/issues)
+- **Patches** → pull requests; please open a Discussion or Issue first for non-trivial changes (new schema classes, new DSL builders, new resolver behavior)
 
 ## License
 
