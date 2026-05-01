@@ -24,36 +24,175 @@
   key ordering, single-vs-vector property emission, and @context
   recreation may differ from the source document.
 
+  @context emission (URPX-awl): every write-* function accepts an optional
+  opts map with `:context`. Three states:
+
+    - opts omits :context (or doesn't pass opts) → emit `default-context`
+      (URPX prefix declarations + typed-property declarations matching what
+      vendored fixtures carry).
+    - opts has `:context map` → emit that map verbatim as @context.
+    - opts has `:context nil` → emit no @context.
+
+  Round-trip: if the input entity already carries :jsonld/context (e.g. from
+  a parsed document), it survives untouched — no clobbering.
+
   Out of scope here:
-    - @context emission policy (URPX-awl)
     - Vendored-fixture round-trip suite (URPX-739)
-    - README documentation (URPX-m9p)"
+    - Deeper README documentation polish (URPX-m9p)"
   (:require [clojure.data.json :as json]
             [urpx.coerce :as coerce]
             [urpx.core :as core]
             [urpx.schema :as schema]))
 
+;; ---------------------------------------------------------------------------
+;; Default JSON-LD @context (URPX-awl)
+;; ---------------------------------------------------------------------------
+
+(def default-context
+  "Baseline @context emitted by the write-* functions when the caller
+   doesn't supply one (and the input entity doesn't already carry a
+   :jsonld/context). Covers:
+
+     - the canonical URPX prefix declarations (urpx, schema, xsd)
+     - typed-property declarations for every URPX field whose schema has a
+       :decode/urpx-jsonld decoder
+
+   Mirrors the shape that vendored fixtures (PG&E, CPAU, URPX upstream
+   test cases) carry, so emitted JSON-LD parses cleanly with strict
+   JSON-LD processors that rely on @context for type resolution.
+
+   Example-namespace prefixes (org, pge, ex, …) are intentionally omitted
+   — those are corpus-specific. Callers who use such prefixes in @id
+   strings should provide their own :context map via the write-* opts."
+  {"urpx"   "https://schema.urpx.org/"
+   "schema" "http://schema.org/"
+   "xsd"    "http://www.w3.org/2001/XMLSchema#"
+
+   ;; xsd:decimal
+   "urpx:unitPrice"        {"@type" "xsd:decimal"}
+   "urpx:amount"           {"@type" "xsd:decimal"}
+   "urpx:basePrice"        {"@type" "xsd:decimal"}
+   "urpx:currentPrice"     {"@type" "xsd:decimal"}
+   "urpx:adder"            {"@type" "xsd:decimal"}
+   "urpx:multiplier"       {"@type" "xsd:decimal"}
+   "urpx:baseQuantity"     {"@type" "xsd:decimal"}
+   "urpx:lowerBound"       {"@type" "xsd:decimal"}
+   "urpx:upperBound"       {"@type" "xsd:decimal"}
+   "urpx:decimalValue"     {"@type" "xsd:decimal"}
+
+   ;; xsd:date
+   "urpx:effectiveDate"        {"@type" "xsd:date"}
+   "urpx:expirationDate"       {"@type" "xsd:date"}
+   "urpx:initialEffectiveDate" {"@type" "xsd:date"}
+   "urpx:startDate"            {"@type" "xsd:date"}
+   "urpx:endDate"              {"@type" "xsd:date"}
+   "urpx:datePublished"        {"@type" "xsd:date"}
+   "urpx:dateApproved"         {"@type" "xsd:date"}
+   "urpx:dateCreated"          {"@type" "xsd:date"}
+   "urpx:dateRetrieved"        {"@type" "xsd:date"}
+   "urpx:dateReceived"         {"@type" "xsd:date"}
+   "urpx:expectedEndDate"      {"@type" "xsd:date"}
+   "urpx:holidayDate"          {"@type" "xsd:date"}
+   "urpx:dateValue"            {"@type" "xsd:date"}
+
+   ;; xsd:dateTime
+   "urpx:effectiveDateTime"   {"@type" "xsd:dateTime"}
+   "urpx:expirationDateTime"  {"@type" "xsd:dateTime"}
+   "urpx:startDateTime"       {"@type" "xsd:dateTime"}
+   "urpx:endDateTime"         {"@type" "xsd:dateTime"}
+   "urpx:dateTimePublished"   {"@type" "xsd:dateTime"}
+   "urpx:dateTimeApproved"    {"@type" "xsd:dateTime"}
+   "urpx:dateTimeCreated"     {"@type" "xsd:dateTime"}
+   "urpx:dateTimeReceived"    {"@type" "xsd:dateTime"}
+   "urpx:expectedEndDateTime" {"@type" "xsd:dateTime"}
+   "urpx:dateTimeValue"       {"@type" "xsd:dateTime"}
+
+   ;; xsd:time
+   "urpx:startTime"  {"@type" "xsd:time"}
+   "urpx:endTime"    {"@type" "xsd:time"}
+   "urpx:timeValue"  {"@type" "xsd:time"}
+
+   ;; xsd:duration
+   "urpx:intervalDuration"   {"@type" "xsd:duration"}
+   "urpx:settlementInterval" {"@type" "xsd:duration"}
+   "urpx:minimumTenure"      {"@type" "xsd:duration"}
+   "urpx:durationValue"      {"@type" "xsd:duration"}
+
+   ;; xsd:gMonth
+   "urpx:month"       {"@type" "xsd:gMonth"}
+   "urpx:gMonthValue" {"@type" "xsd:gMonth"}
+
+   ;; xsd:integer
+   "urpx:touTierNumber"     {"@type" "xsd:integer"}
+   "urpx:touPeriodNumber"   {"@type" "xsd:integer"}
+   "urpx:serviceTierNumber" {"@type" "xsd:integer"}
+   "urpx:integerValue"      {"@type" "xsd:integer"}
+   "urpx:pageStart"         {"@type" "xsd:integer"}
+   "urpx:pageEnd"           {"@type" "xsd:integer"}
+
+   ;; xsd:anyURI
+   "urpx:url"                {"@type" "xsd:anyURI"}
+   "urpx:accessURL"          {"@type" "xsd:anyURI"}
+   "urpx:targetURPXVersion"  {"@type" "xsd:anyURI"}
+   "urpx:constraintProperty" {"@type" "xsd:anyURI"}
+
+   ;; xsd:boolean
+   "urpx:yearlyRecurrence"   {"@type" "xsd:boolean"}
+   "urpx:booleanValue"       {"@type" "xsd:boolean"}
+   "urpx:isDefault"          {"@type" "xsd:boolean"}
+   "urpx:includeHolidays"    {"@type" "xsd:boolean"}
+   "urpx:includeNonHolidays" {"@type" "xsd:boolean"}})
+
+(defn- attach-context
+  "If the entity already carries an @context (from round-tripping parsed
+   data), leave it. Otherwise resolve the caller's :context preference:
+   absent → default; explicit map → that; explicit nil → no @context."
+  [json-keyed-map opts]
+  (cond
+    (contains? json-keyed-map "@context")
+    json-keyed-map
+
+    (and (contains? opts :context) (nil? (:context opts)))
+    json-keyed-map
+
+    (:context opts)
+    (assoc json-keyed-map "@context" (:context opts))
+
+    :else
+    (assoc json-keyed-map "@context" default-context)))
+
 (defn- emit-via-schema
-  "Encode `entity` via `schema`, project keys back to JSON-LD form, and
-   serialize to a JSON-LD string. Internal helper for the per-entity
-   public functions below."
-  [schema entity]
+  "Encode `entity` via `schema`, project keys back to JSON-LD form, attach
+   @context per `opts`, and serialize to a JSON-LD string. Internal helper
+   for the per-entity public functions below."
+  [schema entity opts]
   (-> (coerce/encode schema entity)
       core/keys->jsonld
+      (attach-context opts)
       json/write-str))
 
 (defn write-rate-plan
   "Serialize a coerced urpx:RatePlan to a JSON-LD string. Inverse of the
    urpx.core/load-rate-plan + urpx.coerce/coerce-rate-plan pipeline.
-   Round-trip preserves logical/RDF-graph equivalence."
-  [rate-plan]
-  (emit-via-schema schema/RatePlan rate-plan))
+   Round-trip preserves logical/RDF-graph equivalence.
+
+   Optional `opts` keys:
+     :context — JSON-LD @context map (default: `default-context`); pass
+                `nil` to suppress @context emission entirely. An @context
+                already present on the input entity (e.g. from a parsed
+                document) is preserved untouched."
+  ([rate-plan] (write-rate-plan rate-plan nil))
+  ([rate-plan opts]
+   (emit-via-schema schema/RatePlan rate-plan opts)))
 
 (defn write-rate-plan-modifier
   "Serialize a coerced urpx:RatePlanModifier to a JSON-LD string. Inverse of
-   urpx.core/load-rate-plan-modifier + urpx.coerce/coerce-rate-plan-modifier."
-  [modifier]
-  (emit-via-schema schema/RatePlanModifier modifier))
+   urpx.core/load-rate-plan-modifier + urpx.coerce/coerce-rate-plan-modifier.
+
+   See `write-rate-plan` for `opts`."
+  ([modifier] (write-rate-plan-modifier modifier nil))
+  ([modifier opts]
+   (emit-via-schema schema/RatePlanModifier modifier opts)))
 
 (defn- pre-encode-payloads
   "URPXDocument's payload-pointer schemas are deliberately loose ([:vector :map])
@@ -77,6 +216,9 @@
 (defn write-urpx-document
   "Serialize a coerced urpx:URPXDocument wrapper to a JSON-LD string. Inverse of
    urpx.coerce/coerce-urpx-document. The document's inner urpx:hasRatePlan /
-   urpx:hasRatePlanModifier payloads are emitted as embedded entities."
-  [document]
-  (emit-via-schema schema/URPXDocument (pre-encode-payloads document)))
+   urpx:hasRatePlanModifier payloads are emitted as embedded entities.
+
+   See `write-rate-plan` for `opts`."
+  ([document] (write-urpx-document document nil))
+  ([document opts]
+   (emit-via-schema schema/URPXDocument (pre-encode-payloads document) opts)))

@@ -515,10 +515,11 @@
 (deftest cpau-e-2-via-dsl-round-trips
   (testing "URPX-z2l: DSL → emit → re-parse → re-coerce yields a structurally
             equal plan. End-to-end validates the DSL composes with the
-            write-side without information loss."
+            write-side without information loss. `{:context nil}` suppresses
+            the URPX-awl default @context so the re-coerced shape matches
+            the DSL-built original (which doesn't carry one)."
     (let [plan (cpau-e-2-via-dsl)
-          re-coerced (-> plan
-                         emit/write-rate-plan
+          re-coerced (-> (emit/write-rate-plan plan {:context nil})
                          java.io.StringReader.
                          core/parse-rate-plan
                          coerce/coerce-rate-plan)]

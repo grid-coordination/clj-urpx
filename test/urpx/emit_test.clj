@@ -82,8 +82,10 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest roundtrip-minimal-rate-plan
-  (testing "URPX-biu: minimal rate-plan round-trips with logical equivalence"
-    (let [emitted (emit/write-rate-plan minimal-rate-plan)
+  (testing "URPX-biu: minimal rate-plan round-trips with logical equivalence.
+            `{:context nil}` suppresses the URPX-awl default @context so the
+            re-coerced shape matches the original (which doesn't carry one)."
+    (let [emitted (emit/write-rate-plan minimal-rate-plan {:context nil})
           re-parsed (-> emitted java.io.StringReader. core/parse-rate-plan)
           re-coerced (coerce/coerce-rate-plan re-parsed)]
       (is (= minimal-rate-plan re-coerced)))))
@@ -94,13 +96,48 @@
             available smoke test of the full encoder pipeline before URPX-739
             adds the dedicated round-trip suite over every vendored fixture."
     (let [original (fixtures/load-rate-plan "pge-e-1-2026-03-01")
-          emitted (emit/write-rate-plan original)
+          emitted (emit/write-rate-plan original {:context nil})
           re-coerced (-> emitted
                          java.io.StringReader.
                          core/parse-rate-plan
                          coerce/coerce-rate-plan)]
       (is (= original re-coerced)
           "structural equivalence end-to-end"))))
+
+(deftest default-context-emitted-when-no-opts
+  (testing "URPX-awl: write-* attaches the default @context by default — the
+            output is SHACL-friendly without consumer setup"
+    (let [parsed (json/read-str (emit/write-rate-plan minimal-rate-plan))
+          ctx    (get parsed "@context")]
+      (is (map? ctx))
+      (is (= "https://schema.urpx.org/" (get ctx "urpx")))
+      (is (= "http://www.w3.org/2001/XMLSchema#" (get ctx "xsd")))
+      (is (= {"@type" "xsd:decimal"} (get ctx "urpx:unitPrice"))))))
+
+(deftest caller-supplied-context-overrides-default
+  (testing "URPX-awl: passing :context replaces the default verbatim"
+    (let [my-ctx {"urpx" "https://schema.urpx.org/"
+                  "ex"   "https://example.com/test/"}
+          parsed (json/read-str (emit/write-rate-plan minimal-rate-plan
+                                                      {:context my-ctx}))]
+      (is (= my-ctx (get parsed "@context"))))))
+
+(deftest explicit-nil-context-suppresses-emission
+  (testing "URPX-awl: :context nil emits no @context (used for clean
+            round-trip tests where the original doesn't carry one)"
+    (let [parsed (json/read-str (emit/write-rate-plan minimal-rate-plan
+                                                      {:context nil}))]
+      (is (not (contains? parsed "@context"))))))
+
+(deftest existing-context-on-input-is-preserved
+  (testing "URPX-awl: an entity carrying :jsonld/context keeps its own
+            @context unchanged — the default doesn't clobber it"
+    (let [bespoke-ctx {:urpx "https://schema.urpx.org/"
+                       :ex   "https://example.com/preserved/"}
+          plan-with-ctx (assoc minimal-rate-plan :jsonld/context bespoke-ctx)
+          parsed (json/read-str (emit/write-rate-plan plan-with-ctx))]
+      (is (= "https://example.com/preserved/" (get-in parsed ["@context" "ex"]))
+          "the input's bespoke `:ex` prefix decl survives — default would not include it"))))
 
 (deftest roundtrip-typed-leaves
   (testing "encoders preserve typed values across the full pipeline"
