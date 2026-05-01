@@ -184,3 +184,30 @@
   (testing "URPX-1ii: coerce-doc routes urpx:URPXDocument through coerce-urpx-document"
     (let [coerced (coerce/coerce-doc valid-urpx-document-raw)]
       (is (nil? (coerce/explain schema/URPXDocument coerced))))))
+
+;; ---------------------------------------------------------------------------
+;; Encoder spike (URPX-bnt) — verify malli's transformer system handles
+;; bidirectional encode + decode on a single schema without duplication
+;; ---------------------------------------------------------------------------
+
+(deftest encoder-spike-decimal-forward
+  (testing "URPX-bnt: encoding a typed BigDecimal yields the JSON-LD string form"
+    (is (= "0.15075"
+           (coerce/encode schema/Decimal (BigDecimal. "0.15075"))))))
+
+(deftest encoder-spike-decimal-roundtrip
+  (testing "URPX-bnt: decode → encode → decode is a fixed point — same schema,
+            same transformer, no parallel encode-only schemas needed."
+    (let [original (BigDecimal. "0.15075")
+          encoded  (coerce/encode schema/Decimal original)
+          decoded  (coerce/coerce schema/Decimal encoded)]
+      (is (string? encoded))
+      (is (instance? BigDecimal decoded))
+      (is (= original decoded)
+          "BigDecimal equality is scale-sensitive; .toPlainString must preserve scale"))))
+
+(deftest encoder-spike-decimal-passthrough
+  (testing "URPX-bnt: encoding an already-string value passes through unchanged
+            (mirror of the decoder's already-typed pass-through)"
+    (is (= "0.15075"
+           (coerce/encode schema/Decimal "0.15075")))))

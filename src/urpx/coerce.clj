@@ -14,13 +14,22 @@
 (def ^:private jsonld-transformer
   (mt/transformer
    {:name :urpx-jsonld
-    :default-decoder identity}))
+    :default-decoder identity
+    :default-encoder identity}))
 
 (defn coerce
   "Decode a raw value against `schema` using the URPX JSON-LD transformer.
    Returns the typed value. Use `validate` afterwards if you want a strict check."
   [schema raw]
   (m/decode schema raw jsonld-transformer))
+
+(defn encode
+  "Encode a typed value against `schema` using the URPX JSON-LD transformer.
+   Inverse of `coerce` — turns BigDecimal/LocalDate/etc. back into the JSON-LD
+   string forms (URPX-nvo write-side). Schemas without an :encode/urpx-jsonld
+   property pass values through unchanged (`:default-encoder identity`)."
+  [schema typed]
+  (m/encode schema typed jsonld-transformer))
 
 (defn coerce-rate-plan
   "Coerce a raw parsed URPX rate plan into the typed shape described by

@@ -22,6 +22,20 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- ->decimal  [v] (if (string? v) (BigDecimal. ^String v) v))
+
+;; ---------------------------------------------------------------------------
+;; Encoder helpers (consumed by `:encode/urpx-jsonld` properties below)
+;; ---------------------------------------------------------------------------
+;; Symmetric to the ->X decoders above. Used by the write-side path
+;; (URPX-nvo / urpx.emit) to turn typed values back into JSON-LD strings.
+;; This spike (URPX-bnt) covers Decimal only; the rest land in URPX-99c.
+
+(defn- <-decimal
+  "BigDecimal → plain-string form, preserving scale so a round-trip yields a
+   BigDecimal equal to the original. `.toPlainString` avoids scientific
+   notation that JSON-LD parsers wouldn't expect for xsd:decimal."
+  [v]
+  (if (instance? BigDecimal v) (.toPlainString ^BigDecimal v) v))
 (defn- ->date     [v] (if (string? v) (LocalDate/parse v) v))
 (defn- ->datetime [v] (if (string? v) (LocalDateTime/parse v) v))
 (defn- ->time     [v] (if (string? v) (LocalTime/parse v) v))
@@ -62,7 +76,8 @@
 
 (def Decimal
   [:fn {:error/message "should be a BigDecimal"
-        :decode/urpx-jsonld ->decimal}
+        :decode/urpx-jsonld ->decimal
+        :encode/urpx-jsonld <-decimal}
    #(instance? BigDecimal %)])
 
 (def Date
