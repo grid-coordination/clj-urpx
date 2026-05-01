@@ -340,3 +340,30 @@
                                        {:jsonld/id "x:pd-bsc"}}]}]}]}]
       (is (m/validate s/PlanElements pe))
       (is (m/validate s/Prices prices)))))
+
+(deftest billing-model-accepts-multiple-service-tiers
+  (testing "URPX-6hf: BillingModel.hasServiceTiers is a vector — supports
+            matrix-of-ServiceTiers patterns (one ServiceTiers per (territory,
+            code) cell of a baseline-allowance matrix, e.g. PG&E E-TOU-C
+            baseline-tier modifier with 20 ServiceTiers under one BillingModel).
+            single-or-vec→vec keeps single-ServiceTiers fixtures compatible."
+    (let [tier {:jsonld/type "urpx:ServiceTier"
+                :urpx/serviceTierNumber 1
+                :urpx/lowerBound (BigDecimal. "0")
+                :urpx/upperBound (BigDecimal. "100")
+                :urpx/lowerBoundOperator {:jsonld/id "urpx:greaterThanOrEqualOperator"}
+                :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}
+          st-T (fn [territory]
+                 {:jsonld/type "urpx:ServiceTiers"
+                  :jsonld/id (str "x:st-" territory)
+                  :urpx/referencesMetricInput [{:jsonld/id "x:mi-energy"}]
+                  :urpx/hasServiceTier [tier]})
+          billing {:jsonld/type "urpx:BillingModel"
+                   :urpx/hasServiceTiers [(st-T "T") (st-T "Q") (st-T "X")]
+                   :urpx/hasPriceDefinition []}]
+      (is (m/validate s/BillingModel billing))
+      (testing "single-or-vec: one map auto-coerces to a one-element vector"
+        (let [coerced (coerce/coerce s/BillingModel
+                                     (assoc billing :urpx/hasServiceTiers (st-T "T")))]
+          (is (vector? (:urpx/hasServiceTiers coerced)))
+          (is (= 1 (count (:urpx/hasServiceTiers coerced)))))))))

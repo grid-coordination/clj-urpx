@@ -77,12 +77,14 @@
         (is (every? #(some? (get-in % [:urpx/referencesLedger :jsonld/id])) pds)
             "every PriceDefinition points to its parent Ledger via referencesLedger")))
 
-    (testing "ServiceTiers (v0.2.0 plural container) holds the tier vector"
-      (let [tiers (get-in plan [:urpx/hasRatePlanVersion
-                                :urpx/hasPlanElements
-                                :urpx/hasBillingModel
-                                :urpx/hasServiceTiers
-                                :urpx/hasServiceTier])]
+    (testing "ServiceTiers (v0.2.0 plural container) holds the tier vector.
+              hasServiceTiers is itself a vector (URPX-6hf) — walk it via
+              (mapcat :urpx/hasServiceTier ...)."
+      (let [tiers (mapcat :urpx/hasServiceTier
+                          (get-in plan [:urpx/hasRatePlanVersion
+                                        :urpx/hasPlanElements
+                                        :urpx/hasBillingModel
+                                        :urpx/hasServiceTiers]))]
         (is (= 6 (count tiers))
             "PG&E E-1 has 6 service tiers (Summer/Winter × Tier 1/2/2C)")
         (is (every? #(instance? BigDecimal (:urpx/lowerBound %)) tiers))))

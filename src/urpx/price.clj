@@ -247,11 +247,16 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- service-tiers-by-number
-  "Index ServiceTier entities (from BillingModel.hasServiceTiers.hasServiceTier)
-   by their :urpx/serviceTierNumber. Empty map when the plan is not block-tiered."
+  "Index ServiceTier entities (across every ServiceTiers container at
+   BillingModel.hasServiceTiers, walking each container's :urpx/hasServiceTier
+   list) by :urpx/serviceTierNumber. Empty map when the plan is not
+   block-tiered. URPX-qb5/URPX-6hf: hasServiceTiers is a vector — single
+   ServiceTiers fixtures (CPAU E-1, PG&E E-1) coexist with
+   matrix-of-ServiceTiers patterns (PG&E E-TOU-C baseline-tier modifier:
+   one ServiceTiers per (territory, code) cell)."
   [billing-model]
   (into {} (map (juxt :urpx/serviceTierNumber identity))
-        (get-in billing-model [:urpx/hasServiceTiers :urpx/hasServiceTier])))
+        (mapcat :urpx/hasServiceTier (:urpx/hasServiceTiers billing-model))))
 
 (defn- tier-info
   "Pull tier metadata for a (PD, Price) pair into the resolved-entry shape.

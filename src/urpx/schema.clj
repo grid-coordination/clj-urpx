@@ -343,21 +343,30 @@
 
 (def BillingModel
   "v0.2.0: hasPriceDefinition is required (min 1) and lives at this level
-   (not inside Ledger). hasServiceTiers is the new singular container — the
-   v0.1.x BillingModel.hasServiceTier vector is gone.
+   (not inside Ledger). The v0.1.x BillingModel.hasServiceTier flat vector
+   is gone — block tiers now live under hasServiceTiers's nested
+   `urpx:hasServiceTier` field.
 
-   hasTOUSchedule is a vector (sh:maxCount unbounded per BillingModelShape):
-   one TOUSchedule per MetricInput when the rate plan TOU-zones multiple
-   metrics (e.g. CPAU E-4 TOU: separate energy + demand schedules).
-   single-or-vec->vec keeps single-schedule fixtures (PG&E E-TOU-C/D/EV2)
-   compatible without touching their JSON-LD."
+   Both hasTOUSchedule and hasServiceTiers are vectors (sh:maxCount
+   unbounded per BillingModelShape). `single-or-vec->vec` keeps
+   single-container fixtures compatible without touching their JSON-LD:
+
+     - hasTOUSchedule is a vector for filings that TOU-zone multiple
+       metric inputs (CPAU E-4 TOU: separate energy + demand schedules,
+       URPX-qb5).
+     - hasServiceTiers is a vector for filings with a baseline-allowance
+       matrix — one ServiceTiers per (territory, code) cell — driven by
+       ProfileAlternatives selection (PG&E E-TOU-C baseline-tier modifier;
+       URPX-6hf, per upstream Una guidance on matrix handling)."
   [:map
    [:jsonld/type [:= "urpx:BillingModel"]]
    [:urpx/prorationMethod {:optional true} :string]
    [:urpx/hasTOUSchedule
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector TOUSchedule]]
-   [:urpx/hasServiceTiers {:optional true} ServiceTiers]
+   [:urpx/hasServiceTiers
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector ServiceTiers]]
    [:urpx/hasLedger
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ledger]]
