@@ -1,3 +1,16 @@
+<!-- markdownlint-disable -->
+> ## ⚠ Active development is on the `migrate/urpx-v0.2.0` branch
+>
+> The README and code on `main` predate the URPX v0.2.0-candidate
+> migration. The current state lives on
+> **[`migrate/urpx-v0.2.0`](https://github.com/grid-coordination/clj-urpx/tree/migrate/urpx-v0.2.0)**:
+> a v0.2.0-targeted Clojure library covering parse, coerce, price
+> resolution, JSON-LD emit, and an idiomatic authoring DSL — with a
+> vendored-fixture round-trip suite pinned to the [`urpx-tariffs`](https://github.com/grid-coordination/urpx-tariffs)
+> production corpus. `main` will be updated when URPX v0.2.0 is
+> released.
+<!-- markdownlint-enable -->
+
 # clj-urpx
 
 [![Clojars Project](https://img.shields.io/clojars/v/energy.grid-coordination/clj-urpx.svg)](https://clojars.org/energy.grid-coordination/clj-urpx)
