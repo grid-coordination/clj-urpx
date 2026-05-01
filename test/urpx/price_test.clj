@@ -1,5 +1,8 @@
 (ns urpx.price-test
   (:require [clojure.test :refer [deftest is testing]]
+            [urpx.coerce :as coerce]
+            [urpx.core :as core]
+            [urpx.emit :as emit]
             [urpx.price :as price]
             [urpx.test-fixtures :as fixtures])
   (:import [java.math BigDecimal]
@@ -566,3 +569,175 @@
         r    (price/resolve-prices plan (zdt 2026 1 15 12))
         rate (price/marginal-unit-rate r)]
     (is (= (BigDecimal. "0.17290") rate))))
+
+;; ---------------------------------------------------------------------------
+;; ProfileAlternatives + PriceSetAlternatives selection (URPX-vlf)
+;; ---------------------------------------------------------------------------
+;; Models the PG&E E-1 BSC (Basic Service Charge) income-tier pattern: three
+;; mutually-exclusive alternatives — CARE, FERA, Standard — exposing
+;; different BSC unit prices for the same PriceDefinition. The caller drives
+;; selection explicitly via :profile-alternatives opts; programmatic
+;; ConditionExpression evaluation against a customer profile is a future
+;; enhancement.
+
+(def ^:private trivial-condition-expression
+  {:jsonld/type "urpx:ConditionExpression"
+   :urpx/rootNode {:jsonld/type "urpx:ComparisonNode"
+                   :urpx/operator {:jsonld/id "urpx:eq"}
+                   :urpx/leftOperand  {:jsonld/type "urpx:CustomOperandNode"
+                                       :urpx/customConditionProperty "incomeTier"}
+                   :urpx/rightOperand {:jsonld/type "urpx:CustomOperandNode"
+                                       :urpx/stringValue "placeholder"}}})
+
+(defn- bsc-fixture
+  "A coerced RatePlan with one Ledger (BSC) and three customer-profile
+   alternatives (CARE / FERA / Standard) under a single PriceSetAlternatives.
+   Each alternative's hasPrice references the same PD with a different unit
+   price."
+  []
+  {:jsonld/type "urpx:RatePlan"
+   :urpx/ratePlanUniqueIdentifier "TEST-BSC"
+   :urpx/name "BSC income-tier alternatives test"
+   :urpx/initialEffectiveDate (java.time.LocalDate/of 2026 1 1)
+   :urpx/hasRatePlanVersion
+   {:jsonld/type "urpx:RatePlanVersion"
+    :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
+    :urpx/hasPlanElements
+    {:jsonld/type "urpx:PlanElements"
+     :urpx/hasMetricInput
+     [{:jsonld/type "urpx:MetricInput"
+       :jsonld/id "test:mi-energy"
+       :urpx/name "kWh"
+       :urpx/metricInputType {:jsonld/id "urpx:profileMetricInput"}
+       :urpx/hasMetricSpecification
+       {:jsonld/type "urpx:MetricSpecification"
+        :urpx/measurementKind {:jsonld/id "urpx:energy"}
+        :urpx/unitOfMeasure   {:jsonld/id "urpx:kWh"}}}]
+     :urpx/hasProfileAlternatives
+     [{:jsonld/type "urpx:ProfileAlternatives"
+       :jsonld/id "test:bsc-income-tier"
+       :urpx/name "BSC Income Tier"
+       :urpx/hasAlternativeDimensions
+       {:jsonld/type "urpx:AlternativeDimensions"
+        :urpx/hasAlternativeDimension
+        [{:jsonld/type "urpx:AlternativeDimension"
+          :urpx/dimensionDisplayName "Income Tier"
+          :urpx/dimensionProperty "https://schema.urpx.org/incomeTier"
+          :urpx/hasPossibleValues [{:jsonld/id "urpx:incomeTierCare"}
+                                   {:jsonld/id "urpx:incomeTierFera"}
+                                   {:jsonld/id "urpx:incomeTierStandard"}]}]}
+       :urpx/hasProfileAlternative
+       [{:jsonld/type "urpx:ProfileAlternative"
+         :jsonld/id "test:bsc-care"
+         :urpx/name "CARE"
+         :urpx/hasConditionExpression trivial-condition-expression}
+        {:jsonld/type "urpx:ProfileAlternative"
+         :jsonld/id "test:bsc-fera"
+         :urpx/name "FERA"
+         :urpx/hasConditionExpression trivial-condition-expression}
+        {:jsonld/type "urpx:ProfileAlternative"
+         :jsonld/id "test:bsc-standard"
+         :urpx/name "Standard"
+         :urpx/hasConditionExpression trivial-condition-expression}]}]
+     :urpx/hasBillingModel
+     {:jsonld/type "urpx:BillingModel"
+      :urpx/hasLedger
+      [{:jsonld/type "urpx:Ledger"
+        :jsonld/id "test:ledger-bsc"
+        :urpx/name "Basic Service Charge"
+        :urpx/ledgerType {:jsonld/id "urpx:profileMetricLedger"}
+        :urpx/referencesMetricInput [{:jsonld/id "test:mi-energy"}]}]
+      :urpx/hasPriceDefinition
+      [{:jsonld/type "urpx:PriceDefinition"
+        :jsonld/id "test:pd-bsc"
+        :urpx/name "BSC"
+        :urpx/referencesLedger {:jsonld/id "test:ledger-bsc"}}]}}
+    :urpx/hasPrices
+    {:jsonld/type "urpx:Prices"
+     :urpx/hasPriceSetAlternatives
+     [{:jsonld/type "urpx:PriceSetAlternatives"
+       :jsonld/id "test:bsc-prices"
+       :urpx/name "BSC Prices"
+       :urpx/referencesProfileAlternatives {:jsonld/id "test:bsc-income-tier"}
+       :urpx/hasPriceSetAlternative
+       [{:jsonld/type "urpx:PriceSetAlternative"
+         :jsonld/id "test:bsc-psa-care"
+         :urpx/alternativeLabel "CARE"
+         :urpx/referencesProfileAlternative {:jsonld/id "test:bsc-care"}
+         :urpx/hasPrice
+         [{:jsonld/type "urpx:Price"
+           :jsonld/id "test:bsc-price-care"
+           :urpx/unitPrice (BigDecimal. "0.05")
+           :urpx/referencesPriceDefinition {:jsonld/id "test:pd-bsc"}
+           :urpx/startDate (java.time.LocalDate/of 2026 1 1)}]}
+        {:jsonld/type "urpx:PriceSetAlternative"
+         :jsonld/id "test:bsc-psa-fera"
+         :urpx/alternativeLabel "FERA"
+         :urpx/referencesProfileAlternative {:jsonld/id "test:bsc-fera"}
+         :urpx/hasPrice
+         [{:jsonld/type "urpx:Price"
+           :jsonld/id "test:bsc-price-fera"
+           :urpx/unitPrice (BigDecimal. "0.10")
+           :urpx/referencesPriceDefinition {:jsonld/id "test:pd-bsc"}
+           :urpx/startDate (java.time.LocalDate/of 2026 1 1)}]}
+        {:jsonld/type "urpx:PriceSetAlternative"
+         :jsonld/id "test:bsc-psa-standard"
+         :urpx/alternativeLabel "Standard"
+         :urpx/referencesProfileAlternative {:jsonld/id "test:bsc-standard"}
+         :urpx/hasPrice
+         [{:jsonld/type "urpx:Price"
+           :jsonld/id "test:bsc-price-standard"
+           :urpx/unitPrice (BigDecimal. "0.20")
+           :urpx/referencesPriceDefinition {:jsonld/id "test:pd-bsc"}
+           :urpx/startDate (java.time.LocalDate/of 2026 1 1)}]}]}]}}})
+
+(deftest bsc-care-selection-yields-care-price
+  (testing "URPX-vlf: :profile-alternatives selects the CARE alternative; only
+            its BSC price surfaces"
+    (let [plan (bsc-fixture)
+          r (price/resolve-prices
+             plan (zdt 2026 7 15 17)
+             {:profile-alternatives {"test:bsc-income-tier" "test:bsc-care"}})
+          tiers (:urpx.resolved/tiers (ledger-by-name r "Basic Service Charge"))]
+      (is (= 1 (count tiers)))
+      (is (= "test:bsc-price-care" (:urpx.resolved/price-id (first tiers))))
+      (is (= (BigDecimal. "0.05")  (:urpx.resolved/unit-price (first tiers)))))))
+
+(deftest bsc-standard-selection-yields-standard-price
+  (testing "URPX-vlf: switching the selection switches the surfaced price"
+    (let [plan (bsc-fixture)
+          r (price/resolve-prices
+             plan (zdt 2026 7 15 17)
+             {:profile-alternatives {"test:bsc-income-tier" "test:bsc-standard"}})
+          tiers (:urpx.resolved/tiers (ledger-by-name r "Basic Service Charge"))]
+      (is (= 1 (count tiers)))
+      (is (= (BigDecimal. "0.20") (:urpx.resolved/unit-price (first tiers)))))))
+
+(deftest bsc-no-selection-skips-alternative
+  (testing "URPX-vlf: without :profile-alternatives, alternatives are silently
+            skipped (no BSC price surfaces). Future enhancement: programmatic
+            ConditionExpression evaluation against a customer profile."
+    (let [plan (bsc-fixture)
+          r (price/resolve-prices plan (zdt 2026 7 15 17))]
+      (is (nil? (ledger-by-name r "Basic Service Charge"))
+          "ledger has no tier entries → it's omitted from the resolved output"))))
+
+(deftest bsc-unknown-selection-skips-alternative
+  (testing "URPX-vlf: a selection pointing at an unknown ProfileAlternative @id
+            results in no match — the alternative is skipped silently"
+    (let [plan (bsc-fixture)
+          r (price/resolve-prices
+             plan (zdt 2026 7 15 17)
+             {:profile-alternatives {"test:bsc-income-tier" "test:bsc-nonexistent"}})]
+      (is (nil? (ledger-by-name r "Basic Service Charge"))))))
+
+(deftest bsc-fixture-round-trips-through-emit
+  (testing "URPX-vlf: ProfileAlternatives + PriceSetAlternatives round-trip
+            cleanly through urpx.emit/write-rate-plan + re-parse + re-coerce"
+    (let [plan (bsc-fixture)
+          re-coerced (-> (emit/write-rate-plan plan {:context nil})
+                         java.io.StringReader.
+                         core/parse-rate-plan
+                         coerce/coerce-rate-plan)]
+      (is (= plan re-coerced)
+          "structural equivalence under emit + re-parse"))))

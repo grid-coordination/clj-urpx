@@ -386,13 +386,9 @@
     {:decode/urpx-jsonld single-or-vec->vec}
     [:vector Holiday]]])
 
-(def PlanElements
-  [:map
-   [:jsonld/type [:= "urpx:PlanElements"]]
-   [:urpx/hasSeasons         {:optional true} [:vector Season]]
-   [:urpx/hasMetricInput     [:vector MetricInput]]
-   [:urpx/hasHolidayCalendar {:optional true} HolidayCalendar]
-   [:urpx/hasBillingModel BillingModel]])
+;; PlanElements is defined further down — its hasProfileAlternatives entry
+;; depends on ProfileAlternatives, which depends on ConditionExpression
+;; (defined below).
 
 ;; ---------------------------------------------------------------------------
 ;; Conditions (v0.2.0)
@@ -499,6 +495,85 @@
      [:multi {:dispatch :jsonld/type}
       ["urpx:ComparisonNode"       [:ref ::ComparisonNode]]
       ["urpx:BooleanOperationNode" [:ref ::BooleanOperationNode]]]]]])
+
+;; ---------------------------------------------------------------------------
+;; ProfileAlternatives — declarative customer-or-configuration choice
+;; ---------------------------------------------------------------------------
+;; Per URPX v0.2.0, ProfileAlternatives + PriceSetAlternatives express
+;; mutually-exclusive options that require an explicit selection (income-tier
+;; CARE/FERA/Standard, vintage-PCIA default tier, voltage configurations, …).
+;; ProfileAlternatives lives at PlanElements.hasProfileAlternatives;
+;; PriceSetAlternatives lives at Prices.hasPriceSetAlternatives and references
+;; the ProfileAlternatives whose alternatives drive the per-price selection.
+;; Authoritative shapes: urpx-shacl:ProfileAlternativesShape, *Shape, etc.
+
+(def AlternativeDimension
+  "One axis of a customer-profile choice — e.g. 'incomeTier' (with possible
+   values CARE / FERA / Standard) or 'voltageLevel'."
+  [:map
+   [:jsonld/type [:= "urpx:AlternativeDimension"]]
+   [:jsonld/id   {:optional true} :string]
+   [:urpx/dimensionDisplayName :string]
+   [:urpx/dimensionProperty    :string]   ; xsd:anyURI; passes through as a string
+   [:urpx/hasPossibleValues
+    {:decode/urpx-jsonld single-or-vec->vec}
+    [:vector :any]]
+   [:urpx/referencesMetricInput
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]])
+
+(def AlternativeDimensions
+  "Container for the AlternativeDimension(s) that span a ProfileAlternatives
+   choice (typically a single dimension; multi-dimension matrices possible)."
+  [:map
+   [:jsonld/type [:= "urpx:AlternativeDimensions"]]
+   [:jsonld/id   {:optional true} :string]
+   [:urpx/hasAlternativeDimension
+    {:decode/urpx-jsonld single-or-vec->vec}
+    [:vector AlternativeDimension]]])
+
+(def ProfileAlternative
+  "A single named alternative within a ProfileAlternatives set. The
+   `hasConditionExpression` says how to determine whether this alternative
+   applies to a given customer; `defaultSelectionLogic` is a free-form
+   tie-breaker / default note when conditions don't disambiguate."
+  [:map
+   [:jsonld/type [:= "urpx:ProfileAlternative"]]
+   [:jsonld/id   {:optional true} :string]
+   [:urpx/name :string]
+   [:urpx/defaultSelectionLogic   {:optional true} :string]
+   [:urpx/hasConditionExpression  ConditionExpression]])
+
+(def ProfileAlternatives
+  "Top-level declaration of a customer-profile-driven choice. Lives at
+   PlanElements.hasProfileAlternatives. PriceSetAlternatives reference one
+   ProfileAlternatives via urpx:referencesProfileAlternatives, and each
+   PriceSetAlternative within the set selects ONE of its sibling
+   ProfileAlternatives via urpx:referencesProfileAlternative."
+  [:map
+   [:jsonld/type [:= "urpx:ProfileAlternatives"]]
+   [:jsonld/id   {:optional true} :string]
+   [:urpx/name :string]
+   [:urpx/hasAlternativeDimensions AlternativeDimensions]
+   [:urpx/hasProfileAlternative
+    {:decode/urpx-jsonld single-or-vec->vec}
+    [:vector ProfileAlternative]]])
+
+(def PlanElements
+  "v0.2.0: gains optional `urpx:hasProfileAlternatives` for declarative
+   customer-or-configuration choices (income tier, voltage configuration,
+   PCIA default tier, …). Each ProfileAlternatives is referenced by a
+   PriceSetAlternatives at Prices.hasPriceSetAlternatives — the per-customer
+   selection that determines which alternative's prices apply."
+  [:map
+   [:jsonld/type [:= "urpx:PlanElements"]]
+   [:urpx/hasSeasons         {:optional true} [:vector Season]]
+   [:urpx/hasMetricInput     [:vector MetricInput]]
+   [:urpx/hasHolidayCalendar {:optional true} HolidayCalendar]
+   [:urpx/hasProfileAlternatives
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector ProfileAlternatives]]
+   [:urpx/hasBillingModel BillingModel]])
 
 (def ApplicabilityGroup
   "Container for cross-cutting applicability conditions; carried on
@@ -617,11 +692,9 @@
    [:urpx/hasApplicabilityGroup {:optional true} ApplicabilityGroup]
    [:urpx/hasPrice [:vector Price]]])
 
-(def Prices
-  [:map
-   [:jsonld/type [:= "urpx:Prices"]]
-   [:urpx/hasPrice    {:optional true} [:vector Price]]
-   [:urpx/hasPriceSet {:optional true} [:vector PriceSet]]])
+;; Prices is defined further down — its hasPriceSetAlternatives entry
+;; depends on PriceSetAlternatives, which depends on DataSourceReference
+;; (defined below).
 
 ;; ---------------------------------------------------------------------------
 ;; Top-level metadata
@@ -668,6 +741,111 @@
    [:urpx/pageStart {:optional true} Int]
    [:urpx/pageEnd   {:optional true} Int]
    [:urpx/hasTariffBookReference {:optional true} TariffBookReference]])
+
+;; ---------------------------------------------------------------------------
+;; PriceSetAlternative(s) — pairs with ProfileAlternatives above
+;; ---------------------------------------------------------------------------
+
+(def PriceSetAlternative
+  "One Price-bearing alternative within a PriceSetAlternatives set.
+   Carries Price-like top-level fields (chargeType, billPortion, …) plus
+   the required `referencesProfileAlternative` Ref linking it to one of
+   the sibling ProfileAlternatives, plus `hasPrice` (1..*) for the actual
+   prices that apply when this alternative is selected."
+  [:map
+   [:jsonld/type [:= "urpx:PriceSetAlternative"]]
+   [:jsonld/id   {:optional true} :string]
+   [:urpx/name             {:optional true} :string]
+   [:urpx/description      {:optional true} :string]
+   [:urpx/alternativeLabel {:optional true} :string]
+   [:urpx/billingCycleCode {:optional true} :string]
+   [:urpx/priceCurrency    {:optional true} :string]
+   [:urpx/priceMatchingKey {:optional true} :string]
+   ;; Decimals
+   [:urpx/unitPrice    {:optional true} Decimal]
+   [:urpx/amount       {:optional true} Decimal]
+   [:urpx/basePrice    {:optional true} Decimal]
+   [:urpx/currentPrice {:optional true} Decimal]
+   [:urpx/adder        {:optional true} Decimal]
+   [:urpx/multiplier   {:optional true} Decimal]
+   [:urpx/baseQuantity {:optional true} Decimal]
+   ;; Refs
+   [:urpx/billPortion       {:optional true} Ref]
+   [:urpx/chargeCategory    {:optional true} Ref]
+   [:urpx/chargeType
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/commodity         {:optional true} Ref]
+   [:urpx/primaryChargeType {:optional true} Ref]
+   ;; Dates / times
+   [:urpx/startDate     {:optional true} Date]
+   [:urpx/endDate       {:optional true} Date]
+   [:urpx/expectedEndDate {:optional true} Date]
+   [:urpx/startDateTime {:optional true} DateTime]
+   [:urpx/endDateTime   {:optional true} DateTime]
+   [:urpx/expectedEndDateTime {:optional true} DateTime]
+   ;; Integers
+   [:urpx/serviceTierNumber {:optional true} Int]
+   [:urpx/touPeriodNumber   {:optional true} Int]
+   ;; Multi-valued refs
+   [:urpx/appliesInSeason
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/referencesMetricInput
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/hasAlternative
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/hasRateCase
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   ;; Single Refs
+   [:urpx/referencesPriceDefinition   {:optional true} Ref]
+   [:urpx/referencesProfileAlternative Ref]   ; required (sh:minCount 1)
+   [:urpx/referencesServiceTier       {:optional true} Ref]
+   [:urpx/referencesTouPeriod         {:optional true} Ref]
+   ;; Sub-entities
+   [:urpx/hasApplicabilityGroup {:optional true} ApplicabilityGroup]
+   [:urpx/hasApplicabilityRule
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector ApplicabilityRule]]
+   [:urpx/hasCalculationMethod  {:optional true} CalculationMethod]
+   [:urpx/hasDataSourceReference
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector DataSourceReference]]
+   [:urpx/hasMetricSpecification {:optional true} MetricSpecification]
+   [:urpx/hasPrice
+    {:decode/urpx-jsonld single-or-vec->vec}
+    [:vector Price]]])  ; required (sh:minCount 1)
+
+(def PriceSetAlternatives
+  "Top-level container for a customer-profile-driven price selection.
+   Lives at Prices.hasPriceSetAlternatives. References one ProfileAlternatives
+   (declared at PlanElements.hasProfileAlternatives) whose alternatives drive
+   per-PriceSetAlternative choice."
+  [:map
+   [:jsonld/type [:= "urpx:PriceSetAlternatives"]]
+   [:jsonld/id   {:optional true} :string]
+   [:urpx/name             {:optional true} :string]
+   [:urpx/priceMatchingKey {:optional true} :string]
+   [:urpx/referencesProfileAlternatives Ref]
+   [:urpx/hasPriceSetAlternative
+    {:decode/urpx-jsonld single-or-vec->vec}
+    [:vector PriceSetAlternative]]])
+
+(def Prices
+  "v0.2.0: gains optional `urpx:hasPriceSetAlternatives` for customer-profile-
+   driven price selection. Each PriceSetAlternatives references a sibling
+   ProfileAlternatives (declared at PlanElements.hasProfileAlternatives) and
+   exposes one PriceSetAlternative per ProfileAlternative."
+  [:map
+   [:jsonld/type [:= "urpx:Prices"]]
+   [:urpx/hasPrice    {:optional true} [:vector Price]]
+   [:urpx/hasPriceSet {:optional true} [:vector PriceSet]]
+   [:urpx/hasPriceSetAlternatives
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector PriceSetAlternatives]]])
 
 (def RateCase
   "v0.2.0: NEW. Identifies the regulatory proceeding that authorized a

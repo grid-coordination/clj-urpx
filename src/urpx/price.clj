@@ -136,10 +136,48 @@
   [^LocalDate a ^LocalDate b]
   (not (.isAfter a b)))
 
+(defn- price-set-alternative-for
+  "Within a PriceSetAlternatives, find the alternative whose
+   urpx:referencesProfileAlternative matches the caller-selected
+   :jsonld/id. Returns the matching PriceSetAlternative or nil."
+  [psas chosen-pa-id]
+  (when chosen-pa-id
+    (some (fn [psa]
+            (when (= chosen-pa-id (get-in psa [:urpx/referencesProfileAlternative :jsonld/id]))
+              psa))
+          (:urpx/hasPriceSetAlternative psas))))
+
+(defn- prices-from-alternatives
+  "Walk `Prices.hasPriceSetAlternatives`. For each PriceSetAlternatives,
+   look up the caller's chosen ProfileAlternative for the referenced
+   ProfileAlternatives in `selection` (a {:jsonld/id of ProfileAlternatives
+   → :jsonld/id of chosen ProfileAlternative} map). The matching
+   PriceSetAlternative's hasPrice list contributes to the active-prices
+   stream, gated by start-date as usual.
+
+   When the caller hasn't supplied a selection for a given
+   PriceSetAlternatives, that set is silently skipped — prices for the
+   unresolved alternative aren't surfaced. Programmatic ConditionExpression
+   evaluation against a customer profile is a future enhancement; today
+   the caller drives selection explicitly via `:profile-alternatives` opts."
+  [prices ^LocalDate query-date selection]
+  (mapcat (fn [psas]
+            (let [pa-id   (get-in psas [:urpx/referencesProfileAlternatives :jsonld/id])
+                  chosen  (get selection pa-id)
+                  picked  (price-set-alternative-for psas chosen)]
+              (when picked
+                (keep (fn [p]
+                        (when-let [sd (:urpx/startDate p)]
+                          (when (not-after? sd query-date) [p sd])))
+                      (:urpx/hasPrice picked)))))
+          (:urpx/hasPriceSetAlternatives prices)))
+
 (defn- scoped-prices
   "Return a seq of [price effective-start-date] pairs for every Price under
-   `prices` whose effective start-date is <= `query-date`. Walks both the
-   flat :urpx/hasPrice list and PriceSet-nested prices.
+   `prices` whose effective start-date is <= `query-date`. Walks the flat
+   :urpx/hasPrice list, PriceSet-nested prices, and PriceSetAlternatives-
+   nested prices when the caller supplies an explicit
+   `:profile-alternatives` selection in opts (URPX-vlf).
 
    Per URPX SHACL, PriceSet.startDate is optional (sh:minCount 0). When the
    PriceSet carries one, it acts as the date floor for any contained Price
@@ -147,20 +185,22 @@
    Price must carry its own urpx:startDate (CPAU E-2 shape). A PriceSet
    whose startDate is in the future drops the whole set; otherwise contained
    Prices are walked individually and admitted by their own effective dates."
-  [prices ^LocalDate query-date]
-  (concat
-   (keep (fn [p]
-           (when-let [sd (:urpx/startDate p)]
-             (when (not-after? sd query-date) [p sd])))
-         (:urpx/hasPrice prices))
-   (mapcat (fn [ps]
-             (let [ps-sd (:urpx/startDate ps)]
-               (when (or (nil? ps-sd) (not-after? ps-sd query-date))
-                 (keep (fn [p]
-                         (when-let [sd (or (:urpx/startDate p) ps-sd)]
-                           (when (not-after? sd query-date) [p sd])))
-                       (:urpx/hasPrice ps)))))
-           (:urpx/hasPriceSet prices))))
+  [prices ^LocalDate query-date opts]
+  (let [selection (:profile-alternatives opts {})]
+    (concat
+     (keep (fn [p]
+             (when-let [sd (:urpx/startDate p)]
+               (when (not-after? sd query-date) [p sd])))
+           (:urpx/hasPrice prices))
+     (mapcat (fn [ps]
+               (let [ps-sd (:urpx/startDate ps)]
+                 (when (or (nil? ps-sd) (not-after? ps-sd query-date))
+                   (keep (fn [p]
+                           (when-let [sd (or (:urpx/startDate p) ps-sd)]
+                             (when (not-after? sd query-date) [p sd])))
+                         (:urpx/hasPrice ps)))))
+             (:urpx/hasPriceSet prices))
+     (prices-from-alternatives prices query-date selection))))
 
 (defn- active-prices-by-pd
   "Build a map from PriceDefinition id to a vector of currently-active
@@ -177,7 +217,7 @@
 
    For non-tiered ledgers (one PD, one Price, no serviceTierNumber) the
    returned vector has a single entry."
-  [prices ^LocalDate query-date]
+  [prices ^LocalDate query-date opts]
   (let [latest-per-key
         (reduce (fn [acc [price sd]]
                   (let [k [(get-in price [:urpx/referencesPriceDefinition :jsonld/id])
@@ -186,7 +226,7 @@
                     (if (or (nil? existing-sd) (.isAfter sd existing-sd))
                       (assoc acc k [price sd])
                       acc)))
-                {} (scoped-prices prices query-date))]
+                {} (scoped-prices prices query-date opts))]
     (reduce-kv (fn [acc [pd-id _] pair]
                  (update acc pd-id (fnil conj []) pair))
                {} latest-per-key)))
@@ -200,7 +240,7 @@
   (reduce (fn [acc [price :as pair]]
             (let [pd-id (get-in price [:urpx/referencesPriceDefinition :jsonld/id])]
               (update acc pd-id (fnil conj []) pair)))
-          {} (scoped-prices prices query-date)))
+          {} (scoped-prices prices query-date nil)))
 
 ;; ---------------------------------------------------------------------------
 ;; Service-tier lookup (block tiers, e.g. CPAU E-1 baseline / over-baseline)
@@ -341,6 +381,16 @@
                 (urpx:includeNonHolidays = false, e.g. holiday-only off-peak
                 overrides) will never match.
 
+     :profile-alternatives  a {<ProfileAlternatives @id> <ProfileAlternative @id>}
+                map driving customer-profile-driven price selection. When the
+                rate plan declares Prices.hasPriceSetAlternatives (URPX v0.2.0
+                ProfileAlternatives idiom — income-tier CARE/FERA/Standard,
+                vintage-PCIA default tier, voltage configuration, …) each
+                PriceSetAlternatives surfaces the prices of the explicitly-
+                chosen alternative. Unmapped alternatives are silently skipped
+                — programmatic ConditionExpression evaluation against a
+                customer profile is a future enhancement.
+
    Examples of `:holiday?`:
 
      ;; Most rate plans embed urpx:HolidayCalendar — no opts needed:
@@ -419,7 +469,7 @@
                                         date local-time dow holiday?)
          period-num    (:urpx/touPeriodNumber tou-period)
 
-         pd->prices    (active-prices-by-pd prices date)
+         pd->prices    (active-prices-by-pd prices date opts)
          pds           (:urpx/hasPriceDefinition billing)
          pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
          mi-index      (mi-by-id plan-elements)

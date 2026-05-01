@@ -225,3 +225,118 @@
                                 :urpx/hasRatePlanModifierVersion
                                 (dissoc version :urpx/applicableToRatePlan))]
           (is (m/validate s/RatePlanModifier standalone)))))))
+
+;; ---------------------------------------------------------------------------
+;; ProfileAlternatives + PriceSetAlternatives (URPX-vlf)
+;; ---------------------------------------------------------------------------
+
+(def ^:private trivial-condition-expression
+  "A minimal valid urpx:ConditionExpression — a single ComparisonNode with
+   two operand nodes. Used to satisfy the required-field constraint on
+   ProfileAlternative.hasConditionExpression in the tests below; URPX-vlf
+   doesn't yet evaluate condition expressions."
+  {:jsonld/type "urpx:ConditionExpression"
+   :urpx/rootNode
+   {:jsonld/type "urpx:ComparisonNode"
+    :urpx/operator {:jsonld/id "urpx:eq"}
+    :urpx/leftOperand  {:jsonld/type "urpx:CustomOperandNode"
+                        :urpx/customConditionProperty "incomeTier"}
+    :urpx/rightOperand {:jsonld/type "urpx:CustomOperandNode"
+                        :urpx/stringValue "CARE"}}})
+
+(deftest alternative-dimension-shape
+  (let [d {:jsonld/type "urpx:AlternativeDimension"
+           :urpx/dimensionDisplayName "Income Tier"
+           :urpx/dimensionProperty "https://schema.urpx.org/incomeTier"
+           :urpx/hasPossibleValues [{:jsonld/id "urpx:incomeTierCare"}
+                                    {:jsonld/id "urpx:incomeTierFera"}
+                                    {:jsonld/id "urpx:incomeTierStandard"}]}]
+    (is (m/validate s/AlternativeDimension d))
+    (testing "single-or-vec decoder normalizes a single hasPossibleValue"
+      (let [coerced (coerce/coerce s/AlternativeDimension
+                                   (assoc d :urpx/hasPossibleValues
+                                          {:jsonld/id "urpx:onlyOne"}))]
+        (is (vector? (:urpx/hasPossibleValues coerced)))
+        (is (= 1 (count (:urpx/hasPossibleValues coerced))))))))
+
+(deftest profile-alternatives-shape
+  (let [pa-care {:jsonld/type "urpx:ProfileAlternative"
+                 :urpx/name "CARE"
+                 :urpx/hasConditionExpression trivial-condition-expression}
+        pa-std  {:jsonld/type "urpx:ProfileAlternative"
+                 :urpx/name "Standard"
+                 :urpx/hasConditionExpression trivial-condition-expression}
+        pas {:jsonld/type "urpx:ProfileAlternatives"
+             :urpx/name "BSC Income Tier"
+             :urpx/hasAlternativeDimensions
+             {:jsonld/type "urpx:AlternativeDimensions"
+              :urpx/hasAlternativeDimension
+              [{:jsonld/type "urpx:AlternativeDimension"
+                :urpx/dimensionDisplayName "Income Tier"
+                :urpx/dimensionProperty "https://schema.urpx.org/incomeTier"
+                :urpx/hasPossibleValues [{:jsonld/id "urpx:incomeTierCare"}
+                                         {:jsonld/id "urpx:incomeTierStandard"}]}]}
+             :urpx/hasProfileAlternative [pa-care pa-std]}]
+    (is (m/validate s/ProfileAlternatives pas))
+    (testing "missing required name is rejected"
+      (is (not (m/validate s/ProfileAlternatives (dissoc pas :urpx/name)))))))
+
+(deftest price-set-alternatives-shape
+  (let [psa {:jsonld/type "urpx:PriceSetAlternative"
+             :urpx/alternativeLabel "CARE"
+             :urpx/referencesProfileAlternative {:jsonld/id "x:bsc-care"}
+             :urpx/hasPrice [{:jsonld/type "urpx:Price"
+                              :urpx/unitPrice (BigDecimal. "0.20")
+                              :urpx/referencesPriceDefinition {:jsonld/id "x:pd-bsc"}}]}
+        psas {:jsonld/type "urpx:PriceSetAlternatives"
+              :urpx/name "BSC Prices"
+              :urpx/referencesProfileAlternatives {:jsonld/id "x:bsc-income-tier"}
+              :urpx/hasPriceSetAlternative [psa]}]
+    (is (m/validate s/PriceSetAlternatives psas))
+    (testing "PriceSetAlternative requires referencesProfileAlternative"
+      (is (not (m/validate s/PriceSetAlternative
+                           (dissoc psa :urpx/referencesProfileAlternative)))))
+    (testing "PriceSetAlternative requires hasPrice (1..*)"
+      (is (not (m/validate s/PriceSetAlternative
+                           (dissoc psa :urpx/hasPrice)))))))
+
+(deftest plan-elements-and-prices-accept-alternatives
+  (testing "PlanElements gains hasProfileAlternatives; Prices gains hasPriceSetAlternatives"
+    (let [pas {:jsonld/type "urpx:ProfileAlternatives"
+               :urpx/name "BSC Income Tier"
+               :urpx/hasAlternativeDimensions
+               {:jsonld/type "urpx:AlternativeDimensions"
+                :urpx/hasAlternativeDimension
+                [{:jsonld/type "urpx:AlternativeDimension"
+                  :urpx/dimensionDisplayName "Income Tier"
+                  :urpx/dimensionProperty "https://schema.urpx.org/incomeTier"
+                  :urpx/hasPossibleValues [{:jsonld/id "urpx:incomeTierCare"}
+                                           {:jsonld/id "urpx:incomeTierStandard"}]}]}
+               :urpx/hasProfileAlternative
+               [{:jsonld/type "urpx:ProfileAlternative" :urpx/name "CARE"
+                 :urpx/hasConditionExpression trivial-condition-expression}
+                {:jsonld/type "urpx:ProfileAlternative" :urpx/name "Standard"
+                 :urpx/hasConditionExpression trivial-condition-expression}]}
+          pe {:jsonld/type "urpx:PlanElements"
+              :urpx/hasMetricInput
+              [{:jsonld/type "urpx:MetricInput"
+                :urpx/name "kWh"
+                :urpx/metricInputType {:jsonld/id "urpx:measuredMetricInput"}}]
+              :urpx/hasBillingModel
+              {:jsonld/type "urpx:BillingModel"
+               :urpx/hasPriceDefinition []}
+              :urpx/hasProfileAlternatives [pas]}
+          prices {:jsonld/type "urpx:Prices"
+                  :urpx/hasPriceSetAlternatives
+                  [{:jsonld/type "urpx:PriceSetAlternatives"
+                    :urpx/name "BSC Prices"
+                    :urpx/referencesProfileAlternatives {:jsonld/id "x:bsc-income-tier"}
+                    :urpx/hasPriceSetAlternative
+                    [{:jsonld/type "urpx:PriceSetAlternative"
+                      :urpx/referencesProfileAlternative {:jsonld/id "x:bsc-care"}
+                      :urpx/hasPrice [{:jsonld/type "urpx:Price"
+                                       :urpx/unitPrice (BigDecimal. "0.20")
+                                       :urpx/referencesPriceDefinition
+                                       {:jsonld/id "x:pd-bsc"}}]}]}]}]
+      (is (m/validate s/PlanElements pe))
+      (is (m/validate s/Prices prices)))))

@@ -232,6 +232,20 @@ Pull the modifier with `core/load-rate-plan-modifier`, parallel to `load-rate-pl
 
 Matrix-style modifiers (e.g. PG&E vintage-PCIA — one ledger with a price per departure-vintage year) surface every active price under one ledger entry; the caller picks the active value via `:urpx.resolved/price-id` (each Price's `urpx:hasApplicabilityGroup` carries the v0.2.0 `urpx:ConditionExpression` that names the dimension being matched).
 
+### Customer-profile alternatives
+
+URPX v0.2.0 introduced `urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives` for declarative customer-or-configuration choices — income-tier CARE / FERA / Standard, voltage configurations, vintage-PCIA default tier, and similar. The plan declares a `urpx:ProfileAlternatives` at `PlanElements.hasProfileAlternatives` (each named alternative carries its own `hasConditionExpression`), and a sibling `urpx:PriceSetAlternatives` at `Prices.hasPriceSetAlternatives` exposes one Price-bearing `PriceSetAlternative` per alternative.
+
+`resolve-prices` selects the active alternative explicitly via the `:profile-alternatives` opt — a `{<ProfileAlternatives @id> <chosen ProfileAlternative @id>}` map:
+
+```clojure
+(price/resolve-prices plan zdt
+  {:profile-alternatives
+   {"pge:bsc-income-tier" "pge:bsc-care"}})
+```
+
+Unmapped alternatives are silently skipped — only the explicitly-chosen alternative's prices surface. Programmatic evaluation of each alternative's `urpx:ConditionExpression` against a customer profile is a future enhancement.
+
 ### Sub-hour granularity
 
 `price-schedule` walks at hourly steps by default. For rate plans that define sub-hour TOU bracket transitions, pass `:step`:
@@ -399,6 +413,7 @@ Currently covered:
 - Block-tier surfacing via the v0.2.0 `urpx:ServiceTiers` container — every tier surfaces with its bounds and bound operators
 - Active-price selection by latest `startDate ≤ query-date`, drawing from flat top-level prices, `PriceSet`-scoped prices, and PriceSets that omit `startDate` and fall through to per-Price dates (CPAU E-2 shape, per `urpx:PriceSetShape` `sh:minCount 0`)
 - Modifier resolution alongside the base plan (vintage-PCIA pattern: many Prices share one PD, each carrying its own `urpx:hasApplicabilityGroup`)
+- `urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives` — the v0.2.0 idiom for declarative customer-or-configuration choices (income tier CARE/FERA/Standard, voltage configuration, vintage-PCIA default tier). Coerce + validate full schemas; resolve-prices selects the active alternative via an explicit `:profile-alternatives` opt; emit round-trips cleanly. Programmatic `ConditionExpression` evaluation against a customer profile is a future enhancement
 - Configurable schedule step (hourly default; sub-hour available via `:step`)
 - Symmetric write-side: `urpx.emit` emits JSON-LD from any coerced `RatePlan` / `RatePlanModifier` / `URPXDocument`; the vendored-fixture round-trip suite verifies `parse → coerce → emit → re-parse → re-coerce` is a fixed point for every PG&E filing × {RatePlan, Modifier} plus a URPXDocument-wrapped E-ELEC test case
 - Authoring DSL (`urpx.dsl`): named builders for every entity-type schema, kebab-case kwarg aliases, auto-coercion of raw inputs (numbers → BigDecimal, ISO strings → java.time, `--MM` → int month), validation-on-construct, and local-symbol refs scoped via `dsl-scope`
