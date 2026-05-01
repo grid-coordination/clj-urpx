@@ -1,8 +1,12 @@
 (ns urpx.dsl-test
   (:require [clojure.test :refer [deftest is testing]]
             [urpx.coerce :as coerce]
+            [urpx.core :as core]
             [urpx.dsl :as dsl]
-            [urpx.schema :as schema]))
+            [urpx.emit :as emit]
+            [urpx.price :as price]
+            [urpx.schema :as schema])
+  (:import [java.time ZonedDateTime ZoneId]))
 
 ;; ---------------------------------------------------------------------------
 ;; entity-type introspection (URPX-0cq)
@@ -384,3 +388,138 @@
       (is (= "urpx:URPXDocument"    (:jsonld/type doc)))
       (is (vector? (:urpx/hasRatePlan doc))
           "single-or-vec→vec on URPXDocument's hasRatePlan still applies"))))
+
+;; ---------------------------------------------------------------------------
+;; End-to-end CPAU-E-2 via the DSL (URPX-z2l)
+;; ---------------------------------------------------------------------------
+;; Strongest available demonstration of the full DSL: build a non-TOU
+;; two-season rate plan idiomatically, then exercise it three ways —
+;; schema validation, in-memory price resolution, and JSON-LD round-trip
+;; through urpx.emit. Mirrors the hand-built `non-tou-seasonal-fixture`
+;; from urpx.price-test (URPX-2nk) so the resolution targets are pinned
+;; to the published CPAU E-2 Summer / Winter totals.
+
+(def la-zone (ZoneId/of "America/Los_Angeles"))
+
+(defn- zdt
+  ([y mo d h] (zdt y mo d h 0))
+  ([y mo d h mi] (ZonedDateTime/of y mo d h mi 0 0 la-zone)))
+
+(defn- cpau-e-2-via-dsl
+  "Author a CPAU-E-2-shaped rate plan via the DSL — local-symbol refs,
+   short-form kwargs, raw inputs that auto-coerce."
+  []
+  (dsl/dsl-scope
+   (let [summer    (dsl/season ::summer
+                               :season-name "Summer"
+                               :month [5 6 7 8 9 10])
+         winter    (dsl/season ::winter
+                               :season-name "Winter"
+                               :month [11 12 1 2 3 4])
+         mi-energy (dsl/metric-input ::mi-energy
+                                     :name "kWh"
+                                     :metric-input-type {:jsonld/id "urpx:profileMetricInput"}
+                                     :has-metric-specification
+                                     (dsl/metric-specification
+                                      :measurement-kind {:jsonld/id "urpx:energy"}
+                                      :unit-of-measure  {:jsonld/id "urpx:kWh"}))
+         l-comm    (dsl/ledger ::ledger-commodity
+                               :name "Commodity"
+                               :ledger-type {:jsonld/id "urpx:supplyLedger"}
+                               :references-metric-input [::mi-energy])
+         l-dist    (dsl/ledger ::ledger-distribution
+                               :name "Distribution"
+                               :ledger-type {:jsonld/id "urpx:distributionLedger"}
+                               :references-metric-input [::mi-energy])
+         l-pb      (dsl/ledger ::ledger-public-benefits
+                               :name "Public Benefits"
+                               :ledger-type {:jsonld/id "urpx:bundledLedger"}
+                               :references-metric-input [::mi-energy])
+         pd-cs     (dsl/price-definition ::pd-commodity-summer
+                                         :name "Commodity Summer"
+                                         :applies-in-season ::summer
+                                         :references-ledger ::ledger-commodity)
+         pd-cw     (dsl/price-definition ::pd-commodity-winter
+                                         :name "Commodity Winter"
+                                         :applies-in-season ::winter
+                                         :references-ledger ::ledger-commodity)
+         pd-ds     (dsl/price-definition ::pd-distribution-summer
+                                         :name "Distribution Summer"
+                                         :applies-in-season ::summer
+                                         :references-ledger ::ledger-distribution)
+         pd-dw     (dsl/price-definition ::pd-distribution-winter
+                                         :name "Distribution Winter"
+                                         :applies-in-season ::winter
+                                         :references-ledger ::ledger-distribution)
+         pd-pbs    (dsl/price-definition ::pd-public-benefits-summer
+                                         :name "Public Benefits Summer"
+                                         :applies-in-season ::summer
+                                         :references-ledger ::ledger-public-benefits)
+         pd-pbw    (dsl/price-definition ::pd-public-benefits-winter
+                                         :name "Public Benefits Winter"
+                                         :applies-in-season ::winter
+                                         :references-ledger ::ledger-public-benefits)
+         price-of  (fn [pd-ref unit]
+                     (dsl/price :references-price-definition pd-ref
+                                :unit-price unit
+                                :start-date "2025-07-01"))]
+     (dsl/rate-plan
+      :rate-plan-unique-identifier "TEST-CPAU-E-2"
+      :name "Non-TOU two-season test plan"
+      :initial-effective-date "2025-07-01"
+      :has-rate-plan-version
+      (dsl/rate-plan-version
+       :effective-date-time "2025-07-01T00:00:00"
+       :price-currency "USD"
+       :has-plan-elements
+       (dsl/plan-elements
+        :has-seasons      [summer winter]
+        :has-metric-input [mi-energy]
+        :has-billing-model
+        (dsl/billing-model
+         :has-ledger            [l-comm l-dist l-pb]
+         :has-price-definition  [pd-cs pd-cw pd-ds pd-dw pd-pbs pd-pbw]))
+       :has-prices
+       (dsl/prices
+        :has-price-set
+        [(dsl/price-set
+          :has-price [(price-of ::pd-commodity-summer        0.15075)
+                      (price-of ::pd-commodity-winter        0.09334)
+                      (price-of ::pd-distribution-summer     0.10806)
+                      (price-of ::pd-distribution-winter     0.07352)
+                      (price-of ::pd-public-benefits-summer  0.00604)
+                      (price-of ::pd-public-benefits-winter  0.00604)])]))))))
+
+(deftest cpau-e-2-via-dsl-validates
+  (testing "URPX-z2l: a CPAU-E-2-shaped plan authored via the DSL passes
+            full RatePlan schema validation"
+    (let [plan (cpau-e-2-via-dsl)]
+      (is (nil? (coerce/explain schema/RatePlan plan))))))
+
+(deftest cpau-e-2-via-dsl-resolves-summer
+  (testing "URPX-z2l: the DSL plan resolves at a Summer probe instant to
+            the published $0.26485/kWh CPAU E-2 Summer total"
+    (let [plan (cpau-e-2-via-dsl)
+          r    (price/resolve-prices plan (zdt 2026 7 15 17))]
+      (is (= (BigDecimal. "0.26485") (price/marginal-unit-rate r))
+          "Summer marginal = 0.15075 + 0.10806 + 0.00604"))))
+
+(deftest cpau-e-2-via-dsl-resolves-winter
+  (testing "URPX-z2l: the DSL plan resolves at a Winter probe instant to
+            the published $0.17290/kWh CPAU E-2 Winter total"
+    (let [plan (cpau-e-2-via-dsl)
+          r    (price/resolve-prices plan (zdt 2026 1 15 12))]
+      (is (= (BigDecimal. "0.17290") (price/marginal-unit-rate r))
+          "Winter marginal = 0.09334 + 0.07352 + 0.00604"))))
+
+(deftest cpau-e-2-via-dsl-round-trips
+  (testing "URPX-z2l: DSL → emit → re-parse → re-coerce yields a structurally
+            equal plan. End-to-end validates the DSL composes with the
+            write-side without information loss."
+    (let [plan (cpau-e-2-via-dsl)
+          re-coerced (-> plan
+                         emit/write-rate-plan
+                         java.io.StringReader.
+                         core/parse-rate-plan
+                         coerce/coerce-rate-plan)]
+      (is (= plan re-coerced)))))

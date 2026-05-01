@@ -1,43 +1,58 @@
 (ns urpx.dsl
-  "DSL for authoring URPX entities in idiomatic Clojure (URPX-cjk).
+  "Idiomatic Clojure authoring for URPX entities. Output of every builder is
+  a coerced (typed) entity ready for `urpx.price/resolve-prices`,
+  `urpx.emit/write-*`, or any other consumer of `urpx.schema`-shaped data.
 
-  The pattern, validated by the URPX-4wa spike: assemble a typed-shape map
-  with canonical :urpx/* keys + the inferred :jsonld/type → run
-  urpx.coerce/coerce against the schema (auto-coerces leaves via
-  :decode/urpx-jsonld) → validate and throw ex-info with the Malli
-  explanation on failure.
+  ## At a glance
 
-  This namespace currently exposes:
+    (require '[urpx.dsl :as dsl])
 
-    - `make-builder` — the introspection-based generator (URPX-0cq). Given
-      a Malli entity schema, returns a constructor that takes kwargs of
-      canonical :urpx/* keys and produces a coerced + validated entity.
-    - `entity-type` — the introspection helper used by `make-builder`.
-    - A handful of named builders bound from `make-builder` to demonstrate
-      the pattern: `season`, `metric-input`, `ledger`, `holiday`.
+    (dsl/dsl-scope
+      (dsl/season ::summer :name \"Summer\" :month [5 6 7 8 9 10])
+      (dsl/season ::winter :name \"Winter\" :month [11 12 1 2 3 4])
+      (dsl/price-definition ::pd-summer
+                            :name \"Commodity Summer\"
+                            :applies-in-season ::summer
+                            :references-ledger ::ledger-commodity))
 
-  Naming convention (URPX-0cq): kwargs use the canonical schema keys
-  (:urpx/seasonName, :urpx/month, …). URPX-upf will add an ergonomic layer
-  with short-form aliases (:name, :months) + optional positional name args
-  + builders for every entity type in `urpx.schema`. Local-symbol ref
-  resolution lands in URPX-8fo.
+  ## Public API
 
-  Nil-stripping: kwargs whose value is `nil` are dropped before coercion,
-  so `(builder :urpx/foo (when condition x))` cleanly omits the field
-  rather than producing a present-but-nil entry that would fail validation.
-  Explicit `false` is preserved (boolean fields aren't stripped).
+    - `dsl-scope`             macro establishing a local-symbol-ref scope
+    - `make-builder`          generator: schema → constructor function
+    - `entity-type`           introspect a schema for its @type literal
+    - 37 named builders       one per entity-type schema in `urpx.schema`
+                              (`season`, `metric-input`, `price-definition`,
+                              `rate-plan`, `urpx-document`, …)
 
-  Local-symbol refs (URPX-8fo): inside a `dsl-scope`, builders accept an
-  optional leading qualified-keyword as the entity's local @id, and
-  qualified-keyword values in kwarg positions resolve to {:jsonld/id ...}
-  maps via the scope's registry. Outside `dsl-scope`, builders ignore the
-  local-id machinery and only accept canonical kwargs.
+  ## Builder semantics
 
-  Kwarg aliases (URPX-upf): every builder accepts both canonical
-  :urpx/* keys and a kebab-cased short form derived from the schema's
-  entries — `:urpx/seasonName` → `:season-name`, `:urpx/yearlyRecurrence`
-  → `:yearly-recurrence`. Both forms can be mixed in a single call;
-  unknown keys pass through to surface as schema validation errors."
+  Every builder:
+
+    - Sets `:jsonld/type` automatically from the schema (no boilerplate).
+    - Accepts kwargs (or a Clojure 1.11+ trailing map) of either canonical
+      `:urpx/*` keys (`:urpx/seasonName`) or auto-derived kebab-case short
+      forms (`:season-name`); both can be mixed in one call.
+    - Auto-coerces raw inputs through the schema's `:decode/urpx-jsonld`
+      decoders: number → `BigDecimal`, ISO string → `LocalDate` /
+      `LocalDateTime` / `LocalTime`, `--MM` xsd:gMonth → int month-of-year,
+      ISO 8601 string → `Duration` / `Period`.
+    - Drops `nil`-valued kwargs (so `(builder :foo (when … x))` cleanly
+      omits the field). Explicit `false` is preserved.
+    - Validates the assembled entity against the schema and throws
+      `ex-info` with the Malli explanation on failure.
+
+  Inside a `dsl-scope`, builders additionally:
+
+    - Accept an optional leading qualified-keyword arg as the entity's
+      local `@id` (e.g. `(season ::summer …)` registers `::summer` in the
+      scope and sets `:jsonld/id \"summer\"`).
+    - Resolve qualified-keyword kwarg values against the scope's registry
+      to produce `{:jsonld/id …}` Ref maps. Vector-typed kwargs walk
+      element-wise.
+
+  Resolution is eager (declare-before-reference): an unknown ref or a
+  duplicate declaration throws. Each `dsl-scope` has its own registry —
+  scopes don't leak."
   (:require [clojure.string :as str]
             [malli.core :as m]
             [urpx.coerce :as coerce]

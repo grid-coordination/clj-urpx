@@ -189,7 +189,64 @@ The smoke suite in `urpx.emit-test` confirms the pipeline against the vendored P
 
 - **`@context` emission** — emitted JSON-LD currently carries no synthesized `@context`; consumers either supply one outside the emitter or work with the bare CURIE keys. A future revision will add an opt-in default context derived from the vendored fixtures' shape.
 - **Broader fixture coverage** — round-trip testing today is focused on the smoke cases above; a dedicated round-trip suite over every vendored fixture is planned. Equality is plain `=`, which is *stricter* than logical equivalence (vector ordering, BigDecimal scale all matter); a more tolerant comparator may be introduced for shapes where SHACL doesn't constrain order.
-- **Ergonomic authoring DSL** — for hand-authoring URPX entities, a thin DSL layer (per-entity builders with auto-coercion and local-symbol ref resolution) is planned on top of `urpx.emit`. Today's authoring path is a typed Clojure map literal handed straight to a write-* function.
+
+## Authoring URPX entities
+
+For programmatic construction or test-fixture authoring, `urpx.dsl` provides idiomatic Clojure builders for every entity-type schema in `urpx.schema`. Output is a coerced (typed) entity, ready for `urpx.price/resolve-prices`, `urpx.emit/write-*`, or any other consumer.
+
+```clojure
+(require '[urpx.dsl :as dsl])
+
+(dsl/dsl-scope
+  (let [summer (dsl/season ::summer :season-name "Summer" :month [5 6 7 8 9 10])
+        winter (dsl/season ::winter :season-name "Winter" :month [11 12 1 2 3 4])
+        ledger-comm (dsl/ledger ::ledger-commodity
+                                :name "Commodity"
+                                :ledger-type {:jsonld/id "urpx:supplyLedger"})
+        pd-cs (dsl/price-definition ::pd-commodity-summer
+                                    :name "Commodity Summer"
+                                    :applies-in-season ::summer
+                                    :references-ledger ::ledger-commodity)]
+    ;; ...assemble into a rate-plan via dsl/rate-plan, dsl/rate-plan-version, etc.
+    ))
+```
+
+The DSL handles the boring parts so authoring code stays declarative:
+
+- **`@type` is inferred** from the schema (no `:jsonld/type "urpx:Season"` boilerplate).
+- **Auto-coercion** of raw Clojure inputs through the schema's `:decode/urpx-jsonld` decoders: numbers → `BigDecimal`, ISO strings → `LocalDate` / `LocalDateTime` / `LocalTime`, `--MM` xsd:gMonth → int.
+- **Validation on construct** — every builder throws `ex-info` with the Malli explanation if the entity doesn't validate against its schema, so shape drift surfaces at the call site.
+- **Two kwarg forms** — canonical `:urpx/seasonName` or auto-derived kebab-case `:season-name` (both work, can be mixed in one call).
+
+### Local-symbol refs
+
+Inside a `dsl-scope`, builders accept an optional leading qualified-keyword as the entity's local `@id`, and qualified-keyword values in kwarg positions resolve to `{:jsonld/id …}` Ref maps via the scope's registry:
+
+```clojure
+(dsl/dsl-scope
+  (dsl/season ::summer :season-name "Summer" :month [5 6 7 8 9 10])
+  (dsl/season ::winter :season-name "Winter" :month [11 12 1 2 3 4])
+  (dsl/price-definition ::pd-summer
+                        :applies-in-season ::summer    ; → {:jsonld/id "summer"}
+                        :references-ledger ::commodity))
+```
+
+Resolution is eager (declare-before-reference); unknown refs and duplicate declarations throw. Each `dsl-scope` has its own registry — scopes don't leak.
+
+### Building from arbitrary schemas
+
+`make-builder` derives a constructor from any Malli schema with a `:jsonld/type [:= "urpx:X"]` entry — useful for ad-hoc construction or scripts that don't import every named builder:
+
+```clojure
+(let [build-tou-period (dsl/make-builder schema/TOUPeriod)]
+  (build-tou-period :urpx/name "Summer Peak"
+                    :urpx/touPeriodNumber 1
+                    :urpx/hasTimeBracket []))
+```
+
+The 37 named builders (`season`, `metric-input`, `price-definition`, `rate-plan`, `urpx-document`, …) are each just `(def name (make-builder schema/X))`.
+
+For a longer worked walkthrough that mirrors selected examples from the upstream [URPX Tutorial](https://github.com/urpx-org/urpx/blob/main/documentation/pages/urpx-tutorial.md), see [`doc/dsl-tutorial.md`](doc/dsl-tutorial.md) — each example shows the canonical URPX JSON-LD shape and the equivalent DSL form, with deep-links back to the upstream source section.
 
 ## Namespace overview
 
@@ -203,6 +260,7 @@ The smoke suite in `urpx.emit-test` confirms the pipeline against the vendored P
 | `urpx.schedule`      | `price-schedule`, `price-schedule-days` |
 | `urpx.tz-inference`  | `infer-zone` (opt-in fallback when `urpx:timezoneIdentifier` is absent) |
 | `urpx.emit`          | Write-side: `write-rate-plan`, `write-rate-plan-modifier`, `write-urpx-document` |
+| `urpx.dsl`           | Authoring DSL: `dsl-scope`, `make-builder`, named builders for every entity type |
 
 ## Status
 
@@ -220,6 +278,7 @@ Currently covered:
 - Modifier resolution alongside the base plan (vintage-PCIA pattern: many Prices share one PD, each carrying its own `urpx:hasApplicabilityGroup`)
 - Configurable schedule step (hourly default; sub-hour available via `:step`)
 - Symmetric write-side: `urpx.emit` emits JSON-LD from any coerced `RatePlan` / `RatePlanModifier` / `URPXDocument`; vendored fixtures round-trip cleanly through `parse → coerce → emit → re-parse → re-coerce`
+- Authoring DSL (`urpx.dsl`): named builders for every entity-type schema, kebab-case kwarg aliases, auto-coercion of raw inputs, validation-on-construct, and local-symbol refs scoped via `dsl-scope`
 
 Known gaps:
 - Programmatic interpretation of `urpx:ConditionExpression` for active-tier selection in matrix-style modifiers — currently the caller picks the active value by `price-id` after walking the condition tree itself
