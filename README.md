@@ -16,6 +16,7 @@ URPX is an [LF Energy](https://lfenergy.org/) open standard for exchanging utili
 - **Validate & coerce** parsed data against [Malli](https://github.com/metosin/malli) schemas — string leaves become `BigDecimal`, `LocalDate`, `LocalTime`, `LocalDateTime`, `Duration`, `Period`, integer month numbers
 - **Resolve** the per-ledger, per-tier prices that apply at a given instant in a given timezone — TOU period, season, day-of-week, midnight-wrapping brackets, block-tier ladders
 - **Generate** contiguous price-interval schedules suitable for [OpenADR 3](https://www.openadr.org/) events
+- **Emit** URPX JSON-LD from coerced Clojure entities (the inverse of parse + coerce) — useful for round-trip validation and programmatic authoring of URPX documents
 
 ## Installation
 
@@ -156,6 +157,40 @@ A modifier is skipped silently when its `:urpx/applicableToRatePlan` list does n
 
 Adjacent steps with identical resolved ledgers are still merged, so a quarter-hour walk across an hour-aligned plan produces the same merged intervals as the hourly walk.
 
+## Writing URPX JSON-LD
+
+The library also supports the inverse direction: emit URPX JSON-LD from a coerced Clojure entity. Useful for round-trip validation, programmatic generation of URPX documents, and authoring fixtures in idiomatic Clojure.
+
+```clojure
+(require '[urpx.emit :as emit])
+
+;; Round-trip a parsed rate plan back to JSON-LD
+(spit "out.jsonld" (emit/write-rate-plan plan))
+
+;; Standalone modifier documents
+(emit/write-rate-plan-modifier modifier)
+
+;; URPXDocument-wrapped documents (v0.2.0 wrapper class)
+(emit/write-urpx-document
+  {:jsonld/type "urpx:URPXDocument"
+   :urpx/targetURPXVersion "https://github.com/urpx-org/urpx/raw/v0.2.0/ontology/urpx-ontology.ttl"
+   :urpx/hasRatePlan [plan]})
+```
+
+Each function takes a coerced (or already-typed EDN) entity, runs the schema's `:encode/urpx-jsonld` transformer to convert typed leaves (`BigDecimal`, `LocalDate`, `LocalDateTime`, `Duration`, integer month numbers, …) back to JSON-LD string forms, projects namespaced-keyword keys to their CURIE / `@`-reserved JSON-LD forms, and serializes via `clojure.data.json/write-str`.
+
+### Round-trip fidelity
+
+The emit path targets **logical / RDF-graph equivalence** on round-trip: `parse → coerce → emit → re-parse → re-coerce` yields a structurally equal Clojure entity. Byte-for-byte equality with the input is **not** a goal — key ordering, single-vs-vector property emission, and `@context` recreation may differ from the source document.
+
+The smoke suite in `urpx.emit-test` confirms the pipeline against the vendored PG&E E-1 fixture (a ~20K-character `@graph` document with tier-stratified prices and a sibling vintage-PCIA modifier) and a URPXDocument-wrapped E-ELEC document — both round-trip cleanly with `(= original re-coerced)`.
+
+### Limitations / future work
+
+- **`@context` emission** — emitted JSON-LD currently carries no synthesized `@context`; consumers either supply one outside the emitter or work with the bare CURIE keys. A future revision will add an opt-in default context derived from the vendored fixtures' shape.
+- **Broader fixture coverage** — round-trip testing today is focused on the smoke cases above; a dedicated round-trip suite over every vendored fixture is planned. Equality is plain `=`, which is *stricter* than logical equivalence (vector ordering, BigDecimal scale all matter); a more tolerant comparator may be introduced for shapes where SHACL doesn't constrain order.
+- **Ergonomic authoring DSL** — for hand-authoring URPX entities, a thin DSL layer (per-entity builders with auto-coercion and local-symbol ref resolution) is planned on top of `urpx.emit`. Today's authoring path is a typed Clojure map literal handed straight to a write-* function.
+
 ## Namespace overview
 
 | Namespace        | Purpose |
@@ -167,6 +202,7 @@ Adjacent steps with identical resolved ledgers are still merged, so a quarter-ho
 | `urpx.price`         | `resolve-prices`, `resolve-modifier-prices`, `resolve-prices-with-modifiers`, `marginal-unit-rate` |
 | `urpx.schedule`      | `price-schedule`, `price-schedule-days` |
 | `urpx.tz-inference`  | `infer-zone` (opt-in fallback when `urpx:timezoneIdentifier` is absent) |
+| `urpx.emit`          | Write-side: `write-rate-plan`, `write-rate-plan-modifier`, `write-urpx-document` |
 
 ## Status
 
@@ -183,6 +219,7 @@ Currently covered:
 - Active-price selection by latest `startDate ≤ query-date`, drawing from both flat top-level prices and `PriceSet`-scoped prices
 - Modifier resolution alongside the base plan (vintage-PCIA pattern: many Prices share one PD, each carrying its own `urpx:hasApplicabilityGroup`)
 - Configurable schedule step (hourly default; sub-hour available via `:step`)
+- Symmetric write-side: `urpx.emit` emits JSON-LD from any coerced `RatePlan` / `RatePlanModifier` / `URPXDocument`; vendored fixtures round-trip cleanly through `parse → coerce → emit → re-parse → re-coerce`
 
 Known gaps:
 - Programmatic interpretation of `urpx:ConditionExpression` for active-tier selection in matrix-style modifiers — currently the caller picks the active value by `price-id` after walking the condition tree itself
