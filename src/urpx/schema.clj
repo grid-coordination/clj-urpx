@@ -21,7 +21,24 @@
 ;; Decoder helpers (consumed by `:decode/urpx-jsonld` properties below)
 ;; ---------------------------------------------------------------------------
 
-(defn- ->decimal  [v] (if (string? v) (BigDecimal. ^String v) v))
+(defn- ->decimal
+  "Coerce raw input forms to BigDecimal:
+   - BigDecimal: pass-through
+   - number (long, double, ratio, BigInteger): coerce via clojure.core/bigdec,
+     which uses BigDecimal/valueOf for floats (canonical short-form scale —
+     `(bigdec 0.1)` → `0.1M`, NOT the binary-float garbage that `(BigDecimal. 0.1)`
+     produces)
+   - string: parse as xsd:decimal
+   - anything else: pass-through (let validation surface the type mismatch)
+
+   The number form (URPX-4w3) lets DSL callers write `:urpx/unitPrice 0.15075`
+   instead of `(BigDecimal. \"0.15075\")`."
+  [v]
+  (cond
+    (instance? BigDecimal v) v
+    (number? v)              (bigdec v)
+    (string? v)              (BigDecimal. ^String v)
+    :else                    v))
 
 ;; ---------------------------------------------------------------------------
 ;; Encoder helpers (consumed by `:encode/urpx-jsonld` properties below)

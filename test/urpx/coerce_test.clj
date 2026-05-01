@@ -33,6 +33,17 @@
     (let [bd (BigDecimal. "1.5")]
       (is (identical? bd (coerce/coerce schema/Decimal bd))))))
 
+(deftest decimal-coerces-clojure-numbers
+  (testing "URPX-4w3: number literals (long, double, ratio) coerce to BigDecimal
+            so DSL callers can write idiomatic Clojure numbers"
+    (is (= (BigDecimal. "0.15075") (coerce/coerce schema/Decimal 0.15075)))
+    (is (= (BigDecimal. "1")       (coerce/coerce schema/Decimal 1)))
+    (is (= (BigDecimal. "1.5")     (coerce/coerce schema/Decimal 3/2))))
+  (testing "double precision: BigDecimal/valueOf form (via bigdec) preserves
+            the canonical short-form scale rather than the binary-float bits
+            (`(BigDecimal. 0.1)` would produce 0.1000…025 garbage)"
+    (is (= (BigDecimal. "0.1") (coerce/coerce schema/Decimal 0.1)))))
+
 (deftest coerce-pge-e-1
   (let [plan (fixtures/load-rate-plan "pge-e-1-2026-03-01")]
 

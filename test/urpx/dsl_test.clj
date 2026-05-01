@@ -178,3 +178,41 @@
       (is (= "urpx:Holiday" (:jsonld/type h)))
       (is (instance? java.time.LocalDate (:urpx/holidayDate h)))
       (is (= (java.time.LocalDate/of 2026 12 25) (:urpx/holidayDate h))))))
+
+;; ---------------------------------------------------------------------------
+;; Auto-coercion of raw Clojure numbers (URPX-4w3)
+;; ---------------------------------------------------------------------------
+
+(deftest dsl-builders-accept-clojure-number-literals-for-decimal-fields
+  (testing "URPX-4w3: a builder for an entity with a Decimal field accepts
+            an idiomatic Clojure number — the user no longer has to write
+            (BigDecimal. \"0.15075\") at every call site"
+    (let [build-price (dsl/make-builder schema/Price)
+          p (build-price :urpx/unitPrice 0.15075
+                         :urpx/referencesPriceDefinition {:jsonld/id "x:pd"})]
+      (is (instance? BigDecimal (:urpx/unitPrice p)))
+      (is (= (BigDecimal. "0.15075") (:urpx/unitPrice p))))))
+
+(deftest dsl-builders-pass-through-pre-typed-decimals
+  (testing "URPX-4w3: callers who already have a BigDecimal in hand can pass
+            it through; no double-conversion churn"
+    (let [build-price (dsl/make-builder schema/Price)
+          original (BigDecimal. "0.15075")
+          p (build-price :urpx/unitPrice original
+                         :urpx/referencesPriceDefinition {:jsonld/id "x:pd"})]
+      (is (= original (:urpx/unitPrice p)))
+      (is (= 5 (.scale ^BigDecimal (:urpx/unitPrice p)))
+          "scale preserved (0.15075 has scale 5)"))))
+
+(deftest dsl-builders-accept-mixed-raw-and-typed-inputs
+  (testing "URPX-4w3: every leaf decoder routes its own input shape; a single
+            builder call can mix raw and pre-typed values across fields"
+    (let [build-price (dsl/make-builder schema/Price)
+          p (build-price :urpx/unitPrice 0.15075                                  ; double
+                         :urpx/startDate "2026-03-01"                             ; ISO string
+                         :urpx/endDate (java.time.LocalDate/of 2026 12 31)        ; pre-typed
+                         :urpx/referencesPriceDefinition {:jsonld/id "x:pd"})]
+      (is (= (BigDecimal. "0.15075") (:urpx/unitPrice p)))
+      (is (= (java.time.LocalDate/of 2026 3 1)  (:urpx/startDate p)))
+      (is (= (java.time.LocalDate/of 2026 12 31) (:urpx/endDate p)))
+      (is (nil? (coerce/explain schema/Price p))))))
