@@ -31,8 +31,15 @@
   optional leading qualified-keyword as the entity's local @id, and
   qualified-keyword values in kwarg positions resolve to {:jsonld/id ...}
   maps via the scope's registry. Outside `dsl-scope`, builders ignore the
-  local-id machinery and only accept canonical kwargs."
-  (:require [malli.core :as m]
+  local-id machinery and only accept canonical kwargs.
+
+  Kwarg aliases (URPX-upf): every builder accepts both canonical
+  :urpx/* keys and a kebab-cased short form derived from the schema's
+  entries — `:urpx/seasonName` → `:season-name`, `:urpx/yearlyRecurrence`
+  → `:yearly-recurrence`. Both forms can be mixed in a single call;
+  unknown keys pass through to surface as schema validation errors."
+  (:require [clojure.string :as str]
+            [malli.core :as m]
             [urpx.coerce :as coerce]
             [urpx.schema :as schema]))
 
@@ -129,17 +136,53 @@
 (defn entity-type
   "Extract the @type literal (e.g. \"urpx:Season\") from a Malli entity
    schema by introspecting its :jsonld/type entry — which must have the
-   form `[:= \"urpx:X\"]`. Returns nil if the schema doesn't carry a
-   :jsonld/type entry shaped that way."
+   form `[:= \"urpx:X\"]`. Schemas wrapped in `[:schema {:registry ...}
+   <inner>]` (e.g. ConditionExpression) are unwrapped via `m/deref` first.
+   Returns nil if the schema doesn't carry a :jsonld/type entry shaped
+   that way."
   [schema]
-  (let [type-entry (some (fn [[k v]] (when (= :jsonld/type k) v))
-                         (m/entries schema))]
+  (let [schema* (try (m/deref schema) (catch Exception _ schema))
+        type-entry (some (fn [[k v]] (when (= :jsonld/type k) v))
+                         (m/entries schema*))]
     (when type-entry
       (let [inner (first (m/children type-entry))]
         (first (m/children inner))))))
 
 (defn- strip-nils [m]
   (into {} (remove (comp nil? val)) m))
+
+(defn- camel->kebab
+  "Convert a camelCase or UpperCamelCase identifier to kebab-case.
+   Handles all-caps prefixes correctly: 'URPXDocument' → 'urpx-document',
+   'TOUPeriod' → 'tou-period'. Adapted from the standard two-pass camel→kebab
+   regex idiom: insert a hyphen at every boundary where an uppercase letter
+   either follows a lowercase letter / digit, or starts a new word in an
+   all-caps run."
+  [s]
+  (-> s
+      (str/replace #"([A-Z]+)([A-Z][a-z])" "$1-$2")
+      (str/replace #"([a-z\d])([A-Z])"     "$1-$2")
+      str/lower-case))
+
+(defn- alias-map
+  "Build a {short-key → canonical-key} map for `schema`'s :urpx/* entries.
+   Aliases are kebab-cased local names — :urpx/seasonName → :season-name,
+   :urpx/yearlyRecurrence → :yearly-recurrence."
+  [schema]
+  (into {}
+        (keep (fn [[k _]]
+                (when (and (qualified-keyword? k) (= "urpx" (namespace k)))
+                  [(keyword (camel->kebab (name k))) k])))
+        (m/entries schema)))
+
+(defn- canonicalize-keys
+  "Translate any short-form keys in `opts` to their canonical :urpx/* form
+   via `aliases`. Unknown keys pass through (schema validation surfaces
+   typos)."
+  [opts aliases]
+  (reduce-kv (fn [acc k v]
+               (assoc acc (or (aliases k) k) v))
+             {} opts))
 
 (defn make-builder
   "Given a urpx.schema entity schema, return a constructor function. The
@@ -163,7 +206,8 @@
    The schema must carry a :jsonld/type entry with shape `[:= \"urpx:X\"]`
    so the @type can be inferred."
   [schema]
-  (let [t (entity-type schema)]
+  (let [t (entity-type schema)
+        aliases (alias-map schema)]
     (when-not t
       (throw (ex-info "make-builder: schema must have a :jsonld/type [:= ...] entry"
                       {:schema (m/form schema)})))
@@ -174,6 +218,7 @@
             ;; the registry consistent if any value resolution were to look
             ;; back at the in-progress entity.
             id (when local-id-arg (register-local-id! local-id-arg))
+            opts (canonicalize-keys opts aliases)
             opts* (if (in-scope?)
                     (into {} (map (fn [[k v]] [k (resolve-refs-in-value v)])) opts)
                     opts)
@@ -186,28 +231,62 @@
         coerced))))
 
 ;; ---------------------------------------------------------------------------
-;; Named builders (URPX-0cq)
+;; Named builders for every entity in urpx.schema (URPX-upf)
 ;; ---------------------------------------------------------------------------
-;; A handful of builders demonstrating that `make-builder` works across
-;; entity-shape variety — flat (Season, Holiday), Ref-bearing (Ledger), and
-;; nested-entity-bearing (MetricInput → MetricSpecification). URPX-upf
-;; populates the full set of builders for every schema in `urpx.schema`.
 
-(def ^{:doc "Builder for urpx:Season. See `make-builder` for semantics."}
-  season
-  (make-builder schema/Season))
+;; Each def binds a builder for one entity-type schema. Every builder
+;; accepts canonical :urpx/* kwargs and the auto-derived kebab-case
+;; aliases (e.g. :name for :urpx/name); see `make-builder` for semantics.
 
-(def ^{:doc "Builder for urpx:MetricInput. Demonstrates nested-entity coercion
-            (urpx:hasMetricSpecification accepts a raw MetricSpecification map)."}
-  metric-input
-  (make-builder schema/MetricInput))
+;; Plan elements
+(def season               (make-builder schema/Season))
+(def metric-specification (make-builder schema/MetricSpecification))
+(def metric-input         (make-builder schema/MetricInput))
+(def plan-elements        (make-builder schema/PlanElements))
 
-(def ^{:doc "Builder for urpx:Ledger. Demonstrates Ref-bearing fields
-            (urpx:referencesMetricInput, urpx:ledgerType)."}
-  ledger
-  (make-builder schema/Ledger))
+;; TOU + time
+(def time-bracket         (make-builder schema/TimeBracket))
+(def tou-period           (make-builder schema/TOUPeriod))
+(def tou-tier             (make-builder schema/TOUTier))
+(def tou-schedule         (make-builder schema/TOUSchedule))
+(def calculation-method   (make-builder schema/CalculationMethod))
 
-(def ^{:doc "Builder for urpx:Holiday. Demonstrates a flat shape with mixed
-            optional fields."}
-  holiday
-  (make-builder schema/Holiday))
+;; Billing
+(def ledger               (make-builder schema/Ledger))
+(def price-definition     (make-builder schema/PriceDefinition))
+(def service-tier         (make-builder schema/ServiceTier))
+(def service-tiers        (make-builder schema/ServiceTiers))
+(def billing-model        (make-builder schema/BillingModel))
+
+;; Calendar
+(def holiday              (make-builder schema/Holiday))
+(def holiday-calendar     (make-builder schema/HolidayCalendar))
+
+;; Conditions / applicability
+(def object-operand-node       (make-builder schema/ObjectOperandNode))
+(def datatype-operand-node     (make-builder schema/DatatypeOperandNode))
+(def custom-operand-node       (make-builder schema/CustomOperandNode))
+(def condition-expression      (make-builder schema/ConditionExpression))
+(def applicability-group       (make-builder schema/ApplicabilityGroup))
+(def applicability-rule        (make-builder schema/ApplicabilityRule))
+(def customer-profile          (make-builder schema/CustomerProfile))
+(def scenario                  (make-builder schema/Scenario))
+(def eligibility-rule          (make-builder schema/EligibilityRule))
+
+;; Prices
+(def price                (make-builder schema/Price))
+(def price-set            (make-builder schema/PriceSet))
+(def prices               (make-builder schema/Prices))
+
+;; Metadata
+(def organization              (make-builder schema/Organization))
+(def tariff-book-reference     (make-builder schema/TariffBookReference))
+(def data-source-reference     (make-builder schema/DataSourceReference))
+(def rate-case                 (make-builder schema/RateCase))
+
+;; Rate plan + modifier + document
+(def rate-plan-version              (make-builder schema/RatePlanVersion))
+(def rate-plan                      (make-builder schema/RatePlan))
+(def rate-plan-modifier-version     (make-builder schema/RatePlanModifierVersion))
+(def rate-plan-modifier             (make-builder schema/RatePlanModifier))
+(def urpx-document                  (make-builder schema/URPXDocument))

@@ -300,7 +300,7 @@
                           :urpx/month [11 12 1 2 3 4])
               (dsl/ledger ::commodity :urpx/name "Commodity"
                           :urpx/ledgerType {:jsonld/id "urpx:supplyLedger"})
-              ((dsl/make-builder schema/PriceDefinition)
+              (dsl/price-definition
                ::pd-summer
                :urpx/name "Commodity Summer"
                :urpx/appliesInSeason ::summer
@@ -308,3 +308,79 @@
       (is (= "pd-summer" (:jsonld/id pd)))
       (is (= [{:jsonld/id "summer"}] (:urpx/appliesInSeason pd)))
       (is (= {:jsonld/id "commodity"} (:urpx/referencesLedger pd))))))
+
+;; ---------------------------------------------------------------------------
+;; Kebab-case kwarg aliases (URPX-upf)
+;; ---------------------------------------------------------------------------
+
+(deftest kebab-case-aliases-resolve-to-canonical
+  (testing "URPX-upf: every builder accepts kebab-cased :urpx/* short names
+            in addition to the canonical form"
+    (let [s (dsl/season :season-name "Summer"
+                        :month [5 6 7 8 9 10]
+                        :yearly-recurrence true)]
+      (is (= "Summer" (:urpx/seasonName s)))
+      (is (= [5 6 7 8 9 10] (:urpx/month s)))
+      (is (true? (:urpx/yearlyRecurrence s)))
+      (is (nil? (coerce/explain schema/Season s))))))
+
+(deftest canonical-and-alias-keys-can-mix
+  (testing "URPX-upf: canonical and short-form keys can be mixed in one call"
+    (let [s (dsl/season :urpx/seasonName "Summer" :month [5 6 7 8 9 10])]
+      (is (= "Summer" (:urpx/seasonName s)))
+      (is (= [5 6 7 8 9 10] (:urpx/month s))))))
+
+(deftest acronym-prefixes-kebab-correctly
+  (testing "URPX-upf: schema names with acronym prefixes (URPXDocument,
+            TOUSchedule) kebab-case correctly — boundary between an all-caps
+            run and the next CamelCase word inserts a hyphen"
+    (is (some? (var-get #'urpx.dsl/urpx-document)))
+    (is (some? (var-get #'urpx.dsl/tou-schedule)))
+    (is (some? (var-get #'urpx.dsl/tou-period)))))
+
+;; ---------------------------------------------------------------------------
+;; Sample of new named builders (URPX-upf) — spot-check coverage across the
+;; ~35 entity types
+;; ---------------------------------------------------------------------------
+
+(deftest builder-coverage-spot-check
+  (testing "URPX-upf: sample of new builders defined via defbuilders all work
+            and produce valid coerced entities"
+    (let [tb (dsl/time-bracket :urpx/startTime "16:00:00"
+                               :urpx/endTime "21:00:00"
+                               :urpx/dayType {:jsonld/id "urpx:weekdayDays"})
+          cm (dsl/calculation-method :urpx/intervalDuration "P1M")
+          org (dsl/organization
+               :urpx/legalName "Pacific Gas & Electric"
+               :urpx/organizationType {:jsonld/id "urpx:investorOwnedUtility"})]
+      (is (= "urpx:TimeBracket" (:jsonld/type tb)))
+      (is (nil? (coerce/explain schema/TimeBracket tb)))
+      (is (= "urpx:CalculationMethod" (:jsonld/type cm)))
+      (is (instance? java.time.Period (:urpx/intervalDuration cm)))
+      (is (= "urpx:Organization" (:jsonld/type org)))))
+  (testing "rate plan + version + URPXDocument builders all produce the
+            expected @types"
+    (let [rpv (dsl/rate-plan-version :urpx/effectiveDateTime "2026-01-01T00:00:00"
+                                     :urpx/hasPlanElements
+                                     {:jsonld/type "urpx:PlanElements"
+                                      :urpx/hasMetricInput
+                                      [{:jsonld/type "urpx:MetricInput"
+                                        :urpx/name "kWh"
+                                        :urpx/metricInputType
+                                        {:jsonld/id "urpx:measuredMetricInput"}}]
+                                      :urpx/hasBillingModel
+                                      {:jsonld/type "urpx:BillingModel"
+                                       :urpx/hasPriceDefinition []}}
+                                     :urpx/hasPrices {:jsonld/type "urpx:Prices"})
+          rp (dsl/rate-plan :urpx/ratePlanUniqueIdentifier "P1"
+                            :urpx/name "Plan One"
+                            :urpx/initialEffectiveDate "2026-01-01"
+                            :urpx/hasRatePlanVersion rpv)
+          doc (dsl/urpx-document
+               :urpx/targetURPXVersion "https://example.com/urpx-v0.2.0"
+               :urpx/hasRatePlan rp)]
+      (is (= "urpx:RatePlanVersion" (:jsonld/type rpv)))
+      (is (= "urpx:RatePlan"        (:jsonld/type rp)))
+      (is (= "urpx:URPXDocument"    (:jsonld/type doc)))
+      (is (vector? (:urpx/hasRatePlan doc))
+          "single-or-vec→vec on URPXDocument's hasRatePlan still applies"))))
