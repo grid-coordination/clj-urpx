@@ -163,3 +163,59 @@
           "BigDecimal scale preserved")
       (is (= (LocalDate/of 2026 1 1) (:urpx/startDate price))
           "LocalDate round-trips"))))
+
+;; ---------------------------------------------------------------------------
+;; Vendored-fixture round-trip suite (URPX-739)
+;; ---------------------------------------------------------------------------
+;; The authoritative correctness check for the write side: every fixture
+;; in test/resources/urpx-fixtures/ must round-trip through
+;; parse → coerce → emit → re-parse → re-coerce with structural equality.
+;;
+;; Each fixture is a JSON-LD @graph bundling a base urpx:RatePlan with a
+;; sibling urpx:RatePlanModifier (vintage-PCIA pattern). Both halves are
+;; round-tripped independently. `:context nil` suppresses the URPX-awl
+;; default @context — the inner RatePlan / RatePlanModifier entities don't
+;; carry :jsonld/context (it's at the @graph wrapper level), so the default
+;; would produce a present-but-not-in-original entry that breaks `=`.
+
+(def vendored-fixtures
+  ["pge-e-1-2026-03-01"
+   "pge-e-tou-c-2026-03-01"
+   "pge-e-tou-d-2026-03-27"
+   "pge-ev2-2026-03-27"])
+
+(defn- roundtrip-rate-plan [fixture-name]
+  (let [original (fixtures/load-rate-plan fixture-name)
+        emitted  (emit/write-rate-plan original {:context nil})
+        re-coerced (-> emitted
+                       java.io.StringReader.
+                       core/parse-rate-plan
+                       coerce/coerce-rate-plan)]
+    [original re-coerced]))
+
+(defn- roundtrip-rate-plan-modifier [fixture-name]
+  (let [original (fixtures/load-modifier fixture-name)
+        emitted  (emit/write-rate-plan-modifier original {:context nil})
+        re-coerced (-> emitted
+                       java.io.StringReader.
+                       core/parse-rate-plan
+                       coerce/coerce-rate-plan-modifier)]
+    [original re-coerced]))
+
+(deftest all-vendored-rate-plans-round-trip
+  (testing "URPX-739: every vendored RatePlan round-trips through emit
+            with structural equality (= original re-coerced)"
+    (doseq [fixture-name vendored-fixtures]
+      (testing fixture-name
+        (let [[original re-coerced] (roundtrip-rate-plan fixture-name)]
+          (is (= original re-coerced)
+              (str "RatePlan round-trip failed for fixture " fixture-name)))))))
+
+(deftest all-vendored-modifiers-round-trip
+  (testing "URPX-739: every vendored RatePlanModifier (vintage-PCIA pattern)
+            round-trips through emit with structural equality"
+    (doseq [fixture-name vendored-fixtures]
+      (testing fixture-name
+        (let [[original re-coerced] (roundtrip-rate-plan-modifier fixture-name)]
+          (is (= original re-coerced)
+              (str "RatePlanModifier round-trip failed for fixture " fixture-name)))))))
