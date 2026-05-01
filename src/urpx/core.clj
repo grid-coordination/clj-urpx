@@ -94,7 +94,7 @@
    Otherwise return `[entity]` unchanged. Used by `load-rate-plan` and
    `load-rate-plan-modifier` to descend transparently through the v0.2.0
    wrapper so consumers can target inner entities by @type without caring
-   whether the filing is URPXDocument-wrapped (URPX-1ii / URPX-8hq), bare
+   whether the document is URPXDocument-wrapped (URPX-1ii / URPX-8hq), bare
    single-entity, or `@graph`-bundled."
   [entity]
   (if (= "urpx:URPXDocument" (:jsonld/type entity))

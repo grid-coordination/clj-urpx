@@ -111,7 +111,7 @@
    what matters for resolution is the bracket match).
 
    BillingModel.hasTOUSchedule is a vector (URPX-qb5): one schedule per
-   MetricInput when the filing TOU-zones multiple metrics. The first
+   MetricInput when the rate plan TOU-zones multiple metrics. The first
    bracket-matching period across all schedules wins."
   [tou-schedules season-id ^LocalDate date ^LocalTime t ^DayOfWeek dow holiday?]
   (when (seq tou-schedules)

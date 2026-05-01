@@ -10,7 +10,7 @@ JSON-LD rate-plan documents so that the clj-urpx test suite is hermetic —
 `clojure -M:test` works on a fresh clone with no sibling checkouts, no
 environment setup, no submodule dance.
 
-The fixtures target **URPX v0.2.0-candidate**.
+The fixtures target **URPX v0.2.0**.
 
 ## Source and license
 

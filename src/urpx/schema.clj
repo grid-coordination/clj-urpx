@@ -288,7 +288,7 @@
    v0.1.x BillingModel.hasServiceTier vector is gone.
 
    hasTOUSchedule is a vector (sh:maxCount unbounded per BillingModelShape):
-   one TOUSchedule per MetricInput when the filing TOU-zones multiple
+   one TOUSchedule per MetricInput when the rate plan TOU-zones multiple
    metrics (e.g. CPAU E-4 TOU: separate energy + demand schedules).
    single-or-vec->vec keeps single-schedule fixtures (PG&E E-TOU-C/D/EV2)
    compatible without touching their JSON-LD."
@@ -736,9 +736,10 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
    ;; Single Ref (one base plan) or a vector of Refs (NSE/HRA-style modifiers).
-   ;; Optional per SHACL (sh:minCount 0): standalone modifier filings whose
-   ;; target linkage isn't yet expressed in-document (CPAU E-2-G shape, URPX-g7z)
-   ;; carry no applicableToRatePlan and rely on consumer-side composition.
+   ;; Optional per SHACL (sh:minCount 0): standalone urpx:RatePlanModifier
+   ;; documents whose target linkage isn't yet expressed in-document (CPAU
+   ;; E-2-G shape, URPX-g7z) carry no applicableToRatePlan and rely on
+   ;; consumer-side composition.
    [:urpx/applicableToRatePlan
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
@@ -777,7 +778,7 @@
    required field plus the headline payload pointers; additional metadata
    flows through unvalidated.
 
-   Filings that aren't URPXDocument-wrapped (raw RatePlan, raw
+   Documents that aren't URPXDocument-wrapped (raw RatePlan, raw
    RatePlanModifier, or a JSON-LD `@graph` doc with no urpx:URPXDocument
    @type) bypass this shape — its target is the v0.2.0 wrapper class
    itself, not every URPX serialization."
