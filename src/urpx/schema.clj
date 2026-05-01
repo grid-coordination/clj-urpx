@@ -28,7 +28,8 @@
 ;; ---------------------------------------------------------------------------
 ;; Symmetric to the ->X decoders above. Used by the write-side path
 ;; (URPX-nvo / urpx.emit) to turn typed values back into JSON-LD strings.
-;; This spike (URPX-bnt) covers Decimal only; the rest land in URPX-99c.
+;; Each helper passes through already-string values unchanged, mirroring
+;; the way decoders pass through already-typed values.
 
 (defn- <-decimal
   "BigDecimal → plain-string form, preserving scale so a round-trip yields a
@@ -36,6 +37,27 @@
    notation that JSON-LD parsers wouldn't expect for xsd:decimal."
   [v]
   (if (instance? BigDecimal v) (.toPlainString ^BigDecimal v) v))
+
+(defn- <-date     [v] (if (instance? LocalDate v) (.toString ^LocalDate v) v))
+(defn- <-datetime [v] (if (instance? LocalDateTime v) (.toString ^LocalDateTime v) v))
+(defn- <-time     [v] (if (instance? LocalTime v) (.toString ^LocalTime v) v))
+
+(defn- <-duration
+  "Duration → ISO 8601 time-based duration (PT1H30M); Period → ISO 8601
+   date-based duration (P1M, P1Y). Both java.time toString implementations
+   already produce the canonical xsd:duration form."
+  [v]
+  (cond
+    (instance? Duration v) (.toString ^Duration v)
+    (instance? Period v)   (.toString ^Period v)
+    :else v))
+
+(defn- <-g-month
+  "Month-of-year int → xsd:gMonth string '--MM' (zero-padded). The decoder
+   parses both '--06' and bare numerics; the encoder emits the canonical
+   '--06' form regardless."
+  [v]
+  (if (int? v) (format "--%02d" v) v))
 (defn- ->date     [v] (if (string? v) (LocalDate/parse v) v))
 (defn- ->datetime [v] (if (string? v) (LocalDateTime/parse v) v))
 (defn- ->time     [v] (if (string? v) (LocalTime/parse v) v))
@@ -82,26 +104,31 @@
 
 (def Date
   [:fn {:error/message "should be a LocalDate"
-        :decode/urpx-jsonld ->date}
+        :decode/urpx-jsonld ->date
+        :encode/urpx-jsonld <-date}
    #(instance? LocalDate %)])
 
 (def DateTime
   [:fn {:error/message "should be a LocalDateTime"
-        :decode/urpx-jsonld ->datetime}
+        :decode/urpx-jsonld ->datetime
+        :encode/urpx-jsonld <-datetime}
    #(instance? LocalDateTime %)])
 
 (def Time
   [:fn {:error/message "should be a LocalTime"
-        :decode/urpx-jsonld ->time}
+        :decode/urpx-jsonld ->time
+        :encode/urpx-jsonld <-time}
    #(instance? LocalTime %)])
 
 (def IsoDuration
   [:fn {:error/message "should be a Duration or Period"
-        :decode/urpx-jsonld ->duration}
+        :decode/urpx-jsonld ->duration
+        :encode/urpx-jsonld <-duration}
    #(or (instance? Duration %) (instance? Period %))])
 
 (def MonthNumber
-  [:and {:decode/urpx-jsonld ->g-month}
+  [:and {:decode/urpx-jsonld ->g-month
+         :encode/urpx-jsonld <-g-month}
    :int [:>= 1] [:<= 12]])
 
 (def Int

@@ -211,3 +211,39 @@
             (mirror of the decoder's already-typed pass-through)"
     (is (= "0.15075"
            (coerce/encode schema/Decimal "0.15075")))))
+
+;; ---------------------------------------------------------------------------
+;; Encoders for the rest of the schema primitives (URPX-99c)
+;; ---------------------------------------------------------------------------
+
+(deftest encode-primitives-via-schema
+  (testing "Date: LocalDate → ISO date"
+    (is (= "2026-01-01"
+           (coerce/encode schema/Date (LocalDate/of 2026 1 1)))))
+  (testing "Time: LocalTime → 'HH:mm' (or 'HH:mm:ss' if seconds non-zero)"
+    (is (= "16:00"
+           (coerce/encode schema/Time (LocalTime/of 16 0)))))
+  (testing "DateTime: LocalDateTime → ISO local datetime"
+    (is (= "2026-01-01T00:00"
+           (coerce/encode schema/DateTime (LocalDateTime/of 2026 1 1 0 0)))))
+  (testing "MonthNumber: int → '--MM' (zero-padded)"
+    (is (= "--06" (coerce/encode schema/MonthNumber 6)))
+    (is (= "--12" (coerce/encode schema/MonthNumber 12))))
+  (testing "already-string values pass through unchanged"
+    (is (= "2026-01-01" (coerce/encode schema/Date "2026-01-01")))
+    (is (= "--05"       (coerce/encode schema/MonthNumber "--05")))))
+
+(deftest encode-roundtrip-primitives
+  (testing "URPX-99c: every primitive's decode → encode → decode is a fixed point"
+    (let [cases [[schema/Decimal     (BigDecimal. "0.15075")]
+                 [schema/Date        (LocalDate/of 2026 3 1)]
+                 [schema/Time        (LocalTime/of 16 30)]
+                 [schema/DateTime    (LocalDateTime/of 2026 3 1 16 30)]
+                 [schema/MonthNumber 6]
+                 [schema/IsoDuration (java.time.Duration/parse "PT1H30M")]
+                 [schema/IsoDuration (java.time.Period/parse "P1M")]]]
+      (doseq [[s original] cases]
+        (let [encoded (coerce/encode s original)
+              decoded (coerce/coerce s encoded)]
+          (is (string? encoded) (str s ": encoded form is a string"))
+          (is (= original decoded) (str s ": round-trip preserves the typed value")))))))
