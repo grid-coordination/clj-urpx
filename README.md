@@ -179,16 +179,50 @@ The library also supports the inverse direction: emit URPX JSON-LD from a coerce
 
 Each function takes a coerced (or already-typed EDN) entity, runs the schema's `:encode/urpx-jsonld` transformer to convert typed leaves (`BigDecimal`, `LocalDate`, `LocalDateTime`, `Duration`, integer month numbers, …) back to JSON-LD string forms, projects namespaced-keyword keys to their CURIE / `@`-reserved JSON-LD forms, and serializes via `clojure.data.json/write-str`.
 
+### Worked round-trip
+
+```clojure
+(require '[urpx.core :as core] '[urpx.coerce :as coerce] '[urpx.emit :as emit])
+(import '[java.io StringReader])
+
+;; load + coerce → typed entity
+(def plan (-> "path/to/urpx-rate-plan.jsonld"
+              core/load-rate-plan
+              coerce/coerce-rate-plan))
+
+;; emit → JSON-LD string → re-parse → re-coerce
+(def re-coerced (-> (emit/write-rate-plan plan)
+                    StringReader.
+                    core/parse-rate-plan
+                    coerce/coerce-rate-plan))
+
+(= plan re-coerced)
+;; => true (the round-trip is a fixed point)
+```
+
+### `@context` emission
+
+By default, every write-* function emits a baseline `@context` with the canonical URPX prefix declarations (`urpx`, `schema`, `xsd`) plus typed-property declarations matching the shape vendored fixtures carry — output parses cleanly with strict JSON-LD processors out of the box. The full default context lives at [`urpx.emit/default-context`](src/urpx/emit.clj).
+
+```clojure
+;; Default context (most use cases)
+(emit/write-rate-plan plan)
+
+;; Caller-supplied context (replaces the default verbatim)
+(emit/write-rate-plan plan {:context {"urpx" "https://schema.urpx.org/"
+                                      "ex"   "https://example.com/foo/"}})
+
+;; Suppress @context entirely
+(emit/write-rate-plan plan {:context nil})
+```
+
+A `@context` already present on the input entity (e.g. from a parsed document) is preserved untouched — the default never clobbers a context the consumer supplied.
+
 ### Round-trip fidelity
 
 The emit path targets **logical / RDF-graph equivalence** on round-trip: `parse → coerce → emit → re-parse → re-coerce` yields a structurally equal Clojure entity. Byte-for-byte equality with the input is **not** a goal — key ordering, single-vs-vector property emission, and `@context` recreation may differ from the source document.
 
-The smoke suite in `urpx.emit-test` confirms the pipeline against the vendored PG&E E-1 fixture (a ~20K-character `@graph` document with tier-stratified prices and a sibling vintage-PCIA modifier) and a URPXDocument-wrapped E-ELEC document — both round-trip cleanly with `(= original re-coerced)`.
-
-### Limitations / future work
-
-- **`@context` emission** — emitted JSON-LD currently carries no synthesized `@context`; consumers either supply one outside the emitter or work with the bare CURIE keys. A future revision will add an opt-in default context derived from the vendored fixtures' shape.
-- **Broader fixture coverage** — round-trip testing today is focused on the smoke cases above; a dedicated round-trip suite over every vendored fixture is planned. Equality is plain `=`, which is *stricter* than logical equivalence (vector ordering, BigDecimal scale all matter); a more tolerant comparator may be introduced for shapes where SHACL doesn't constrain order.
+`urpx.emit-test` runs an authoritative round-trip suite over every vendored fixture (PG&E E-1, E-TOU-C, E-TOU-D, EV2 — both the base RatePlan and the bundled vintage-PCIA modifier in each `@graph`) plus a URPXDocument-wrapped E-ELEC document; all round-trip cleanly with plain `(= original re-coerced)`. The DSL test suite (`urpx.dsl-test`) extends this to a CPAU-E-2-shaped plan authored entirely via the DSL.
 
 ## Authoring URPX entities
 

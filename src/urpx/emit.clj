@@ -18,27 +18,28 @@
        keyword keys back to their CURIE / @-reserved JSON-LD forms.
     3. clojure.data.json/write-str serializes to JSON.
 
-  Round-trip success bar (URPX-nvo): logical/RDF-graph equivalence
+  Round-trip success bar: logical/RDF-graph equivalence
   (parse → coerce → write → re-parse → re-coerce yields a structurally
   equal entity). Byte-for-byte equality with the input is NOT a goal —
   key ordering, single-vs-vector property emission, and @context
-  recreation may differ from the source document.
+  recreation may differ from the source document. The vendored-fixture
+  round-trip suite in urpx.emit-test pins the `=`-equality contract over
+  every PG&E filing in test/resources/urpx-fixtures/ plus a URPXDocument-
+  wrapped E-ELEC test case from the URPX upstream.
 
-  @context emission (URPX-awl): every write-* function accepts an optional
-  opts map with `:context`. Three states:
+  @context emission: every write-* function accepts an optional opts map
+  with `:context`. Three states:
 
     - opts omits :context (or doesn't pass opts) → emit `default-context`
       (URPX prefix declarations + typed-property declarations matching what
       vendored fixtures carry).
     - opts has `:context map` → emit that map verbatim as @context.
-    - opts has `:context nil` → emit no @context.
+    - opts has `:context nil` → emit no @context (used by round-trip tests
+      where the input doesn't carry one and `=`-equality would mismatch).
 
-  Round-trip: if the input entity already carries :jsonld/context (e.g. from
-  a parsed document), it survives untouched — no clobbering.
-
-  Out of scope here:
-    - Vendored-fixture round-trip suite (URPX-739)
-    - Deeper README documentation polish (URPX-m9p)"
+  An @context already on the input entity (`:jsonld/context`, e.g. from
+  a parsed document) is preserved untouched — the default never clobbers
+  a context the consumer already supplied."
   (:require [clojure.data.json :as json]
             [urpx.coerce :as coerce]
             [urpx.core :as core]
