@@ -110,13 +110,13 @@
     (let [parsed (json/read-str (emit/write-rate-plan minimal-rate-plan))
           ctx    (get parsed "@context")]
       (is (map? ctx))
-      (is (= "https://schema.urpx.org/" (get ctx "urpx")))
+      (is (= "https://urpx-org.github.io/urpx/ontology/" (get ctx "urpx")))
       (is (= "http://www.w3.org/2001/XMLSchema#" (get ctx "xsd")))
       (is (= {"@type" "xsd:decimal"} (get ctx "urpx:unitPrice"))))))
 
 (deftest caller-supplied-context-overrides-default
   (testing "URPX-awl: passing :context replaces the default verbatim"
-    (let [my-ctx {"urpx" "https://schema.urpx.org/"
+    (let [my-ctx {"urpx" "https://urpx-org.github.io/urpx/ontology/"
                   "ex"   "https://example.com/test/"}
           parsed (json/read-str (emit/write-rate-plan minimal-rate-plan
                                                       {:context my-ctx}))]
@@ -132,7 +132,7 @@
 (deftest existing-context-on-input-is-preserved
   (testing "URPX-awl: an entity carrying :jsonld/context keeps its own
             @context unchanged — the default doesn't clobber it"
-    (let [bespoke-ctx {:urpx "https://schema.urpx.org/"
+    (let [bespoke-ctx {:urpx "https://urpx-org.github.io/urpx/ontology/"
                        :ex   "https://example.com/preserved/"}
           plan-with-ctx (assoc minimal-rate-plan :jsonld/context bespoke-ctx)
           parsed (json/read-str (emit/write-rate-plan plan-with-ctx))]

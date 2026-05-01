@@ -65,7 +65,7 @@
    Example-namespace prefixes (org, pge, ex, …) are intentionally omitted
    — those are corpus-specific. Callers who use such prefixes in @id
    strings should provide their own :context map via the write-* opts."
-  {"urpx"   "https://schema.urpx.org/"
+  {"urpx"   "https://urpx-org.github.io/urpx/ontology/"
    "schema" "http://schema.org/"
    "xsd"    "http://www.w3.org/2001/XMLSchema#"
 
