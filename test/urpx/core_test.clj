@@ -284,3 +284,59 @@
         (is (thrown-with-msg? clojure.lang.ExceptionInfo
                               #"No urpx:RatePlan entity"
                               (core/load-rate-plan path)))))))
+
+;; ---------------------------------------------------------------------------
+;; Key encoder (URPX-moq) — keyword → JSON-LD string-key form
+;; ---------------------------------------------------------------------------
+
+(deftest keyword->jsonld-key-cases
+  (testing "URPX-moq: reserved JSON-LD keys (:jsonld/X) → '@X'"
+    (is (= "@type"    (core/keyword->jsonld-key :jsonld/type)))
+    (is (= "@id"      (core/keyword->jsonld-key :jsonld/id)))
+    (is (= "@context" (core/keyword->jsonld-key :jsonld/context)))
+    (is (= "@graph"   (core/keyword->jsonld-key :jsonld/graph))))
+  (testing "namespaced keywords → 'ns:local' CURIE form"
+    (is (= "urpx:name"      (core/keyword->jsonld-key :urpx/name)))
+    (is (= "urpx:unitPrice" (core/keyword->jsonld-key :urpx/unitPrice))))
+  (testing "bare keywords → unprefixed string"
+    (is (= "plain" (core/keyword->jsonld-key :plain)))))
+
+(deftest keys->jsonld-walks-nested-structure
+  (testing "URPX-moq: keys->jsonld walks maps and sequences, converting every
+            namespaced-keyword key back to its JSON-LD string form (leaves
+            unchanged)"
+    (let [typed {:jsonld/type "urpx:RatePlan"
+                 :jsonld/id "x:plan"
+                 :urpx/name "Plan One"
+                 :urpx/hasRatePlanVersion
+                 {:jsonld/type "urpx:RatePlanVersion"
+                  :urpx/effectiveDateTime "2026-01-01T00:00:00"
+                  :urpx/hasPriceDefinition [{:jsonld/type "urpx:PriceDefinition"
+                                             :urpx/name "PD-1"}
+                                            {:jsonld/type "urpx:PriceDefinition"
+                                             :urpx/name "PD-2"}]}}
+          out (core/keys->jsonld typed)]
+      (is (= "urpx:RatePlan" (get out "@type")))
+      (is (= "x:plan"        (get out "@id")))
+      (is (= "Plan One"      (get out "urpx:name")))
+      (let [version (get out "urpx:hasRatePlanVersion")]
+        (is (= "urpx:RatePlanVersion" (get version "@type")))
+        (is (= "2026-01-01T00:00:00"  (get version "urpx:effectiveDateTime")))
+        (let [pds (get version "urpx:hasPriceDefinition")]
+          (is (vector? pds))
+          (is (= 2 (count pds)))
+          (is (= "urpx:PriceDefinition" (get (first pds) "@type")))
+          (is (= "PD-1"                  (get (first pds) "urpx:name"))))))))
+
+(deftest keys->jsonld-roundtrips-against-parsed-data
+  (testing "URPX-moq: parse → keys->jsonld → write → parse yields the same
+            JSON-LD-keyed shape (round-trip via the existing parser path)"
+    (let [parsed (core/parse-rate-plan
+                  (jsonld-reader graph-with-plan-and-modifier))
+          json-keyed (core/keys->jsonld parsed)
+          re-parsed (-> json-keyed
+                        json/write-str
+                        java.io.StringReader.
+                        core/parse-rate-plan)]
+      (is (= parsed re-parsed)
+          "structural equivalence under transform-keys ∘ keys->jsonld"))))

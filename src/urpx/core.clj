@@ -41,6 +41,47 @@
 
     :else v))
 
+(defn keyword->jsonld-key
+  "Inverse of `prefixed-key->keyword`: a Clojure keyword → its JSON-LD
+   string-key form.
+
+   - `:jsonld/X` (reserved JSON-LD keys) → `\"@X\"` (covers @type, @id,
+     @context, @graph).
+   - Namespaced keywords → `\"ns:local\"` (CURIE form, e.g. :urpx/name → \"urpx:name\").
+   - Bare keywords → `\"name\"`.
+
+   Used by the write-side path (urpx.emit, URPX-biu) to project a typed
+   entity back into the JSON-shaped data that `clojure.data.json/write-str`
+   serializes."
+  [k]
+  (cond
+    (= "jsonld" (namespace k))  (str "@" (name k))
+    (namespace k)               (str (namespace k) ":" (name k))
+    :else                       (name k)))
+
+(defn keys->jsonld
+  "Walk a Clojure data structure converting namespaced-keyword map keys back
+   to their JSON-LD string forms via `keyword->jsonld-key`. Inverse of the
+   private `transform-keys` walker that the parse path uses to keywordize
+   incoming JSON-LD.
+
+   Output is plain JSON-friendly Clojure data (string keys, leaves
+   unchanged), ready for `clojure.data.json/write-str`."
+  [v]
+  (cond
+    (map? v)
+    (persistent!
+     (reduce-kv (fn [acc k val]
+                  (assoc! acc
+                          (if (keyword? k) (keyword->jsonld-key k) k)
+                          (keys->jsonld val)))
+                (transient {}) v))
+
+    (sequential? v)
+    (mapv keys->jsonld v)
+
+    :else v))
+
 (defn parse-rate-plan
   "Parse a URPX JSON-LD rate plan document from `src` (anything io/reader can handle:
    File, URL, Reader, InputStream, or path string).
