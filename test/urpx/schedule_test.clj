@@ -139,3 +139,90 @@
           start (start-of-day 2026 7 15)]
       (is (= (schedule/price-schedule-days plan start 1 la-zone)
              (schedule/price-schedule-days plan start 1))))))
+
+;; ---------------------------------------------------------------------------
+;; price-schedule-with-modifiers (URPX-21n)
+;; ---------------------------------------------------------------------------
+;; Mirror of price-schedule that calls resolve-prices-with-modifiers per step.
+;; Verifies (a) modifier ledgers are folded into each interval's resolved
+;; output, (b) the merge-adjacent + step + zone-resolution semantics match
+;; price-schedule, and (c) modifiers whose applicableToRatePlan doesn't
+;; include the base plan are silently skipped (delegated behavior).
+
+(deftest schedule-with-modifiers-folds-modifier-ledgers-per-step
+  (testing "URPX-21n: every interval includes the vintage-PCIA modifier ledger
+            appended to the base plan's"
+    (let [plan     (fixtures/load-rate-plan "pge-e-1-2026-03-01")
+          modifier (fixtures/load-modifier  "pge-e-1-2026-03-01")
+          start    (start-of-day 2026 7 15)
+          end      (start-of-day 2026 7 16)
+          sch      (schedule/price-schedule-with-modifiers
+                    plan [modifier] start end la-zone)]
+      (testing "every interval has the Vintaged-PCIA ledger present"
+        (is (every? (fn [iv]
+                      (some #(= "Vintaged Power Charge Indifference Adjustment"
+                                (:urpx.resolved/ledger-name %))
+                            (get-in iv [:urpx.interval/resolved
+                                        :urpx.resolved/ledgers])))
+                    sch)))
+      (testing "ledger count per interval matches resolve-prices-with-modifiers
+                at the corresponding instant"
+        (let [zdt (.atZone ^Instant (:tick/beginning (first sch)) la-zone)
+              direct (price/resolve-prices-with-modifiers plan [modifier] zdt)]
+          (is (= (count (:urpx.resolved/ledgers direct))
+                 (count (get-in (first sch) [:urpx.interval/resolved
+                                             :urpx.resolved/ledgers])))))))))
+
+(deftest schedule-with-modifiers-merges-adjacent-intervals
+  (testing "URPX-21n: same merge semantics as price-schedule. A 24h Summer day
+            on PG&E E-1 (no TOU) collapses to a single interval whether or
+            not the modifier is folded in (modifier is constant across the
+            day, so adjacency holds)."
+    (let [plan     (fixtures/load-rate-plan "pge-e-1-2026-03-01")
+          modifier (fixtures/load-modifier  "pge-e-1-2026-03-01")
+          start    (start-of-day 2026 7 15)
+          end      (start-of-day 2026 7 16)
+          sch-base (schedule/price-schedule plan start end la-zone)
+          sch-mod  (schedule/price-schedule-with-modifiers
+                    plan [modifier] start end la-zone)]
+      (is (= (count sch-base) (count sch-mod))
+          "modifier addition doesn't change the day's TOU/merge structure"))))
+
+(deftest schedule-with-modifiers-defaults-zone-from-plan
+  (testing "URPX-21n: zone defaulting via plan's urpx:timezoneIdentifier
+            mirrors price-schedule"
+    (let [plan     (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          modifier (fixtures/load-modifier  "pge-e-tou-c-2026-03-01")
+          start    (start-of-day 2026 7 15)
+          end      (start-of-day 2026 7 16)]
+      (is (= (schedule/price-schedule-with-modifiers plan [modifier] start end la-zone)
+             (schedule/price-schedule-with-modifiers plan [modifier] start end))))))
+
+(deftest schedule-with-modifiers-skips-non-applicable
+  (testing "URPX-21n: modifiers whose applicableToRatePlan doesn't include
+            the plan @id are silently skipped per step (delegated to
+            resolve-prices-with-modifiers)"
+    (let [plan      (fixtures/load-rate-plan "pge-e-1-2026-03-01")
+          mod-base  (fixtures/load-modifier  "pge-e-1-2026-03-01")
+          modifier  (assoc-in mod-base
+                              [:urpx/hasRatePlanModifierVersion
+                               :urpx/applicableToRatePlan]
+                              [{:jsonld/id "urpx:not-this-plan"}])
+          start     (start-of-day 2026 7 15)
+          end       (start-of-day 2026 7 16)
+          sch-with  (schedule/price-schedule-with-modifiers
+                     plan [modifier] start end la-zone)
+          sch-base  (schedule/price-schedule plan start end la-zone)]
+      (is (= sch-base sch-with)
+          "non-applicable modifier produces the same schedule as the base plan"))))
+
+(deftest schedule-days-with-modifiers
+  (testing "URPX-21n: the days-convenience wrapper composes the same as the
+            base price-schedule-days"
+    (let [plan     (fixtures/load-rate-plan "pge-e-1-2026-03-01")
+          modifier (fixtures/load-modifier  "pge-e-1-2026-03-01")
+          start    (start-of-day 2026 7 15)]
+      (is (= (schedule/price-schedule-with-modifiers
+              plan [modifier] start (.plus start (Duration/ofDays 1)) la-zone)
+             (schedule/price-schedule-days-with-modifiers
+              plan [modifier] start 1 la-zone))))))

@@ -391,7 +391,7 @@ For a longer worked walkthrough that mirrors selected examples from the upstream
 | `urpx.coerce`    | Schema-driven coercion: strings → typed values; `validate`, `explain` |
 | `urpx.index`     | `build-index`, `resolve-ref`, `get-entity` for `@id` references |
 | `urpx.price`         | `resolve-prices`, `resolve-modifier-prices`, `resolve-prices-with-modifiers`, `marginal-unit-rate` |
-| `urpx.schedule`      | `price-schedule`, `price-schedule-days` |
+| `urpx.schedule`      | `price-schedule`, `price-schedule-days`, `price-schedule-with-modifiers`, `price-schedule-days-with-modifiers` |
 | `urpx.tz-inference`  | `infer-zone` (opt-in fallback when `urpx:timezoneIdentifier` is absent) |
 | `urpx.emit`          | Write-side: `write-rate-plan`, `write-rate-plan-modifier`, `write-urpx-document` |
 | `urpx.dsl`           | Authoring DSL: `dsl-scope`, `make-builder`, named builders for every entity type |
