@@ -116,9 +116,15 @@
       [parsed])))
 
 (defn load-graph
-  "Load a URPX JSON-LD document from a file path. See `parse-graph`."
-  [path]
-  (parse-graph (io/file path)))
+  "Load a URPX JSON-LD document from `src` — anything `clojure.java.io/reader`
+   can coerce (File, URL, Reader, InputStream, or path string). See
+   `parse-graph` for the unwrapping semantics.
+
+   Accepting URLs lets callers pass the result of `(io/resource ...)`
+   directly, including the `jar:file:...!/...` URL form that classpath
+   lookups produce when the library is deployed inside an uberjar."
+  [src]
+  (parse-graph src))
 
 (defn- as-vec
   "Normalize a JSON-LD property value into a vector. Handles the
@@ -145,8 +151,11 @@
     [entity]))
 
 (defn load-rate-plan
-  "Load a URPX rate plan from a file path. The document may carry the plan in
-   one of three shapes — all three resolve to the unique inner urpx:RatePlan:
+  "Load a URPX rate plan from `src` — anything `clojure.java.io/reader` can
+   coerce (File, URL, Reader, InputStream, or path string; URL forms include
+   the `jar:file:...!/...` produced by `(io/resource ...)` against an uberjar
+   classpath). The document may carry the plan in one of three shapes — all
+   three resolve to the unique inner urpx:RatePlan:
 
      - Single-entity doc: top-level `@type: urpx:RatePlan`.
      - `@graph` bundle: the plan appears as one of several siblings (alongside
@@ -156,34 +165,36 @@
 
    Zero or more than one urpx:RatePlan in a single document is an error —
    use `load-graph` to inspect such documents directly."
-  [path]
-  (let [entities (mapcat expand-document-entities (load-graph path))
+  [src]
+  (let [entities (mapcat expand-document-entities (load-graph src))
         plans (filter #(= "urpx:RatePlan" (:jsonld/type %)) entities)]
     (case (count plans)
       0 (throw (ex-info "No urpx:RatePlan entity in document"
-                        {:path path
+                        {:src src
                          :entity-types (mapv :jsonld/type entities)}))
       1 (first plans)
       (throw (ex-info "Multiple urpx:RatePlan entities in @graph; use load-graph to disambiguate"
-                      {:path path
+                      {:src src
                        :rate-plan-ids (mapv :jsonld/id plans)})))))
 
 (defn load-rate-plan-modifier
-  "Load a URPX rate plan modifier from a file path. Parallel to `load-rate-plan`
+  "Load a URPX rate plan modifier from `src` (see `load-rate-plan` for the
+   accepted shapes — File, URL, Reader, InputStream, path string, including
+   `jar:file:...` URLs from `(io/resource ...)`). Parallel to `load-rate-plan`
    — the modifier may appear as a standalone single-entity doc, as one entity
    in a `@graph` bundle, or under a urpx:URPXDocument wrapper's
    urpx:hasRatePlanModifier pointer.
 
    The unique urpx:RatePlanModifier is returned; zero or more than one is an
    error — use `load-graph` to inspect ambiguous documents directly."
-  [path]
-  (let [entities (mapcat expand-document-entities (load-graph path))
+  [src]
+  (let [entities (mapcat expand-document-entities (load-graph src))
         modifiers (filter #(= "urpx:RatePlanModifier" (:jsonld/type %)) entities)]
     (case (count modifiers)
       0 (throw (ex-info "No urpx:RatePlanModifier entity in document"
-                        {:path path
+                        {:src src
                          :entity-types (mapv :jsonld/type entities)}))
       1 (first modifiers)
       (throw (ex-info "Multiple urpx:RatePlanModifier entities in @graph; use load-graph to disambiguate"
-                      {:path path
+                      {:src src
                        :modifier-ids (mapv :jsonld/id modifiers)})))))

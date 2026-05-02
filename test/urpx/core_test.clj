@@ -1,5 +1,6 @@
 (ns urpx.core-test
   (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [clojure.test :refer [deftest is testing]]
             [urpx.core :as core]
             [urpx.test-fixtures :as fixtures]))
@@ -35,6 +36,32 @@
           (is (vector? pds))
           (is (every? #(some? (get-in % [:urpx/referencesLedger :jsonld/id])) pds)
               "every PD references its parent Ledger"))))))
+
+(deftest load-rate-plan-accepts-url-and-reader
+  (testing "URPX-drt: load-rate-plan accepts any source io/reader can handle.
+            Specifically, a java.net.URL — which is what (io/resource ...)
+            returns — must work, both for `file:` (test classpath) and
+            `jar:file:` (production uberjar) flavors.
+
+            Reproduces the production deploy bug surfaced in PPS-6f0:
+            previously load-rate-plan called (io/file path), which throws
+            IllegalArgumentException 'Not a file: jar:file:...' on the
+            jar:file: URL form."
+    (let [resource-url (fixtures/fixture-resource "pge-e-1-2026-03-01")]
+      (testing "URL form (io/resource result) works"
+        (is (instance? java.net.URL resource-url))
+        (let [plan (core/load-rate-plan resource-url)]
+          (is (= "urpx:RatePlan" (:jsonld/type plan)))
+          (is (= "pge:e-1" (:jsonld/id plan)))))
+      (testing "load-graph accepts the URL too (the load-rate-plan-modifier
+                / load-rate-plan / load-graph chain shares this code path)"
+        (let [entities (core/load-graph resource-url)]
+          (is (some #(= "urpx:RatePlan" (:jsonld/type %)) entities))
+          (is (some #(= "urpx:RatePlanModifier" (:jsonld/type %)) entities))))
+      (testing "Reader is also accepted (io/reader IOFactory)"
+        (with-open [r (io/reader resource-url)]
+          (let [plan (core/load-rate-plan r)]
+            (is (= "urpx:RatePlan" (:jsonld/type plan)))))))))
 
 (deftest prefixed-key-conversion
   (testing "via parse-rate-plan on a small inline document"
