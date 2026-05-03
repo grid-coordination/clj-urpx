@@ -6,10 +6,10 @@
   merges adjacent steps whose ledger resolutions are identical.
 
   Output is a vector of interval maps each carrying `:tick/beginning` and
-  `:tick/end` (java.time.Instants) plus the full `urpx.price` resolved
-  structure under `:urpx.interval/resolved`. Suitable for feeding to a
-  consumer like the price-server's TariffFetcher, which can extract a
-  single $/kWh value per interval via `urpx.price/marginal-unit-rate`.
+  `:tick/end` (java.time.ZonedDateTime in the resolved zone — DST-correct
+  end-to-end) plus the full `urpx.price` resolved structure under
+  `:urpx.interval/resolved`. Callers that want plain `java.time.Instant`
+  values invoke `.toInstant` themselves at the call site.
 
   Default step is 1 hour, anchored to the start-of-hour of `start`. Pass
   `{:step (Duration/ofMinutes 15)}` etc. for finer granularity when a rate
@@ -71,14 +71,19 @@
    `resolve-fn` (a `(ZonedDateTime -> resolved)` callback), then merge
    adjacent intervals whose ledger resolution matches. Used by both
    `price-schedule` (per-step `resolve-prices`) and
-   `price-schedule-with-modifiers` (per-step `resolve-prices-with-modifiers`)."
+   `price-schedule-with-modifiers` (per-step `resolve-prices-with-modifiers`).
+
+   `:tick/beginning` and `:tick/end` are emitted as `ZonedDateTime` —
+   matches `urpx.schedule`'s end-to-end ZonedDateTime pipeline (DST-correct
+   under daylight transitions because the wall-clock walk preserves zone).
+   Callers that want plain `Instant` call `.toInstant` themselves."
   [rate-plan ^Instant start ^Instant end zone opts resolve-fn]
   (let [zone  (resolve-zone rate-plan zone)
         step  (or (:step opts) (Duration/ofHours 1))
         steps (step-zdts start end zone step)
         intervals (mapv (fn [^ZonedDateTime zdt]
-                          {:tick/beginning         (.toInstant zdt)
-                           :tick/end               (.toInstant (.plus zdt step))
+                          {:tick/beginning         zdt
+                           :tick/end               (.plus zdt step)
                            :urpx.interval/resolved (resolve-fn zdt)})
                         steps)]
     (merge-adjacent intervals)))
@@ -87,11 +92,13 @@
   "Generate a vector of merged price intervals across `[start, end)`.
 
    Each entry is:
-     {:tick/beginning           Instant
-      :tick/end                 Instant
+     {:tick/beginning           ZonedDateTime
+      :tick/end                 ZonedDateTime
       :urpx.interval/resolved   <full price/resolve-prices result>}
 
-   Adjacent steps with identical ledger resolution are merged.
+   `:tick/*` are ZonedDateTimes in the resolved zone (callers wanting
+   plain Instants invoke `.toInstant` themselves). Adjacent steps with
+   identical ledger resolution are merged.
 
    `zone` (a java.time.ZoneId) is optional when `rate-plan` declares
    `urpx:timezoneIdentifier`; pass `nil` to use the plan's declared

@@ -8,22 +8,28 @@
 
 (def la-zone (ZoneId/of "America/Los_Angeles"))
 
+(defn- start-of-day-zdt
+  ^ZonedDateTime [year month day]
+  (.atStartOfDay (LocalDate/of year month day) la-zone))
+
 (defn- start-of-day
   ^Instant [year month day]
-  (-> (LocalDate/of year month day)
-      (.atStartOfDay la-zone)
-      .toInstant))
+  (.toInstant (start-of-day-zdt year month day)))
 
 (deftest hourly-schedule-summer-day-pge-e-tou-c
   (testing "a 24h PG&E E-TOU-C summer day collapses into 3 contiguous TOU intervals
             (Off-Peak / Peak / Off-Peak — no Super Off-Peak in this schedule)"
-    (let [plan  (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
-          start (start-of-day 2026 7 15)
-          end   (start-of-day 2026 7 16)
-          sch   (schedule/price-schedule plan start end la-zone)]
-      (testing "intervals cover the full 24 hours with no gaps"
-        (is (= start (:tick/beginning (first sch))))
-        (is (= end (:tick/end (last sch))))
+    (let [plan      (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          start-zdt (start-of-day-zdt 2026 7 15)
+          end-zdt   (start-of-day-zdt 2026 7 16)
+          sch       (schedule/price-schedule plan
+                                             (.toInstant start-zdt)
+                                             (.toInstant end-zdt)
+                                             la-zone)]
+      (testing "intervals cover the full 24 hours with no gaps. URPX-906:
+                :tick/beginning and :tick/end are ZonedDateTimes."
+        (is (= start-zdt (:tick/beginning (first sch))))
+        (is (= end-zdt   (:tick/end (last sch))))
         (loop [[a b & rest] sch]
           (when b
             (is (= (:tick/end a) (:tick/beginning b)))
@@ -36,21 +42,23 @@
           (is (= [3 1 3] period-numbers)
               "off-peak (3), peak (1), off-peak (3)")))
       (testing "Each merged interval's begin/end matches the bracket boundary"
-        (let [zdt-of (fn [^Instant i] (.atZone i la-zone))
-              hours-of (fn [^Instant i] (.getHour (zdt-of i)))]
+        (let [hours-of (fn [^ZonedDateTime z] (.getHour z))]
           (is (= [0 16 21] (mapv #(hours-of (:tick/beginning %)) sch)))
           (is (= [16 21 0] (mapv #(hours-of (:tick/end %)) sch))))))))
 
 (deftest hourly-schedule-pge-e-1-no-tou
   (testing "a non-TOU plan collapses into a single 24h interval"
-    (let [plan  (fixtures/load-rate-plan "pge-e-1-2026-03-01")
-          start (start-of-day 2026 8 1)
-          end   (start-of-day 2026 8 2)
-          sch   (schedule/price-schedule plan start end la-zone)]
+    (let [plan      (fixtures/load-rate-plan "pge-e-1-2026-03-01")
+          start-zdt (start-of-day-zdt 2026 8 1)
+          end-zdt   (start-of-day-zdt 2026 8 2)
+          sch       (schedule/price-schedule plan
+                                             (.toInstant start-zdt)
+                                             (.toInstant end-zdt)
+                                             la-zone)]
       (is (= 1 (count sch)) "no period changes -> one merged span")
       (let [iv (first sch)]
-        (is (= start (:tick/beginning iv)))
-        (is (= end   (:tick/end iv)))
+        (is (= start-zdt (:tick/beginning iv)))
+        (is (= end-zdt   (:tick/end iv)))
         (testing "marginal rate matches independent resolve-prices"
           (let [zdt (ZonedDateTime/of 2026 8 1 12 0 0 0 la-zone)
                 expected (price/marginal-unit-rate (price/resolve-prices plan zdt))]
@@ -69,7 +77,7 @@
         sch  (schedule/price-schedule-days plan (start-of-day 2026 7 15) 1 la-zone)]
     (testing "every interval has a positive duration"
       (doseq [{b :tick/beginning e :tick/end} sch]
-        (is (.isBefore ^Instant b ^Instant e))))
+        (is (.isBefore ^ZonedDateTime b ^ZonedDateTime e))))
     (testing "every interval surfaces a BigDecimal marginal rate"
       ;; PG&E E-TOU-C bundles the California Climate Credit, which is a
       ;; bill-period credit; depending on how the fixture models it the
@@ -166,8 +174,10 @@
                                         :urpx.resolved/ledgers])))
                     sch)))
       (testing "ledger count per interval matches resolve-prices-with-modifiers
-                at the corresponding instant"
-        (let [zdt (.atZone ^Instant (:tick/beginning (first sch)) la-zone)
+                at the corresponding instant. URPX-906: :tick/beginning is
+                already a ZonedDateTime, so resolve-prices-with-modifiers
+                consumes it directly."
+        (let [zdt (:tick/beginning (first sch))
               direct (price/resolve-prices-with-modifiers plan [modifier] zdt)]
           (is (= (count (:urpx.resolved/ledgers direct))
                  (count (get-in (first sch) [:urpx.interval/resolved

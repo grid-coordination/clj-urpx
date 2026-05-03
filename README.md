@@ -145,7 +145,8 @@ That covers the consume side end-to-end. For emit and authoring, jump to [Writin
 (def start (.toInstant (.atStartOfDay (LocalDate/of 2026 7 15) la)))
 (schedule/price-schedule-days plan start 1 la)
 ;; =>
-;; [{:tick/beginning #inst "..." :tick/end #inst "..."
+;; [{:tick/beginning <ZDT 2026-07-15T00:00-07:00[America/Los_Angeles]>
+;;   :tick/end       <ZDT 2026-07-15T16:00-07:00[America/Los_Angeles]>
 ;;   :urpx.interval/resolved {... "Summer Off-Peak Period" ...}}
 ;;  {... 16:00–21:00 "Summer Peak Period" ...}
 ;;  {... 21:00–24:00 "Summer Off-Peak Period" ...}]
@@ -153,18 +154,31 @@ That covers the consume side end-to-end. For emit and authoring, jump to [Writin
 
 For block-tiered plans (e.g. PG&E E-1), each ledger's `:tiers` vector exposes every tier with its `:tier-lower-bound`, `:tier-upper-bound`, and `:unit-price` — the caller selects the active tier from cumulative billing-period usage.
 
-### Timezone
+### Time and timezones
 
-`price-schedule` and `price-schedule-days` need a `ZoneId` to walk a window in local time. When the rate plan declares `urpx:timezoneIdentifier` (an IANA string, e.g. `"America/Los_Angeles"`), the zone arg can be omitted:
+The library uses `java.time.ZonedDateTime` end-to-end internally and at output boundaries — DST-correct under daylight transitions because every step of the walk preserves zone, no `Instant`-to-local-time conversions in the middle of the schedule.
+
+**Inputs and outputs:**
+
+- `resolve-prices` takes a `ZonedDateTime` directly — its zone always comes from the caller
+- `price-schedule` / `price-schedule-with-modifiers` take an `Instant`-shaped `[start, end)` window plus an optional `ZoneId` (the zone the walk is performed in)
+- The schedule output's `:tick/beginning` and `:tick/end` are `ZonedDateTime` in the resolved zone. Callers wanting a plain `java.time.Instant` invoke `.toInstant` themselves at the call site
+
+**Zone resolution order:**
+
+1. Explicit `ZoneId` arg passed to `price-schedule` / `price-schedule-days` / `price-schedule-with-modifiers` / `price-schedule-days-with-modifiers`
+2. Rate plan's `urpx:timezoneIdentifier` (an IANA string, e.g. `"America/Los_Angeles"`) — used when the zone arg is omitted
 
 ```clojure
 (schedule/price-schedule-days plan start 1)            ; uses plan's declared zone
 (schedule/price-schedule-days plan start 1 la)         ; explicit override
 ```
 
-When neither is available, an `ex-info` is thrown rather than silently falling back to the system default. `resolve-prices` takes a `ZonedDateTime` directly, so its zone always comes from the caller.
+When neither is available, an `ex-info` is thrown rather than silently falling back to the system default.
 
-For documents that omit `urpx:timezoneIdentifier`, the optional `urpx.tz-inference/infer-zone` helper does best-effort inference from the publishing utility's `urpx:legalName` (and a caller-supplied `urpx:eiaId` table when available). It returns `nil` for unknown or multi-zone utilities so the caller fails loudly rather than silently picking one. Inference is **opt-in** — `price-schedule` does not call it automatically; compose at the call site:
+**Standing rule:** pass an IANA `ZoneId` like `(ZoneId/of "America/Los_Angeles")` — never a fixed offset, never the system default.
+
+**Inference fallback:** for documents that omit `urpx:timezoneIdentifier`, the optional `urpx.tz-inference/infer-zone` helper does best-effort inference from the publishing utility's `urpx:legalName` (and a caller-supplied `urpx:eiaId` table when available). It returns `nil` for unknown or multi-zone utilities so the caller fails loudly rather than silently picking one. Inference is **opt-in** — `price-schedule` does not call it automatically; compose at the call site:
 
 ```clojure
 (require '[urpx.tz-inference :as tz])
