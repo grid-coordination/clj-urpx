@@ -23,12 +23,42 @@ Clojure library for [URPX](https://lfenergy.org/projects/utility-rate-plan-excha
 
 URPX is an [LF Energy](https://lfenergy.org/) open standard for exchanging utility rate plan information using semantic web technologies (RDF, OWL, SHACL, JSON-LD). It enables precise, machine-readable data exchange between utilities, regulators, vendors, and researchers.
 
+The standard's source of truth — ontology, SHACL shapes, JSON-LD context, decision log, tutorial, and reference test cases — lives at [github.com/urpx-org/urpx](https://github.com/urpx-org/urpx). This library targets the same version-pinned ontology snapshot that fixtures cite via `urpx:targetURPXVersion`.
+
 ## What does this library do?
 
 - **Parse** URPX JSON-LD rate plan documents into Clojure data structures
 - **Validate & coerce** parsed data against [Malli](https://github.com/metosin/malli) schemas — string leaves become `BigDecimal`, `LocalDate`, `LocalTime`, `LocalDateTime`, `Duration`, `Period`, integer month numbers
 - **Resolve** the per-ledger, per-tier prices that apply at a given instant in a given timezone — TOU period, season, day-of-week, midnight-wrapping brackets, block-tier ladders
 - **Generate** contiguous price-interval schedules suitable for [OpenADR 3](https://www.openadr.org/) events
+- **Emit** URPX JSON-LD from coerced Clojure entities (the inverse of parse + coerce) — useful for round-trip validation and programmatic authoring of URPX documents
+- **Author** URPX entities idiomatically in Clojure via `urpx.dsl` — per-entity builders with auto-coercion, validation-on-construct, and local-symbol refs scoped via `dsl-scope`
+
+## Library at a glance
+
+```mermaid
+flowchart LR
+    JSONLD["URPX JSON-LD<br/>document"]
+    PARSED["parsed<br/><i>(string-keyed)</i>"]
+    COERCED["coerced entity<br/><i>(typed Clojure)</i>"]
+    RESOLVED["resolved prices<br/><i>at an instant</i>"]
+    SCHEDULE["price schedule<br/><i>over a window</i>"]
+    EMITTED["URPX JSON-LD<br/>output"]
+    DSL["urpx.dsl<br/><i>(authoring)</i>"]
+
+    JSONLD -->|urpx.core| PARSED
+    PARSED -->|urpx.coerce| COERCED
+    COERCED -->|urpx.price| RESOLVED
+    COERCED -->|urpx.schedule| SCHEDULE
+    COERCED -->|urpx.emit| EMITTED
+    DSL --> COERCED
+```
+
+Three paths share the same typed entity model:
+
+- **Reading URPX docs** — load, coerce, and resolve prices → see [Usage](#usage)
+- **Writing URPX docs** — emit JSON-LD from coerced entities → see [Writing URPX JSON-LD](#writing-urpx-json-ld)
+- **Authoring URPX entities in Clojure** — build coerced entities idiomatically → see [Authoring URPX entities](#authoring-urpx-entities)
 
 ## Installation
 
@@ -40,6 +70,51 @@ URPX is an [LF Energy](https://lfenergy.org/) open standard for exchanging utili
          :git/sha "..."}}}
 ```
 
+## Getting started
+
+A five-minute walkthrough using the vendored PG&E E-1 fixture (a real Schedule E-1 filing with block-tier pricing and a sibling vintage-PCIA modifier in a single JSON-LD `@graph`). Runs from a cold clone — no env vars, no sibling checkouts.
+
+```bash
+git clone https://github.com/grid-coordination/clj-urpx.git
+cd clj-urpx
+clojure -M:nrepl   # nREPL on the port written to .nrepl-port
+```
+
+In the REPL:
+
+```clojure
+(require '[urpx.core :as core]
+         '[urpx.coerce :as coerce]
+         '[urpx.price :as price]
+         '[urpx.test-fixtures :as fixtures])
+(import '[java.time ZoneId ZonedDateTime])
+
+;; 1. Load the vendored PG&E E-1 fixture: a urpx:RatePlan + sibling urpx:RatePlanModifier
+(def plan     (fixtures/load-rate-plan "pge-e-1-2026-03-01"))
+(def modifier (fixtures/load-modifier  "pge-e-1-2026-03-01"))
+
+;; 2. Resolve prices for July 4 2026 at 5pm Pacific (Summer, weekend, holiday)
+(def la (ZoneId/of "America/Los_Angeles"))
+(def july-4-evening (ZonedDateTime/of 2026 7 4 17 0 0 0 la))
+
+(def resolved
+  (price/resolve-prices-with-modifiers plan [modifier] july-4-evening))
+
+(:urpx.resolved/season-name resolved)
+;; => "Summer"
+
+(mapv :urpx.resolved/ledger-name (:urpx.resolved/ledgers resolved))
+;; => ["Energy Supply Prices" "Energy Delivery Prices" "Adjustment Prices"
+;;     "Conservation Incentive Adjustment"
+;;     "Vintaged Power Charge Indifference Adjustment"]
+
+;; 3. Marginal $/kWh — sum of the lowest-tier unit-prices across energy ledgers
+(price/marginal-unit-rate resolved)
+;; => some BigDecimal in the [0, 1] range
+```
+
+That covers the consume side end-to-end. For emit and authoring, jump to [Writing URPX JSON-LD](#writing-urpx-json-ld) and [Authoring URPX entities](#authoring-urpx-entities) — both compose with the coerced entity above.
+
 ## Usage
 
 ```clojure
@@ -49,7 +124,10 @@ URPX is an [LF Energy](https://lfenergy.org/) open standard for exchanging utili
          '[urpx.schedule :as schedule])
 (import '[java.time LocalDate ZoneId ZonedDateTime])
 
-;; 1. Load and coerce a URPX rate plan document
+;; 1. Load and coerce a URPX rate plan document. v0.2.0 documents are
+;;    typically @graph bundles holding a urpx:RatePlan plus sibling
+;;    urpx:RatePlanModifier and metadata entities; load-rate-plan picks
+;;    the unique RatePlan from the bundle.
 (def plan
   (-> "path/to/urpx-rate-plan.jsonld"
       core/load-rate-plan
@@ -60,48 +138,60 @@ URPX is an [LF Energy](https://lfenergy.org/) open standard for exchanging utili
 (price/resolve-prices plan (ZonedDateTime/of 2026 7 15 17 0 0 0 la))
 ;; =>
 ;; {:urpx.resolved/season-name        "Summer"
-;;  :urpx.resolved/tou-period-name    "Summer Peak"
+;;  :urpx.resolved/tou-period-name    "Summer Peak Period"
 ;;  :urpx.resolved/tou-period-number  1
 ;;  :urpx.resolved/ledgers
-;;  [{:urpx.resolved/ledger-name "Commodity (Supply)"
+;;  [{:urpx.resolved/ledger-name "Energy Supply Prices"
 ;;    :urpx.resolved/tiers
-;;    [{:urpx.resolved/price-name "Commodity Summer Peak"
-;;      :urpx.resolved/unit-price 0.23354M}]}
-;;   {:urpx.resolved/ledger-name "Distribution (Delivery)"
-;;    :urpx.resolved/tiers [{:urpx.resolved/unit-price 0.09351M ...}]}
-;;   {:urpx.resolved/ledger-name "Public Benefits"
-;;    :urpx.resolved/tiers [{:urpx.resolved/unit-price 0.00604M ...}]}]}
+;;    [{:urpx.resolved/price-name "Generation Summer Peak"
+;;      :urpx.resolved/unit-price 0.20782M ...}
+;;     {:urpx.resolved/price-name "Bundled Power Charge Indifference Adjustment"
+;;      :urpx.resolved/unit-price -0.01011M ...}]}
+;;   {:urpx.resolved/ledger-name "Energy Delivery Prices"
+;;    :urpx.resolved/tiers [{:urpx.resolved/unit-price 0.20388M ...} ...]}
+;;   {:urpx.resolved/ledger-name "Adjustment Prices" ...}]}
 
 ;; 3. Marginal $/kWh — sum of the lowest-tier unit-price across all ledgers
-(price/marginal-unit-rate *1)   ;; => 0.33309M
+(price/marginal-unit-rate *1)
 
 ;; 4. Generate a day's worth of natural TOU intervals
 (def start (.toInstant (.atStartOfDay (LocalDate/of 2026 7 15) la)))
 (schedule/price-schedule-days plan start 1 la)
 ;; =>
-;; [{:tick/beginning #inst "2026-07-15T07:00:00Z"  ; midnight LA
-;;   :tick/end       #inst "2026-07-15T16:00:00Z"  ; 09:00 LA
-;;   :urpx.interval/resolved {... "Summer Off-Peak" ...}}
-;;  {... 09:00–15:00 "Summer Super Off-Peak"   $0.16645/kWh ...}
-;;  {... 15:00–16:00 "Summer Off-Peak"         $0.18204/kWh ...}
-;;  {... 16:00–21:00 "Summer Peak"             $0.33309/kWh ...}
-;;  {... 21:00–24:00 "Summer Off-Peak"         $0.18204/kWh ...}]
+;; [{:tick/beginning <ZDT 2026-07-15T00:00-07:00[America/Los_Angeles]>
+;;   :tick/end       <ZDT 2026-07-15T16:00-07:00[America/Los_Angeles]>
+;;   :urpx.interval/resolved {... "Summer Off-Peak Period" ...}}
+;;  {... 16:00–21:00 "Summer Peak Period" ...}
+;;  {... 21:00–24:00 "Summer Off-Peak Period" ...}]
 ```
 
-For block-tiered plans (e.g. CPAU E-1), each ledger's `:tiers` vector exposes every tier with its `:tier-lower-bound`, `:tier-upper-bound`, and `:unit-price` — the caller selects the active tier from cumulative billing-period usage.
+For block-tiered plans (e.g. PG&E E-1), each ledger's `:tiers` vector exposes every tier with its `:tier-lower-bound`, `:tier-upper-bound`, and `:unit-price` — the caller selects the active tier from cumulative billing-period usage.
 
-### Timezone
+### Time and timezones
 
-`price-schedule` and `price-schedule-days` need a `ZoneId` to walk a window in local time. When the rate plan declares `urpx:timezoneIdentifier` (an IANA string, e.g. `"America/Los_Angeles"`), the zone arg can be omitted:
+The library uses `java.time.ZonedDateTime` end-to-end internally and at output boundaries — DST-correct under daylight transitions because every step of the walk preserves zone, no `Instant`-to-local-time conversions in the middle of the schedule.
+
+**Inputs and outputs:**
+
+- `resolve-prices` takes a `ZonedDateTime` directly — its zone always comes from the caller
+- `price-schedule` / `price-schedule-with-modifiers` take an `Instant`-shaped `[start, end)` window plus an optional `ZoneId` (the zone the walk is performed in)
+- The schedule output's `:tick/beginning` and `:tick/end` are `ZonedDateTime` in the resolved zone. Callers wanting a plain `java.time.Instant` invoke `.toInstant` themselves at the call site
+
+**Zone resolution order:**
+
+1. Explicit `ZoneId` arg passed to `price-schedule` / `price-schedule-days` / `price-schedule-with-modifiers` / `price-schedule-days-with-modifiers`
+2. Rate plan's `urpx:timezoneIdentifier` (an IANA string, e.g. `"America/Los_Angeles"`) — used when the zone arg is omitted
 
 ```clojure
 (schedule/price-schedule-days plan start 1)            ; uses plan's declared zone
 (schedule/price-schedule-days plan start 1 la)         ; explicit override
 ```
 
-When neither is available, an `ex-info` is thrown rather than silently falling back to the system default. `resolve-prices` takes a `ZonedDateTime` directly, so its zone always comes from the caller.
+When neither is available, an `ex-info` is thrown rather than silently falling back to the system default.
 
-For documents that omit `urpx:timezoneIdentifier`, the optional `urpx.tz-inference/infer-zone` helper does best-effort inference from the publishing utility (`urpx:eiaId`, `urpx:legalName`). It returns `nil` for unknown or multi-zone utilities so the caller fails loudly rather than silently picking one. Inference is **opt-in** — `price-schedule` does not call it automatically; compose at the call site:
+**Standing rule:** pass an IANA `ZoneId` like `(ZoneId/of "America/Los_Angeles")` — never a fixed offset, never the system default.
+
+**Inference fallback:** for documents that omit `urpx:timezoneIdentifier`, the optional `urpx.tz-inference/infer-zone` helper does best-effort inference from the publishing utility's `urpx:legalName` (and a caller-supplied `urpx:eiaId` table when available). It returns `nil` for unknown or multi-zone utilities so the caller fails loudly rather than silently picking one. Inference is **opt-in** — `price-schedule` does not call it automatically; compose at the call site:
 
 ```clojure
 (require '[urpx.tz-inference :as tz])
@@ -115,7 +205,13 @@ The shipped lookup tables only cover utilities used by the test suite; productio
 
 ### Holiday calendar
 
-URPX `TimeBracket` carries two optional booleans — `urpx:includeHolidays` and `urpx:includeNonHolidays` — that gate whether the bracket applies on holidays, non-holidays, or both (both default to `true` when omitted, matching every day). To resolve a plan that uses these gates (e.g. PG&E E-TOU-D's "weekday peak EXCLUDING holidays" pattern), pass a `:holiday?` predicate (`LocalDate -> bool`). A plain set of `LocalDate`s works because sets are functions:
+URPX `TimeBracket` carries two optional booleans — `urpx:includeHolidays` and `urpx:includeNonHolidays` — that gate whether the bracket applies on holidays, non-holidays, or both (both default to `true` when omitted, matching every day). For plans that use these gates (e.g. PG&E E-TOU-D's "weekday peak EXCLUDING holidays" pattern), the resolver picks a holiday predicate in this order:
+
+1. **Explicit `:holiday?` in opts** — caller-supplied predicate `(LocalDate -> bool)` always wins.
+2. **Embedded `urpx:HolidayCalendar`** — if the plan declares one (PG&E E-TOU-D and several CPAU filings do), `urpx.holidays/derive-predicate` builds a predicate from the calendar's `urpx:Holiday` entries (literal dates plus rule-based descriptions like "fourth Thursday of November"). No caller setup required.
+3. **Fallback** — only when both of the above are absent: every date is treated as a non-holiday. Brackets that opt out of non-holidays (`includeNonHolidays: false`, e.g. holiday-only off-peak overrides) will never match.
+
+A caller-supplied `:holiday?` overrides any embedded calendar — useful when you need a different jurisdiction's holiday set or want to inject a calendar service:
 
 ```clojure
 (import '[java.time LocalDate])
@@ -136,24 +232,46 @@ URPX `TimeBracket` carries two optional booleans — `urpx:includeHolidays` and 
 (schedule/price-schedule plan start end la {:holiday? us-federal-2026})
 ```
 
-You can also pass any `(LocalDate -> bool)` function — e.g. wrap a calendar service. Without `:holiday?`, every date is treated as a non-holiday — so brackets that opt out of non-holidays (`includeNonHolidays: false`, e.g. holiday-only off-peak overrides) will never match.
+A plain set of `LocalDate`s works because sets are functions; you can also pass any `(LocalDate -> bool)` function — e.g. one that delegates to an external calendar service.
 
 ### Modifiers
 
-`urpx:RatePlanModifier` documents (export adders, net-surplus rates, hardship/seasonal adjusters) augment a base plan. Resolve them alongside the plan with `resolve-prices-with-modifiers`:
+`urpx:RatePlanModifier` documents (vintage-PCIA adders, export-compensation adjusters, etc.) augment a base plan. They appear in three packaging shapes — the loader handles all three transparently:
+
+- **`@graph` bundle**: a single document holds a base `urpx:RatePlan` plus one or more sibling modifiers (PG&E filings).
+- **URPXDocument wrapper**: a `urpx:URPXDocument` whose `urpx:hasRatePlanModifier` points at the modifier (v0.2.0 wrapper class).
+- **Standalone filing**: a document whose only entity is `urpx:RatePlanModifier` (CPAU E-2-G shape — modifier-only filings whose target linkage is expressed by consumer-side composition).
+
+Pull the modifier with `core/load-rate-plan-modifier`, parallel to `load-rate-plan`:
 
 ```clojure
-(def eec
+(def modifier
   (-> "path/to/urpx-rate-plan-modifier.jsonld"
-      core/load-rate-plan
+      core/load-rate-plan-modifier
       coerce/coerce-rate-plan-modifier))
 
-(price/resolve-prices-with-modifiers plan [eec] zdt)
+(price/resolve-prices-with-modifiers plan [modifier] zdt)
 ;; => the resolve-prices output, with each applicable modifier's ledgers
 ;;    appended to :urpx.resolved/ledgers
 ```
 
-A modifier is skipped silently when its `:urpx/applicableToRatePlan` list does not include the base plan's `@id`; `:urpx/isOptional` is informational and the caller decides whether to include the modifier in the call. Matrix-style modifiers (e.g. CPAU E-HRA — a 4×4 reserve-level × generation-tier matrix) surface every active price under one ledger entry; the caller picks the active value via `:urpx.resolved/price-id` because URPX condition vocabulary is not yet specified in a way that's programmatically interpretable.
+`urpx:applicableToRatePlan` (modifier → base plan linkage) is optional per URPX SHACL — bundled modifiers usually declare it, standalone ones may not. `resolve-prices-with-modifiers` only includes modifiers whose `applicableToRatePlan` list contains the base plan's `@id`; modifiers without an applicableToRatePlan are skipped on the assumption that their applicability is decided externally. Pass them explicitly (or trim the list yourself) when you've verified the target.
+
+Matrix-style modifiers (e.g. PG&E vintage-PCIA — one ledger with a price per departure-vintage year) surface every active price under one ledger entry; the caller picks the active value via `:urpx.resolved/price-id` (each Price's `urpx:hasApplicabilityGroup` carries the v0.2.0 `urpx:ConditionExpression` that names the dimension being matched).
+
+### Customer-profile alternatives
+
+URPX v0.2.0 introduced `urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives` for declarative customer-or-configuration choices — income-tier CARE / FERA / Standard, voltage configurations, vintage-PCIA default tier, and similar. The plan declares a `urpx:ProfileAlternatives` at `PlanElements.hasProfileAlternatives` (each named alternative carries its own `hasConditionExpression`), and a sibling `urpx:PriceSetAlternatives` at `Prices.hasPriceSetAlternatives` exposes one Price-bearing `PriceSetAlternative` per alternative.
+
+`resolve-prices` selects the active alternative explicitly via the `:profile-alternatives` opt — a `{<ProfileAlternatives @id> <chosen ProfileAlternative @id>}` map:
+
+```clojure
+(price/resolve-prices plan zdt
+  {:profile-alternatives
+   {"pge:bsc-income-tier" "pge:bsc-care"}})
+```
+
+Unmapped alternatives are silently skipped — only the explicitly-chosen alternative's prices surface. Programmatic evaluation of each alternative's `urpx:ConditionExpression` against a customer profile is a future enhancement.
 
 ### Sub-hour granularity
 
@@ -166,6 +284,131 @@ A modifier is skipped silently when its `:urpx/applicableToRatePlan` list does n
 
 Adjacent steps with identical resolved ledgers are still merged, so a quarter-hour walk across an hour-aligned plan produces the same merged intervals as the hourly walk.
 
+## Writing URPX JSON-LD
+
+The library also supports the inverse direction: emit URPX JSON-LD from a coerced Clojure entity. Useful for round-trip validation, programmatic generation of URPX documents, and authoring fixtures in idiomatic Clojure.
+
+```clojure
+(require '[urpx.emit :as emit])
+
+;; Round-trip a parsed rate plan back to JSON-LD
+(spit "out.jsonld" (emit/write-rate-plan plan))
+
+;; Standalone modifier documents
+(emit/write-rate-plan-modifier modifier)
+
+;; URPXDocument-wrapped documents (v0.2.0 wrapper class)
+(emit/write-urpx-document
+  {:jsonld/type "urpx:URPXDocument"
+   :urpx/targetURPXVersion "https://github.com/urpx-org/urpx/raw/v0.2.0/ontology/urpx-ontology.ttl"
+   :urpx/hasRatePlan [plan]})
+```
+
+Each function takes a coerced (or already-typed EDN) entity, runs the schema's `:encode/urpx-jsonld` transformer to convert typed leaves (`BigDecimal`, `LocalDate`, `LocalDateTime`, `Duration`, integer month numbers, …) back to JSON-LD string forms, projects namespaced-keyword keys to their CURIE / `@`-reserved JSON-LD forms, and serializes via `clojure.data.json/write-str`.
+
+### Worked round-trip
+
+```clojure
+(require '[urpx.core :as core] '[urpx.coerce :as coerce] '[urpx.emit :as emit])
+(import '[java.io StringReader])
+
+;; load + coerce → typed entity
+(def plan (-> "path/to/urpx-rate-plan.jsonld"
+              core/load-rate-plan
+              coerce/coerce-rate-plan))
+
+;; emit → JSON-LD string → re-parse → re-coerce
+(def re-coerced (-> (emit/write-rate-plan plan)
+                    StringReader.
+                    core/parse-rate-plan
+                    coerce/coerce-rate-plan))
+
+(= plan re-coerced)
+;; => true (the round-trip is a fixed point)
+```
+
+### `@context` emission
+
+By default, every write-* function emits a baseline `@context` with the canonical URPX prefix declarations (`urpx`, `schema`, `xsd`) plus typed-property declarations matching the shape vendored fixtures carry — output parses cleanly with strict JSON-LD processors out of the box. The full default context lives at [`urpx.emit/default-context`](src/urpx/emit.clj).
+
+```clojure
+;; Default context (most use cases)
+(emit/write-rate-plan plan)
+
+;; Caller-supplied context (replaces the default verbatim)
+(emit/write-rate-plan plan {:context {"urpx" "https://urpx-org.github.io/urpx/ontology/"
+                                      "ex"   "https://example.com/foo/"}})
+
+;; Suppress @context entirely
+(emit/write-rate-plan plan {:context nil})
+```
+
+A `@context` already present on the input entity (e.g. from a parsed document) is preserved untouched — the default never clobbers a context the consumer supplied.
+
+### Round-trip fidelity
+
+The emit path targets **logical / RDF-graph equivalence** on round-trip: `parse → coerce → emit → re-parse → re-coerce` yields a structurally equal Clojure entity. Byte-for-byte equality with the input is **not** a goal — key ordering, single-vs-vector property emission, and `@context` recreation may differ from the source document.
+
+`urpx.emit-test` runs an authoritative round-trip suite over every vendored fixture (PG&E E-1, E-TOU-C, E-TOU-D, EV2 — both the base RatePlan and the bundled vintage-PCIA modifier in each `@graph`) plus a URPXDocument-wrapped E-ELEC document; all round-trip cleanly with plain `(= original re-coerced)`. The DSL test suite (`urpx.dsl-test`) extends this to a CPAU-E-2-shaped plan authored entirely via the DSL.
+
+## Authoring URPX entities
+
+For programmatic construction or test-fixture authoring, `urpx.dsl` provides idiomatic Clojure builders for every entity-type schema in `urpx.schema`. Output is a coerced (typed) entity, ready for `urpx.price/resolve-prices`, `urpx.emit/write-*`, or any other consumer.
+
+```clojure
+(require '[urpx.dsl :as dsl])
+
+(dsl/dsl-scope
+  (let [summer (dsl/season ::summer :season-name "Summer" :month [5 6 7 8 9 10])
+        winter (dsl/season ::winter :season-name "Winter" :month [11 12 1 2 3 4])
+        ledger-comm (dsl/ledger ::ledger-commodity
+                                :name "Commodity"
+                                :ledger-type {:jsonld/id "urpx:supplyLedger"})
+        pd-cs (dsl/price-definition ::pd-commodity-summer
+                                    :name "Commodity Summer"
+                                    :applies-in-season ::summer
+                                    :references-ledger ::ledger-commodity)]
+    ;; ...assemble into a rate-plan via dsl/rate-plan, dsl/rate-plan-version, etc.
+    ))
+```
+
+The DSL handles the boring parts so authoring code stays declarative:
+
+- **`@type` is inferred** from the schema (no `:jsonld/type "urpx:Season"` boilerplate).
+- **Auto-coercion** of raw Clojure inputs through the schema's `:decode/urpx-jsonld` decoders: numbers → `BigDecimal`, ISO strings → `LocalDate` / `LocalDateTime` / `LocalTime`, `--MM` xsd:gMonth → int.
+- **Validation on construct** — every builder throws `ex-info` with the Malli explanation if the entity doesn't validate against its schema, so shape drift surfaces at the call site.
+- **Two kwarg forms** — canonical `:urpx/seasonName` or auto-derived kebab-case `:season-name` (both work, can be mixed in one call).
+
+### Local-symbol refs
+
+Inside a `dsl-scope`, builders accept an optional leading qualified-keyword as the entity's local `@id`, and qualified-keyword values in kwarg positions resolve to `{:jsonld/id …}` Ref maps via the scope's registry:
+
+```clojure
+(dsl/dsl-scope
+  (dsl/season ::summer :season-name "Summer" :month [5 6 7 8 9 10])
+  (dsl/season ::winter :season-name "Winter" :month [11 12 1 2 3 4])
+  (dsl/price-definition ::pd-summer
+                        :applies-in-season ::summer    ; → {:jsonld/id "summer"}
+                        :references-ledger ::commodity))
+```
+
+Resolution is eager (declare-before-reference); unknown refs and duplicate declarations throw. Each `dsl-scope` has its own registry — scopes don't leak.
+
+### Building from arbitrary schemas
+
+`make-builder` derives a constructor from any Malli schema with a `:jsonld/type [:= "urpx:X"]` entry — useful for ad-hoc construction or scripts that don't import every named builder:
+
+```clojure
+(let [build-tou-period (dsl/make-builder schema/TOUPeriod)]
+  (build-tou-period :urpx/name "Summer Peak"
+                    :urpx/touPeriodNumber 1
+                    :urpx/hasTimeBracket []))
+```
+
+The 37 named builders (`season`, `metric-input`, `price-definition`, `rate-plan`, `urpx-document`, …) are each just `(def name (make-builder schema/X))`.
+
+For a longer worked walkthrough that mirrors selected examples from the upstream [URPX Tutorial](https://github.com/urpx-org/urpx/blob/main/documentation/pages/urpx-tutorial.md), see [`doc/dsl-tutorial.md`](doc/dsl-tutorial.md) — each example shows the canonical URPX JSON-LD shape and the equivalent DSL form, with deep-links back to the upstream source section.
+
 ## Namespace overview
 
 | Namespace        | Purpose |
@@ -175,30 +418,51 @@ Adjacent steps with identical resolved ledgers are still merged, so a quarter-ho
 | `urpx.coerce`    | Schema-driven coercion: strings → typed values; `validate`, `explain` |
 | `urpx.index`     | `build-index`, `resolve-ref`, `get-entity` for `@id` references |
 | `urpx.price`         | `resolve-prices`, `resolve-modifier-prices`, `resolve-prices-with-modifiers`, `marginal-unit-rate` |
-| `urpx.schedule`      | `price-schedule`, `price-schedule-days` |
+| `urpx.schedule`      | `price-schedule`, `price-schedule-days`, `price-schedule-with-modifiers`, `price-schedule-days-with-modifiers` |
 | `urpx.tz-inference`  | `infer-zone` (opt-in fallback when `urpx:timezoneIdentifier` is absent) |
+| `urpx.emit`          | Write-side: `write-rate-plan`, `write-rate-plan-modifier`, `write-urpx-document` |
+| `urpx.dsl`           | Authoring DSL: `dsl-scope`, `make-builder`, named builders for every entity type |
 
 ## Status
 
+Targets **URPX v0.2.0**.
+
+Test fixtures are vendored from [urpx-tariffs](https://github.com/grid-coordination/urpx-tariffs) (the production rate-plan corpus) at pinned commits — see [`test/resources/urpx-fixtures/FIXTURES.md`](test/resources/urpx-fixtures/FIXTURES.md) for the table and the re-sync workflow.
+
 Currently covered:
-- Both top-level document types: `urpx:RatePlan` (CPAU E-1 TOU, CPAU E-1 non-TOU, PG&E E-ELEC, PG&E E-TOU-D) and `urpx:RatePlanModifier` (EEC, NSE, HRA) parse, coerce, and validate
-- TOU period resolution: seasons, ontology day-types (`urpx:allDays`, `urpx:weekdayDays`, `urpx:weekendDays`, `urpx:customDays`), `urpx:includeHolidays` / `urpx:includeNonHolidays` bracket gates, time-bracket containment with midnight wrap
-- Block-tier surfacing with bounds and bound operators
-- Flat per-energy charges (distribution, public benefits)
-- Active-price selection by latest `startDate ≤ query-date`, drawing from both flat top-level prices and `PriceSet`-scoped prices
-- `urpx:RatePlanModifier` resolution alongside the base plan (EEC, NSE, HRA) — modifier ledgers appended to the resolved output, with matrix-style prices surfaced for caller selection
+- All three v0.2.0 top-level document classes parse, coerce, and validate against Malli schemas: `urpx:RatePlan`, `urpx:RatePlanModifier`, and `urpx:URPXDocument` (the v0.2.0 wrapper class with required `urpx:targetURPXVersion` per Decision #103). The loader transparently descends through URPXDocument's `urpx:hasRatePlan` / `urpx:hasRatePlanModifier`, so consumers target inner entities by `@type` regardless of packaging shape (bare entity, `@graph` bundle, or URPXDocument wrapper)
+- Modifier filings in all three packaging shapes — bundled with a base RatePlan in `@graph`, URPXDocument-wrapped, or standalone (no in-document target linkage; consumer-side composition expected) — load via `core/load-rate-plan-modifier`
+- v0.2.0 `urpx:ConditionExpression` tree (Comparison/Boolean nodes with Object/Datatype/Custom operand leaves) parses and coerces; recursive operands are validated through a local Malli registry
+- v0.2.0 `BillingModel.hasPriceDefinition` traversal (PD now lives at the BillingModel level with `referencesLedger` pointing back) for price resolution
+- TOU period resolution: seasons, ontology day-types (`urpx:allDays`, `urpx:weekdayDays`, `urpx:weekendDays`, `urpx:customDays`), `urpx:includeHolidays` / `urpx:includeNonHolidays` bracket gates, time-bracket containment with midnight wrap. Multiple `urpx:TOUSchedule`s per BillingModel are supported (one per MetricInput, e.g. separate energy + demand schedules)
+- Non-TOU seasonal gating via `PriceDefinition.appliesInSeason → Season.month`, alongside the existing `hasApplicabilityRule.month` path — handles filings whose seasonal partition isn't carried by a TOUPeriod indirection (CPAU E-2 shape)
+- `RatePlanVersion` surfaces `urpx:hasModifierOptions` and `urpx:hasModifierVersionOptions` pointers (Decisions #084 + #090) for cross-version modifier wiring
+- Block-tier surfacing via the v0.2.0 `urpx:ServiceTiers` container — every tier surfaces with its bounds and bound operators
+- Active-price selection by latest `startDate ≤ query-date`, drawing from flat top-level prices, `PriceSet`-scoped prices, and PriceSets that omit `startDate` and fall through to per-Price dates (CPAU E-2 shape, per `urpx:PriceSetShape` `sh:minCount 0`)
+- Modifier resolution alongside the base plan (vintage-PCIA pattern: many Prices share one PD, each carrying its own `urpx:hasApplicabilityGroup`)
+- `urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives` — the v0.2.0 idiom for declarative customer-or-configuration choices (income tier CARE/FERA/Standard, voltage configuration, vintage-PCIA default tier). Coerce + validate full schemas; resolve-prices selects the active alternative via an explicit `:profile-alternatives` opt; emit round-trips cleanly. Programmatic `ConditionExpression` evaluation against a customer profile is a future enhancement
 - Configurable schedule step (hourly default; sub-hour available via `:step`)
+- Symmetric write-side: `urpx.emit` emits JSON-LD from any coerced `RatePlan` / `RatePlanModifier` / `URPXDocument`; the vendored-fixture round-trip suite verifies `parse → coerce → emit → re-parse → re-coerce` is a fixed point for every PG&E filing × {RatePlan, Modifier} plus a URPXDocument-wrapped E-ELEC test case
+- Authoring DSL (`urpx.dsl`): named builders for every entity-type schema, kebab-case kwarg aliases, auto-coercion of raw inputs (numbers → BigDecimal, ISO strings → java.time, `--MM` → int month), validation-on-construct, and local-symbol refs scoped via `dsl-scope`
 
 Known gaps:
-- Programmatic interpretation of `urpx:Condition` operator + label `conditionValue` for matrix-style modifier price selection — currently the caller picks active values by `price-id`
+- Programmatic interpretation of `urpx:ConditionExpression` for active-tier selection in matrix-style modifiers — currently the caller picks the active value by `price-id` after walking the condition tree itself
+- A handful of v0.2.0 SHACL classes that appear as references but aren't deeply modeled — `urpx:TariffPublication`, `urpx:ProgramEnrollment`, `urpx:ServicePointProfile`, plus the non-RatePlan URPXDocument subclasses (`urpx:TariffStatementDocument`, `urpx:DERExportsDocument`, `urpx:HighlyDynamicPricesDocument`, `urpx:SupplyChargesDocument`). They round-trip correctly as opaque maps via `:map`-typed payload pointers; deeper modeling (named builders, validation) lands as consumers need it.
 
-## Development
+## See also
 
-```bash
-clojure -M:test                 # run tests (Kaocha)
-clojure -M:nrepl                # nREPL on the port written to .nrepl-port
-clj-kondo --lint src test       # lint
-```
+- [URPX standard](https://github.com/urpx-org/urpx) — ontology, SHACL shapes, decision log, tutorial, and reference test cases (the upstream specification this library targets)
+- [urpx-tariffs](https://github.com/grid-coordination/urpx-tariffs) — production corpus of California utility rate-plan filings; vendored test fixtures here are pinned snapshots from there
+- [LF Energy URPX project page](https://lfenergy.org/projects/utility-rate-plan-exchange-urpx/) — broader context for the URPX initiative
+- [`doc/dsl-tutorial.md`](doc/dsl-tutorial.md) — worked DSL examples mirroring sections of the upstream URPX tutorial
+
+## Contributing
+
+Issues, Discussions, and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow (and the dev commands: tests, lint, nREPL). In short:
+
+- **Questions, API/design discussion, vocabulary gaps** → [Discussions](https://github.com/grid-coordination/clj-urpx/discussions)
+- **Confirmed bugs, schema/resolver fixes, doc errors** → [Issues](https://github.com/grid-coordination/clj-urpx/issues)
+- **Patches** → pull requests; please open a Discussion or Issue first for non-trivial changes (new schema classes, new DSL builders, new resolver behavior)
 
 ## License
 

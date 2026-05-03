@@ -14,13 +14,22 @@
 (def ^:private jsonld-transformer
   (mt/transformer
    {:name :urpx-jsonld
-    :default-decoder identity}))
+    :default-decoder identity
+    :default-encoder identity}))
 
 (defn coerce
   "Decode a raw value against `schema` using the URPX JSON-LD transformer.
    Returns the typed value. Use `validate` afterwards if you want a strict check."
   [schema raw]
   (m/decode schema raw jsonld-transformer))
+
+(defn encode
+  "Encode a typed value against `schema` using the URPX JSON-LD transformer.
+   Inverse of `coerce` — turns BigDecimal/LocalDate/etc. back into the JSON-LD
+   string forms (URPX-nvo write-side). Schemas without an :encode/urpx-jsonld
+   property pass values through unchanged (`:default-encoder identity`)."
+  [schema typed]
+  (m/encode schema typed jsonld-transformer))
 
 (defn coerce-rate-plan
   "Coerce a raw parsed URPX rate plan into the typed shape described by
@@ -36,13 +45,23 @@
   [raw]
   (coerce schema/RatePlanModifier raw))
 
+(defn coerce-urpx-document
+  "Coerce a raw parsed URPX document wrapper into the typed shape described
+   by `urpx.schema/URPXDocument`. Validates the document-level metadata
+   (urpx:targetURPXVersion, dates, version, …) — inner urpx:hasRatePlan /
+   urpx:hasRatePlanModifier payloads are passed through as raw maps and
+   should be coerced + validated against their own schemas separately."
+  [raw]
+  (coerce schema/URPXDocument raw))
+
 (defn coerce-doc
-  "Dispatch on the document's :jsonld/type and coerce as a RatePlan or
-   RatePlanModifier. Returns nil for unknown types."
+  "Dispatch on the document's :jsonld/type and coerce as a RatePlan,
+   RatePlanModifier, or URPXDocument wrapper. Returns nil for unknown types."
   [raw]
   (case (:jsonld/type raw)
     "urpx:RatePlan"         (coerce-rate-plan raw)
     "urpx:RatePlanModifier" (coerce-rate-plan-modifier raw)
+    "urpx:URPXDocument"     (coerce-urpx-document raw)
     nil))
 
 (defn validate

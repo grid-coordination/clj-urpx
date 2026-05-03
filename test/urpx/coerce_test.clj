@@ -1,17 +1,17 @@
 (ns urpx.coerce-test
   (:require [clojure.test :refer [deftest is testing]]
             [urpx.coerce :as coerce]
+            [urpx.core :as core]
             [urpx.schema :as schema]
             [urpx.test-fixtures :as fixtures])
   (:import [java.math BigDecimal]
            [java.time LocalDate LocalDateTime LocalTime]))
 
-(def base-rate-plan-fixtures
-  "Names of URPX test cases of @type urpx:RatePlan (excludes the
-   RatePlanModifier docs, which need their own schema)."
-  ["cpau-e-1-tou-2026-01-01"
-   "cpau-e-1-2025-07-01"
-   "pge-e-elec-2026-01-01"])
+(def rate-plan-fixtures
+  ["pge-e-1-2026-03-01"
+   "pge-e-tou-c-2026-03-01"
+   "pge-e-tou-d-2026-03-27"
+   "pge-ev2-2026-03-27"])
 
 (deftest coerce-primitives-via-schema
   (testing "Decimal: string -> BigDecimal"
@@ -33,114 +33,230 @@
     (let [bd (BigDecimal. "1.5")]
       (is (identical? bd (coerce/coerce schema/Decimal bd))))))
 
-(deftest coerce-cpau-tou-rate-plan
-  (let [raw     (fixtures/load-raw "cpau-e-1-tou-2026-01-01")
-        coerced (coerce/coerce-rate-plan raw)]
+(deftest decimal-coerces-clojure-numbers
+  (testing "URPX-4w3: number literals (long, double, ratio) coerce to BigDecimal
+            so DSL callers can write idiomatic Clojure numbers"
+    (is (= (BigDecimal. "0.15075") (coerce/coerce schema/Decimal 0.15075)))
+    (is (= (BigDecimal. "1")       (coerce/coerce schema/Decimal 1)))
+    (is (= (BigDecimal. "1.5")     (coerce/coerce schema/Decimal 3/2))))
+  (testing "double precision: BigDecimal/valueOf form (via bigdec) preserves
+            the canonical short-form scale rather than the binary-float bits
+            (`(BigDecimal. 0.1)` would produce 0.1000…025 garbage)"
+    (is (= (BigDecimal. "0.1") (coerce/coerce schema/Decimal 0.1)))))
+
+(deftest coerce-pge-e-1
+  (let [plan (fixtures/load-rate-plan "pge-e-1-2026-03-01")]
 
     (testing "the full plan validates against the RatePlan schema"
-      (is (nil? (coerce/explain schema/RatePlan coerced))
-          "no explanation should be returned for a valid plan"))
+      (is (nil? (coerce/explain schema/RatePlan plan))))
+
+    (testing "v0.2.0: ratePlanUniqueIdentifier is the unique-id field"
+      (is (= "E-1" (:urpx/ratePlanUniqueIdentifier plan))))
 
     (testing "top-level effective date is a LocalDate"
-      (is (= (LocalDate/of 2026 1 1) (:urpx/initialEffectiveDate coerced))))
+      (is (= (LocalDate/of 2001 1 1) (:urpx/initialEffectiveDate plan))))
 
     (testing "RatePlanVersion's effectiveDateTime is a LocalDateTime"
-      (is (= (LocalDateTime/of 2026 1 1 0 0)
-             (get-in coerced [:urpx/hasRatePlanVersion :urpx/effectiveDateTime]))))
+      (is (= (LocalDateTime/of 2026 3 1 0 0)
+             (get-in plan [:urpx/hasRatePlanVersion :urpx/effectiveDateTime]))))
 
-    (testing "Seasons have integer months"
-      (let [seasons (get-in coerced [:urpx/hasRatePlanVersion
-                                     :urpx/hasPlanElements
-                                     :urpx/hasSeasons])
-            summer (first (filter #(= "Summer" (:urpx/seasonName %)) seasons))]
+    (testing "Seasons have integer months (gMonth decoded)"
+      (let [seasons (get-in plan [:urpx/hasRatePlanVersion
+                                  :urpx/hasPlanElements
+                                  :urpx/hasSeasons])
+            summer  (first (filter #(= "Summer" (:urpx/seasonName %)) seasons))]
         (is (= [6 7 8 9] (:urpx/month summer)))))
 
-    (testing "TimeBrackets have LocalTime start/end"
-      (let [bracket (-> coerced
-                        (get-in [:urpx/hasRatePlanVersion
-                                 :urpx/hasPlanElements
-                                 :urpx/hasBillingModel
-                                 :urpx/hasTOUSchedule
-                                 :urpx/hasTOUTier])
-                        first
-                        :urpx/hasTOUPeriod
-                        first
-                        :urpx/hasTimeBracket
-                        first)]
-        (is (= (LocalTime/of 16 0) (:urpx/startTime bracket)))
-        (is (= (LocalTime/of 21 0) (:urpx/endTime bracket)))))
+    (testing "BillingModel.hasPriceDefinition (v0.2.0 location) is a populated vector"
+      (let [pds (get-in plan [:urpx/hasRatePlanVersion
+                              :urpx/hasPlanElements
+                              :urpx/hasBillingModel
+                              :urpx/hasPriceDefinition])]
+        (is (vector? pds))
+        (is (pos? (count pds)))
+        (is (every? #(some? (get-in % [:urpx/referencesLedger :jsonld/id])) pds)
+            "every PriceDefinition points to its parent Ledger via referencesLedger")))
+
+    (testing "ServiceTiers (v0.2.0 plural container) holds the tier vector.
+              hasServiceTiers is itself a vector (URPX-6hf) — walk it via
+              (mapcat :urpx/hasServiceTier ...)."
+      (let [tiers (mapcat :urpx/hasServiceTier
+                          (get-in plan [:urpx/hasRatePlanVersion
+                                        :urpx/hasPlanElements
+                                        :urpx/hasBillingModel
+                                        :urpx/hasServiceTiers]))]
+        (is (= 6 (count tiers))
+            "PG&E E-1 has 6 service tiers (Summer/Winter × Tier 1/2/2C)")
+        (is (every? #(instance? BigDecimal (:urpx/lowerBound %)) tiers))))
 
     (testing "Prices have BigDecimal unitPrice"
-      (let [prices (get-in coerced
-                           [:urpx/hasRatePlanVersion
-                            :urpx/hasPrices
-                            :urpx/hasPriceSet
-                            0
-                            :urpx/hasPrice])
-            summer-peak (first (filter #(= "Commodity Summer Peak" (:urpx/name %)) prices))]
-        (is (= (BigDecimal. "0.23354") (:urpx/unitPrice summer-peak)))))
+      (let [price-sets (get-in plan [:urpx/hasRatePlanVersion :urpx/hasPrices :urpx/hasPriceSet])
+            generation (->> price-sets
+                            (mapcat :urpx/hasPrice)
+                            (some #(when (= "Generation" (:urpx/name %)) %)))]
+        (is (= (BigDecimal. "0.12855") (:urpx/unitPrice generation)))))
 
-    (testing "Flat hasPriceDefinition (single map) is normalized to a vector"
-      (let [ledgers (get-in coerced [:urpx/hasRatePlanVersion
-                                     :urpx/hasPlanElements
-                                     :urpx/hasBillingModel
-                                     :urpx/hasLedger])
-            distribution (first (filter #(= "Distribution (Delivery)" (:urpx/name %)) ledgers))]
-        (is (vector? (:urpx/hasPriceDefinition distribution)))
-        (is (= 1 (count (:urpx/hasPriceDefinition distribution))))
-        (is (= "Distribution"
-               (:urpx/name (first (:urpx/hasPriceDefinition distribution)))))))
-
-    (testing "CalculationMethod intervalDuration parses to Duration"
-      (let [ledgers (get-in coerced [:urpx/hasRatePlanVersion
-                                     :urpx/hasPlanElements
-                                     :urpx/hasBillingModel
-                                     :urpx/hasLedger])
-            customer (first (filter #(= "Customer Charge" (:urpx/name %)) ledgers))
-            pd (first (:urpx/hasPriceDefinition customer))
-            calc (:urpx/hasCalculationMethod pd)]
+    (testing "CalculationMethod intervalDuration parses to Period"
+      (let [pds (get-in plan [:urpx/hasRatePlanVersion
+                              :urpx/hasPlanElements
+                              :urpx/hasBillingModel
+                              :urpx/hasPriceDefinition])
+            base-charge (some #(when (= "Base Services Charge" (:urpx/name %)) %) pds)
+            calc (:urpx/hasCalculationMethod base-charge)]
         (is (some? calc))
-        (is (= (java.time.Period/parse "P1M") (:urpx/intervalDuration calc)))
-        (is (= (BigDecimal. "1") (:urpx/baseQuantity pd)))))))
+        (is (= (java.time.Period/parse "P1D") (:urpx/intervalDuration calc)))))))
 
-(deftest all-base-rate-plan-fixtures-validate
-  (testing "every URPX RatePlan fixture coerces and validates against the schema"
-    (doseq [name base-rate-plan-fixtures]
-      (let [coerced (fixtures/load-rate-plan name)
-            err (coerce/explain schema/RatePlan coerced)]
+(deftest coerce-condition-expression-tree
+  (testing "ConditionExpression in EligibilityRule decodes operand value types"
+    (let [plan (fixtures/load-rate-plan "pge-e-1-2026-03-01")
+          rules (get-in plan [:urpx/hasRatePlanVersion :urpx/hasEligibilityRule])
+          rule (first rules)
+          ce (:urpx/hasConditionExpression rule)
+          root (:urpx/rootNode ce)]
+      (is (= "urpx:ComparisonNode" (:jsonld/type root)))
+      (is (= {:jsonld/id "urpx:hasCustomerKind"}
+             (get-in root [:urpx/leftOperand :urpx/conditionProperty]))))))
+
+(deftest all-rate-plan-fixtures-validate
+  (testing "every URPX RatePlan fixture coerces and validates against the v0.2.0 schema"
+    (doseq [name rate-plan-fixtures]
+      (let [plan (fixtures/load-rate-plan name)
+            err (coerce/explain schema/RatePlan plan)]
         (is (nil? err)
             (str name " should validate; got " (count (:errors err)) " errors"))))))
-
-(def modifier-fixtures
-  ["cpau-e-eec-1-2025-09-01"
-   "cpau-e-nse-1-2025-09-01"
-   "cpau-e-hra-2023-01-01"])
 
 (deftest all-modifier-fixtures-validate
-  (testing "every URPX RatePlanModifier fixture coerces and validates"
-    (doseq [name modifier-fixtures]
-      (let [coerced (fixtures/load-rate-plan-modifier name)
-            err (coerce/explain schema/RatePlanModifier coerced)]
+  (testing "every fixture's bundled RatePlanModifier coerces and validates"
+    (doseq [name rate-plan-fixtures]
+      (let [modifier (fixtures/load-modifier name)
+            err (coerce/explain schema/RatePlanModifier modifier)]
         (is (nil? err)
-            (str name " should validate; got " (count (:errors err)) " errors"))))))
+            (str name "/modifier should validate; got "
+                 (count (:errors err)) " errors"))))))
 
 (deftest coerce-doc-dispatches-on-type
-  (testing "coerce-doc handles RatePlan and RatePlanModifier docs"
-    (let [base    (coerce/coerce-doc (fixtures/load-raw "cpau-e-1-tou-2026-01-01"))
-          mod-doc (coerce/coerce-doc (fixtures/load-raw (first modifier-fixtures)))]
-      (is (nil? (coerce/explain schema/RatePlan base)))
-      (is (nil? (coerce/explain schema/RatePlanModifier mod-doc)))
-      (is (nil? (coerce/coerce-doc {:jsonld/type "urpx:Unknown"}))
-          "unknown @type returns nil")))
+  (testing "coerce-doc handles RatePlan, RatePlanModifier, and unknowns"
+    (let [entities (fixtures/load-graph "pge-e-1-2026-03-01")
+          plan (some #(when (= "urpx:RatePlan" (:jsonld/type %)) %) entities)
+          mod  (some #(when (= "urpx:RatePlanModifier" (:jsonld/type %)) %) entities)]
+      (is (nil? (coerce/explain schema/RatePlan (coerce/coerce-doc plan))))
+      (is (nil? (coerce/explain schema/RatePlanModifier (coerce/coerce-doc mod))))
+      (is (nil? (coerce/coerce-doc {:jsonld/type "urpx:Unknown"})))))
 
-  (testing "EEC modifier carries a single applicableToRatePlan that normalizes to a vector"
-    (let [m    (fixtures/load-rate-plan-modifier "cpau-e-eec-1-2025-09-01")
+  (testing "applicableToRatePlan (single map upstream) is normalized to a vector"
+    (let [m (fixtures/load-modifier "pge-e-1-2026-03-01")
           refs (get-in m [:urpx/hasRatePlanModifierVersion :urpx/applicableToRatePlan])]
       (is (vector? refs))
-      (is (= 1 (count refs)))
-      (is (= "urpx:cpau-e-1" (:jsonld/id (first refs))))))
+      (is (= "pge:e-1" (:jsonld/id (first refs)))))))
 
-  (testing "NSE modifier applies to multiple base plans (vector preserved)"
-    (let [m    (fixtures/load-rate-plan-modifier "cpau-e-nse-1-2025-09-01")
-          refs (get-in m [:urpx/hasRatePlanModifierVersion :urpx/applicableToRatePlan])]
-      (is (= ["urpx:cpau-e-1" "urpx:cpau-e-1-tou"] (mapv :jsonld/id refs))))))
+(deftest core-load-rate-plan-finds-unique-rate-plan-in-graph
+  (testing "load-rate-plan picks the urpx:RatePlan out of an @graph bundle"
+    (let [path (.getPath (fixtures/fixture-resource "pge-e-1-2026-03-01"))
+          plan (core/load-rate-plan path)]
+      (is (= "urpx:RatePlan" (:jsonld/type plan)))
+      (is (= "pge:e-1" (:jsonld/id plan))))))
+
+;; ---------------------------------------------------------------------------
+;; URPXDocument wrapper (URPX-1ii / Decision #103)
+;; ---------------------------------------------------------------------------
+
+(def ^:private valid-urpx-document-raw
+  {:jsonld/type "urpx:URPXDocument"
+   :jsonld/id   "ex:doc"
+   :urpx/targetURPXVersion
+   "https://github.com/urpx-org/urpx/raw/v0.2.0/ontology/urpx-ontology.ttl"
+   :urpx/hasRatePlan
+   {:jsonld/type "urpx:RatePlan" :jsonld/id "ex:plan"}})
+
+(deftest urpx-document-validates-with-target-version
+  (testing "URPX-1ii: a URPXDocument carrying urpx:targetURPXVersion validates"
+    (let [coerced (coerce/coerce-urpx-document valid-urpx-document-raw)]
+      (is (nil? (coerce/explain schema/URPXDocument coerced)))
+      (testing "single hasRatePlan map is normalized to a vector"
+        (is (vector? (:urpx/hasRatePlan coerced)))
+        (is (= 1 (count (:urpx/hasRatePlan coerced))))))))
+
+(deftest urpx-document-rejected-when-target-version-missing
+  (testing "URPX-1ii / Decision #103: missing urpx:targetURPXVersion fails
+            Malli validation — corpus filings retrofit must add the field."
+    (let [no-version (dissoc valid-urpx-document-raw :urpx/targetURPXVersion)
+          coerced (coerce/coerce-urpx-document no-version)
+          err (coerce/explain schema/URPXDocument coerced)]
+      (is (some? err) "validation must fail")
+      (is (some #(= [:urpx/targetURPXVersion] (:in %)) (:errors err))
+          "the explanation must point at urpx:targetURPXVersion"))))
+
+(deftest urpx-document-rejected-when-target-version-not-string
+  (testing "targetURPXVersion must be a string (xsd:anyURI in SHACL)"
+    (let [bad (assoc valid-urpx-document-raw :urpx/targetURPXVersion 42)
+          err (coerce/explain schema/URPXDocument
+                              (coerce/coerce-urpx-document bad))]
+      (is (some? err)))))
+
+(deftest coerce-doc-dispatches-on-urpx-document
+  (testing "URPX-1ii: coerce-doc routes urpx:URPXDocument through coerce-urpx-document"
+    (let [coerced (coerce/coerce-doc valid-urpx-document-raw)]
+      (is (nil? (coerce/explain schema/URPXDocument coerced))))))
+
+;; ---------------------------------------------------------------------------
+;; Encoder spike (URPX-bnt) — verify malli's transformer system handles
+;; bidirectional encode + decode on a single schema without duplication
+;; ---------------------------------------------------------------------------
+
+(deftest encoder-spike-decimal-forward
+  (testing "URPX-bnt: encoding a typed BigDecimal yields the JSON-LD string form"
+    (is (= "0.15075"
+           (coerce/encode schema/Decimal (BigDecimal. "0.15075"))))))
+
+(deftest encoder-spike-decimal-roundtrip
+  (testing "URPX-bnt: decode → encode → decode is a fixed point — same schema,
+            same transformer, no parallel encode-only schemas needed."
+    (let [original (BigDecimal. "0.15075")
+          encoded  (coerce/encode schema/Decimal original)
+          decoded  (coerce/coerce schema/Decimal encoded)]
+      (is (string? encoded))
+      (is (instance? BigDecimal decoded))
+      (is (= original decoded)
+          "BigDecimal equality is scale-sensitive; .toPlainString must preserve scale"))))
+
+(deftest encoder-spike-decimal-passthrough
+  (testing "URPX-bnt: encoding an already-string value passes through unchanged
+            (mirror of the decoder's already-typed pass-through)"
+    (is (= "0.15075"
+           (coerce/encode schema/Decimal "0.15075")))))
+
+;; ---------------------------------------------------------------------------
+;; Encoders for the rest of the schema primitives (URPX-99c)
+;; ---------------------------------------------------------------------------
+
+(deftest encode-primitives-via-schema
+  (testing "Date: LocalDate → ISO date"
+    (is (= "2026-01-01"
+           (coerce/encode schema/Date (LocalDate/of 2026 1 1)))))
+  (testing "Time: LocalTime → 'HH:mm' (or 'HH:mm:ss' if seconds non-zero)"
+    (is (= "16:00"
+           (coerce/encode schema/Time (LocalTime/of 16 0)))))
+  (testing "DateTime: LocalDateTime → ISO local datetime"
+    (is (= "2026-01-01T00:00"
+           (coerce/encode schema/DateTime (LocalDateTime/of 2026 1 1 0 0)))))
+  (testing "MonthNumber: int → '--MM' (zero-padded)"
+    (is (= "--06" (coerce/encode schema/MonthNumber 6)))
+    (is (= "--12" (coerce/encode schema/MonthNumber 12))))
+  (testing "already-string values pass through unchanged"
+    (is (= "2026-01-01" (coerce/encode schema/Date "2026-01-01")))
+    (is (= "--05"       (coerce/encode schema/MonthNumber "--05")))))
+
+(deftest encode-roundtrip-primitives
+  (testing "URPX-99c: every primitive's decode → encode → decode is a fixed point"
+    (let [cases [[schema/Decimal     (BigDecimal. "0.15075")]
+                 [schema/Date        (LocalDate/of 2026 3 1)]
+                 [schema/Time        (LocalTime/of 16 30)]
+                 [schema/DateTime    (LocalDateTime/of 2026 3 1 16 30)]
+                 [schema/MonthNumber 6]
+                 [schema/IsoDuration (java.time.Duration/parse "PT1H30M")]
+                 [schema/IsoDuration (java.time.Period/parse "P1M")]]]
+      (doseq [[s original] cases]
+        (let [encoded (coerce/encode s original)
+              decoded (coerce/coerce s encoded)]
+          (is (string? encoded) (str s ": encoded form is a string"))
+          (is (= original decoded) (str s ": round-trip preserves the typed value")))))))

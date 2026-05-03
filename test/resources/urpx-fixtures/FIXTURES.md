@@ -6,52 +6,49 @@ SPDX-License-Identifier: MIT
 # URPX test fixtures
 
 This directory vendors a small set of [URPX](https://github.com/urpx-org/urpx)
-JSON-LD rate-plan and rate-plan-modifier documents so that the clj-urpx test
-suite is hermetic — `clojure -M:test` works on a fresh clone with no sibling
-checkouts, no environment setup, no submodule dance.
+JSON-LD rate-plan documents so that the clj-urpx test suite is hermetic —
+`clojure -M:test` works on a fresh clone with no sibling checkouts, no
+environment setup, no submodule dance.
+
+The fixtures target **URPX v0.2.0**.
 
 ## Source and license
 
-All vendored `.jsonld` files originate in the upstream URPX project,
-copyright Flux Tailor LLC, distributed under **Apache-2.0**. The accompanying
-`.license` sidecars carry SPDX headers consistent with the URPX project's
-[REUSE](https://reuse.software/) framework. Datasets are slated to transition
-to CDLA-Permissive-2.0 upon URPX's acceptance as a Working Group Draft;
-that transition happens upstream and we re-sync.
+All vendored `.jsonld` files originate in the
+[urpx-tariffs](https://github.com/grid-coordination/urpx-tariffs) project,
+released under **CC0-1.0**. The accompanying `.license` sidecars carry SPDX
+headers consistent with the URPX project's
+[REUSE](https://reuse.software/) framework. The underlying tariff data is from
+public regulatory filings (CPUC advice letters); the URPX serializations are
+the work of the urpx-tariffs contributors.
 
 ## Pinned upstream commits
 
-Fixtures are snapshots, pinned to specific upstream commits.
+Fixtures are snapshots, pinned to a specific upstream commit on the
+`migrate/urpx-v0.2.0` branch of urpx-tariffs.
 
-| Fixture                                               | Upstream branch         | Pinned commit |
-|-------------------------------------------------------|-------------------------|---------------|
-| `cpau-e-1-2025-07-01.jsonld`                          | `cpau-rate-plans`       | `205f030`     |
-| `cpau-e-1-tou-2026-01-01.jsonld`                      | `cpau-rate-plans`       | `205f030`     |
-| `cpau-e-eec-1-2025-09-01.jsonld`                      | `cpau-rate-plans`       | `205f030`     |
-| `cpau-e-hra-2023-01-01.jsonld`                        | `cpau-rate-plans`       | `205f030`     |
-| `cpau-e-nse-1-2025-09-01.jsonld`                      | `cpau-rate-plans`       | `205f030`     |
-| `pge-e-elec-2026-01-01.jsonld`                        | `cpau-rate-plans`       | `205f030`     |
-| `pge-e-tou-d-tou-holiday-2026-03-01.jsonld`           | `tou-daytype-holiday`   | `02be2e4`     |
+| Fixture                              | Upstream branch        | Pinned commit |
+|--------------------------------------|------------------------|---------------|
+| `pge-e-1-2026-03-01.jsonld`          | `migrate/urpx-v0.2.0`  | `cb5b8b3`     |
+| `pge-e-tou-c-2026-03-01.jsonld`      | `migrate/urpx-v0.2.0`  | `cb5b8b3`     |
+| `pge-e-tou-d-2026-03-27.jsonld`      | `migrate/urpx-v0.2.0`  | `cb5b8b3`     |
+| `pge-ev2-2026-03-27.jsonld`          | `migrate/urpx-v0.2.0`  | `cb5b8b3`     |
 
-CPAU fixtures and `pge-e-elec` come from the `cpau-rate-plans` feature branch;
-`pge-e-tou-d-tou-holiday` lives on `tou-daytype-holiday`. Neither branch carries
-`.license` sidecars yet upstream — the sidecars in this directory are written
-locally to match the pattern established on `v0.2.0-candidate` and assert the
-same Apache-2.0 / Flux Tailor attribution. The substantive copyright and
-license terms are upstream's; we only mirror the metadata.
+Each fixture is a JSON-LD `@graph` document bundling a `urpx:RatePlan` with
+its sibling `urpx:RatePlanModifier`(s) plus surrounding metadata
+(`urpx:TariffPublication`, `urpx:ProgramEnrollment`).
 
 ## Re-syncing from upstream
 
-Use `scripts/sync-urpx-fixtures.sh` to refresh from a local URPX checkout:
+Use `scripts/sync-urpx-fixtures.sh` to refresh from a local urpx-tariffs
+checkout:
 
 ```bash
-./scripts/sync-urpx-fixtures.sh /path/to/urpx
+./scripts/sync-urpx-fixtures.sh /path/to/urpx-tariffs
 ```
 
 The script copies each pinned file from the appropriate branch (via
-`git show <commit>:<path>`) into this directory and reports any drift. It
-does not regenerate the `.license` sidecars — those stay stable until the
-URPX licensing model itself moves.
+`git show <commit>:<path>`) into this directory and reports any drift.
 
 When you bump the pinned commits, update the table above so the audit trail
 stays accurate.
@@ -65,6 +62,9 @@ the working directory doesn't matter:
 (require '[clojure.java.io :as io]
          '[urpx.core :as core])
 
-(core/parse-rate-plan
- (io/resource "urpx-fixtures/cpau-e-1-tou-2026-01-01.jsonld"))
+;; Each fixture is a @graph bundle — use load-rate-plan to extract the
+;; unique urpx:RatePlan, or load-graph to access siblings (modifiers,
+;; programs, tariff publication metadata).
+(core/load-rate-plan
+ (.getPath (io/resource "urpx-fixtures/pge-e-1-2026-03-01.jsonld")))
 ```

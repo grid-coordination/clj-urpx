@@ -1,0 +1,526 @@
+(ns urpx.dsl-test
+  (:require [clojure.test :refer [deftest is testing]]
+            [urpx.coerce :as coerce]
+            [urpx.core :as core]
+            [urpx.dsl :as dsl]
+            [urpx.emit :as emit]
+            [urpx.price :as price]
+            [urpx.schema :as schema])
+  (:import [java.time ZonedDateTime ZoneId]))
+
+;; ---------------------------------------------------------------------------
+;; entity-type introspection (URPX-0cq)
+;; ---------------------------------------------------------------------------
+
+(deftest entity-type-extracts-jsonld-type-literal
+  (testing "URPX-0cq: entity-type pulls the @type literal from the schema's
+            :jsonld/type [:= ...] entry"
+    (is (= "urpx:Season"       (dsl/entity-type schema/Season)))
+    (is (= "urpx:MetricInput"  (dsl/entity-type schema/MetricInput)))
+    (is (= "urpx:Ledger"       (dsl/entity-type schema/Ledger)))
+    (is (= "urpx:Holiday"      (dsl/entity-type schema/Holiday)))
+    (is (= "urpx:RatePlan"     (dsl/entity-type schema/RatePlan)))
+    (is (= "urpx:URPXDocument" (dsl/entity-type schema/URPXDocument)))))
+
+(deftest entity-type-returns-nil-on-non-entity-schema
+  (testing "schemas without a :jsonld/type entry return nil (Decimal is a
+            primitive :fn schema, not an entity)"
+    (is (nil? (dsl/entity-type schema/Decimal)))))
+
+;; ---------------------------------------------------------------------------
+;; make-builder mechanics (URPX-0cq)
+;; ---------------------------------------------------------------------------
+
+(deftest make-builder-rejects-non-entity-schema
+  (testing "make-builder throws ex-info if the schema can't supply a @type"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"must have a :jsonld/type"
+                          (dsl/make-builder schema/Decimal)))))
+
+(deftest make-builder-on-the-fly
+  (testing "the generator works for any entity schema, not just the ones
+            with named builders bound at ns load time"
+    (let [build-tou-period (dsl/make-builder schema/TOUPeriod)
+          period (build-tou-period :urpx/name "Summer Peak"
+                                   :urpx/touPeriodNumber 1
+                                   :urpx/hasTimeBracket [])]
+      (is (= "urpx:TOUPeriod" (:jsonld/type period)))
+      (is (= "Summer Peak" (:urpx/name period)))
+      (is (= 1 (:urpx/touPeriodNumber period))))))
+
+;; ---------------------------------------------------------------------------
+;; Season builder via make-builder (URPX-0cq replaces the URPX-4wa spike)
+;; ---------------------------------------------------------------------------
+
+(deftest season-minimal
+  (testing "name-only — produces a valid Season with @type set automatically"
+    (let [s (dsl/season :urpx/seasonName "Summer")]
+      (is (= "urpx:Season" (:jsonld/type s)))
+      (is (= "Summer"      (:urpx/seasonName s)))
+      (is (nil? (coerce/explain schema/Season s))))))
+
+(deftest season-with-int-months
+  (testing "ints pass through the MonthNumber decoder unchanged"
+    (let [s (dsl/season :urpx/seasonName "Summer" :urpx/month [5 6 7 8 9 10])]
+      (is (= [5 6 7 8 9 10] (:urpx/month s)))
+      (is (every? int? (:urpx/month s))))))
+
+(deftest season-auto-coerces-gMonth-strings
+  (testing "URPX-4wa/0cq: '--MM' xsd:gMonth strings auto-coerce via the
+            schema's :decode/urpx-jsonld decoder — no per-property handling
+            needed in the builder"
+    (let [s (dsl/season :urpx/seasonName "Summer"
+                        :urpx/month ["--05" "--06" "--07" "--08" "--09" "--10"])]
+      (is (= [5 6 7 8 9 10] (:urpx/month s))))))
+
+(deftest season-mixed-input-types
+  (testing "auto-coercion is per-leaf — int + string can be mixed"
+    (let [s (dsl/season :urpx/seasonName "Summer"
+                        :urpx/month [5 "--06" 7 "--08"])]
+      (is (= [5 6 7 8] (:urpx/month s))))))
+
+(deftest season-trailing-map-kwargs
+  (testing "Clojure 1.12 trailing-map-as-kwargs unification — both call
+            shapes produce identical output"
+    (let [a (dsl/season :urpx/seasonName "Summer"
+                        :urpx/month [5 6]
+                        :urpx/yearlyRecurrence true)
+          b (dsl/season {:urpx/seasonName "Summer"
+                         :urpx/month [5 6]
+                         :urpx/yearlyRecurrence true})]
+      (is (= a b)))))
+
+(deftest season-handles-optional-id
+  (let [s (dsl/season :jsonld/id "x:summer"
+                      :urpx/seasonName "Summer"
+                      :urpx/month [5 6 7 8 9 10])]
+    (is (= "x:summer" (:jsonld/id s)))))
+
+(deftest season-yearly-recurrence-false-is-preserved
+  (testing "explicit false isn't stripped — only nil values are dropped"
+    (let [s (dsl/season :urpx/seasonName "Special"
+                        :urpx/yearlyRecurrence false)]
+      (is (false? (:urpx/yearlyRecurrence s))))))
+
+(deftest season-nil-kwargs-are-stripped
+  (testing "URPX-0cq: nil kwarg values drop out, so optional fields can be
+            supplied conditionally without producing present-but-nil entries"
+    (let [s (dsl/season :urpx/seasonName "Summer"
+                        :urpx/month nil
+                        :jsonld/id nil)]
+      (is (not (contains? s :urpx/month)))
+      (is (not (contains? s :jsonld/id)))
+      (is (= "Summer" (:urpx/seasonName s))))))
+
+(deftest season-equals-hand-built
+  (testing "URPX-0cq acceptance: generator output equals a hand-built coerced
+            Season — same shape, same values, same types"
+    (let [hand-built {:jsonld/type "urpx:Season"
+                      :jsonld/id "x:summer"
+                      :urpx/seasonName "Summer"
+                      :urpx/month [5 6 7 8 9 10]
+                      :urpx/yearlyRecurrence true}
+          dsl-built  (dsl/season :jsonld/id "x:summer"
+                                 :urpx/seasonName "Summer"
+                                 :urpx/month [5 6 7 8 9 10]
+                                 :urpx/yearlyRecurrence true)]
+      (is (= hand-built dsl-built)))))
+
+(deftest season-validates-against-schema
+  (testing "every legal call yields a Season that validates"
+    (doseq [s [(dsl/season :urpx/seasonName "Summer")
+               (dsl/season :urpx/seasonName "Summer" :urpx/month [6 7 8])
+               (dsl/season :urpx/seasonName "Winter" :urpx/month ["--12" "--01" "--02"])
+               (dsl/season :urpx/seasonName "Special" :urpx/yearlyRecurrence false)]]
+      (is (nil? (coerce/explain schema/Season s))))))
+
+(deftest season-bad-month-throws-with-explanation
+  (testing "out-of-range month surfaces as ex-info with the Malli explanation
+            attached — validates the error UX for the broader DSL"
+    (let [thrown (try (dsl/season :urpx/seasonName "Summer" :urpx/month [13])
+                      nil
+                      (catch clojure.lang.ExceptionInfo e e))]
+      (is (some? thrown))
+      (is (re-find #"invalid urpx:Season" (.getMessage ^Throwable thrown)))
+      (is (some? (:explanation (ex-data thrown))))
+      (is (= [13] (get-in (ex-data thrown) [:input :urpx/month]))))))
+
+;; ---------------------------------------------------------------------------
+;; Other named builders (URPX-0cq) — demonstrate the generator works
+;; across entity-shape variety
+;; ---------------------------------------------------------------------------
+
+(deftest metric-input-with-nested-spec
+  (testing "URPX-0cq: nested-entity coercion — urpx:hasMetricSpecification
+            takes a raw MetricSpecification map; coerce/coerce traverses it"
+    (let [mi (dsl/metric-input
+              :urpx/name "Energy consumed (kWh)"
+              :urpx/metricInputType {:jsonld/id "urpx:profileMetricInput"}
+              :urpx/hasMetricSpecification
+              {:jsonld/type "urpx:MetricSpecification"
+               :urpx/measurementKind {:jsonld/id "urpx:energy"}
+               :urpx/unitOfMeasure   {:jsonld/id "urpx:kWh"}})]
+      (is (= "urpx:MetricInput" (:jsonld/type mi)))
+      (is (= "urpx:MetricSpecification"
+             (get-in mi [:urpx/hasMetricSpecification :jsonld/type])))
+      (is (nil? (coerce/explain schema/MetricInput mi))))))
+
+(deftest ledger-with-refs
+  (testing "URPX-0cq: Ref-bearing fields work — urpx:referencesMetricInput
+            and urpx:ledgerType are passed as :jsonld/id maps"
+    (let [l (dsl/ledger :urpx/name "Commodity"
+                        :urpx/ledgerType {:jsonld/id "urpx:supplyLedger"}
+                        :urpx/referencesMetricInput [{:jsonld/id "x:mi-energy"}])]
+      (is (= "urpx:Ledger" (:jsonld/type l)))
+      (is (nil? (coerce/explain schema/Ledger l))))))
+
+(deftest holiday-with-date-coercion
+  (testing "URPX-0cq: typed-leaf coercion — Date strings auto-coerce into
+            LocalDate via the schema's :decode/urpx-jsonld decoder"
+    (let [h (dsl/holiday :urpx/holidayName "Christmas"
+                         :urpx/holidayDate "2026-12-25")]
+      (is (= "urpx:Holiday" (:jsonld/type h)))
+      (is (instance? java.time.LocalDate (:urpx/holidayDate h)))
+      (is (= (java.time.LocalDate/of 2026 12 25) (:urpx/holidayDate h))))))
+
+;; ---------------------------------------------------------------------------
+;; Auto-coercion of raw Clojure numbers (URPX-4w3)
+;; ---------------------------------------------------------------------------
+
+(deftest dsl-builders-accept-clojure-number-literals-for-decimal-fields
+  (testing "URPX-4w3: a builder for an entity with a Decimal field accepts
+            an idiomatic Clojure number — the user no longer has to write
+            (BigDecimal. \"0.15075\") at every call site"
+    (let [build-price (dsl/make-builder schema/Price)
+          p (build-price :urpx/unitPrice 0.15075
+                         :urpx/referencesPriceDefinition {:jsonld/id "x:pd"})]
+      (is (instance? BigDecimal (:urpx/unitPrice p)))
+      (is (= (BigDecimal. "0.15075") (:urpx/unitPrice p))))))
+
+(deftest dsl-builders-pass-through-pre-typed-decimals
+  (testing "URPX-4w3: callers who already have a BigDecimal in hand can pass
+            it through; no double-conversion churn"
+    (let [build-price (dsl/make-builder schema/Price)
+          original (BigDecimal. "0.15075")
+          p (build-price :urpx/unitPrice original
+                         :urpx/referencesPriceDefinition {:jsonld/id "x:pd"})]
+      (is (= original (:urpx/unitPrice p)))
+      (is (= 5 (.scale ^BigDecimal (:urpx/unitPrice p)))
+          "scale preserved (0.15075 has scale 5)"))))
+
+(deftest dsl-builders-accept-mixed-raw-and-typed-inputs
+  (testing "URPX-4w3: every leaf decoder routes its own input shape; a single
+            builder call can mix raw and pre-typed values across fields"
+    (let [build-price (dsl/make-builder schema/Price)
+          p (build-price :urpx/unitPrice 0.15075                                  ; double
+                         :urpx/startDate "2026-03-01"                             ; ISO string
+                         :urpx/endDate (java.time.LocalDate/of 2026 12 31)        ; pre-typed
+                         :urpx/referencesPriceDefinition {:jsonld/id "x:pd"})]
+      (is (= (BigDecimal. "0.15075") (:urpx/unitPrice p)))
+      (is (= (java.time.LocalDate/of 2026 3 1)  (:urpx/startDate p)))
+      (is (= (java.time.LocalDate/of 2026 12 31) (:urpx/endDate p)))
+      (is (nil? (coerce/explain schema/Price p))))))
+
+;; ---------------------------------------------------------------------------
+;; Local-symbol refs (URPX-8fo) — dsl-scope + qualified-keyword resolution
+;; ---------------------------------------------------------------------------
+
+(deftest local-id-arg-sets-jsonld-id-inside-scope
+  (testing "URPX-8fo: leading qualified-keyword arg becomes the entity's
+            local @id when called inside a dsl-scope"
+    (let [s (dsl/dsl-scope (dsl/season ::summer :urpx/seasonName "Summer"))]
+      (is (= "summer" (:jsonld/id s))
+          "default id is the keyword's local name"))))
+
+(deftest local-id-arg-ignored-outside-scope
+  (testing "URPX-8fo: outside dsl-scope, builders only accept canonical
+            kwargs — a leading qualified keyword would be (mis-)parsed as
+            a kwarg key, which fails because :foo expects a value"
+    (is (thrown? Exception
+                 (dsl/season ::summer :urpx/seasonName "Summer")))))
+
+(deftest qualified-keyword-value-resolves-to-ref
+  (testing "URPX-8fo: a kwarg value that's a qualified keyword resolves to
+            a {:jsonld/id ...} Ref via the registry"
+    (let [pd (dsl/dsl-scope
+              (dsl/season ::summer :urpx/seasonName "Summer")
+              ((dsl/make-builder schema/PriceDefinition)
+               :urpx/name "Commodity Summer"
+               :urpx/appliesInSeason ::summer
+               :urpx/referencesLedger {:jsonld/id "x:commodity"}))]
+      (is (= [{:jsonld/id "summer"}] (:urpx/appliesInSeason pd))
+          "::summer resolved to a Ref vector (single-or-vec→vec normalizes)"))))
+
+(deftest local-refs-resolve-inside-vectors
+  (testing "URPX-8fo: vector-typed kwargs walk element-wise — each
+            qualified keyword resolves to its own Ref"
+    (let [pd (dsl/dsl-scope
+              (dsl/season ::summer :urpx/seasonName "Summer")
+              (dsl/season ::winter :urpx/seasonName "Winter")
+              ((dsl/make-builder schema/PriceDefinition)
+               :urpx/name "All-season"
+               :urpx/appliesInSeason [::summer ::winter]
+               :urpx/referencesLedger {:jsonld/id "x:commodity"}))]
+      (is (= [{:jsonld/id "summer"} {:jsonld/id "winter"}]
+             (:urpx/appliesInSeason pd))))))
+
+(deftest unknown-local-ref-throws
+  (testing "URPX-8fo: a reference to an undeclared keyword fails loud"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"DSL local ref not declared"
+         (dsl/dsl-scope
+          ((dsl/make-builder schema/PriceDefinition)
+           :urpx/name "broken"
+           :urpx/appliesInSeason ::nowhere
+           :urpx/referencesLedger {:jsonld/id "x:l"}))))))
+
+(deftest duplicate-local-id-throws
+  (testing "URPX-8fo: declaring the same local sym twice fails loud"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"DSL local ref already declared"
+         (dsl/dsl-scope
+          (dsl/season ::summer :urpx/seasonName "Summer")
+          (dsl/season ::summer :urpx/seasonName "Hot Summer"))))))
+
+(deftest each-dsl-scope-has-its-own-registry
+  (testing "URPX-8fo: scopes don't leak — the same local sym can be declared
+            in two distinct scopes without collision"
+    (let [a (dsl/dsl-scope (dsl/season ::summer :urpx/seasonName "Scope-A Summer"))
+          b (dsl/dsl-scope (dsl/season ::summer :urpx/seasonName "Scope-B Summer"))]
+      (is (= "summer" (:jsonld/id a)))
+      (is (= "summer" (:jsonld/id b)))
+      (is (= "Scope-A Summer" (:urpx/seasonName a)))
+      (is (= "Scope-B Summer" (:urpx/seasonName b))))))
+
+(deftest worked-example-from-issue-description
+  (testing "URPX-8fo: the example call shape from the issue description —
+            seasons declared with local syms, PD references them by sym"
+    (let [pd (dsl/dsl-scope
+              (dsl/season ::summer :urpx/seasonName "Summer"
+                          :urpx/month [5 6 7 8 9 10])
+              (dsl/season ::winter :urpx/seasonName "Winter"
+                          :urpx/month [11 12 1 2 3 4])
+              (dsl/ledger ::commodity :urpx/name "Commodity"
+                          :urpx/ledgerType {:jsonld/id "urpx:supplyLedger"})
+              (dsl/price-definition
+               ::pd-summer
+               :urpx/name "Commodity Summer"
+               :urpx/appliesInSeason ::summer
+               :urpx/referencesLedger ::commodity))]
+      (is (= "pd-summer" (:jsonld/id pd)))
+      (is (= [{:jsonld/id "summer"}] (:urpx/appliesInSeason pd)))
+      (is (= {:jsonld/id "commodity"} (:urpx/referencesLedger pd))))))
+
+;; ---------------------------------------------------------------------------
+;; Kebab-case kwarg aliases (URPX-upf)
+;; ---------------------------------------------------------------------------
+
+(deftest kebab-case-aliases-resolve-to-canonical
+  (testing "URPX-upf: every builder accepts kebab-cased :urpx/* short names
+            in addition to the canonical form"
+    (let [s (dsl/season :season-name "Summer"
+                        :month [5 6 7 8 9 10]
+                        :yearly-recurrence true)]
+      (is (= "Summer" (:urpx/seasonName s)))
+      (is (= [5 6 7 8 9 10] (:urpx/month s)))
+      (is (true? (:urpx/yearlyRecurrence s)))
+      (is (nil? (coerce/explain schema/Season s))))))
+
+(deftest canonical-and-alias-keys-can-mix
+  (testing "URPX-upf: canonical and short-form keys can be mixed in one call"
+    (let [s (dsl/season :urpx/seasonName "Summer" :month [5 6 7 8 9 10])]
+      (is (= "Summer" (:urpx/seasonName s)))
+      (is (= [5 6 7 8 9 10] (:urpx/month s))))))
+
+(deftest acronym-prefixes-kebab-correctly
+  (testing "URPX-upf: schema names with acronym prefixes (URPXDocument,
+            TOUSchedule) kebab-case correctly — boundary between an all-caps
+            run and the next CamelCase word inserts a hyphen"
+    (is (some? (var-get #'urpx.dsl/urpx-document)))
+    (is (some? (var-get #'urpx.dsl/tou-schedule)))
+    (is (some? (var-get #'urpx.dsl/tou-period)))))
+
+;; ---------------------------------------------------------------------------
+;; Sample of new named builders (URPX-upf) — spot-check coverage across the
+;; ~35 entity types
+;; ---------------------------------------------------------------------------
+
+(deftest builder-coverage-spot-check
+  (testing "URPX-upf: sample of new builders defined via defbuilders all work
+            and produce valid coerced entities"
+    (let [tb (dsl/time-bracket :urpx/startTime "16:00:00"
+                               :urpx/endTime "21:00:00"
+                               :urpx/dayType {:jsonld/id "urpx:weekdayDays"})
+          cm (dsl/calculation-method :urpx/intervalDuration "P1M")
+          org (dsl/organization
+               :urpx/legalName "Pacific Gas & Electric"
+               :urpx/organizationType {:jsonld/id "urpx:investorOwnedUtility"})]
+      (is (= "urpx:TimeBracket" (:jsonld/type tb)))
+      (is (nil? (coerce/explain schema/TimeBracket tb)))
+      (is (= "urpx:CalculationMethod" (:jsonld/type cm)))
+      (is (instance? java.time.Period (:urpx/intervalDuration cm)))
+      (is (= "urpx:Organization" (:jsonld/type org)))))
+  (testing "rate plan + version + URPXDocument builders all produce the
+            expected @types"
+    (let [rpv (dsl/rate-plan-version :urpx/effectiveDateTime "2026-01-01T00:00:00"
+                                     :urpx/hasPlanElements
+                                     {:jsonld/type "urpx:PlanElements"
+                                      :urpx/hasMetricInput
+                                      [{:jsonld/type "urpx:MetricInput"
+                                        :urpx/name "kWh"
+                                        :urpx/metricInputType
+                                        {:jsonld/id "urpx:measuredMetricInput"}}]
+                                      :urpx/hasBillingModel
+                                      {:jsonld/type "urpx:BillingModel"
+                                       :urpx/hasPriceDefinition []}}
+                                     :urpx/hasPrices {:jsonld/type "urpx:Prices"})
+          rp (dsl/rate-plan :urpx/ratePlanUniqueIdentifier "P1"
+                            :urpx/name "Plan One"
+                            :urpx/initialEffectiveDate "2026-01-01"
+                            :urpx/hasRatePlanVersion rpv)
+          doc (dsl/urpx-document
+               :urpx/targetURPXVersion "https://example.com/urpx-v0.2.0"
+               :urpx/hasRatePlan rp)]
+      (is (= "urpx:RatePlanVersion" (:jsonld/type rpv)))
+      (is (= "urpx:RatePlan"        (:jsonld/type rp)))
+      (is (= "urpx:URPXDocument"    (:jsonld/type doc)))
+      (is (vector? (:urpx/hasRatePlan doc))
+          "single-or-vec→vec on URPXDocument's hasRatePlan still applies"))))
+
+;; ---------------------------------------------------------------------------
+;; End-to-end CPAU-E-2 via the DSL (URPX-z2l)
+;; ---------------------------------------------------------------------------
+;; Strongest available demonstration of the full DSL: build a non-TOU
+;; two-season rate plan idiomatically, then exercise it three ways —
+;; schema validation, in-memory price resolution, and JSON-LD round-trip
+;; through urpx.emit. Mirrors the hand-built `non-tou-seasonal-fixture`
+;; from urpx.price-test (URPX-2nk) so the resolution targets are pinned
+;; to the published CPAU E-2 Summer / Winter totals.
+
+(def la-zone (ZoneId/of "America/Los_Angeles"))
+
+(defn- zdt
+  ([y mo d h] (zdt y mo d h 0))
+  ([y mo d h mi] (ZonedDateTime/of y mo d h mi 0 0 la-zone)))
+
+(defn- cpau-e-2-via-dsl
+  "Author a CPAU-E-2-shaped rate plan via the DSL — local-symbol refs,
+   short-form kwargs, raw inputs that auto-coerce."
+  []
+  (dsl/dsl-scope
+   (let [summer    (dsl/season ::summer
+                               :season-name "Summer"
+                               :month [5 6 7 8 9 10])
+         winter    (dsl/season ::winter
+                               :season-name "Winter"
+                               :month [11 12 1 2 3 4])
+         mi-energy (dsl/metric-input ::mi-energy
+                                     :name "kWh"
+                                     :metric-input-type {:jsonld/id "urpx:profileMetricInput"}
+                                     :has-metric-specification
+                                     (dsl/metric-specification
+                                      :measurement-kind {:jsonld/id "urpx:energy"}
+                                      :unit-of-measure  {:jsonld/id "urpx:kWh"}))
+         l-comm    (dsl/ledger ::ledger-commodity
+                               :name "Commodity"
+                               :ledger-type {:jsonld/id "urpx:supplyLedger"}
+                               :references-metric-input [::mi-energy])
+         l-dist    (dsl/ledger ::ledger-distribution
+                               :name "Distribution"
+                               :ledger-type {:jsonld/id "urpx:distributionLedger"}
+                               :references-metric-input [::mi-energy])
+         l-pb      (dsl/ledger ::ledger-public-benefits
+                               :name "Public Benefits"
+                               :ledger-type {:jsonld/id "urpx:bundledLedger"}
+                               :references-metric-input [::mi-energy])
+         pd-cs     (dsl/price-definition ::pd-commodity-summer
+                                         :name "Commodity Summer"
+                                         :applies-in-season ::summer
+                                         :references-ledger ::ledger-commodity)
+         pd-cw     (dsl/price-definition ::pd-commodity-winter
+                                         :name "Commodity Winter"
+                                         :applies-in-season ::winter
+                                         :references-ledger ::ledger-commodity)
+         pd-ds     (dsl/price-definition ::pd-distribution-summer
+                                         :name "Distribution Summer"
+                                         :applies-in-season ::summer
+                                         :references-ledger ::ledger-distribution)
+         pd-dw     (dsl/price-definition ::pd-distribution-winter
+                                         :name "Distribution Winter"
+                                         :applies-in-season ::winter
+                                         :references-ledger ::ledger-distribution)
+         pd-pbs    (dsl/price-definition ::pd-public-benefits-summer
+                                         :name "Public Benefits Summer"
+                                         :applies-in-season ::summer
+                                         :references-ledger ::ledger-public-benefits)
+         pd-pbw    (dsl/price-definition ::pd-public-benefits-winter
+                                         :name "Public Benefits Winter"
+                                         :applies-in-season ::winter
+                                         :references-ledger ::ledger-public-benefits)
+         price-of  (fn [pd-ref unit]
+                     (dsl/price :references-price-definition pd-ref
+                                :unit-price unit
+                                :start-date "2025-07-01"))]
+     (dsl/rate-plan
+      :rate-plan-unique-identifier "TEST-CPAU-E-2"
+      :name "Non-TOU two-season test plan"
+      :initial-effective-date "2025-07-01"
+      :has-rate-plan-version
+      (dsl/rate-plan-version
+       :effective-date-time "2025-07-01T00:00:00"
+       :price-currency "USD"
+       :has-plan-elements
+       (dsl/plan-elements
+        :has-seasons      [summer winter]
+        :has-metric-input [mi-energy]
+        :has-billing-model
+        (dsl/billing-model
+         :has-ledger            [l-comm l-dist l-pb]
+         :has-price-definition  [pd-cs pd-cw pd-ds pd-dw pd-pbs pd-pbw]))
+       :has-prices
+       (dsl/prices
+        :has-price-set
+        [(dsl/price-set
+          :has-price [(price-of ::pd-commodity-summer        0.15075)
+                      (price-of ::pd-commodity-winter        0.09334)
+                      (price-of ::pd-distribution-summer     0.10806)
+                      (price-of ::pd-distribution-winter     0.07352)
+                      (price-of ::pd-public-benefits-summer  0.00604)
+                      (price-of ::pd-public-benefits-winter  0.00604)])]))))))
+
+(deftest cpau-e-2-via-dsl-validates
+  (testing "URPX-z2l: a CPAU-E-2-shaped plan authored via the DSL passes
+            full RatePlan schema validation"
+    (let [plan (cpau-e-2-via-dsl)]
+      (is (nil? (coerce/explain schema/RatePlan plan))))))
+
+(deftest cpau-e-2-via-dsl-resolves-summer
+  (testing "URPX-z2l: the DSL plan resolves at a Summer probe instant to
+            the published $0.26485/kWh CPAU E-2 Summer total"
+    (let [plan (cpau-e-2-via-dsl)
+          r    (price/resolve-prices plan (zdt 2026 7 15 17))]
+      (is (= (BigDecimal. "0.26485") (price/marginal-unit-rate r))
+          "Summer marginal = 0.15075 + 0.10806 + 0.00604"))))
+
+(deftest cpau-e-2-via-dsl-resolves-winter
+  (testing "URPX-z2l: the DSL plan resolves at a Winter probe instant to
+            the published $0.17290/kWh CPAU E-2 Winter total"
+    (let [plan (cpau-e-2-via-dsl)
+          r    (price/resolve-prices plan (zdt 2026 1 15 12))]
+      (is (= (BigDecimal. "0.17290") (price/marginal-unit-rate r))
+          "Winter marginal = 0.09334 + 0.07352 + 0.00604"))))
+
+(deftest cpau-e-2-via-dsl-round-trips
+  (testing "URPX-z2l: DSL → emit → re-parse → re-coerce yields a structurally
+            equal plan. End-to-end validates the DSL composes with the
+            write-side without information loss. `{:context nil}` suppresses
+            the URPX-awl default @context so the re-coerced shape matches
+            the DSL-built original (which doesn't carry one)."
+    (let [plan (cpau-e-2-via-dsl)
+          re-coerced (-> (emit/write-rate-plan plan {:context nil})
+                         java.io.StringReader.
+                         core/parse-rate-plan
+                         coerce/coerce-rate-plan)]
+      (is (= plan re-coerced)))))

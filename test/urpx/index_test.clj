@@ -26,27 +26,27 @@
       (is (= "Root" (:jsonld/type (idx "root"))))
       (is (nil? (idx "ref-only"))))))
 
-(deftest build-index-on-cpau-tou
-  (let [coerced (fixtures/load-rate-plan "cpau-e-1-tou-2026-01-01")
-        idx (index/build-index coerced)]
+(deftest build-index-on-pge-e-1
+  (let [plan (fixtures/load-rate-plan "pge-e-1-2026-03-01")
+        idx (index/build-index plan)]
     (testing "every entity that has a :jsonld/id is reachable by id"
-      (is (some? (idx "urpx:cpau-e-1-tou")) "top-level RatePlan")
-      (is (some? (idx "urpx:cpau-e-1-tou-2026-01-01")) "RatePlanVersion")
-      (is (some? (idx "urpx:cpau-tou-season-summer")) "Season")
-      (is (some? (idx "urpx:cpau-tou-period-summer-peak")) "TOUPeriod")
-      (is (some? (idx "urpx:cpau-tou-pd-commodity-summer-peak")) "PriceDefinition")
-      (is (some? (idx "urpx:cpau-tou-price-commodity-summer-peak")) "Price"))
+      (is (some? (idx "pge:e-1")) "top-level RatePlan")
+      (is (some? (idx "pge:e-1-2026-03-01")) "RatePlanVersion")
+      (is (some? (idx "pge:season-summer")) "Season")
+      (is (some? (idx "pge:tier-summer-t1")) "ServiceTier")
+      (is (some? (idx "pge:pd-cia")) "PriceDefinition")
+      (is (some? (idx "pge:price-cia-summer-t1")) "Price"))
 
     (testing "vocabulary IRIs (not nodes in this doc) are not indexed"
-      (is (nil? (idx "urpx:peakTier")))
+      (is (nil? (idx "urpx:residentialKind")))
       (is (nil? (idx "urpx:allDays")))
       (is (nil? (idx "urpx:bundledLedger"))))
 
     (testing "resolve-ref handles both id strings and ref maps"
-      (let [season-ref {:jsonld/id "urpx:cpau-tou-season-summer"}]
+      (let [season-ref {:jsonld/id "pge:season-summer"}]
         (is (= "Summer" (:urpx/seasonName (index/resolve-ref idx season-ref))))
         (is (= "Summer" (:urpx/seasonName
-                         (index/resolve-ref idx "urpx:cpau-tou-season-summer"))))))
+                         (index/resolve-ref idx "pge:season-summer"))))))
 
     (testing "resolve-ref returns nil for unknown ids and non-refs"
       (is (nil? (index/resolve-ref idx "urpx:does-not-exist")))
@@ -54,9 +54,8 @@
       (is (nil? (index/resolve-ref idx 42)))
       (is (nil? (index/resolve-ref idx nil))))
 
-    (testing "indexed entity round-trips through resolve-ref"
-      (let [pd (index/get-entity idx "urpx:cpau-tou-pd-commodity-summer-peak")
-            referencing-price (index/get-entity idx "urpx:cpau-tou-price-commodity-summer-peak")
-            resolved (index/resolve-ref idx (:urpx/referencesPriceDefinition referencing-price))]
-        (is (identical? pd resolved)
-            "Price -> PriceDefinition reference resolves to the indexed entity")))))
+    (testing "v0.2.0 PD->Ledger reference resolves to the indexed Ledger"
+      (let [pd (index/get-entity idx "pge:pd-cia")
+            ledger (index/resolve-ref idx (:urpx/referencesLedger pd))]
+        (is (= "pge:ledger-cia" (:jsonld/id ledger)))
+        (is (= "Conservation Incentive Adjustment" (:urpx/name ledger)))))))

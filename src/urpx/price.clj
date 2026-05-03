@@ -106,10 +106,15 @@
 
 (defn- find-tou-period
   "Find the TOUPeriod whose TimeBracket matches the given season, date,
-   day-of-week, and local-time. Walks every tier's periods (the tier hierarchy
-   is for classification — what matters for resolution is the bracket match)."
-  [tou-schedule season-id ^LocalDate date ^LocalTime t ^DayOfWeek dow holiday?]
-  (when tou-schedule
+   day-of-week, and local-time across every TOUSchedule in `tou-schedules`.
+   Walks every tier's periods (the tier hierarchy is for classification —
+   what matters for resolution is the bracket match).
+
+   BillingModel.hasTOUSchedule is a vector (URPX-qb5): one schedule per
+   MetricInput when the rate plan TOU-zones multiple metrics. The first
+   bracket-matching period across all schedules wins."
+  [tou-schedules season-id ^LocalDate date ^LocalTime t ^DayOfWeek dow holiday?]
+  (when (seq tou-schedules)
     (some
      (fn [period]
        (when (some
@@ -119,7 +124,9 @@
                      (time-in-bracket? t bracket)))
               (:urpx/hasTimeBracket period))
          period))
-     (mapcat :urpx/hasTOUPeriod (:urpx/hasTOUTier tou-schedule)))))
+     (mapcat (fn [schedule]
+               (mapcat :urpx/hasTOUPeriod (:urpx/hasTOUTier schedule)))
+             tou-schedules))))
 
 ;; ---------------------------------------------------------------------------
 ;; Active-price lookup
@@ -129,23 +136,71 @@
   [^LocalDate a ^LocalDate b]
   (not (.isAfter a b)))
 
+(defn- price-set-alternative-for
+  "Within a PriceSetAlternatives, find the alternative whose
+   urpx:referencesProfileAlternative matches the caller-selected
+   :jsonld/id. Returns the matching PriceSetAlternative or nil."
+  [psas chosen-pa-id]
+  (when chosen-pa-id
+    (some (fn [psa]
+            (when (= chosen-pa-id (get-in psa [:urpx/referencesProfileAlternative :jsonld/id]))
+              psa))
+          (:urpx/hasPriceSetAlternative psas))))
+
+(defn- prices-from-alternatives
+  "Walk `Prices.hasPriceSetAlternatives`. For each PriceSetAlternatives,
+   look up the caller's chosen ProfileAlternative for the referenced
+   ProfileAlternatives in `selection` (a {:jsonld/id of ProfileAlternatives
+   → :jsonld/id of chosen ProfileAlternative} map). The matching
+   PriceSetAlternative's hasPrice list contributes to the active-prices
+   stream, gated by start-date as usual.
+
+   When the caller hasn't supplied a selection for a given
+   PriceSetAlternatives, that set is silently skipped — prices for the
+   unresolved alternative aren't surfaced. Programmatic ConditionExpression
+   evaluation against a customer profile is a future enhancement; today
+   the caller drives selection explicitly via `:profile-alternatives` opts."
+  [prices ^LocalDate query-date selection]
+  (mapcat (fn [psas]
+            (let [pa-id   (get-in psas [:urpx/referencesProfileAlternatives :jsonld/id])
+                  chosen  (get selection pa-id)
+                  picked  (price-set-alternative-for psas chosen)]
+              (when picked
+                (keep (fn [p]
+                        (when-let [sd (:urpx/startDate p)]
+                          (when (not-after? sd query-date) [p sd])))
+                      (:urpx/hasPrice picked)))))
+          (:urpx/hasPriceSetAlternatives prices)))
+
 (defn- scoped-prices
   "Return a seq of [price effective-start-date] pairs for every Price under
-   `prices` whose effective start-date is <= `query-date`. Walks both the
-   flat :urpx/hasPrice list and PriceSet-nested prices; PriceSet startDate
-   scopes contained Prices when they don't carry their own."
-  [prices ^LocalDate query-date]
-  (concat
-   (keep (fn [p]
-           (when-let [sd (:urpx/startDate p)]
-             (when (not-after? sd query-date) [p sd])))
-         (:urpx/hasPrice prices))
-   (mapcat (fn [ps]
-             (let [sd (:urpx/startDate ps)]
-               (when (and sd (not-after? sd query-date))
-                 (map (fn [p] [p (or (:urpx/startDate p) sd)])
-                      (:urpx/hasPrice ps)))))
-           (:urpx/hasPriceSet prices))))
+   `prices` whose effective start-date is <= `query-date`. Walks the flat
+   :urpx/hasPrice list, PriceSet-nested prices, and PriceSetAlternatives-
+   nested prices when the caller supplies an explicit
+   `:profile-alternatives` selection in opts (URPX-vlf).
+
+   Per URPX SHACL, PriceSet.startDate is optional (sh:minCount 0). When the
+   PriceSet carries one, it acts as the date floor for any contained Price
+   that does not declare its own; when the PriceSet omits it, each contained
+   Price must carry its own urpx:startDate (CPAU E-2 shape). A PriceSet
+   whose startDate is in the future drops the whole set; otherwise contained
+   Prices are walked individually and admitted by their own effective dates."
+  [prices ^LocalDate query-date opts]
+  (let [selection (:profile-alternatives opts {})]
+    (concat
+     (keep (fn [p]
+             (when-let [sd (:urpx/startDate p)]
+               (when (not-after? sd query-date) [p sd])))
+           (:urpx/hasPrice prices))
+     (mapcat (fn [ps]
+               (let [ps-sd (:urpx/startDate ps)]
+                 (when (or (nil? ps-sd) (not-after? ps-sd query-date))
+                   (keep (fn [p]
+                           (when-let [sd (or (:urpx/startDate p) ps-sd)]
+                             (when (not-after? sd query-date) [p sd])))
+                         (:urpx/hasPrice ps)))))
+             (:urpx/hasPriceSet prices))
+     (prices-from-alternatives prices query-date selection))))
 
 (defn- active-prices-by-pd
   "Build a map from PriceDefinition id to a vector of currently-active
@@ -162,7 +217,7 @@
 
    For non-tiered ledgers (one PD, one Price, no serviceTierNumber) the
    returned vector has a single entry."
-  [prices ^LocalDate query-date]
+  [prices ^LocalDate query-date opts]
   (let [latest-per-key
         (reduce (fn [acc [price sd]]
                   (let [k [(get-in price [:urpx/referencesPriceDefinition :jsonld/id])
@@ -171,7 +226,7 @@
                     (if (or (nil? existing-sd) (.isAfter sd existing-sd))
                       (assoc acc k [price sd])
                       acc)))
-                {} (scoped-prices prices query-date))]
+                {} (scoped-prices prices query-date opts))]
     (reduce-kv (fn [acc [pd-id _] pair]
                  (update acc pd-id (fnil conj []) pair))
                {} latest-per-key)))
@@ -185,18 +240,23 @@
   (reduce (fn [acc [price :as pair]]
             (let [pd-id (get-in price [:urpx/referencesPriceDefinition :jsonld/id])]
               (update acc pd-id (fnil conj []) pair)))
-          {} (scoped-prices prices query-date)))
+          {} (scoped-prices prices query-date nil)))
 
 ;; ---------------------------------------------------------------------------
 ;; Service-tier lookup (block tiers, e.g. CPAU E-1 baseline / over-baseline)
 ;; ---------------------------------------------------------------------------
 
 (defn- service-tiers-by-number
-  "Index ServiceTier entities (from BillingModel.hasServiceTier) by their
-   :urpx/serviceTierNumber. Empty map when the plan is not block-tiered."
+  "Index ServiceTier entities (across every ServiceTiers container at
+   BillingModel.hasServiceTiers, walking each container's :urpx/hasServiceTier
+   list) by :urpx/serviceTierNumber. Empty map when the plan is not
+   block-tiered. URPX-qb5/URPX-6hf: hasServiceTiers is a vector — single
+   ServiceTiers fixtures (CPAU E-1, PG&E E-1) coexist with
+   matrix-of-ServiceTiers patterns (PG&E E-TOU-C baseline-tier modifier:
+   one ServiceTiers per (territory, code) cell)."
   [billing-model]
   (into {} (map (juxt :urpx/serviceTierNumber identity))
-        (:urpx/hasServiceTier billing-model)))
+        (mapcat :urpx/hasServiceTier (:urpx/hasServiceTiers billing-model))))
 
 (defn- tier-info
   "Pull tier metadata for a (PD, Price) pair into the resolved-entry shape.
@@ -241,6 +301,72 @@
     (nil? (:urpx/touPeriodNumber pd)) true
     :else (= (:urpx/touPeriodNumber pd) resolved-period-num)))
 
+(defn- mi-by-id
+  "Index PlanElements.hasMetricInput by :jsonld/id. Used to decorate each
+   resolved Ledger with its MetricInput's type, measurementKind, and
+   unitOfMeasure — without this, marginal-unit-rate can't tell a per-kWh
+   energy ledger from a per-meter or per-household service-charge ledger."
+  [plan-elements]
+  (into {} (map (juxt :jsonld/id identity))
+        (:urpx/hasMetricInput plan-elements)))
+
+(defn- ledger-metric-info
+  "Return the resolved-shape keys that describe `ledger`'s referenced
+   MetricInput. Looks up the first :urpx/referencesMetricInput Ref against
+   `mi-index` (a {id -> MetricInput} map). Missing fields are simply
+   omitted; consumers that need a particular dimension (e.g. energy-only
+   marginal sums) test on what's present."
+  [ledger mi-index]
+  (let [mi-id (some-> ledger :urpx/referencesMetricInput first :jsonld/id)
+        mi    (when mi-id (mi-index mi-id))
+        spec  (:urpx/hasMetricSpecification mi)]
+    (cond-> {}
+      mi-id (assoc :urpx.resolved/metric-input-id mi-id)
+      (:urpx/metricInputType mi)
+      (assoc :urpx.resolved/metric-input-type (:urpx/metricInputType mi))
+      (:urpx/measurementKind spec)
+      (assoc :urpx.resolved/measurement-kind (:urpx/measurementKind spec))
+      (:urpx/unitOfMeasure spec)
+      (assoc :urpx.resolved/unit-of-measure (:urpx/unitOfMeasure spec)))))
+
+(defn- pd-active-in-month?
+  "True if `pd`'s urpx:hasApplicabilityRule constraints (if any) admit the
+   query date's month-of-year. Each rule that carries a non-empty
+   urpx:month list contributes a conjunctive constraint; a rule without
+   urpx:month is permissive at this layer (any urpx:hasConditionExpression
+   gating is deferred — see URPX-axn). PDs without applicability rules
+   are always month-active."
+  [pd ^java.time.LocalDate date]
+  (let [rules (:urpx/hasApplicabilityRule pd)]
+    (or (empty? rules)
+        (let [m (.getMonthValue date)]
+          (every? (fn [rule]
+                    (let [months (:urpx/month rule)]
+                      (or (empty? months)
+                          (some #{m} months))))
+                  rules)))))
+
+(defn- pd-active-in-season?
+  "True if `pd`'s urpx:appliesInSeason refs (if any) admit the query date's
+   month-of-year. Each ref is resolved via `seasons-by-id` to a Season; the
+   Season's urpx:month list is the gate. Multiple refs are disjunctive (any
+   admitting season is enough). PDs without urpx:appliesInSeason are always
+   season-active.
+
+   This complements `pd-active-in-month?` to support non-TOU seasonal pricing
+   (URPX-2nk) — where the seasonal partition isn't carried by a TOUPeriod
+   indirection (no TOU schedule), so the only month-gating signal is the
+   PD → Season pointer plus Season.month."
+  [pd seasons-by-id ^java.time.LocalDate date]
+  (let [refs (:urpx/appliesInSeason pd)]
+    (or (empty? refs)
+        (let [m (.getMonthValue date)]
+          (boolean
+           (some (fn [ref]
+                   (when-let [season (seasons-by-id (:jsonld/id ref))]
+                     (some #{m} (:urpx/month season))))
+                 refs))))))
+
 ;; ---------------------------------------------------------------------------
 ;; Public API
 ;; ---------------------------------------------------------------------------
@@ -259,6 +385,16 @@
                 non-holiday — so brackets that opt out of non-holidays
                 (urpx:includeNonHolidays = false, e.g. holiday-only off-peak
                 overrides) will never match.
+
+     :profile-alternatives  a {<ProfileAlternatives @id> <ProfileAlternative @id>}
+                map driving customer-profile-driven price selection. When the
+                rate plan declares Prices.hasPriceSetAlternatives (URPX v0.2.0
+                ProfileAlternatives idiom — income-tier CARE/FERA/Standard,
+                vintage-PCIA default tier, voltage configuration, …) each
+                PriceSetAlternatives surfaces the prices of the explicitly-
+                chosen alternative. Unmapped alternatives are silently skipped
+                — programmatic ConditionExpression evaluation against a
+                customer profile is a future enhancement.
 
    Examples of `:holiday?`:
 
@@ -289,10 +425,16 @@
       :urpx.resolved/ledgers          [LedgerResult]}
 
    where each LedgerResult is:
-     {:urpx.resolved/ledger-id    String
-      :urpx.resolved/ledger-name  String
-      :urpx.resolved/ledger-type  Ref
-      :urpx.resolved/tiers        [TierResult]}
+     {:urpx.resolved/ledger-id           String
+      :urpx.resolved/ledger-name         String
+      :urpx.resolved/ledger-type         Ref
+      :urpx.resolved/metric-input-id     String  (when the ledger references one)
+      :urpx.resolved/metric-input-type   Ref     (e.g. urpx:measuredMetricInput)
+      :urpx.resolved/measurement-kind    Ref     (e.g. urpx:energy — present when
+                                                  the MetricInput carries one;
+                                                  marginal-unit-rate filters on this)
+      :urpx.resolved/unit-of-measure     Ref     (e.g. urpx:kWh)
+      :urpx.resolved/tiers               [TierResult]}
 
    and each TierResult is:
      {:urpx.resolved/price-definition-id String
@@ -314,9 +456,10 @@
    (let [version       (:urpx/hasRatePlanVersion rate-plan)
          plan-elements (:urpx/hasPlanElements version)
          seasons       (:urpx/hasSeasons plan-elements)
+         seasons-by-id (into {} (map (juxt :jsonld/id identity)) seasons)
          billing       (:urpx/hasBillingModel plan-elements)
          ledgers       (:urpx/hasLedger billing)
-         tou-schedule  (:urpx/hasTOUSchedule billing)
+         tou-schedules (:urpx/hasTOUSchedule billing)
          tiers-by-num  (service-tiers-by-number billing)
          prices        (:urpx/hasPrices version)
          holiday?      (or (:holiday? opts)
@@ -327,18 +470,24 @@
          dow           (.getDayOfWeek zdt)
 
          season        (season-of seasons date)
-         tou-period    (find-tou-period tou-schedule (:jsonld/id season)
+         tou-period    (find-tou-period tou-schedules (:jsonld/id season)
                                         date local-time dow holiday?)
          period-num    (:urpx/touPeriodNumber tou-period)
 
-         pd->prices    (active-prices-by-pd prices date)
+         pd->prices    (active-prices-by-pd prices date opts)
+         pds           (:urpx/hasPriceDefinition billing)
+         pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
+         mi-index      (mi-by-id plan-elements)
 
          ledger-results
          (vec
           (for [ledger ledgers
-                :let [tier-entries
-                      (->> (:urpx/hasPriceDefinition ledger)
-                           (filter #(pd-active-at-tou? % period-num))
+                :let [ledger-pds (->> (pds-by-ledger (:jsonld/id ledger))
+                                      (filter #(and (pd-active-at-tou? % period-num)
+                                                    (pd-active-in-month? % date)
+                                                    (pd-active-in-season? % seasons-by-id date))))
+                      tier-entries
+                      (->> ledger-pds
                            (mapcat (fn [pd]
                                      (for [[price _] (pd->prices (:jsonld/id pd))]
                                        (merge
@@ -350,10 +499,11 @@
                            (sort-by #(or (:urpx.resolved/tier-number %) 0))
                            vec)]
                 :when (seq tier-entries)]
-            {:urpx.resolved/ledger-id   (:jsonld/id ledger)
-             :urpx.resolved/ledger-name (:urpx/name ledger)
-             :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
-             :urpx.resolved/tiers       tier-entries}))]
+            (merge {:urpx.resolved/ledger-id   (:jsonld/id ledger)
+                    :urpx.resolved/ledger-name (:urpx/name ledger)
+                    :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
+                    :urpx.resolved/tiers       tier-entries}
+                   (ledger-metric-info ledger mi-index))))]
 
      {:urpx.resolved/season-name       (:urpx/seasonName season)
       :urpx.resolved/tou-period-name   (:urpx/name tou-period)
@@ -383,14 +533,18 @@
    prices and rely on caller selection)."
   [modifier ^LocalDate query-date]
   (let [version    (:urpx/hasRatePlanModifierVersion modifier)
-        billing    (get-in version [:urpx/hasPlanElements :urpx/hasBillingModel])
+        plan-elts  (:urpx/hasPlanElements version)
+        billing    (:urpx/hasBillingModel plan-elts)
         ledgers    (:urpx/hasLedger billing)
         prices     (:urpx/hasPrices version)
-        pd->prices (all-active-prices-by-pd prices query-date)]
+        pd->prices (all-active-prices-by-pd prices query-date)
+        pds        (:urpx/hasPriceDefinition billing)
+        pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
+        mi-index   (mi-by-id plan-elts)]
     (vec
      (for [ledger ledgers
            :let [tier-entries
-                 (->> (:urpx/hasPriceDefinition ledger)
+                 (->> (pds-by-ledger (:jsonld/id ledger))
                       (mapcat (fn [pd]
                                 (for [[price _] (pd->prices (:jsonld/id pd))]
                                   {:urpx.resolved/price-definition-id (:jsonld/id pd)
@@ -399,10 +553,11 @@
                                    :urpx.resolved/unit-price          (:urpx/unitPrice price)})))
                       vec)]
            :when (seq tier-entries)]
-       {:urpx.resolved/ledger-id   (:jsonld/id ledger)
-        :urpx.resolved/ledger-name (:urpx/name ledger)
-        :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
-        :urpx.resolved/tiers       tier-entries}))))
+       (merge {:urpx.resolved/ledger-id   (:jsonld/id ledger)
+               :urpx.resolved/ledger-name (:urpx/name ledger)
+               :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
+               :urpx.resolved/tiers       tier-entries}
+              (ledger-metric-info ledger mi-index))))))
 
 (defn resolve-modifier-prices
   "Resolve every per-energy unit price that `modifier` (a coerced
@@ -425,8 +580,7 @@
   "Resolve prices for `rate-plan` at `zdt` and append ledger results for
    each modifier in `modifiers` whose :urpx/applicableToRatePlan list
    includes the base plan's @id. Modifiers whose target lists don't include
-   the plan are silently skipped — the caller decides whether to filter
-   `:urpx/isOptional` modifiers in or out before calling.
+   the plan are silently skipped.
 
    Returns the `resolve-prices` shape with :urpx.resolved/ledgers extended
    by the modifier ledgers."
@@ -441,16 +595,26 @@
      (update base :urpx.resolved/ledgers (fnil into []) extra))))
 
 (defn marginal-unit-rate
-  "Sum the unit prices across all ledgers, picking the LOWEST tier in each
-   block-tiered ledger as the marginal rate at the start of a billing period.
+  "Sum the unit prices across all **energy** ledgers, picking the LOWEST tier
+   in each block-tiered ledger as the marginal $/kWh at the start of a billing
+   period.
+
+   A ledger is treated as energy iff its referenced MetricInput's
+   urpx:measurementKind is urpx:energy. Per-meter, per-customer, per-day, or
+   per-month service charges (urpx:profileMetricInput, or non-energy
+   measurementKinds) are excluded — they have a different shape and don't
+   belong in a $/kWh sum.
 
    Useful for price signaling: when you don't know a customer's usage but want
    a single $/kWh number, this is the marginal rate at zero baseline usage."
   [resolved]
   (reduce
    (fn [^java.math.BigDecimal acc ledger]
-     (if-let [first-tier (first (:urpx.resolved/tiers ledger))]
-       (.add acc ^java.math.BigDecimal (:urpx.resolved/unit-price first-tier))
+     (if (and (= "urpx:energy"
+                 (get-in ledger [:urpx.resolved/measurement-kind :jsonld/id]))
+              (seq (:urpx.resolved/tiers ledger)))
+       (.add acc ^java.math.BigDecimal
+             (:urpx.resolved/unit-price (first (:urpx.resolved/tiers ledger))))
        acc))
    0M
    (:urpx.resolved/ledgers resolved)))
