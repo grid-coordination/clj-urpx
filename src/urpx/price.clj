@@ -526,25 +526,49 @@
         (boolean (some #(= plan-id (:jsonld/id %)) refs)))))
 
 (defn- modifier-ledger-results
-  "Build a vector of LedgerResult entries for `modifier` at `query-date`.
-   Modifier ledgers don't go through TOU/season/serviceTier machinery; every
-   active Price for each PD is surfaced under :urpx.resolved/tiers so the
-   caller can pick (matrix-style modifiers like CPAU E-HRA expose all 16
-   prices and rely on caller selection)."
-  [modifier ^LocalDate query-date]
-  (let [version    (:urpx/hasRatePlanModifierVersion modifier)
-        plan-elts  (:urpx/hasPlanElements version)
-        billing    (:urpx/hasBillingModel plan-elts)
-        ledgers    (:urpx/hasLedger billing)
-        prices     (:urpx/hasPrices version)
-        pd->prices (all-active-prices-by-pd prices query-date)
-        pds        (:urpx/hasPriceDefinition billing)
+  "Build a vector of LedgerResult entries for `modifier` at `zdt`.
+
+   TOU gating for modifier PDs (issue #4):
+   1. If the modifier carries its own urpx:hasTOUSchedule, resolve the
+      modifier's own TOU period at `zdt` and gate PDs against THAT period
+      number — symmetric with base PD gating.
+   2. Else if the caller passes `base-period-num`, gate PDs that carry
+      :urpx/touPeriodNumber against the base RatePlan's resolved period
+      (e.g. smud:cpp's Mid-Peak/Off-Peak discounts ride the base's TOU).
+   3. Else (no own TOUSchedule, no base context), don't gate by TOU — every
+      active Price for each PD surfaces under :urpx.resolved/tiers. This
+      preserves the caller-picks contract for matrix-style modifiers
+      (e.g. CPAU E-HRA's 4x4 reserve-level x generation-tier matrix)
+      whose PDs typically don't carry touPeriodNumber anyway."
+  [modifier ^ZonedDateTime zdt base-period-num holiday?]
+  (let [version       (:urpx/hasRatePlanModifierVersion modifier)
+        plan-elts     (:urpx/hasPlanElements version)
+        billing       (:urpx/hasBillingModel plan-elts)
+        ledgers       (:urpx/hasLedger billing)
+        prices        (:urpx/hasPrices version)
+        own-schedules (:urpx/hasTOUSchedule billing)
+        own-seasons   (:urpx/hasSeasons plan-elts)
+        query-date    (.toLocalDate zdt)
+        own-period-num
+        (when (seq own-schedules)
+          (let [season-id  (:jsonld/id (season-of own-seasons query-date))
+                local-time (.toLocalTime zdt)
+                dow        (.getDayOfWeek zdt)
+                hol?       (or holiday? (constantly false))]
+            (:urpx/touPeriodNumber
+             (find-tou-period own-schedules season-id query-date local-time dow (hol? query-date)))))
+        gate-period (if (seq own-schedules) own-period-num base-period-num)
+        gate?       (or (seq own-schedules) (some? base-period-num))
+        pd->prices  (all-active-prices-by-pd prices query-date)
+        pds         (:urpx/hasPriceDefinition billing)
         pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
-        mi-index   (mi-by-id plan-elts)]
+        mi-index    (mi-by-id plan-elts)]
     (vec
      (for [ledger ledgers
-           :let [tier-entries
-                 (->> (pds-by-ledger (:jsonld/id ledger))
+           :let [ledger-pds (cond->> (pds-by-ledger (:jsonld/id ledger))
+                              gate? (filter #(pd-active-at-tou? % gate-period)))
+                 tier-entries
+                 (->> ledger-pds
                       (mapcat (fn [pd]
                                 (for [[price _] (pd->prices (:jsonld/id pd))]
                                   {:urpx.resolved/price-definition-id (:jsonld/id pd)
@@ -566,15 +590,17 @@
    Returns the same shape as `resolve-prices` minus the season/TOU keys
    (modifier ledgers are flat add-ons): {:urpx.resolved/ledgers [...]}.
 
-   For matrix-style modifiers (e.g. CPAU E-HRA — a 4x4 matrix of reserve
-   level x generation tier driven by external state), every applicable
-   Price for each PriceDefinition is surfaced under :urpx.resolved/tiers.
-   The caller is responsible for selecting the active value because the
-   URPX condition vocabulary (operator + label conditionValue) is not
-   yet specified in a way that's programmatically interpretable. Filter
-   the returned :tiers vector on :urpx.resolved/price-id."
+   When the modifier carries its own urpx:hasTOUSchedule, PDs with
+   :urpx/touPeriodNumber are gated against the modifier's resolved period.
+   Without an own TOUSchedule and no base context, every applicable Price
+   is surfaced — matrix-style modifiers (e.g. CPAU E-HRA — 4x4 reserve
+   level x generation tier driven by external state) rely on this so the
+   caller can select the active value, since the URPX condition
+   vocabulary (operator + label conditionValue) is not yet specified in a
+   way that's programmatically interpretable. Filter the returned :tiers
+   vector on :urpx.resolved/price-id when needed."
   [modifier ^ZonedDateTime zdt]
-  {:urpx.resolved/ledgers (modifier-ledger-results modifier (.toLocalDate zdt))})
+  {:urpx.resolved/ledgers (modifier-ledger-results modifier zdt nil nil)})
 
 (defn resolve-prices-with-modifiers
   "Resolve prices for `rate-plan` at `zdt` and append ledger results for
@@ -586,12 +612,13 @@
    by the modifier ledgers."
   ([rate-plan modifiers ^ZonedDateTime zdt] (resolve-prices-with-modifiers rate-plan modifiers zdt nil))
   ([rate-plan modifiers ^ZonedDateTime zdt opts]
-   (let [base       (resolve-prices rate-plan zdt opts)
-         plan-id    (:jsonld/id rate-plan)
-         date       (.toLocalDate zdt)
-         extra      (mapcat #(when (modifier-applies-to? % plan-id)
-                               (modifier-ledger-results % date))
-                            modifiers)]
+   (let [base            (resolve-prices rate-plan zdt opts)
+         plan-id         (:jsonld/id rate-plan)
+         base-period-num (:urpx.resolved/tou-period-number base)
+         holiday?        (or (:holiday? opts) (holidays/derive-predicate rate-plan))
+         extra           (mapcat #(when (modifier-applies-to? % plan-id)
+                                    (modifier-ledger-results % zdt base-period-num holiday?))
+                                 modifiers)]
      (update base :urpx.resolved/ledgers (fnil into []) extra))))
 
 (defn marginal-unit-rate

@@ -275,6 +275,223 @@
              (count (:urpx.resolved/ledgers comb)))))))
 
 ;; ---------------------------------------------------------------------------
+;; Issue #4: modifier PDs gated by their own hasTOUSchedule (touPeriodNumber)
+;; ---------------------------------------------------------------------------
+
+(defn- own-tou-modifier-fixture
+  "Modifier with own urpx:hasTOUSchedule (one TOUPeriod, midnight-6am, allDays,
+   touPeriodNumber=1) and a single PD/Price gated by touPeriodNumber=1.
+   Mirrors smud:pev-credit's shape."
+  []
+  {:jsonld/type "urpx:RatePlanModifier"
+   :jsonld/id "test:overnight-credit"
+   :urpx/name "Test overnight credit (midnight-6am)"
+   :urpx/initialEffectiveDate (java.time.LocalDate/of 2026 1 1)
+   :urpx/hasRatePlanModifierVersion
+   {:jsonld/type "urpx:RatePlanModifierVersion"
+    :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
+    :urpx/priceCurrency "USD"
+    :urpx/applicableToRatePlan [{:jsonld/id "test:base-plan"}]
+    :urpx/hasPlanElements
+    {:jsonld/type "urpx:PlanElements"
+     :urpx/hasMetricInput
+     [{:jsonld/type "urpx:MetricInput"
+       :jsonld/id "test:mi-energy"
+       :urpx/name "kWh"
+       :urpx/metricInputType {:jsonld/id "urpx:measuredMetricInput"}
+       :urpx/hasMetricSpecification
+       {:jsonld/type "urpx:MetricSpecification"
+        :urpx/measurementKind {:jsonld/id "urpx:energy"}
+        :urpx/unitOfMeasure {:jsonld/id "urpx:kWh"}
+        :urpx/flowDirection {:jsonld/id "urpx:forward"}}}]
+     :urpx/hasBillingModel
+     {:jsonld/type "urpx:BillingModel"
+      :urpx/hasTOUSchedule
+      [{:jsonld/type "urpx:TOUSchedule"
+        :urpx/hasTOUTier
+        [{:jsonld/type "urpx:TOUTier"
+          :urpx/touTierNumber 1
+          :urpx/hasTOUPeriod
+          [{:jsonld/type "urpx:TOUPeriod"
+            :urpx/name "Overnight (midnight-6am)"
+            :urpx/touPeriodNumber 1
+            :urpx/hasTimeBracket
+            [{:jsonld/type "urpx:TimeBracket"
+              :urpx/startTime (java.time.LocalTime/of 0 0)
+              :urpx/endTime (java.time.LocalTime/of 6 0)
+              :urpx/dayType {:jsonld/id "urpx:allDays"}}]}]}]}]
+      :urpx/hasLedger
+      [{:jsonld/type "urpx:Ledger"
+        :jsonld/id "test:ledger-credit"
+        :urpx/name "Overnight credit"
+        :urpx/ledgerType {:jsonld/id "urpx:bundledLedger"}
+        :urpx/referencesMetricInput {:jsonld/id "test:mi-energy"}}]
+      :urpx/hasPriceDefinition
+      [{:jsonld/type "urpx:PriceDefinition"
+        :jsonld/id "test:pd-overnight-credit"
+        :urpx/name "Overnight credit (touPeriodNumber=1)"
+        :urpx/touPeriodNumber 1
+        :urpx/referencesLedger {:jsonld/id "test:ledger-credit"}}]}}
+    :urpx/hasPrices
+    {:jsonld/type "urpx:Prices"
+     :urpx/hasPrice
+     [{:jsonld/type "urpx:Price"
+       :jsonld/id "test:price-overnight-credit"
+       :urpx/name "Overnight credit"
+       :urpx/unitPrice (BigDecimal. "-0.0150")
+       :urpx/referencesPriceDefinition {:jsonld/id "test:pd-overnight-credit"}
+       :urpx/startDate (java.time.LocalDate/of 2026 1 1)
+       :urpx/touPeriodNumber 1}]}}})
+
+(deftest modifier-own-tou-gates-out-of-window
+  (testing "Modifier with own midnight-6am TOUSchedule does NOT surface its
+            tier at 17:00 — the modifier's own TOU period (1) does not match
+            because 17:00 is outside the bracket (issue #4 case 1)."
+    (let [{:keys [urpx.resolved/ledgers]}
+          (price/resolve-modifier-prices (own-tou-modifier-fixture) (zdt 2026 7 15 17))]
+      (is (empty? ledgers)
+          "no ledgers surface when probe instant is outside the modifier's window"))))
+
+(deftest modifier-own-tou-fires-in-window
+  (testing "Same modifier surfaces its tier at 03:00 — inside the
+            midnight-6am bracket (issue #4 case 1, positive case)."
+    (let [{:keys [urpx.resolved/ledgers]}
+          (price/resolve-modifier-prices (own-tou-modifier-fixture) (zdt 2026 7 15 3))
+          tiers (:urpx.resolved/tiers (first ledgers))]
+      (is (= 1 (count ledgers)))
+      (is (= 1 (count tiers)))
+      (is (= (BigDecimal. "-0.0150") (:urpx.resolved/unit-price (first tiers)))))))
+
+(defn- base-tou-rate-plan-fixture
+  "Minimal RatePlan with two TOU periods (Peak=1 16-21, Off-Peak=2 21-16)
+   and one ledger that has NO PriceDefinition — exists only to give
+   resolve-prices a TOU resolution context. The price-server modifier path
+   tests don't care about base prices firing, only about
+   :urpx.resolved/tou-period-number being set."
+  []
+  {:jsonld/type "urpx:RatePlan"
+   :jsonld/id "test:base-plan"
+   :urpx/ratePlanUniqueIdentifier "TEST-BASE"
+   :urpx/name "Test base plan"
+   :urpx/initialEffectiveDate (java.time.LocalDate/of 2026 1 1)
+   :urpx/hasRatePlanVersion
+   {:jsonld/type "urpx:RatePlanVersion"
+    :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
+    :urpx/priceCurrency "USD"
+    :urpx/hasPlanElements
+    {:jsonld/type "urpx:PlanElements"
+     :urpx/hasMetricInput
+     [{:jsonld/type "urpx:MetricInput"
+       :jsonld/id "test:base-mi-energy"
+       :urpx/name "kWh"
+       :urpx/metricInputType {:jsonld/id "urpx:measuredMetricInput"}
+       :urpx/hasMetricSpecification
+       {:jsonld/type "urpx:MetricSpecification"
+        :urpx/measurementKind {:jsonld/id "urpx:energy"}
+        :urpx/unitOfMeasure {:jsonld/id "urpx:kWh"}}}]
+     :urpx/hasBillingModel
+     {:jsonld/type "urpx:BillingModel"
+      :urpx/hasTOUSchedule
+      [{:jsonld/type "urpx:TOUSchedule"
+        :urpx/hasTOUTier
+        [{:jsonld/type "urpx:TOUTier"
+          :urpx/touTierNumber 1
+          :urpx/hasTOUPeriod
+          [{:jsonld/type "urpx:TOUPeriod"
+            :urpx/name "Peak"
+            :urpx/touPeriodNumber 1
+            :urpx/hasTimeBracket
+            [{:jsonld/type "urpx:TimeBracket"
+              :urpx/startTime (java.time.LocalTime/of 16 0)
+              :urpx/endTime (java.time.LocalTime/of 21 0)
+              :urpx/dayType {:jsonld/id "urpx:allDays"}}]}
+           {:jsonld/type "urpx:TOUPeriod"
+            :urpx/name "Off-Peak"
+            :urpx/touPeriodNumber 2
+            :urpx/hasTimeBracket
+            [{:jsonld/type "urpx:TimeBracket"
+              :urpx/startTime (java.time.LocalTime/of 21 0)
+              :urpx/endTime (java.time.LocalTime/of 16 0)
+              :urpx/dayType {:jsonld/id "urpx:allDays"}}]}]}]}]
+      :urpx/hasLedger []
+      :urpx/hasPriceDefinition []}}
+    :urpx/hasPrices {:jsonld/type "urpx:Prices" :urpx/hasPrice []}}})
+
+(defn- rides-base-tou-modifier-fixture
+  "Modifier with NO own urpx:hasTOUSchedule and a single PD/Price gated by
+   touPeriodNumber=2 — meant to fire only when the BASE plan resolves to
+   period 2. Mirrors smud:cpp's Mid-Peak/Off-Peak discount shape."
+  []
+  {:jsonld/type "urpx:RatePlanModifier"
+   :jsonld/id "test:rides-base"
+   :urpx/name "Test rides-base modifier"
+   :urpx/initialEffectiveDate (java.time.LocalDate/of 2026 1 1)
+   :urpx/hasRatePlanModifierVersion
+   {:jsonld/type "urpx:RatePlanModifierVersion"
+    :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
+    :urpx/priceCurrency "USD"
+    :urpx/applicableToRatePlan [{:jsonld/id "test:base-plan"}]
+    :urpx/hasPlanElements
+    {:jsonld/type "urpx:PlanElements"
+     :urpx/hasMetricInput
+     [{:jsonld/type "urpx:MetricInput"
+       :jsonld/id "test:rb-mi-energy"
+       :urpx/name "kWh"
+       :urpx/metricInputType {:jsonld/id "urpx:measuredMetricInput"}
+       :urpx/hasMetricSpecification
+       {:jsonld/type "urpx:MetricSpecification"
+        :urpx/measurementKind {:jsonld/id "urpx:energy"}
+        :urpx/unitOfMeasure {:jsonld/id "urpx:kWh"}}}]
+     :urpx/hasBillingModel
+     {:jsonld/type "urpx:BillingModel"
+      :urpx/hasLedger
+      [{:jsonld/type "urpx:Ledger"
+        :jsonld/id "test:rb-ledger"
+        :urpx/name "Off-Peak discount"
+        :urpx/ledgerType {:jsonld/id "urpx:bundledLedger"}
+        :urpx/referencesMetricInput {:jsonld/id "test:rb-mi-energy"}}]
+      :urpx/hasPriceDefinition
+      [{:jsonld/type "urpx:PriceDefinition"
+        :jsonld/id "test:rb-pd"
+        :urpx/name "Off-Peak discount (touPeriodNumber=2 in base)"
+        :urpx/touPeriodNumber 2
+        :urpx/referencesLedger {:jsonld/id "test:rb-ledger"}}]}}
+    :urpx/hasPrices
+    {:jsonld/type "urpx:Prices"
+     :urpx/hasPrice
+     [{:jsonld/type "urpx:Price"
+       :jsonld/id "test:rb-price"
+       :urpx/name "Off-Peak discount"
+       :urpx/unitPrice (BigDecimal. "-0.0200")
+       :urpx/referencesPriceDefinition {:jsonld/id "test:rb-pd"}
+       :urpx/startDate (java.time.LocalDate/of 2026 1 1)
+       :urpx/touPeriodNumber 2}]}}})
+
+(deftest modifier-without-own-tou-rides-base-period-no-fire
+  (testing "Modifier with no own TOUSchedule and PD touPeriodNumber=2 does
+            NOT fire when the base resolves to period 1 (issue #4 case 2)."
+    (let [plan (base-tou-rate-plan-fixture)
+          modifier (rides-base-tou-modifier-fixture)
+          ;; 17:00 is in base Peak window (16-21), touPeriodNumber=1
+          comb (price/resolve-prices-with-modifiers plan [modifier] (zdt 2026 7 15 17))]
+      (is (= 1 (:urpx.resolved/tou-period-number comb)))
+      (is (empty? (:urpx.resolved/ledgers comb))
+          "modifier PD gated to base period 2 does not surface at base period 1"))))
+
+(deftest modifier-without-own-tou-rides-base-period-fires
+  (testing "Same modifier DOES fire when base resolves to period 2 (issue #4
+            case 2, positive case)."
+    (let [plan (base-tou-rate-plan-fixture)
+          modifier (rides-base-tou-modifier-fixture)
+          ;; 12:00 is in base Off-Peak window (wraps 21-16), touPeriodNumber=2
+          comb (price/resolve-prices-with-modifiers plan [modifier] (zdt 2026 7 15 12))
+          ledger (ledger-by-name comb "Off-Peak discount")]
+      (is (= 2 (:urpx.resolved/tou-period-number comb)))
+      (is (some? ledger))
+      (is (= (BigDecimal. "-0.0200")
+             (:urpx.resolved/unit-price (first (:urpx.resolved/tiers ledger))))))))
+
+;; ---------------------------------------------------------------------------
 ;; Multiple tier-Prices sharing a single PriceDefinition (PG&E CIA pattern)
 ;; ---------------------------------------------------------------------------
 
