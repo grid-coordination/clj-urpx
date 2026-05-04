@@ -492,6 +492,97 @@
              (:urpx.resolved/unit-price (first (:urpx.resolved/tiers ledger))))))))
 
 ;; ---------------------------------------------------------------------------
+;; Issue #5 (1): surface urpx:hasDynamicPricing on resolved tier entries
+;; ---------------------------------------------------------------------------
+
+(defn- event-charge-modifier-fixture
+  "Modifier carrying a single event-driven Price (CPP-style): touPeriodNumber-less
+   PD, Price with urpx:hasDynamicPricing pointing at criticalPeakPricing /
+   eventTriggeredUpdates, plus a PriceUpdateRule prose description.
+   Mirrors smud:cpp's Event Charge shape and the urpx-org B6-PDP example."
+  []
+  {:jsonld/type "urpx:RatePlanModifier"
+   :jsonld/id "test:event-charge"
+   :urpx/name "Test event-driven charge"
+   :urpx/initialEffectiveDate (java.time.LocalDate/of 2026 1 1)
+   :urpx/hasRatePlanModifierVersion
+   {:jsonld/type "urpx:RatePlanModifierVersion"
+    :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
+    :urpx/priceCurrency "USD"
+    :urpx/applicableToRatePlan [{:jsonld/id "test:base-plan"}]
+    :urpx/hasPlanElements
+    {:jsonld/type "urpx:PlanElements"
+     :urpx/hasMetricInput
+     [{:jsonld/type "urpx:MetricInput"
+       :jsonld/id "test:ec-mi-energy"
+       :urpx/name "kWh"
+       :urpx/metricInputType {:jsonld/id "urpx:measuredMetricInput"}
+       :urpx/hasMetricSpecification
+       {:jsonld/type "urpx:MetricSpecification"
+        :urpx/measurementKind {:jsonld/id "urpx:energy"}
+        :urpx/unitOfMeasure {:jsonld/id "urpx:kWh"}}}]
+     :urpx/hasBillingModel
+     {:jsonld/type "urpx:BillingModel"
+      :urpx/hasLedger
+      [{:jsonld/type "urpx:Ledger"
+        :jsonld/id "test:ec-ledger"
+        :urpx/name "Event Charge"
+        :urpx/ledgerType {:jsonld/id "urpx:bundledLedger"}
+        :urpx/referencesMetricInput {:jsonld/id "test:ec-mi-energy"}}]
+      :urpx/hasPriceDefinition
+      [{:jsonld/type "urpx:PriceDefinition"
+        :jsonld/id "test:ec-pd"
+        :urpx/name "Event Charge (consumer-gated)"
+        :urpx/referencesLedger {:jsonld/id "test:ec-ledger"}}]}}
+    :urpx/hasPrices
+    {:jsonld/type "urpx:Prices"
+     :urpx/hasPrice
+     [{:jsonld/type "urpx:Price"
+       :jsonld/id "test:ec-price"
+       :urpx/name "Event Charge"
+       :urpx/unitPrice (BigDecimal. "0.5000")
+       :urpx/referencesPriceDefinition {:jsonld/id "test:ec-pd"}
+       :urpx/startDate (java.time.LocalDate/of 2026 1 1)
+       :urpx/hasDynamicPricing
+       {:jsonld/type "urpx:DynamicPricing"
+        :urpx/dynamicPricingType {:jsonld/id "urpx:criticalPeakPricing"}
+        :urpx/updateFrequency {:jsonld/id "urpx:eventTriggeredUpdates"}
+        :urpx/hasPriceUpdateRule
+        {:jsonld/type "urpx:PriceUpdateRule"
+         :urpx/description "CPP events called by ops; day-ahead announcement; summer-only."}}}]}}})
+
+(deftest dynamic-pricing-surfaces-on-modifier-tier
+  (testing "Event-driven modifier Price exposes :urpx.resolved/dynamic-pricing
+            on its tier entry, with the DynamicPricing payload passed through
+            verbatim — type, updateFrequency, and PriceUpdateRule reachable."
+    (let [plan (base-tou-rate-plan-fixture)
+          modifier (event-charge-modifier-fixture)
+          comb (price/resolve-prices-with-modifiers plan [modifier] (zdt 2026 7 15 17))
+          tier (first (:urpx.resolved/tiers (ledger-by-name comb "Event Charge")))]
+      (is (some? tier))
+      (is (some? (:urpx.resolved/dynamic-pricing tier))
+          "tier carries :urpx.resolved/dynamic-pricing")
+      (is (= "urpx:criticalPeakPricing"
+             (get-in tier [:urpx.resolved/dynamic-pricing
+                           :urpx/dynamicPricingType :jsonld/id])))
+      (is (= "urpx:eventTriggeredUpdates"
+             (get-in tier [:urpx.resolved/dynamic-pricing
+                           :urpx/updateFrequency :jsonld/id])))
+      (is (some? (get-in tier [:urpx.resolved/dynamic-pricing
+                               :urpx/hasPriceUpdateRule :urpx/description]))
+          "nested PriceUpdateRule passes through with its prose description"))))
+
+(deftest dynamic-pricing-absent-on-non-event-tier
+  (testing "Modifier Prices without hasDynamicPricing have no
+            :urpx.resolved/dynamic-pricing key on their tier entry — additive
+            metadata, no impact on consumers that don't ask for it."
+    (let [{:keys [urpx.resolved/ledgers]}
+          (price/resolve-modifier-prices (own-tou-modifier-fixture) (zdt 2026 7 15 3))
+          tier (first (:urpx.resolved/tiers (first ledgers)))]
+      (is (some? tier))
+      (is (not (contains? tier :urpx.resolved/dynamic-pricing))))))
+
+;; ---------------------------------------------------------------------------
 ;; Multiple tier-Prices sharing a single PriceDefinition (PG&E CIA pattern)
 ;; ---------------------------------------------------------------------------
 
@@ -617,6 +708,31 @@
       (is (= 3 (count tiers)))
       (is (= "test:price-cia-t1-v2" (:urpx.resolved/price-id tier-1)))
       (is (= (BigDecimal. "-0.05000") (:urpx.resolved/unit-price tier-1))))))
+
+(deftest dynamic-pricing-surfaces-on-base-plan-tier
+  (testing "A base RatePlan Price with hasDynamicPricing also surfaces
+            :urpx.resolved/dynamic-pricing — uniform with the modifier path,
+            since the SHACL Price shape allows hasDynamicPricing on any Price."
+    (let [base (shared-pd-tier-fixture)
+          ;; Tag tier-2 as dynamically-priced (hypothetical RTP overlay)
+          plan (update-in base
+                          [:urpx/hasRatePlanVersion :urpx/hasPrices :urpx/hasPrice]
+                          (fn [prices]
+                            (mapv (fn [p]
+                                    (if (= "test:price-cia-t2" (:jsonld/id p))
+                                      (assoc p :urpx/hasDynamicPricing
+                                             {:jsonld/type "urpx:DynamicPricing"
+                                              :urpx/dynamicPricingType {:jsonld/id "urpx:realTimePricing"}})
+                                      p))
+                                  prices)))
+          r (price/resolve-prices plan (zdt 2026 6 15 12))
+          tiers (:urpx.resolved/tiers (ledger-by-name r "Conservation Incentive Adjustment"))
+          t1 (some #(when (= 1 (:urpx.resolved/tier-number %)) %) tiers)
+          t2 (some #(when (= 2 (:urpx.resolved/tier-number %)) %) tiers)]
+      (is (not (contains? t1 :urpx.resolved/dynamic-pricing)))
+      (is (= "urpx:realTimePricing"
+             (get-in t2 [:urpx.resolved/dynamic-pricing
+                         :urpx/dynamicPricingType :jsonld/id]))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Non-TOU seasonal pricing — PriceDefinition.appliesInSeason → Season.month

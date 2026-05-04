@@ -446,7 +446,15 @@
       :urpx.resolved/tier-lower-bound     BigDecimal
       :urpx.resolved/tier-upper-bound     BigDecimal
       :urpx.resolved/tier-lower-bound-operator Ref
-      :urpx.resolved/tier-upper-bound-operator Ref}
+      :urpx.resolved/tier-upper-bound-operator Ref
+      :urpx.resolved/dynamic-pricing      Map      (present iff the source Price
+                                                    carries urpx:hasDynamicPricing
+                                                    — a CPP Event Charge, RTP
+                                                    price, or other event-driven
+                                                    component; consumers that
+                                                    need a non-event marginal
+                                                    rate filter on the absence
+                                                    of this key)}
 
    For non-tiered ledgers, :tiers has a single entry with no tier-* keys.
    For block-tiered ledgers (e.g. CPAU E-1), :tiers carries every tier sorted
@@ -490,12 +498,15 @@
                       (->> ledger-pds
                            (mapcat (fn [pd]
                                      (for [[price _] (pd->prices (:jsonld/id pd))]
-                                       (merge
-                                        {:urpx.resolved/price-definition-id (:jsonld/id pd)
-                                         :urpx.resolved/price-id            (:jsonld/id price)
-                                         :urpx.resolved/price-name          (:urpx/name price)
-                                         :urpx.resolved/unit-price          (:urpx/unitPrice price)}
-                                        (tier-info pd price tiers-by-num)))))
+                                       (cond-> (merge
+                                                {:urpx.resolved/price-definition-id (:jsonld/id pd)
+                                                 :urpx.resolved/price-id            (:jsonld/id price)
+                                                 :urpx.resolved/price-name          (:urpx/name price)
+                                                 :urpx.resolved/unit-price          (:urpx/unitPrice price)}
+                                                (tier-info pd price tiers-by-num))
+                                         (:urpx/hasDynamicPricing price)
+                                         (assoc :urpx.resolved/dynamic-pricing
+                                                (:urpx/hasDynamicPricing price))))))
                            (sort-by #(or (:urpx.resolved/tier-number %) 0))
                            vec)]
                 :when (seq tier-entries)]
@@ -571,10 +582,13 @@
                  (->> ledger-pds
                       (mapcat (fn [pd]
                                 (for [[price _] (pd->prices (:jsonld/id pd))]
-                                  {:urpx.resolved/price-definition-id (:jsonld/id pd)
-                                   :urpx.resolved/price-id            (:jsonld/id price)
-                                   :urpx.resolved/price-name          (:urpx/name price)
-                                   :urpx.resolved/unit-price          (:urpx/unitPrice price)})))
+                                  (cond-> {:urpx.resolved/price-definition-id (:jsonld/id pd)
+                                           :urpx.resolved/price-id            (:jsonld/id price)
+                                           :urpx.resolved/price-name          (:urpx/name price)
+                                           :urpx.resolved/unit-price          (:urpx/unitPrice price)}
+                                    (:urpx/hasDynamicPricing price)
+                                    (assoc :urpx.resolved/dynamic-pricing
+                                           (:urpx/hasDynamicPricing price))))))
                       vec)]
            :when (seq tier-entries)]
        (merge {:urpx.resolved/ledger-id   (:jsonld/id ledger)
