@@ -518,12 +518,20 @@
 
 (def AlternativeDimension
   "One axis of a customer-profile choice — e.g. 'incomeTier' (with possible
-   values CARE / FERA / Standard) or 'voltageLevel'."
+   values CARE / FERA / Standard) or 'voltageLevel'.
+
+   Per upstream urpx commit c9d974f (closes urpx-org/urpx#30), exactly one
+   of urpx:dimensionProperty (xsd:anyURI when a suitable URPX property
+   exists) or urpx:customDimensionProperty (xsd:string fallback) must be
+   present. The xone is enforced by SHACL (pyshacl); we keep the Malli
+   schema open-world and let SHACL catch violations, consistent with the
+   existing stance for analogous customConditionProperty on operand nodes."
   [:map
    [:jsonld/type [:= "urpx:AlternativeDimension"]]
    [:jsonld/id   {:optional true} :string]
    [:urpx/dimensionDisplayName :string]
-   [:urpx/dimensionProperty    :string]   ; xsd:anyURI; passes through as a string
+   [:urpx/dimensionProperty       {:optional true} :string]   ; xsd:anyURI
+   [:urpx/customDimensionProperty {:optional true} :string]   ; xsd:string fallback
    [:urpx/hasPossibleValues
     {:decode/urpx-jsonld single-or-vec->vec}
     [:vector :any]]

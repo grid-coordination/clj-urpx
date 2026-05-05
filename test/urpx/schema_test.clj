@@ -257,7 +257,18 @@
                                    (assoc d :urpx/hasPossibleValues
                                           {:jsonld/id "urpx:onlyOne"}))]
         (is (vector? (:urpx/hasPossibleValues coerced)))
-        (is (= 1 (count (:urpx/hasPossibleValues coerced))))))))
+        (is (= 1 (count (:urpx/hasPossibleValues coerced))))))
+    (testing "customDimensionProperty fallback (urpx-org/urpx#30): exactly
+              one of dimensionProperty / customDimensionProperty per SHACL,
+              both shapes pass Malli validation"
+      (let [d-custom (-> d
+                         (dissoc :urpx/dimensionProperty)
+                         (assoc :urpx/customDimensionProperty "departureVintage"))]
+        (is (m/validate s/AlternativeDimension d-custom)
+            "customDimensionProperty alone validates")
+        (is (m/validate s/AlternativeDimension
+                        (dissoc d :urpx/dimensionProperty))
+            "neither property validates at Malli level (SHACL catches the xone)")))))
 
 (deftest profile-alternatives-shape
   (let [pa-care {:jsonld/type "urpx:ProfileAlternative"
