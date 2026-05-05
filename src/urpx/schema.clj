@@ -315,30 +315,47 @@
       [:urpx/hasConditionExpression {:optional true} :any]]]]])
 
 (def ServiceTier
-  "v0.2.0: lowerBound, lowerBoundOperator, upperBound, upperBoundOperator,
-   serviceTierNumber are all required (were optional in v0.1.x). ServiceTier
-   no longer carries description, referencesMetricInput, or
+  "v0.2.0 + 0994aec: bounds are flexible (sh:or three branches —
+   lower-bound only, upper-bound only, or both). At least one bound +
+   matching operator must be present; pyshacl enforces the xone, Malli
+   accepts any combination including the previous both-required shape.
+   Drops the 999999 upper-bound placeholder workaround for top-tiers.
+   ServiceTier no longer carries description, referencesMetricInput, or
    hasCalculationMethod — those moved to the parent ServiceTiers container."
   [:map
    [:jsonld/type [:= "urpx:ServiceTier"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/serviceTierNumber Int]
    [:urpx/name {:optional true} :string]
-   [:urpx/lowerBound Decimal]
-   [:urpx/upperBound Decimal]
-   [:urpx/lowerBoundOperator Ref]
-   [:urpx/upperBoundOperator Ref]])
+   [:urpx/lowerBound         {:optional true} Decimal]
+   [:urpx/upperBound         {:optional true} Decimal]
+   [:urpx/lowerBoundOperator {:optional true} Ref]
+   [:urpx/upperBoundOperator {:optional true} Ref]])
 
 (def ServiceTiers
-  "v0.2.0: NEW container that holds the block-tier vector. Carries the
+  "v0.2.0 + 0994aec: container holding the block-tier vector. Carries the
    referencesMetricInput pointer that used to live on individual ServiceTiers
-   in v0.1.x."
+   in v0.1.x.
+
+   :urpx/appliesInSeason allows seasonal grouping — a single
+   ProfileAlternative-keyed ServiceTiers can be split into per-season
+   containers (e.g., baseline-tier summer/winter pair) without nesting
+   season into serviceTierNumber.
+
+   :urpx/referencesProfileAlternative wires a per-cell ServiceTiers to one
+   ProfileAlternative within a matrix-style hasServiceTiers vector
+   (e.g., territory × code combinations for the PG&E E-TOU-C baseline-tier
+   modifier)."
   [:map
    [:jsonld/type [:= "urpx:ServiceTiers"]]
    [:jsonld/id {:optional true} :string]
+   [:urpx/appliesInSeason
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
    [:urpx/referencesMetricInput
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
+   [:urpx/referencesProfileAlternative {:optional true} Ref]
    [:urpx/hasServiceTier [:vector ServiceTier]]])
 
 (def BillingModel

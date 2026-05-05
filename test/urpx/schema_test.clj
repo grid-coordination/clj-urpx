@@ -63,19 +63,59 @@
     (testing "string startTime rejected"
       (is (not (m/validate s/TimeBracket (assoc bracket :urpx/startTime "16:00:00")))))))
 
-(deftest service-tier-shape-tightened
-  (testing "v0.2.0: ServiceTier requires lowerBound, upperBound, and both operators"
-    (let [tier {:jsonld/type "urpx:ServiceTier"
+(deftest service-tier-shape-flexible-bounds
+  (testing "v0.2.0 + 0994aec: ServiceTier bounds are flexible (sh:or
+            three branches: lower-only, upper-only, or both). Malli accepts
+            any combination including no-bounds; SHACL enforces the xone."
+    (let [both {:jsonld/type "urpx:ServiceTier"
                 :jsonld/id "pge:tier-1"
                 :urpx/serviceTierNumber 1
                 :urpx/name "Tier 1"
                 :urpx/lowerBound (BigDecimal. "0")
                 :urpx/upperBound (BigDecimal. "13.5")
                 :urpx/lowerBoundOperator {:jsonld/id "urpx:greaterThanOrEqualOperator"}
-                :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}]
-      (is (m/validate s/ServiceTier tier))
-      (is (not (m/validate s/ServiceTier (dissoc tier :urpx/lowerBound))))
-      (is (not (m/validate s/ServiceTier (dissoc tier :urpx/lowerBoundOperator)))))))
+                :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}
+          lower-only {:jsonld/type "urpx:ServiceTier"
+                      :urpx/serviceTierNumber 3
+                      :urpx/name "Top tier (no upper bound)"
+                      :urpx/lowerBound (BigDecimal. "400")
+                      :urpx/lowerBoundOperator {:jsonld/id "urpx:greaterThanOperator"}}
+          upper-only {:jsonld/type "urpx:ServiceTier"
+                      :urpx/serviceTierNumber 1
+                      :urpx/name "Tier 1 (no lower bound)"
+                      :urpx/upperBound (BigDecimal. "100")
+                      :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}]
+      (is (m/validate s/ServiceTier both))
+      (is (m/validate s/ServiceTier lower-only)
+          "lower-bound-only ServiceTier validates (Tier-Top after dropping 999999)")
+      (is (m/validate s/ServiceTier upper-only)
+          "upper-bound-only ServiceTier validates (Tier 1 with no explicit lower)"))))
+
+(deftest service-tiers-shape-seasonal-and-profile-alternative
+  (testing "v0.2.0 + 0994aec: ServiceTiers accepts :urpx/appliesInSeason
+            (vector of Refs, single-or-vec normalized) and
+            :urpx/referencesProfileAlternative (single Ref)."
+    (let [tier {:jsonld/type "urpx:ServiceTier"
+                :urpx/serviceTierNumber 1
+                :urpx/name "Baseline"
+                :urpx/upperBound (BigDecimal. "100")
+                :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}
+          base {:jsonld/type "urpx:ServiceTiers"
+                :jsonld/id "pge:tiers-baseline-p-b-summer"
+                :urpx/hasServiceTier [tier]}
+          with-season (assoc base :urpx/appliesInSeason
+                             [{:jsonld/id "pge:season-summer"}])
+          with-profile-alt (assoc base :urpx/referencesProfileAlternative
+                                  {:jsonld/id "pge:pa-territory-p-code-b"})]
+      (is (m/validate s/ServiceTiers base))
+      (is (m/validate s/ServiceTiers with-season))
+      (is (m/validate s/ServiceTiers with-profile-alt))
+      (testing "appliesInSeason single-or-vec decoder"
+        (let [coerced (coerce/coerce s/ServiceTiers
+                                     (assoc base :urpx/appliesInSeason
+                                            {:jsonld/id "pge:season-summer"}))]
+          (is (vector? (:urpx/appliesInSeason coerced)))
+          (is (= 1 (count (:urpx/appliesInSeason coerced)))))))))
 
 (deftest price-shape
   (let [price {:jsonld/type "urpx:Price"
