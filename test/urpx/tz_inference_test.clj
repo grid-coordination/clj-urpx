@@ -7,20 +7,19 @@
 (def la (ZoneId/of "America/Los_Angeles"))
 (def ny (ZoneId/of "America/New_York"))
 
-;; v0.2.0 fixtures don't carry urpx:eiaId on Organization (the v0.1.x location
-;; for that field). They do carry urpx:legalName, so legalName-based inference
-;; covers the production path. The eia-id path remains supported for callers
-;; that supply their own :eia-id->zone table; the tests below inject
-;; :urpx/eiaId into a coerced fixture to exercise it.
+;; v0.2.0 fixtures (post urpx-tariffs commit 02da66e, retrieved here) carry
+;; both urpx:eiaId and urpx:legalName on Organization. Inference prefers
+;; eiaId (the standardized identifier); legalName remains the documented
+;; fallback for fixtures that omit eiaId — see plan-with-only-legal-name.
 
-(deftest pge-zone-inferred-from-legal-name
-  (testing "v0.2.0 PG&E fixtures carry urpx:legalName but not urpx:eiaId,
-            so inference resolves via the legalName table"
+(deftest pge-zone-inferred-from-eia-id
+  (testing "v0.2.0 PG&E fixtures carry urpx:eiaId; inference resolves via
+            the eia-id table (preferred over legalName when both present)"
     (let [plan (fixtures/load-rate-plan "pge-e-1-2026-03-01")
           {:keys [zone inferred-from]} (tz/infer-zone plan)]
       (is (= la zone))
-      (is (= :legal-name (:source inferred-from)))
-      (is (= "Pacific Gas & Electric Company" (:value inferred-from))))))
+      (is (= :eia-id (:source inferred-from)))
+      (is (= "14328" (:value inferred-from))))))
 
 (deftest unknown-utility-returns-nil
   (testing "A plan whose publisher is not in either table yields no inference"
@@ -37,7 +36,7 @@
     (let [m (fixtures/load-modifier "pge-e-1-2026-03-01")
           {:keys [zone inferred-from]} (tz/infer-zone m)]
       (is (= la zone))
-      (is (= :legal-name (:source inferred-from))))))
+      (is (= :eia-id (:source inferred-from))))))
 
 (deftest opts-extend-eia-table
   (testing "Caller-supplied :eia-id->zone is merged with defaults; caller entries win.
@@ -65,8 +64,13 @@
       (is (= ny zone)))))
 
 (deftest plan-with-only-legal-name
-  (testing "Falls through to legalName when eiaId is absent — the v0.2.0 default"
-    (let [plan (fixtures/load-rate-plan "pge-e-1-2026-03-01")
+  (testing "Falls through to legalName when eiaId is absent. Vendored v0.2.0
+            fixtures now carry eiaId, so this test strips it to exercise
+            the fallback path."
+    (let [base (fixtures/load-rate-plan "pge-e-1-2026-03-01")
+          plan (update-in base
+                          [:urpx/hasRatePlanVersion :urpx/publishedBy]
+                          dissoc :urpx/eiaId)
           {:keys [inferred-from]} (tz/infer-zone plan)]
       (is (= :legal-name (:source inferred-from))))))
 

@@ -63,33 +63,62 @@
     (testing "string startTime rejected"
       (is (not (m/validate s/TimeBracket (assoc bracket :urpx/startTime "16:00:00")))))))
 
-(deftest service-tier-shape-flexible-bounds
-  (testing "v0.2.0 + 0994aec: ServiceTier bounds are flexible (sh:or
-            three branches: lower-only, upper-only, or both). Malli accepts
-            any combination including no-bounds; SHACL enforces the xone."
-    (let [both {:jsonld/type "urpx:ServiceTier"
-                :jsonld/id "pge:tier-1"
-                :urpx/serviceTierNumber 1
-                :urpx/name "Tier 1"
+(deftest service-bracket-shape-flexible-bounds
+  (testing "v0.2.0 + 423e83f: ServiceBracket carries the bounds + operators
+            that previously lived inline on ServiceTier. SHACL enforces the
+            sh:or three branches (lower-only, upper-only, both); Malli stays
+            open-world."
+    (let [both {:jsonld/type "urpx:ServiceBracket"
                 :urpx/lowerBound (BigDecimal. "0")
                 :urpx/upperBound (BigDecimal. "13.5")
                 :urpx/lowerBoundOperator {:jsonld/id "urpx:greaterThanOrEqualOperator"}
                 :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}
-          lower-only {:jsonld/type "urpx:ServiceTier"
-                      :urpx/serviceTierNumber 3
-                      :urpx/name "Top tier (no upper bound)"
+          lower-only {:jsonld/type "urpx:ServiceBracket"
                       :urpx/lowerBound (BigDecimal. "400")
                       :urpx/lowerBoundOperator {:jsonld/id "urpx:greaterThanOperator"}}
-          upper-only {:jsonld/type "urpx:ServiceTier"
-                      :urpx/serviceTierNumber 1
-                      :urpx/name "Tier 1 (no lower bound)"
+          upper-only {:jsonld/type "urpx:ServiceBracket"
                       :urpx/upperBound (BigDecimal. "100")
-                      :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}]
-      (is (m/validate s/ServiceTier both))
-      (is (m/validate s/ServiceTier lower-only)
-          "lower-bound-only ServiceTier validates (Tier-Top after dropping 999999)")
-      (is (m/validate s/ServiceTier upper-only)
-          "upper-bound-only ServiceTier validates (Tier 1 with no explicit lower)"))))
+                      :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}
+          with-season (assoc both :urpx/appliesInSeason
+                             [{:jsonld/id "pge:season-summer"}])
+          with-profile-alt (assoc both :urpx/referencesProfileAlternative
+                                  {:jsonld/id "pge:pa-territory-p-code-b"})]
+      (is (m/validate s/ServiceBracket both))
+      (is (m/validate s/ServiceBracket lower-only)
+          "lower-bound-only ServiceBracket validates (Tier-Top after dropping 999999)")
+      (is (m/validate s/ServiceBracket upper-only)
+          "upper-bound-only ServiceBracket validates (Tier 1 with no explicit lower)")
+      (is (m/validate s/ServiceBracket with-season))
+      (is (m/validate s/ServiceBracket with-profile-alt)))))
+
+(deftest service-tier-shape-with-bracket
+  (testing "v0.2.0 + 423e83f: ServiceTier carries only logical identity
+            (serviceTierNumber + optional name) plus the required
+            hasServiceBracket attaching 1+ bound-bearing brackets."
+    (let [bracket {:jsonld/type "urpx:ServiceBracket"
+                   :urpx/lowerBound (BigDecimal. "0")
+                   :urpx/upperBound (BigDecimal. "13.5")
+                   :urpx/lowerBoundOperator {:jsonld/id "urpx:greaterThanOrEqualOperator"}
+                   :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}
+          tier {:jsonld/type "urpx:ServiceTier"
+                :jsonld/id "pge:tier-1"
+                :urpx/serviceTierNumber 1
+                :urpx/name "Tier 1"
+                :urpx/hasServiceBracket [bracket]}]
+      (is (m/validate s/ServiceTier tier))
+      (is (not (m/validate s/ServiceTier (dissoc tier :urpx/hasServiceBracket)))
+          "missing hasServiceBracket fails Malli validation"))
+    (testing "single-or-vec decoder normalizes a single hasServiceBracket"
+      (let [coerced (coerce/coerce
+                     s/ServiceTier
+                     {:jsonld/type "urpx:ServiceTier"
+                      :urpx/serviceTierNumber 1
+                      :urpx/hasServiceBracket
+                      {:jsonld/type "urpx:ServiceBracket"
+                       :urpx/upperBound (BigDecimal. "100")
+                       :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}})]
+        (is (vector? (:urpx/hasServiceBracket coerced)))
+        (is (= 1 (count (:urpx/hasServiceBracket coerced))))))))
 
 (deftest service-tiers-shape-seasonal-and-profile-alternative
   (testing "v0.2.0 + 0994aec: ServiceTiers accepts :urpx/appliesInSeason
@@ -98,8 +127,10 @@
     (let [tier {:jsonld/type "urpx:ServiceTier"
                 :urpx/serviceTierNumber 1
                 :urpx/name "Baseline"
-                :urpx/upperBound (BigDecimal. "100")
-                :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}
+                :urpx/hasServiceBracket
+                [{:jsonld/type "urpx:ServiceBracket"
+                  :urpx/upperBound (BigDecimal. "100")
+                  :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}]}
           base {:jsonld/type "urpx:ServiceTiers"
                 :jsonld/id "pge:tiers-baseline-p-b-summer"
                 :urpx/hasServiceTier [tier]}
@@ -400,10 +431,12 @@
             single-or-vec→vec keeps single-ServiceTiers fixtures compatible."
     (let [tier {:jsonld/type "urpx:ServiceTier"
                 :urpx/serviceTierNumber 1
-                :urpx/lowerBound (BigDecimal. "0")
-                :urpx/upperBound (BigDecimal. "100")
-                :urpx/lowerBoundOperator {:jsonld/id "urpx:greaterThanOrEqualOperator"}
-                :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}
+                :urpx/hasServiceBracket
+                [{:jsonld/type "urpx:ServiceBracket"
+                  :urpx/lowerBound (BigDecimal. "0")
+                  :urpx/upperBound (BigDecimal. "100")
+                  :urpx/lowerBoundOperator {:jsonld/id "urpx:greaterThanOrEqualOperator"}
+                  :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}]}
           st-T (fn [territory]
                  {:jsonld/type "urpx:ServiceTiers"
                   :jsonld/id (str "x:st-" territory)

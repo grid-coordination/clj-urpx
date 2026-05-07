@@ -32,10 +32,10 @@ dest=$repo_root/test/resources/urpx-fixtures
 
 # fixture-name                   upstream-commit  upstream-path
 fixtures=(
-  "pge-e-1-2026-03-01             cb5b8b3  ca/iou/pge/e-1/versions/2026-03-01/rate-plan_pge_e-1_2026-03-01.jsonld"
-  "pge-e-tou-c-2026-03-01         cb5b8b3  ca/iou/pge/e-tou-c/versions/2026-03-01/rate-plan_pge_e-tou-c_2026-03-01.jsonld"
-  "pge-e-tou-d-2026-03-27         cb5b8b3  ca/iou/pge/e-tou-d/versions/2026-03-27/rate-plan_pge_e-tou-d_2026-03-27.jsonld"
-  "pge-ev2-2026-03-27             cb5b8b3  ca/iou/pge/ev2/versions/2026-03-27/rate-plan_pge_ev2_2026-03-27.jsonld"
+  "pge-e-1-2026-03-01             fed8ab4  ca/iou/pge/e-1/versions/2026-03-01/rate-plan_pge_e-1_2026-03-01.jsonld"
+  "pge-e-tou-c-2026-03-01         fed8ab4  ca/iou/pge/e-tou-c/versions/2026-03-01/rate-plan_pge_e-tou-c_2026-03-01.jsonld"
+  "pge-e-tou-d-2026-03-27         fed8ab4  ca/iou/pge/e-tou-d/versions/2026-03-27/rate-plan_pge_e-tou-d_2026-03-27.jsonld"
+  "pge-ev2-2026-03-27             fed8ab4  ca/iou/pge/ev2/versions/2026-03-27/rate-plan_pge_ev2_2026-03-27.jsonld"
 )
 
 for entry in "${fixtures[@]}"; do

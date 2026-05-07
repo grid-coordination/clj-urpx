@@ -617,24 +617,28 @@
         [{:jsonld/type "urpx:ServiceTier"
           :urpx/serviceTierNumber 1
           :urpx/name "Tier 1 (within baseline)"
-          :urpx/lowerBound (BigDecimal. "0")
-          :urpx/upperBound (BigDecimal. "100")
-          :urpx/lowerBoundOperator {:jsonld/id "urpx:greaterThanOrEqualOperator"}
-          :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}
+          :urpx/hasServiceBracket
+          [{:jsonld/type "urpx:ServiceBracket"
+            :urpx/lowerBound (BigDecimal. "0")
+            :urpx/upperBound (BigDecimal. "100")
+            :urpx/lowerBoundOperator {:jsonld/id "urpx:greaterThanOrEqualOperator"}
+            :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}]}
          {:jsonld/type "urpx:ServiceTier"
           :urpx/serviceTierNumber 2
           :urpx/name "Tier 2 (101-400% of baseline)"
-          :urpx/lowerBound (BigDecimal. "100")
-          :urpx/upperBound (BigDecimal. "400")
-          :urpx/lowerBoundOperator {:jsonld/id "urpx:greaterThanOperator"}
-          :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}
+          :urpx/hasServiceBracket
+          [{:jsonld/type "urpx:ServiceBracket"
+            :urpx/lowerBound (BigDecimal. "100")
+            :urpx/upperBound (BigDecimal. "400")
+            :urpx/lowerBoundOperator {:jsonld/id "urpx:greaterThanOperator"}
+            :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}]}
          {:jsonld/type "urpx:ServiceTier"
           :urpx/serviceTierNumber 3
           :urpx/name "Tier 2 Continued (over 400%)"
-          :urpx/lowerBound (BigDecimal. "400")
-          :urpx/upperBound (BigDecimal. "999999")
-          :urpx/lowerBoundOperator {:jsonld/id "urpx:greaterThanOperator"}
-          :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}]}]
+          :urpx/hasServiceBracket
+          [{:jsonld/type "urpx:ServiceBracket"
+            :urpx/lowerBound (BigDecimal. "400")
+            :urpx/lowerBoundOperator {:jsonld/id "urpx:greaterThanOperator"}}]}]}]
       :urpx/hasLedger
       [{:jsonld/type "urpx:Ledger"
         :jsonld/id "test:ledger-cia"

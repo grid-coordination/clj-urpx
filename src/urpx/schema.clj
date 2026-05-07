@@ -284,8 +284,9 @@
    [:urpx/referencesMetricInput
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
-   [:urpx/referencesServiceTier {:optional true} Ref]
-   [:urpx/referencesTouPeriod   {:optional true} Ref]
+   [:urpx/referencesServiceTier    {:optional true} Ref]
+   [:urpx/referencesServiceBracket {:optional true} Ref]
+   [:urpx/referencesTouPeriod      {:optional true} Ref]
    [:urpx/serviceTierNumber {:optional true} Int]
    [:urpx/touPeriodNumber   {:optional true} Int]
    [:urpx/baseQuantity      {:optional true} Decimal]
@@ -314,23 +315,43 @@
       [:urpx/month  {:optional true} [:vector MonthNumber]]
       [:urpx/hasConditionExpression {:optional true} :any]]]]])
 
+(def ServiceBracket
+  "v0.2.0 + 423e83f: contextual boundary definition for a ServiceTier.
+   Carries the bounds + bound operators that previously lived inline on
+   ServiceTier, plus optional appliesInSeason / referencesProfileAlternative
+   qualifiers so a single logical tier (one ServiceTier, identified by
+   serviceTierNumber) can carry season- or PA-specific bound variants by
+   attaching multiple ServiceBrackets via ServiceTier.hasServiceBracket.
+
+   SHACL enforces sh:or three branches (lower-only, upper-only, or both
+   bounds + matching operators); Malli stays open-world, consistent with
+   the customDimensionProperty / customConditionProperty pattern."
+  [:map
+   [:jsonld/type [:= "urpx:ServiceBracket"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/lowerBound         {:optional true} Decimal]
+   [:urpx/upperBound         {:optional true} Decimal]
+   [:urpx/lowerBoundOperator {:optional true} Ref]
+   [:urpx/upperBoundOperator {:optional true} Ref]
+   [:urpx/appliesInSeason
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/referencesProfileAlternative {:optional true} Ref]])
+
 (def ServiceTier
-  "v0.2.0 + 0994aec: bounds are flexible (sh:or three branches —
-   lower-bound only, upper-bound only, or both). At least one bound +
-   matching operator must be present; pyshacl enforces the xone, Malli
-   accepts any combination including the previous both-required shape.
-   Drops the 999999 upper-bound placeholder workaround for top-tiers.
-   ServiceTier no longer carries description, referencesMetricInput, or
-   hasCalculationMethod — those moved to the parent ServiceTiers container."
+  "v0.2.0 + 423e83f: bounds moved off ServiceTier onto attached
+   ServiceBracket instances (Decision #111). ServiceTier carries only the
+   logical identity (serviceTierNumber + optional name); hasServiceBracket
+   carries 1+ bound-bearing brackets, optionally qualified by season or
+   ProfileAlternative for matrix-cell variants of the same logical tier."
   [:map
    [:jsonld/type [:= "urpx:ServiceTier"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/serviceTierNumber Int]
    [:urpx/name {:optional true} :string]
-   [:urpx/lowerBound         {:optional true} Decimal]
-   [:urpx/upperBound         {:optional true} Decimal]
-   [:urpx/lowerBoundOperator {:optional true} Ref]
-   [:urpx/upperBoundOperator {:optional true} Ref]])
+   [:urpx/hasServiceBracket
+    {:decode/urpx-jsonld single-or-vec->vec}
+    [:vector ServiceBracket]]])
 
 (def ServiceTiers
   "v0.2.0 + 0994aec: container holding the block-tier vector. Carries the
@@ -690,8 +711,9 @@
    [:urpx/baseQuantity {:optional true} Decimal]
    [:urpx/priceCurrency {:optional true} :string]
    [:urpx/referencesPriceDefinition Ref]
-   [:urpx/referencesServiceTier {:optional true} Ref]
-   [:urpx/referencesTouPeriod   {:optional true} Ref]
+   [:urpx/referencesServiceTier    {:optional true} Ref]
+   [:urpx/referencesServiceBracket {:optional true} Ref]
+   [:urpx/referencesTouPeriod      {:optional true} Ref]
    [:urpx/serviceTierNumber {:optional true} Int]
    [:urpx/touPeriodNumber   {:optional true} Int]
    [:urpx/startDate     {:optional true} Date]
@@ -723,6 +745,7 @@
    [:urpx/touPeriodNumber {:optional true} Int]
    [:urpx/serviceTierNumber {:optional true} Int]
    [:urpx/referencesPriceDefinition {:optional true} Ref]
+   [:urpx/referencesServiceBracket  {:optional true} Ref]
    [:urpx/hasApplicabilityGroup {:optional true} ApplicabilityGroup]
    [:urpx/hasPrice [:vector Price]]])
 
@@ -838,6 +861,7 @@
    [:urpx/referencesPriceDefinition   {:optional true} Ref]
    [:urpx/referencesProfileAlternative Ref]   ; required (sh:minCount 1)
    [:urpx/referencesServiceTier       {:optional true} Ref]
+   [:urpx/referencesServiceBracket    {:optional true} Ref]
    [:urpx/referencesTouPeriod         {:optional true} Ref]
    ;; Sub-entities
    [:urpx/hasApplicabilityGroup {:optional true} ApplicabilityGroup]

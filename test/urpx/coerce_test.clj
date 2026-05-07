@@ -87,7 +87,12 @@
                                         :urpx/hasServiceTiers]))]
         (is (= 6 (count tiers))
             "PG&E E-1 has 6 service tiers (Summer/Winter × Tier 1/2/2C)")
-        (is (every? #(instance? BigDecimal (:urpx/lowerBound %)) tiers))))
+        ;; Per upstream urpx 423e83f, bounds live on ServiceBracket(s)
+        ;; attached via ServiceTier.hasServiceBracket. Path A wrap: each
+        ;; tier carries exactly one bracket.
+        (is (every? #(instance? BigDecimal
+                                (:urpx/lowerBound (first (:urpx/hasServiceBracket %))))
+                    tiers))))
 
     (testing "Prices have BigDecimal unitPrice"
       (let [price-sets (get-in plan [:urpx/hasRatePlanVersion :urpx/hasPrices :urpx/hasPriceSet])

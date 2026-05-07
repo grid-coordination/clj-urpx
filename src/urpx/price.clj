@@ -231,16 +231,37 @@
                  (update acc pd-id (fnil conj []) pair))
                {} latest-per-key)))
 
+(defn- all-prices-from-alternatives
+  "Walk Prices.hasPriceSetAlternatives and return [price start-date] pairs
+   for EVERY active Price across EVERY PriceSetAlternative — the matrix-
+   modifier surface-all contract (e.g. PG&E Vintage-PCIA's per-departure-
+   vintage-year prices). Distinct from `prices-from-alternatives`, which
+   only surfaces the caller-selected alternative for the base RatePlan
+   resolution path."
+  [prices ^LocalDate query-date]
+  (mapcat (fn [psas]
+            (mapcat (fn [psa]
+                      (keep (fn [p]
+                              (when-let [sd (:urpx/startDate p)]
+                                (when (not-after? sd query-date) [p sd])))
+                            (:urpx/hasPrice psa)))
+                    (:urpx/hasPriceSetAlternative psas)))
+          (:urpx/hasPriceSetAlternatives prices)))
+
 (defn- all-active-prices-by-pd
   "Build a map from PriceDefinition id to a vector of [price start-date]
    pairs for every active Price referencing that PD. Used by modifier
-   resolution where matrix-style pricing (e.g. CPAU E-HRA) surfaces
-   multiple concurrent prices that the caller selects from."
+   resolution where matrix-style pricing surfaces multiple concurrent
+   prices that the caller selects from. Walks both the flat hasPrice list
+   (CPAU E-HRA shape) and hasPriceSetAlternatives nesting (PG&E Vintage-PCIA
+   shape — per-departure-vintage-year prices in PriceSetAlternative)."
   [prices ^LocalDate query-date]
   (reduce (fn [acc [price :as pair]]
             (let [pd-id (get-in price [:urpx/referencesPriceDefinition :jsonld/id])]
               (update acc pd-id (fnil conj []) pair)))
-          {} (scoped-prices prices query-date nil)))
+          {}
+          (concat (scoped-prices prices query-date nil)
+                  (all-prices-from-alternatives prices query-date))))
 
 ;; ---------------------------------------------------------------------------
 ;; Service-tier lookup (block tiers, e.g. CPAU E-1 baseline / over-baseline)
@@ -263,10 +284,18 @@
    The serviceTierNumber may live on the Price (PG&E-style: many tier-Prices
    share one PD) or on the PD (CPAU-style: one PD per tier). The Price's
    number wins when both are present. Returns an empty map when the entry
-   isn't block-tiered."
+   isn't block-tiered.
+
+   Per upstream urpx commit 423e83f (Decision #111), bounds live on
+   urpx:ServiceBracket(s) attached via ServiceTier.hasServiceBracket. We
+   read bounds from the first attached bracket — Path A (mechanical wrap)
+   gives every ServiceTier exactly one ServiceBracket. Per-season /
+   per-ProfileAlternative bracket selection across multiple brackets per
+   tier is a future-day concern."
   [pd price tiers-by-num]
   (let [tier-num     (or (:urpx/serviceTierNumber price) (:urpx/serviceTierNumber pd))
-        service-tier (when tier-num (tiers-by-num tier-num))]
+        service-tier (when tier-num (tiers-by-num tier-num))
+        bracket      (first (:urpx/hasServiceBracket service-tier))]
     (cond-> {}
       tier-num
       (assoc :urpx.resolved/tier-number tier-num)
@@ -275,16 +304,16 @@
       (merge (cond-> {}
                (:urpx/name service-tier)
                (assoc :urpx.resolved/tier-name (:urpx/name service-tier))
-               (:urpx/lowerBound service-tier)
-               (assoc :urpx.resolved/tier-lower-bound (:urpx/lowerBound service-tier))
-               (:urpx/upperBound service-tier)
-               (assoc :urpx.resolved/tier-upper-bound (:urpx/upperBound service-tier))
-               (:urpx/lowerBoundOperator service-tier)
+               (:urpx/lowerBound bracket)
+               (assoc :urpx.resolved/tier-lower-bound (:urpx/lowerBound bracket))
+               (:urpx/upperBound bracket)
+               (assoc :urpx.resolved/tier-upper-bound (:urpx/upperBound bracket))
+               (:urpx/lowerBoundOperator bracket)
                (assoc :urpx.resolved/tier-lower-bound-operator
-                      (:urpx/lowerBoundOperator service-tier))
-               (:urpx/upperBoundOperator service-tier)
+                      (:urpx/lowerBoundOperator bracket))
+               (:urpx/upperBoundOperator bracket)
                (assoc :urpx.resolved/tier-upper-bound-operator
-                      (:urpx/upperBoundOperator service-tier)))))))
+                      (:urpx/upperBoundOperator bracket)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Per-instant applicability of a PriceDefinition
