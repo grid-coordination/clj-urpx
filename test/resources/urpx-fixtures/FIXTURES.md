@@ -25,14 +25,14 @@ the work of the urpx-tariffs contributors.
 ## Pinned upstream commits
 
 Fixtures are snapshots, pinned to a specific upstream commit on the
-`migrate/urpx-v0.2.0` branch of urpx-tariffs.
+`main` branch of urpx-tariffs.
 
 | Fixture                              | Upstream branch        | Pinned commit |
 |--------------------------------------|------------------------|---------------|
-| `pge-e-1-2026-03-01.jsonld`          | `master`               | `fed8ab4`     |
-| `pge-e-tou-c-2026-03-01.jsonld`      | `master`               | `fed8ab4`     |
-| `pge-e-tou-d-2026-03-27.jsonld`      | `master`               | `fed8ab4`     |
-| `pge-ev2-2026-03-27.jsonld`          | `master`               | `fed8ab4`     |
+| `pge-e-1-2026-03-01.jsonld`          | `main`               | `fed8ab4`     |
+| `pge-e-tou-c-2026-03-01.jsonld`      | `main`               | `fed8ab4`     |
+| `pge-e-tou-d-2026-03-27.jsonld`      | `main`               | `fed8ab4`     |
+| `pge-ev2-2026-03-27.jsonld`          | `main`               | `fed8ab4`     |
 
 Each fixture is a JSON-LD `@graph` document bundling a `urpx:RatePlan` with
 its sibling `urpx:RatePlanModifier`(s) plus surrounding metadata
