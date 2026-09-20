@@ -726,7 +726,10 @@
    [:urpx/hasApplicabilityGroup {:optional true} ApplicabilityGroup]
    [:urpx/hasApplicabilityRule
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
-    [:vector ApplicabilityRule]]
+    ;; Inline rule or a bare @id ref to one defined elsewhere in the document
+    ;; (RDF merges a reference with its definition). Richer schema first so an
+    ;; inline node decodes through ApplicabilityRule, not Ref.
+    [:vector [:or ApplicabilityRule Ref]]]
    [:urpx/hasCalculationMethod {:optional true} CalculationMethod]
    [:urpx/hasRateCase
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
@@ -867,7 +870,10 @@
    [:urpx/hasApplicabilityGroup {:optional true} ApplicabilityGroup]
    [:urpx/hasApplicabilityRule
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
-    [:vector ApplicabilityRule]]
+    ;; Inline rule or a bare @id ref to one defined elsewhere in the document
+    ;; (RDF merges a reference with its definition). Richer schema first so an
+    ;; inline node decodes through ApplicabilityRule, not Ref.
+    [:vector [:or ApplicabilityRule Ref]]]
    [:urpx/hasCalculationMethod  {:optional true} CalculationMethod]
    [:urpx/hasDataSourceReference
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
@@ -1061,7 +1067,11 @@
    [:urpx/hasRatePlanModifierVersion RatePlanModifierVersion]])
 
 ;; ---------------------------------------------------------------------------
-;; URPXDocument — top-level wrapper carrying ontology-version metadata
+;; Top-level wrappers carrying ontology-version metadata
+;;
+;; urpx:URPXDocument (v0.2.x) was renamed urpx:URPXPackage in v0.3.0. Both are
+;; modeled, so a corpus part-way through a wave-by-wave migration validates
+;; either way rather than having to switch over all at once.
 ;; ---------------------------------------------------------------------------
 
 (def URPXDocument
@@ -1104,5 +1114,44 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector :map]]
    [:urpx/hasTariffPublication
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector :map]]])
+
+(def URPXPackage
+  "v0.3.0 renamed urpx:URPXDocument to urpx:URPXPackage; v0.5.1 keeps the
+   class. urpx:targetURPXVersion stays required. Against URPXDocument the
+   shape drops urpx:hasTariffPublication and adds urpx:packages, the general
+   containment pointer (range: RatePlan | RatePlanModifier | RatePlanVersion |
+   RatePlanModifierVersion | PricingModel | TariffFiling | SourcePublication),
+   while retaining urpx:hasRatePlan and urpx:hasRatePlanModifier. Read from
+   urpx-shacl:URPXPackageShape at urpx-org/urpx 95eb8e22 (v0.5.1-candidate).
+
+   As with URPXDocument, only the required field and the payload pointers are
+   modeled; other wrapper metadata flows through unvalidated."
+  [:map
+   [:jsonld/type [:= "urpx:URPXPackage"]]
+   [:jsonld/id {:optional true} :string]
+   [:jsonld/context {:optional true} :map]
+   [:urpx/targetURPXVersion :string]
+   [:urpx/name              {:optional true} :string]
+   [:urpx/description       {:optional true} :string]
+   [:urpx/version           {:optional true} :string]
+   [:urpx/url               {:optional true} :string]
+   [:urpx/timezoneIdentifier {:optional true} :string]
+   [:urpx/priceCurrency     {:optional true} :string]
+   [:urpx/dateCreated       {:optional true} Date]
+   [:urpx/dateTimeCreated   {:optional true} DateTime]
+   [:urpx/effectiveDate     {:optional true} Date]
+   [:urpx/effectiveDateTime {:optional true} DateTime]
+   [:urpx/expirationDate    {:optional true} Date]
+   [:urpx/expirationDateTime {:optional true} DateTime]
+   ;; Payload pointers: embedded entity or a Ref by @id, as on URPXDocument.
+   [:urpx/hasRatePlan
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector :map]]
+   [:urpx/hasRatePlanModifier
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector :map]]
+   [:urpx/packages
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector :map]]])

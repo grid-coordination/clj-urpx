@@ -226,7 +226,7 @@ A plain set of `LocalDate`s works because sets are functions; you can also pass 
 `urpx:RatePlanModifier` documents (vintage-PCIA adders, export-compensation adjusters, etc.) augment a base plan. They appear in three packaging shapes — the loader handles all three transparently:
 
 - **`@graph` bundle**: a single document holds a base `urpx:RatePlan` plus one or more sibling modifiers (PG&E filings).
-- **URPXDocument wrapper**: a `urpx:URPXDocument` whose `urpx:hasRatePlanModifier` points at the modifier (v0.2.0 wrapper class).
+- **Wrapper**: a `urpx:URPXDocument` (the v0.2.0 wrapper class) or `urpx:URPXPackage` (its v0.3.0 rename) whose `urpx:hasRatePlanModifier` or `urpx:packages` points at the modifier.
 - **Standalone filing**: a document whose only entity is `urpx:RatePlanModifier` (CPAU E-2-G shape — modifier-only filings whose target linkage is expressed by consumer-side composition).
 
 Pull the modifier with `core/load-rate-plan-modifier`, parallel to `load-rate-plan`:
@@ -293,6 +293,12 @@ The library also supports the inverse direction: emit URPX JSON-LD from a coerce
   {:jsonld/type "urpx:URPXDocument"
    :urpx/targetURPXVersion "https://github.com/urpx-org/urpx/raw/v0.2.0/ontology/urpx-ontology.ttl"
    :urpx/hasRatePlan [plan]})
+
+;; urpx:URPXPackage, the v0.3.0 rename of that wrapper
+(emit/write-urpx-package
+  {:jsonld/type "urpx:URPXPackage"
+   :urpx/targetURPXVersion "https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl"
+   :urpx/packages [plan]})
 ```
 
 Each function takes a coerced (or already-typed EDN) entity, runs the schema's `:encode/urpx-jsonld` transformer to convert typed leaves (`BigDecimal`, `LocalDate`, `LocalDateTime`, `Duration`, integer month numbers, …) back to JSON-LD string forms, projects namespaced-keyword keys to their CURIE / `@`-reserved JSON-LD forms, and serializes via `clojure.data.json/write-str`.
@@ -422,7 +428,9 @@ Test fixtures are vendored from [urpx-tariffs](https://github.com/grid-coordinat
 
 Currently covered:
 - All three v0.2.0 top-level document classes parse, coerce, and validate against Malli schemas: `urpx:RatePlan`, `urpx:RatePlanModifier`, and `urpx:URPXDocument` (the v0.2.0 wrapper class with required `urpx:targetURPXVersion` per Decision #103). The loader transparently descends through URPXDocument's `urpx:hasRatePlan` / `urpx:hasRatePlanModifier`, so consumers target inner entities by `@type` regardless of packaging shape (bare entity, `@graph` bundle, or URPXDocument wrapper)
-- Modifier filings in all three packaging shapes — bundled with a base RatePlan in `@graph`, URPXDocument-wrapped, or standalone (no in-document target linkage; consumer-side composition expected) — load via `core/load-rate-plan-modifier`
+- Both wrapper vocabularies are accepted at once: `urpx:URPXDocument` and `urpx:URPXPackage`, its v0.3.0 rename, which drops `urpx:hasTariffPublication` and adds the general `urpx:packages` containment pointer. Loading, coercion, the DSL builders and the emitters cover both, so a corpus migrating utility-by-utility validates while it still carries a mix of the two. Nothing else here has moved off v0.2.0
+- `Price.hasApplicabilityRule` and `PriceSetAlternative.hasApplicabilityRule` take either an inline `urpx:ApplicabilityRule` or a bare `@id` reference to one defined elsewhere in the document, since RDF merges a reference with its definition
+- Modifier filings in all three packaging shapes — bundled with a base RatePlan in `@graph`, carried by a wrapper, or standalone (no in-document target linkage; consumer-side composition expected) — load via `core/load-rate-plan-modifier`
 - v0.2.0 `urpx:ConditionExpression` tree (Comparison/Boolean nodes with Object/Datatype/Custom operand leaves) parses and coerces; recursive operands are validated through a local Malli registry
 - v0.2.0 `BillingModel.hasPriceDefinition` traversal (PD now lives at the BillingModel level with `referencesLedger` pointing back) for price resolution
 - TOU period resolution: seasons, ontology day-types (`urpx:allDays`, `urpx:weekdayDays`, `urpx:weekendDays`, `urpx:customDays`), `urpx:includeHolidays` / `urpx:includeNonHolidays` bracket gates, time-bracket containment with midnight wrap. Multiple `urpx:TOUSchedule`s per BillingModel are supported (one per MetricInput, e.g. separate energy + demand schedules)

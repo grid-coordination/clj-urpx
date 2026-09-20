@@ -204,6 +204,45 @@
       (is (nil? (coerce/explain schema/URPXDocument coerced))))))
 
 ;; ---------------------------------------------------------------------------
+;; URPXPackage wrapper (v0.3.0 rename of URPXDocument)
+;; ---------------------------------------------------------------------------
+
+(def ^:private valid-urpx-package-raw
+  {:jsonld/type "urpx:URPXPackage"
+   :jsonld/id   "ex:pkg"
+   :urpx/targetURPXVersion
+   "https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl"
+   :urpx/packages
+   {:jsonld/type "urpx:RatePlan" :jsonld/id "ex:plan"}})
+
+(deftest urpx-package-validates-with-target-version
+  (testing "a URPXPackage carrying urpx:targetURPXVersion validates"
+    (let [coerced (coerce/coerce-urpx-package valid-urpx-package-raw)]
+      (is (nil? (coerce/explain schema/URPXPackage coerced)))
+      (testing "single urpx:packages map is normalized to a vector"
+        (is (vector? (:urpx/packages coerced)))
+        (is (= 1 (count (:urpx/packages coerced))))))))
+
+(deftest urpx-package-rejected-when-target-version-missing
+  (testing "targetURPXVersion stays required on URPXPackage (sh:minCount 1 in
+            urpx-shacl:URPXPackageShape), as it was on URPXDocument"
+    (let [no-version (dissoc valid-urpx-package-raw :urpx/targetURPXVersion)
+          err (coerce/explain schema/URPXPackage
+                              (coerce/coerce-urpx-package no-version))]
+      (is (some? err) "validation must fail")
+      (is (some #(= [:urpx/targetURPXVersion] (:in %)) (:errors err))
+          "the explanation must point at urpx:targetURPXVersion"))))
+
+(deftest coerce-doc-dispatches-both-wrapper-vocabularies
+  (testing "coerce-doc routes urpx:URPXPackage through coerce-urpx-package while
+            urpx:URPXDocument keeps routing to coerce-urpx-document, so a corpus
+            part-way through a migration coerces either way"
+    (is (nil? (coerce/explain schema/URPXPackage
+                              (coerce/coerce-doc valid-urpx-package-raw))))
+    (is (nil? (coerce/explain schema/URPXDocument
+                              (coerce/coerce-doc valid-urpx-document-raw))))))
+
+;; ---------------------------------------------------------------------------
 ;; Encoder spike (URPX-bnt) — verify malli's transformer system handles
 ;; bidirectional encode + decode on a single schema without duplication
 ;; ---------------------------------------------------------------------------

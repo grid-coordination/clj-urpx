@@ -339,6 +339,7 @@
             TOUSchedule) kebab-case correctly — boundary between an all-caps
             run and the next CamelCase word inserts a hyphen"
     (is (some? (var-get #'urpx.dsl/urpx-document)))
+    (is (some? (var-get #'urpx.dsl/urpx-package)))
     (is (some? (var-get #'urpx.dsl/tou-schedule)))
     (is (some? (var-get #'urpx.dsl/tou-period)))))
 
@@ -387,7 +388,13 @@
       (is (= "urpx:RatePlan"        (:jsonld/type rp)))
       (is (= "urpx:URPXDocument"    (:jsonld/type doc)))
       (is (vector? (:urpx/hasRatePlan doc))
-          "single-or-vec→vec on URPXDocument's hasRatePlan still applies"))))
+          "single-or-vec→vec on URPXDocument's hasRatePlan still applies")
+      (let [pkg (dsl/urpx-package
+                 :urpx/targetURPXVersion "https://example.com/urpx-v0.5.1"
+                 :urpx/packages rp)]
+        (is (= "urpx:URPXPackage" (:jsonld/type pkg)))
+        (is (vector? (:urpx/packages pkg))
+            "single-or-vec→vec applies to URPXPackage's packages pointer")))))
 
 ;; ---------------------------------------------------------------------------
 ;; End-to-end CPAU-E-2 via the DSL (URPX-z2l)

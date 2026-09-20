@@ -77,6 +77,23 @@
            (get parsed "urpx:targetURPXVersion")))
     (is (vector? (get parsed "urpx:hasRatePlan")))))
 
+(deftest write-urpx-package-returns-valid-json
+  (let [pkg {:jsonld/type "urpx:URPXPackage"
+             :jsonld/id   "x:pkg"
+             :urpx/targetURPXVersion "https://example.com/urpx-v0.5.1"
+             :urpx/packages [minimal-rate-plan {:jsonld/id "x:other"}]}
+        parsed (json/read-str (emit/write-urpx-package pkg))]
+    (is (= "urpx:URPXPackage" (get parsed "@type")))
+    (is (= "https://example.com/urpx-v0.5.1"
+           (get parsed "urpx:targetURPXVersion")))
+    (is (vector? (get parsed "urpx:packages")))
+    (testing "a urpx:RatePlan under urpx:packages is pre-encoded through its own
+              schema, so its typed leaves come back as JSON-LD strings"
+      (is (= "2026-01-01"
+             (get-in parsed ["urpx:packages" 0 "urpx:initialEffectiveDate"]))))
+    (testing "an untyped @id ref under urpx:packages passes through as-is"
+      (is (= {"@id" "x:other"} (get-in parsed ["urpx:packages" 1]))))))
+
 ;; ---------------------------------------------------------------------------
 ;; End-to-end round-trip — parse → coerce → emit → re-parse → re-coerce
 ;; ---------------------------------------------------------------------------

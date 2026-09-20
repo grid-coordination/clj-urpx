@@ -135,19 +135,29 @@
     (sequential? v) (vec v)
     :else [v]))
 
+(def ^:private wrapper-types
+  "Top-level wrapper @types that `expand-document-entities` descends through.
+   v0.3.0 renamed urpx:URPXDocument to urpx:URPXPackage; both are accepted, so
+   a corpus part-way through a wave-by-wave migration loads either way."
+  #{"urpx:URPXDocument" "urpx:URPXPackage"})
+
 (defn- expand-document-entities
-  "If `entity` is a urpx:URPXDocument, return its embedded payload entities
-   (urpx:hasRatePlan + urpx:hasRatePlanModifier + urpx:hasTariffPublication).
-   Otherwise return `[entity]` unchanged. Used by `load-rate-plan` and
-   `load-rate-plan-modifier` to descend transparently through the v0.2.0
-   wrapper so consumers can target inner entities by @type without caring
-   whether the document is URPXDocument-wrapped (URPX-1ii / URPX-8hq), bare
+  "If `entity` is one of `wrapper-types`, return its embedded payload
+   entities: urpx:hasRatePlan and urpx:hasRatePlanModifier (both wrappers),
+   urpx:hasTariffPublication (v0.2.x URPXDocument only), and urpx:packages
+   (the general containment pointer added in v0.3.0). Otherwise return
+   `[entity]` unchanged.
+
+   Used by `load-rate-plan` and `load-rate-plan-modifier` to descend
+   transparently through the wrapper so consumers can target inner entities
+   by @type without caring whether the document is wrapped, bare
    single-entity, or `@graph`-bundled."
   [entity]
-  (if (= "urpx:URPXDocument" (:jsonld/type entity))
+  (if (contains? wrapper-types (:jsonld/type entity))
     (vec (concat (as-vec (:urpx/hasRatePlan entity))
                  (as-vec (:urpx/hasRatePlanModifier entity))
-                 (as-vec (:urpx/hasTariffPublication entity))))
+                 (as-vec (:urpx/hasTariffPublication entity))
+                 (as-vec (:urpx/packages entity))))
     [entity]))
 
 (defn load-rate-plan
@@ -160,8 +170,9 @@
      - Single-entity doc: top-level `@type: urpx:RatePlan`.
      - `@graph` bundle: the plan appears as one of several siblings (alongside
        RatePlanModifier(s), ProgramEnrollment, …).
-     - URPXDocument wrapper (v0.2.0 Decision #103): top-level
-       `@type: urpx:URPXDocument` with `urpx:hasRatePlan` pointing at the plan.
+     - Wrapper: top-level `@type: urpx:URPXDocument` (v0.2.0 Decision #103)
+       or `urpx:URPXPackage` (its v0.3.0 rename), with `urpx:hasRatePlan` or
+       `urpx:packages` pointing at the plan.
 
    Zero or more than one urpx:RatePlan in a single document is an error —
    use `load-graph` to inspect such documents directly."
@@ -182,8 +193,8 @@
    accepted shapes — File, URL, Reader, InputStream, path string, including
    `jar:file:...` URLs from `(io/resource ...)`). Parallel to `load-rate-plan`
    — the modifier may appear as a standalone single-entity doc, as one entity
-   in a `@graph` bundle, or under a urpx:URPXDocument wrapper's
-   urpx:hasRatePlanModifier pointer.
+   in a `@graph` bundle, or under a urpx:URPXDocument / urpx:URPXPackage
+   wrapper's urpx:hasRatePlanModifier or urpx:packages pointer.
 
    The unique urpx:RatePlanModifier is returned; zero or more than one is an
    error — use `load-graph` to inspect ambiguous documents directly."

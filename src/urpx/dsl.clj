@@ -305,3 +305,4 @@
 (def rate-plan-modifier-version     (make-builder schema/RatePlanModifierVersion))
 (def rate-plan-modifier             (make-builder schema/RatePlanModifier))
 (def urpx-document                  (make-builder schema/URPXDocument))
+(def urpx-package                   (make-builder schema/URPXPackage))

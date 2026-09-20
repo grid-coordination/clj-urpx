@@ -451,3 +451,45 @@
                                      (assoc billing :urpx/hasServiceTiers (st-T "T")))]
           (is (vector? (:urpx/hasServiceTiers coerced)))
           (is (= 1 (count (:urpx/hasServiceTiers coerced)))))))))
+
+;; ---------------------------------------------------------------------------
+;; hasApplicabilityRule accepts an inline rule or a bare @id reference
+;; ---------------------------------------------------------------------------
+
+(deftest applicability-rule-inline-or-bare-ref
+  (let [inline {:jsonld/type "urpx:ApplicabilityRule"
+                :jsonld/id "pge:nbt-ar-m01"
+                :urpx/month [1 2]}
+        bare   {:jsonld/id "pge:nbt-ar-m01"}
+        price  {:jsonld/type "urpx:Price"
+                :urpx/unitPrice (BigDecimal. "0.12855")
+                :urpx/referencesPriceDefinition {:jsonld/id "pge:pd-generation"}}
+        psa    {:jsonld/type "urpx:PriceSetAlternative"
+                :urpx/referencesProfileAlternative {:jsonld/id "x:bsc-care"}
+                :urpx/hasPrice [price]}]
+    (testing "Price.hasApplicabilityRule takes an inline rule, a bare @id ref,
+              or a mix of the two in one vector"
+      (is (m/validate s/Price (assoc price :urpx/hasApplicabilityRule [inline])))
+      (is (m/validate s/Price (assoc price :urpx/hasApplicabilityRule [bare])))
+      (is (m/validate s/Price (assoc price :urpx/hasApplicabilityRule [inline bare]))))
+    (testing "PriceSetAlternative.hasApplicabilityRule takes the same two shapes"
+      (is (m/validate s/PriceSetAlternative
+                      (assoc psa :urpx/hasApplicabilityRule [inline])))
+      (is (m/validate s/PriceSetAlternative
+                      (assoc psa :urpx/hasApplicabilityRule [bare]))))
+    (testing "an inline rule still decodes its xsd:gMonth months through the
+              richer schema; a bare ref passes through untouched"
+      (let [coerced (coerce/coerce
+                     s/Price
+                     (assoc price :urpx/hasApplicabilityRule
+                            [{:jsonld/type "urpx:ApplicabilityRule"
+                              :jsonld/id "pge:nbt-ar-m01"
+                              :urpx/month ["--01" "--02"]}
+                             bare]))
+            [decoded-inline decoded-ref] (:urpx/hasApplicabilityRule coerced)]
+        (is (= [1 2] (:urpx/month decoded-inline)))
+        (is (= bare decoded-ref))))
+    (testing "a map that is neither a typed rule nor an @id reference is rejected"
+      (is (not (m/validate s/Price
+                           (assoc price :urpx/hasApplicabilityRule
+                                  [{:urpx/name "neither"}])))))))

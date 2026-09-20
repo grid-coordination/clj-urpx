@@ -174,6 +174,20 @@
    "urpx:targetURPXVersion" "https://example.com/urpx-v0.2.0"
    "urpx:hasRatePlanModifier" (assoc modifier-m1 "urpx:name" "Standalone Modifier")})
 
+(def urpx-package-with-plan
+  {"@context" context
+   "@type" "urpx:URPXPackage"
+   "@id" "x:pkg"
+   "urpx:targetURPXVersion" "https://example.com/urpx-v0.5.1"
+   "urpx:hasRatePlan" plan-one})
+
+(def urpx-package-with-packages-pointer
+  {"@context" context
+   "@type" "urpx:URPXPackage"
+   "@id" "x:pkg"
+   "urpx:targetURPXVersion" "https://example.com/urpx-v0.5.1"
+   "urpx:packages" [plan-one modifier-m1]})
+
 (deftest parse-graph-single-entity-doc
   (testing "A document with no @graph yields a one-element vector containing the entity"
     (let [entities (core/parse-graph (jsonld-reader single-entity-doc))]
@@ -311,6 +325,27 @@
         (is (thrown-with-msg? clojure.lang.ExceptionInfo
                               #"No urpx:RatePlan entity"
                               (core/load-rate-plan path)))))))
+
+;; ---------------------------------------------------------------------------
+;; URPXPackage wrapper traversal (the v0.3.0 rename of URPXDocument)
+;; ---------------------------------------------------------------------------
+
+(deftest load-rate-plan-descends-into-urpx-package
+  (testing "a urpx:URPXPackage wrapper traverses urpx:hasRatePlan exactly as the
+            urpx:URPXDocument it was renamed from"
+    (with-temp-jsonld urpx-package-with-plan
+      (fn [path]
+        (let [plan (core/load-rate-plan path)]
+          (is (= "urpx:RatePlan" (:jsonld/type plan)))
+          (is (= "x:plan" (:jsonld/id plan))))))))
+
+(deftest load-descends-into-urpx-package-packages-pointer
+  (testing "urpx:packages, the general containment pointer added in v0.3.0,
+            reaches both the plan and the modifier a package carries"
+    (with-temp-jsonld urpx-package-with-packages-pointer
+      (fn [path]
+        (is (= "x:plan" (:jsonld/id (core/load-rate-plan path))))
+        (is (= "x:mod"  (:jsonld/id (core/load-rate-plan-modifier path))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Key encoder (URPX-moq) — keyword → JSON-LD string-key form

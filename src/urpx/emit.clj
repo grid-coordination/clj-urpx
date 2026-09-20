@@ -2,8 +2,9 @@
   "Write-side: emit URPX JSON-LD from coerced Clojure entities.
 
   Symmetric to the existing parse + coerce path. Given a coerced
-  urpx:RatePlan / urpx:RatePlanModifier / urpx:URPXDocument (or an EDN
-  map shaped like one with namespaced-keyword keys + already-string values),
+  urpx:RatePlan / urpx:RatePlanModifier / urpx:URPXDocument / urpx:URPXPackage
+  (or an EDN map shaped like one with namespaced-keyword keys + already-string
+  values),
   emit a SHACL-valid JSON-LD string ready to write to disk or send to a
   consumer.
 
@@ -195,13 +196,20 @@
   ([modifier opts]
    (emit-via-schema schema/RatePlanModifier modifier opts)))
 
+(def ^:private payload-schemas
+  "@type → schema for the payload entities a wrapper can embed under the
+   heterogeneous urpx:packages pointer. Entries of any other type (or bare
+   @id refs, which carry no @type) are passed through unencoded."
+  {"urpx:RatePlan"         schema/RatePlan
+   "urpx:RatePlanModifier" schema/RatePlanModifier})
+
 (defn- pre-encode-payloads
-  "URPXDocument's payload-pointer schemas are deliberately loose ([:vector :map])
-   — wrapper-level validation only, per the URPXDocument schema's design.
-   That means malli's wrapper encoder won't recurse into inner entities to
-   convert their typed leaves (BigDecimal, LocalDate, …) back to JSON-LD
+  "A wrapper's payload-pointer schemas are deliberately loose ([:vector :map])
+   — wrapper-level validation only, per the URPXDocument / URPXPackage schema
+   design. That means malli's wrapper encoder won't recurse into inner entities
+   to convert their typed leaves (BigDecimal, LocalDate, …) back to JSON-LD
    strings. Pre-encode each embedded RatePlan / RatePlanModifier through its
-   own schema before handing the document to the wrapper encoder. Refs
+   own schema before handing the wrapper to the encoder. Refs
    (:jsonld/id-only maps) survive intact — encoding skips fields the entity
    doesn't carry."
   [document]
@@ -212,7 +220,15 @@
 
     (:urpx/hasRatePlanModifier document)
     (update :urpx/hasRatePlanModifier
-            (fn [vs] (mapv #(coerce/encode schema/RatePlanModifier %) vs)))))
+            (fn [vs] (mapv #(coerce/encode schema/RatePlanModifier %) vs)))
+
+    (:urpx/packages document)
+    (update :urpx/packages
+            (fn [vs] (mapv (fn [v]
+                             (if-let [sch (payload-schemas (:jsonld/type v))]
+                               (coerce/encode sch v)
+                               v))
+                           vs)))))
 
 (defn write-urpx-document
   "Serialize a coerced urpx:URPXDocument wrapper to a JSON-LD string. Inverse of
@@ -223,3 +239,15 @@
   ([document] (write-urpx-document document nil))
   ([document opts]
    (emit-via-schema schema/URPXDocument (pre-encode-payloads document) opts)))
+
+(defn write-urpx-package
+  "Serialize a coerced urpx:URPXPackage wrapper to a JSON-LD string. Inverse of
+   urpx.coerce/coerce-urpx-package. Embedded urpx:hasRatePlan /
+   urpx:hasRatePlanModifier payloads are pre-encoded through their own schemas,
+   as are urpx:packages entries typed urpx:RatePlan or urpx:RatePlanModifier;
+   other urpx:packages entries are emitted as-is.
+
+   See `write-rate-plan` for `opts`."
+  ([package] (write-urpx-package package nil))
+  ([package opts]
+   (emit-via-schema schema/URPXPackage (pre-encode-payloads package) opts)))
