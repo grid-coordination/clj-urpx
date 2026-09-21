@@ -9,6 +9,23 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [0.13.0] — 2026-09-21
+
+One feature. A `urpx:Price` may state `urpx:multiplier` with `urpx:basedOnPrice` instead of a `urpx:unitPrice`, naming the price it is derived from. That is how a percentage discount such as CARE or FERA is filed. 0.12.0 returned `nil` for every such Price, and a nil unit price reads to a consumer as free, so a 32.5% discount arrived as a 100% one.
+
+### Added
+
+- `urpx:PriceSummary`, which aggregates line items through `urpx:includesPrice` (`sh:minCount 2` upstream: a summary of one price is not a summary), and `urpx:hasPriceSummary` on `PriceSet` and `PriceSetAlternative`, which is where a summary attaches (it is `rdfs:domain urpx:PriceSet`, so a subtotal lives beside the line items it names). A `price-summary` DSL builder comes with it; nothing else was needed, because `make-builder` derives kwargs, aliases and validation from the schema, and a test now pins that rather than assuming it.
+- `resolve-prices` values derived prices: the multiplier times the referenced Price's unit price, or times the sum of a referenced summary's members. `urpx:summaryAmount` is read but not trusted, so an author-stated total that disagrees with the members stays visible rather than becoming authoritative.
+- `:urpx.resolved/unvaluable` on any tier whose Price could not be valued, carrying a reason and a detail: `:unresolved-reference`, `:summary-member-unresolved`, `:basis-not-valuable`, or `:no-unit-price`. This is the point of the release. A Price this library cannot value is now named as such instead of surfacing as a nil that reads as free.
+- `resolve-prices-with-modifiers` builds one `@id` index spanning the base plan and every modifier, so a discount Price filed in a program modifier can dereference a summary defined in the base plan filing. That is the shape these discounts take in practice, the discount belonging to the program and the line items to the plan. No cross-file lookup is invented: the index covers exactly the documents the caller passed in, and a modifier resolved on its own reports `:unresolved-reference`.
+
+### Changed
+
+- `marginal-unit-rate` throws when a marginal energy tier could not be valued, rather than summing around it. Skipping one reports the undiscounted price as though it were the real rate.
+- `urpx:basedOnPrice` is accepted as **0..N**, as `PriceShape` declares (`sh:minCount 0`, no `sh:maxCount`); it was modeled as a single value. With more than one basis stated, resolution throws rather than picking, the same refusal the 0..N properties in 0.12.0 make.
+- `scripts/shacl-drift.sh` recurses through `:and` as well as `:or` when deciding whether a schema entry is 0..N. `[:and [:vector X] [:fn ...]]` is how a cardinality refinement is written, and reading it as a single value reported drift against a schema that has none.
+
 ## [0.12.0] — 2026-09-20
 
 Ten commits. URPX's production corpus finished migrating to v0.5.1 across all six of its per-utility waves during this window, so most of what follows is the library catching up with real migrated filings rather than with the specification on paper.
@@ -69,5 +86,6 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.13.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.13.0
 [0.12.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.12.0
 [0.11.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.11.0
