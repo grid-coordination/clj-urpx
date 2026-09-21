@@ -9,6 +9,18 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Added
+
+- **`:urpx.resolved/condition-gated`** on a tier whose Price, or whose PriceDefinition, carries a `urpx:ConditionExpression` this library does not evaluate. Such a price fires **unconditionally** at resolution, which is a silent assumption that its predicate holds, and it is epistemically the same position as an event-driven price. Event-driven prices have been marked since 0.19.0 and excluded from the marginal since; condition-gated ones were neither. Composing SCE TOU-D-PRIME with its CPP modifier returns **-0.13897** at summer peak and **-0.46336** off-peak, a customer being paid to consume, because a credit gated on "is a CPP event called today" and a credit gated on a grandfathered-customer attribute both apply at every instant.
+
+  Each gate carries `:urpx.resolved/gate-id`, `:urpx.resolved/gate-name` and `:urpx.resolved/gate-on` (`:price` or `:price-definition`). Rules stated as a bare `{@id}` reference are dereferenced, for the same reason the month gate dereferences them.
+
+  **Marking only. Nothing is excluded from any aggregate and no resolved number changes.** Measured over the 76-file production corpus at four instants, 101,992 of 105,177 resolved tiers are condition-gated, so excluding wholesale would delete the corpus rather than correct it. The population that actually reaches a per-kWh marginal is far smaller: 1,352 of 3,717 tiers on import energy ledgers, the other 100,640 being export prices that `urpx:flowDirection urpx:reverse` already keeps out of the sum.
+
+  A rule carrying only `urpx:month` is **not** reported, because that constraint is evaluated. Conditions inside a `urpx:ProfileAlternative` (required on every alternative by the shapes) and inside a `urpx:EligibilityRule` (which answers who may take the tariff) are not reported either, since neither hangs off a Price.
+
 ## [0.25.0] — 2026-09-21
 
 `urpx:referencesProfileAlternative` on a `urpx:PriceDefinition`, and a narrower rule for when withholding costs the caller an answer.

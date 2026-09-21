@@ -750,6 +750,52 @@
                           (some #{m} months))))
                   rules)))))
 
+(defn- condition-gates
+  "The urpx:ConditionExpression gates on `price` and its PriceDefinition that
+   this library does not evaluate, as a vector of {:gate-id, :gate-name,
+   :on} maps, or nil when there are none.
+
+   A gated Price fires UNCONDITIONALLY at resolution, because nothing here
+   evaluates the predicate. That is a silent assumption of true, and it is
+   epistemically the same position as an event-driven price: it may or may not
+   apply. Composing SCE TOU-D-PRIME with its CPP modifier returns -0.13897 at
+   summer peak and -0.46336 off-peak, a customer being paid to consume, because
+   a non-event credit gated on \"is a CPP event called today\" and a credit
+   gated on a grandfathered-customer attribute both apply at every instant.
+
+   Marking rather than excluding, deliberately. Excluding wholesale is not
+   available as a default: most of the gated population is export price
+   matrices where the gate is how the matrix is indexed, and dropping those
+   would delete the filing. This surfaces the assumption so a consumer can
+   compute a defensible number today, and decides nothing.
+
+   Only gates carried by the Price or its PriceDefinition count. A condition
+   inside a urpx:ProfileAlternative is correct by construction, since URPX
+   requires one on every alternative; a condition inside a urpx:EligibilityRule
+   answers who may take the tariff, not which price applies. Neither hangs off
+   a Price, so reading only these two attachment points excludes both.
+
+   A rule carrying only urpx:month is NOT a gate here: that constraint IS
+   evaluated, by `pd-active-in-month?`. Marking it would report a gate the
+   resolver honors, which is the false positive that would make the flag
+   useless on the filings that use months heavily.
+
+   A rule may be inline or a bare {@id} reference, so `by-id` dereferences
+   the latter, for the same reason `pd-active-in-month?` does."
+  [price pd by-id]
+  (let [deref-rule (fn [r] (if (:urpx/hasConditionExpression r)
+                             r
+                             (or (get by-id (:jsonld/id r)) r)))
+        gates (for [[owner src] [[price :price] [pd :price-definition]]
+                    :when owner
+                    rule  (concat (map deref-rule (:urpx/hasApplicabilityRule owner))
+                                  (:urpx/hasApplicabilityGroup owner))
+                    :when (:urpx/hasConditionExpression rule)]
+                (cond-> {:urpx.resolved/gate-on src}
+                  (:jsonld/id rule)   (assoc :urpx.resolved/gate-id (:jsonld/id rule))
+                  (:urpx/name rule)   (assoc :urpx.resolved/gate-name (:urpx/name rule))))]
+    (seq (vec (distinct gates)))))
+
 (defn- pd-active-in-season?
   "True if `pd`'s urpx:appliesInSeason refs (if any) admit the query date's
    month-of-year. Each ref is resolved via `seasons-by-id` to a Season; the
@@ -1268,7 +1314,21 @@
                                                     component; consumers that
                                                     need a non-event marginal
                                                     rate filter on the absence
-                                                    of this key)}
+                                                    of this key)
+      :urpx.resolved/condition-gated     [Gate]   (present iff the source Price
+                                                    or its PriceDefinition
+                                                    carries a
+                                                    urpx:ConditionExpression
+                                                    this library does not
+                                                    evaluate, so the price fired
+                                                    on an ASSUMPTION that its
+                                                    predicate holds. Each Gate
+                                                    carries :gate-id, :gate-name
+                                                    and :gate-on, the last being
+                                                    :price or :price-definition.
+                                                    Not excluded from any
+                                                    aggregate: see
+                                                    marginal-unit-rate)}
 
    For non-tiered ledgers, :tiers has a single entry with no tier-* keys.
    For block-tiered ledgers (e.g. CPAU E-1), :tiers carries every tier sorted
@@ -1352,7 +1412,8 @@
                       tier-entries
                       (->> ledger-pds
                            (mapcat (fn [pd]
-                                     (for [[price _] (pd->prices (:jsonld/id pd))]
+                                     (for [[price _] (pd->prices (:jsonld/id pd))
+                                           :let [gates (condition-gates price pd by-id)]]
                                        (cond-> (merge
                                                 {:urpx.resolved/price-definition-id (:jsonld/id pd)
                                                  :urpx.resolved/price-id            (:jsonld/id price)
@@ -1361,7 +1422,9 @@
                                                 (tier-info pd price tiers-by-num))
                                          (:urpx/hasDynamicPricing price)
                                          (assoc :urpx.resolved/dynamic-pricing
-                                                (:urpx/hasDynamicPricing price))))))
+                                                (:urpx/hasDynamicPricing price))
+                                         gates
+                                         (assoc :urpx.resolved/condition-gated gates)))))
                            (sort-by #(or (:urpx.resolved/tier-number %) 0))
                            vec)
                       ;; The MARK keeps its existing condition: an alternatives
@@ -1515,7 +1578,8 @@
                                 ;; disagreed with the present view about whether
                                 ;; it counts.
                                 (let [interval (recurring-interval pd)]
-                                  (for [[price _] (pd->prices (:jsonld/id pd))]
+                                  (for [[price _] (pd->prices (:jsonld/id pd))
+                                        :let [gates (condition-gates price pd by-id)]]
                                     (cond-> (merge
                                              {:urpx.resolved/price-definition-id (:jsonld/id pd)
                                               :urpx.resolved/price-id            (:jsonld/id price)
@@ -1525,7 +1589,9 @@
                                       (assoc :urpx.resolved/interval-duration interval)
                                       (:urpx/hasDynamicPricing price)
                                       (assoc :urpx.resolved/dynamic-pricing
-                                             (:urpx/hasDynamicPricing price)))))))
+                                             (:urpx/hasDynamicPricing price))
+                                      gates
+                                      (assoc :urpx.resolved/condition-gated gates))))))
                       ;; Sorted like the base path. marginal-unit-rate documents
                       ;; itself as taking the LOWEST tier and implements that as
                       ;; `first`, which only holds if the vector is ordered by
