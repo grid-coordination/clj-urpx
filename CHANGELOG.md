@@ -9,6 +9,24 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [0.22.0] — 2026-09-21
+
+Silent losses. A sweep looked for every way a SHACL-conformant document can lose content or produce a wrong number with no diagnostic; it returned seven confirmed findings, rejected nineteen candidates as correct gating or existing loud refusals, and caught four overclaims among its own results. Two more came from the urpx-tariffs session. **Resolved prices change on filings that carry any of these shapes.**
+
+### Fixed
+
+- **An absent `urpx:startDate` discarded the Price.** Four scoping sites read the date with `when-let` and dropped anything without one, while the PriceSet gate three lines above treats a nil date as permissive. It deleted content from a shipped filing: PG&E's E-TOU-C baseline-tier modifier carries four Prices and no dates anywhere, resolved to **zero ledgers and zero tiers**, and composing it with its base plan changed no number and reported nothing. Absence now means no start constraint, which is what `sh:minCount 0` says. A Price that has not started yet is still excluded.
+- **`urpx:startDateTime` was never read.** Modeled on Price, PriceSet and PriceSetAlternative, written by `urpx.emit`, ignored by the resolver: a filing stating its date that way was accepted, validated, round-tripped and then priced as though it had no date. On SDG&E DR, restating one PriceSet's date that way took 13 tiers to 3.
+- **A single version was never checked against the instant.** 0.17.0 routed the one-candidate case past the effective and expiration tests, and every one of the 40 base filings carries exactly one version, so that was the branch standalone resolution always took. SCE D answered **0.31085 five weeks before its version took effect**, byte-identical to the in-window answer; LADWP R-1A answered seven years early. Results now carry `:urpx.resolved/outside-version-window` and `marginal-unit-rate` refuses with `:reason :outside-version-window`. Season and TOU period still answer, because those are structural questions about a plan's shape.
+- **`urpx:touPeriodNumber` on a Price was ignored.** URPX puts it on Price as well as PriceDefinition and 43 corpus Prices use it. Two different wrong answers followed: in a summary every TOU variant of one charge summed, overstating SDG&E EV-TOU's CARE discount **3.09×** (−0.9255435 against −0.2999885); in the tier path the variants collided in the latest-wins dedupe and the survivor was reported **at every hour**, so a transmission charge read at its on-peak value around the clock.
+- **A summary summed every rung of a block-tier ladder.** Those are alternatives per kWh. SCE Schedule D's discountable subtotal names both Conservation Incentive Adjustment rungs; summing both gave 0.37353, a subtotal matching no bill any customer can receive, and understated the CARE discount by **10.4%** (−0.12139725 against −0.10070125) and FERA by 4.5%. This is the defect `marginal-unit-rate` had within a ledger in 0.20.0, one level down, and the partition is now one shared function rather than two copies.
+
+### Added
+
+- Three fixtures pinned at shapes the live corpus no longer has: `sdge-ev-tou-2026-04-01` (12 Prices carrying `touPeriodNumber` directly — urpx-tariffs has since collapsed these, so this is the only place the case survives), `pge-e-tou-c-baseline-tier-2026-03-01` (four Prices, no dates), and `sce-d-2025-11-15` earlier.
+
+**Upgrading:** a filing carrying any of these shapes prices differently, generally more completely. `marginal-unit-rate` gains a fifth refusal, `:outside-version-window`, which fires when a filing is resolved outside the window its version describes — check `:reason` rather than catching broadly.
+
 ## [0.21.0] — 2026-09-21
 
 ### Fixed
@@ -258,6 +276,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.22.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.22.0
 [0.21.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.21.0
 [0.20.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.20.0
 [0.19.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.19.0
