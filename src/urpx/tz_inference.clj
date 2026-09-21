@@ -19,6 +19,7 @@
   The shipped tables only cover utilities used by the clj-urpx test
   suite; production deployments are expected to supply their own table
   (e.g. derived from EIA Form 861)."
+  (:require [urpx.index :as index])
   (:import [java.time ZoneId]))
 
 ;; ---------------------------------------------------------------------------
@@ -54,12 +55,11 @@
    snapshot arms come first."
   ([plan] (published-by plan nil))
   ([plan version]
-   (or (:urpx/offeredBy   version)
-       (:urpx/publishedBy version)
-       (get-in plan [:urpx/hasRatePlanVersion         :urpx/offeredBy])
-       (get-in plan [:urpx/hasRatePlanModifierVersion :urpx/offeredBy])
-       (get-in plan [:urpx/hasRatePlanVersion         :urpx/publishedBy])
-       (get-in plan [:urpx/hasRatePlanModifierVersion :urpx/publishedBy]))))
+   (let [snapshot (or version
+                      (index/nested-version plan :urpx/hasRatePlanVersion)
+                      (index/nested-version plan :urpx/hasRatePlanModifierVersion))]
+     (or (:urpx/offeredBy   snapshot)
+         (:urpx/publishedBy snapshot)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Public API

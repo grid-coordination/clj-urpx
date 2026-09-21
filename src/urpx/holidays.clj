@@ -29,7 +29,8 @@
 
   Unrecognized rules throw ex-info — pass an explicit `:holiday?` predicate
   in `urpx.price/resolve-prices` opts to override the derived calendar."
-  (:require [clojure.string :as str])
+  (:require [clojure.string :as str]
+            [urpx.index :as index])
   (:import [java.time DayOfWeek LocalDate Month]
            [java.time.temporal TemporalAdjusters]
            [java.util.concurrent ConcurrentHashMap]))
@@ -185,9 +186,15 @@
    version is identical in both shapes."
   ([plan] (plan-calendar plan nil))
   ([plan version]
-   (or (get-in version [:urpx/hasPlanElements :urpx/hasHolidayCalendar])
-       (get-in plan [:urpx/hasRatePlanVersion         :urpx/hasPlanElements :urpx/hasHolidayCalendar])
-       (get-in plan [:urpx/hasRatePlanModifierVersion :urpx/hasPlanElements :urpx/hasHolidayCalendar]))))
+   (if version
+     ;; An explicitly supplied snapshot is the authority, not merely the first
+     ;; preference: falling through to the nested path when it has no calendar
+     ;; would consult a different snapshot than the one prices resolve against.
+     (get-in version [:urpx/hasPlanElements :urpx/hasHolidayCalendar])
+     (or (get-in (index/nested-version plan :urpx/hasRatePlanVersion)
+                 [:urpx/hasPlanElements :urpx/hasHolidayCalendar])
+         (get-in (index/nested-version plan :urpx/hasRatePlanModifierVersion)
+                 [:urpx/hasPlanElements :urpx/hasHolidayCalendar])))))
 
 ;; ---------------------------------------------------------------------------
 ;; Public API

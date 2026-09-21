@@ -1260,7 +1260,14 @@
    [:urpx/hasLocationDataSet
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
-   [:urpx/hasRatePlanVersion {:optional true} RatePlanVersion]])
+   ;; 0..N upstream: sh:minCount 0 and no sh:maxCount. Accepts a single nested
+   ;; snapshot or several. Deliberately NOT normalized to a vector by a decoder:
+   ;; every filing in the corpus nests exactly one, and forcing a vector would
+   ;; change the coerced shape every consumer already reads. Readers go through
+   ;; `urpx.index/nested-version`, which refuses to guess when there is more
+   ;; than one rather than silently resolving against an arbitrary snapshot.
+   [:urpx/hasRatePlanVersion {:optional true}
+    [:or RatePlanVersion [:vector RatePlanVersion]]]])
 
 ;; ---------------------------------------------------------------------------
 ;; Modifier — augments / overrides parts of an existing RatePlan
@@ -1362,7 +1369,9 @@
    [:urpx/hasLocationDataSet
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
-   [:urpx/hasRatePlanModifierVersion {:optional true} RatePlanModifierVersion]])
+   ;; 0..N upstream, same as RatePlan/hasRatePlanVersion above.
+   [:urpx/hasRatePlanModifierVersion {:optional true}
+    [:or RatePlanModifierVersion [:vector RatePlanModifierVersion]]]])
 
 ;; ---------------------------------------------------------------------------
 ;; Top-level wrappers carrying ontology-version metadata

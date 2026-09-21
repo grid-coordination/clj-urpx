@@ -4,6 +4,7 @@
             [urpx.core :as core]
             [urpx.emit :as emit]
             [urpx.index :as index]
+            [urpx.schema :as schema]
             [urpx.price :as price]
             [urpx.test-fixtures :as fixtures])
   (:import [java.math BigDecimal]
@@ -1133,3 +1134,29 @@
           july4 (zdt 2026 7 3 18)]
       (is (= (price/resolve-prices plan july4)
              (price/resolve-prices shell july4 {:version snapshot}))))))
+
+;; ---------------------------------------------------------------------------
+;; v0.5.1 arity: the version pointers are 0..N upstream
+;; ---------------------------------------------------------------------------
+
+(deftest multiple-nested-versions-validate-and-refuse-to-guess
+  (let [plan    (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+        version (:urpx/hasRatePlanVersion plan)
+        when-zdt (zdt 2026 7 15 17)]
+    (testing "a single nested snapshot keeps working unchanged, in both the map
+              and the one-element vector shapes"
+      (is (= (price/resolve-prices plan when-zdt)
+             (price/resolve-prices (assoc plan :urpx/hasRatePlanVersion [version]) when-zdt))))
+    (testing "two nested snapshots are VALID upstream (sh:minCount 0, no
+              sh:maxCount) and must not be rejected by the schema"
+      (let [two (assoc plan :urpx/hasRatePlanVersion [version version])]
+        (is (nil? (coerce/explain schema/RatePlan two))
+            "the document is conformant; rejecting it was the old defect")
+        (testing "but resolution refuses to guess which one applies, rather than
+                  silently picking one and reporting a confident wrong answer"
+          (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                                #"Multiple nested version snapshots"
+                                (price/resolve-prices two when-zdt))))
+        (testing "and an explicitly supplied snapshot resolves it"
+          (is (= (price/resolve-prices plan when-zdt)
+                 (price/resolve-prices two when-zdt {:version version}))))))))

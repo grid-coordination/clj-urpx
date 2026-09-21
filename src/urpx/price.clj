@@ -28,7 +28,8 @@
   Plans without a HolidayCalendar and called without `:holiday?` retain the
   pre-existing 'every date is a non-holiday' fallback — so brackets that
   opt out of non-holidays (urpx:includeNonHolidays = false) will never match."
-  (:require [urpx.holidays :as holidays])
+  (:require [urpx.holidays :as holidays]
+            [urpx.index :as index])
   (:import [java.time DayOfWeek LocalDate LocalTime ZonedDateTime]))
 
 ;; ---------------------------------------------------------------------------
@@ -415,7 +416,7 @@
    duration of its migration and every filing in it today is nested."
   [plan opts nested-key]
   (or (:version opts)
-      (nested-key plan)
+      (index/nested-version plan nested-key)
       (when-let [by-plan (:versions-by-plan opts)]
         (first (get by-plan (:jsonld/id plan))))))
 

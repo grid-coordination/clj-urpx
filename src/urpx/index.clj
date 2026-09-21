@@ -106,3 +106,38 @@
    found."
   [doc]
   (back-pointer-walk {} doc))
+
+(defn nested-version
+  "Return the single version snapshot nested under `nested-key` on `plan`, or
+   nil when there is none.
+
+   urpx:hasRatePlanVersion and urpx:hasRatePlanModifierVersion are sh:minCount 0
+   with NO sh:maxCount upstream, so a conformant document may nest several
+   snapshots. Documents in the wild nest exactly one, and every reader in this
+   library expects one, so this normalizes the single-or-vector shapes and
+   REFUSES to guess when there is genuinely more than one:
+
+     nil or absent  -> nil
+     a single map   -> that map
+     a 1-vector     -> its element
+     a longer vector -> throws
+
+   Throwing rather than taking `first` is deliberate. Picking arbitrarily would
+   resolve prices against an unpredictable snapshot and report a confident wrong
+   answer; the caller that knows which window it wants passes it explicitly
+   instead (`:version` in the resolve-prices opts). Which snapshot applies to a
+   given instant is a selection question the vocabulary does not yet settle:
+   urpx:hasTemporalScope carries no sh:path constraints at 95eb8e22."
+  [plan nested-key]
+  (let [v (get plan nested-key)]
+    (cond
+      (map? v) v
+      (sequential? v)
+      (case (count v)
+        0 nil
+        1 (first v)
+        (throw (ex-info "Multiple nested version snapshots; pass one explicitly"
+                        {:key nested-key
+                         :count (count v)
+                         :version-ids (mapv :jsonld/id v)})))
+      :else nil)))
