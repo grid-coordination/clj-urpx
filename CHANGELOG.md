@@ -9,6 +9,13 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Added
+
+- **Six SCE and SDG&E fixtures**, the corpus's first percentage discounts, pinned at urpx-rate-plans `384ffb1`. Both utilities are vendored because neither alone shows the variation, and a fixture set carrying only one would silently sanction whichever shape it held. SCE shares **one** subtotal between CARE and FERA, which differ only in rate; SDG&E carries **two** subtotals on one base plan with different member lists, because Schedule E-CARE excludes any applicable exemptions and FERA grants none. Unlike the PG&E `@graph` bundles each base plan is a separate filing from its modifiers, so the cross-document dereference is exercised the way the corpus files it. `urpx.care-fera-test` pins the filed values: SDG&E CARE `-0.1450505` and FERA `-0.0756612`, SCE CARE `-0.12139725` and FERA `-0.0672354`, each checked against the summary's own member arithmetic as well as against the resolver.
+- A note in the README on **two properties that are optional in the shapes but load-bearing here**, so a conformant document can still lose content: `urpx:startDate` on a `urpx:Price` with nothing enclosing it to inherit a date from (dropped silently), and `urpx:referencesMetricInput` on a `urpx:Ledger` (tiers survive, but `marginal-unit-rate` comes back quietly short, or `0M`). Both were found by authoring real filings, not by validation.
+
 ## [0.14.0] — 2026-09-21
 
 Composition. Five defects in how a modifier resolves against a base plan, four of them wrong answers rather than errors and one a crash, plus three semantics that URPX leaves open and that this library now states rather than implies. Found by auditing the compose path to answer a question from the filings repo, not by a failing test: every one is reachable by a SHACL-conformant document, and the 73-filing corpus gate caught none of them, because it validates documents and these are resolution defects.

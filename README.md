@@ -308,6 +308,17 @@ The conjunctive reading (sum the bases) is already covered by `urpx:PriceSummary
 
 Note that this is a second, independent way to express CARE and FERA. The `urpx:ProfileAlternatives` mechanism below files the already-discounted prices directly as an alternative price set; this one files the discount as arithmetic over the undiscounted prices. Which a plan uses is the filer's choice, and a reader should expect either.
 
+### What the resolver needs that SHACL does not require
+
+Two properties are optional in the shapes but load-bearing here, so a document can be perfectly conformant and still lose content on the way to a resolved price. Both were found by authoring real filings, not by validation.
+
+| Property | If omitted |
+|---|---|
+| `urpx:startDate` on a `urpx:Price` | The Price is **dropped silently** when nothing encloses it that carries a date. A Price inside a `urpx:PriceSet` inherits the set's `urpx:startDate`, so the omission is invisible there; a Price on the flat `urpx:hasPrice` list has nothing to inherit from and simply disappears. |
+| `urpx:referencesMetricInput` on a `urpx:Ledger` | The ledger and its tiers still resolve and still appear in `:urpx.resolved/ledgers`, so reading tiers shows no loss. But `marginal-unit-rate` decides which ledgers are energy from the referenced `MetricInput`'s `urpx:measurementKind`, so an unreferenced ledger contributes nothing and the aggregate comes back **quietly short**, or `0M` if no ledger qualifies. |
+
+The second is the more dangerous of the two, because `0M` is a legal price rather than an error. If a per-kWh ledger is missing from a marginal rate, check that its `MetricInput` exists and that its `urpx:measurementKind` is `urpx:energy`.
+
 ### Customer-profile alternatives
 
 URPX v0.2.0 introduced `urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives` for declarative customer-or-configuration choices — income-tier CARE / FERA / Standard, voltage configurations, vintage-PCIA default tier, and similar. The plan declares a `urpx:ProfileAlternatives` at `PlanElements.hasProfileAlternatives` (each named alternative carries its own `hasConditionExpression`), and a sibling `urpx:PriceSetAlternatives` at `Prices.hasPriceSetAlternatives` exposes one Price-bearing `PriceSetAlternative` per alternative.

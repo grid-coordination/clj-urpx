@@ -46,6 +46,22 @@ fixtures=(
   "ladwp-ez-save-2008-09-01       6453536  us/ca/ladwp/electricity/ez-save/versions/2008-09-01/rate-plan-modifier_ladwp_ez-save_2008-09-01.jsonld"
   "ladwp-lifeline-2008-09-01      6453536  us/ca/ladwp/electricity/lifeline/versions/2008-09-01/rate-plan-modifier_ladwp_lifeline_2008-09-01.jsonld"
   "ladwp-nem-2008-09-01           6453536  us/ca/ladwp/electricity/nem/versions/2008-09-01/rate-plan-modifier_ladwp_nem_2008-09-01.jsonld"
+
+  # SCE and SDG&E, URPX v0.5.1, the first percentage discounts in the corpus:
+  # a urpx:Price carrying urpx:multiplier over a urpx:PriceSummary instead of a
+  # urpx:unitPrice. Both utilities are vendored because neither alone shows the
+  # variation. SCE shares ONE subtotal between CARE and FERA, which differ only
+  # in rate; SDG&E carries TWO subtotals on one base plan with different member
+  # lists, because Schedule E-CARE excludes applicable exemptions and FERA
+  # grants none. Each base plan is a separate filing from its modifiers here,
+  # unlike the PG&E @graph bundles, so the cross-document dereference is
+  # exercised the way the corpus actually files it.
+  "sce-d-2026-03-20               384ffb1  us/ca/sce/electricity/d/versions/2026-03-20/rate-plan_sce_d_2026-03-20.jsonld"
+  "sce-care-2026-03-20            384ffb1  us/ca/sce/electricity/care/versions/2026-03-20/rate-plan-modifier_sce_care_2026-03-20.jsonld"
+  "sce-fera-2026-03-20            384ffb1  us/ca/sce/electricity/fera/versions/2026-03-20/rate-plan-modifier_sce_fera_2026-03-20.jsonld"
+  "sdge-dr-2026-04-01             384ffb1  us/ca/sdge/electricity/dr/versions/2026-04-01/rate-plan_sdge_dr_2026-04-01.jsonld"
+  "sdge-care-2025-10-01           384ffb1  us/ca/sdge/electricity/care/versions/2025-10-01/rate-plan-modifier_sdge_care_2025-10-01.jsonld"
+  "sdge-fera-2026-04-01           384ffb1  us/ca/sdge/electricity/fera/versions/2026-04-01/rate-plan-modifier_sdge_fera_2026-04-01.jsonld"
 )
 
 for entry in "${fixtures[@]}"; do
