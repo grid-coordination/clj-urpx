@@ -207,6 +207,8 @@
 (deftest rate-plan-minimal
   (testing "v0.2.0: ratePlanUniqueIdentifier is required"
     (let [version {:jsonld/type "urpx:RatePlanVersion"
+                   :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+                   :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
                    :urpx/effectiveDateTime (LocalDateTime/of 2026 3 1 0 0)
                    :urpx/hasPlanElements
                    {:jsonld/type "urpx:PlanElements"
@@ -243,6 +245,8 @@
             hasModifierOptions and hasModifierVersionOptions, both as vectors
             of Refs (single-or-vec→vec normalizes the JSON-LD shape)."
     (let [version-base {:jsonld/type "urpx:RatePlanVersion"
+                        :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+                        :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
                         :urpx/effectiveDateTime (LocalDateTime/of 2026 3 1 0 0)
                         :urpx/hasPlanElements
                         {:jsonld/type "urpx:PlanElements"
@@ -265,6 +269,8 @@
         (is (m/validate s/RatePlanVersion version-base)))))
   (testing "single-or-vec decoder normalizes a single Ref to a one-element vector"
     (let [raw {:jsonld/type "urpx:RatePlanVersion"
+               :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+               :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
                :urpx/effectiveDateTime "2026-03-01T00:00:00"
                :urpx/hasModifierOptions {:jsonld/id "pge:e-1-vintage-pcia"}
                :urpx/hasModifierVersionOptions {:jsonld/id "pge:e-1-vintage-pcia-2026-03-01"}
@@ -288,6 +294,8 @@
   (testing "v0.2.0: RatePlanModifier no longer has urpx:isOptional and uses
             modifierUniqueIdentifier (was per-version in v0.1.x)"
     (let [version {:jsonld/type "urpx:RatePlanModifierVersion"
+                   :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+                   :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
                    :urpx/modifierVersionNumber "2026-03-01"
                    :urpx/effectiveDateTime (LocalDateTime/of 2026 3 1 0 0)
                    :urpx/applicableToRatePlan [{:jsonld/id "pge:e-1"}]
@@ -547,6 +555,8 @@
 
 (def ^:private minimal-version
   {:jsonld/type "urpx:RatePlanVersion"
+   :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+   :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
    :urpx/effectiveDateTime (LocalDateTime/of 2026 1 1 0 0)
    :urpx/hasPlanElements
    {:jsonld/type "urpx:PlanElements"
@@ -582,6 +592,8 @@
     (testing "RatePlanModifierVersion carries the same four entries, with
               forRatePlanModifier in place of forRatePlan"
       (let [mv {:jsonld/type "urpx:RatePlanModifierVersion"
+                :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+                :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
                 :urpx/modifierVersionNumber "1"
                 :urpx/effectiveDateTime (LocalDateTime/of 2026 1 1 0 0)
                 :urpx/hasPlanElements (:urpx/hasPlanElements minimal-version)
@@ -901,3 +913,22 @@
            (catch clojure.lang.ExceptionInfo e
              (is (= ["a" "b"] (:ids (ex-data e))))
              (is (= 2 (:count (ex-data e)))))))))
+
+(deftest version-snapshots-require-change-reason-and-service-role
+  (testing "both are sh:minCount 1 on the version shapes, and have been since
+            v0.2.1. All 84 version snapshots across the corpus carry both, so
+            requiring them costs nothing on real data; clj-urpx accepted
+            snapshots the standard rejects until now."
+    (let [v {:jsonld/type "urpx:RatePlanVersion"
+             :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+             :urpx/serviceRole  {:jsonld/id "urpx:bundledServiceRole"}
+             :urpx/hasPlanElements (:urpx/hasPlanElements minimal-version)
+             :urpx/hasPrices {:jsonld/type "urpx:Prices"}}]
+      (is (m/validate s/RatePlanVersion v))
+      (is (not (m/validate s/RatePlanVersion (dissoc v :urpx/changeReason))))
+      (is (not (m/validate s/RatePlanVersion (dissoc v :urpx/serviceRole))))
+      (testing "and the modifier snapshot the same way"
+        (let [mv (assoc v :jsonld/type "urpx:RatePlanModifierVersion"
+                        :urpx/modifierVersionNumber "1")]
+          (is (m/validate s/RatePlanModifierVersion mv))
+          (is (not (m/validate s/RatePlanModifierVersion (dissoc mv :urpx/serviceRole)))))))))

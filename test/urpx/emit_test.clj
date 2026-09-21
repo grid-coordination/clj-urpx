@@ -20,6 +20,8 @@
    :urpx/initialEffectiveDate (LocalDate/of 2026 1 1)
    :urpx/hasRatePlanVersion
    {:jsonld/type "urpx:RatePlanVersion"
+    :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/effectiveDateTime (LocalDateTime/of 2026 1 1 0 0)
     :urpx/hasPlanElements
     {:jsonld/type "urpx:PlanElements"
@@ -50,6 +52,8 @@
                   :urpx/initialEffectiveDate (LocalDate/of 2026 1 1)
                   :urpx/hasRatePlanModifierVersion
                   {:jsonld/type "urpx:RatePlanModifierVersion"
+                   :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+                   :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
                    :urpx/modifierVersionNumber "1.0"
                    :urpx/effectiveDateTime (LocalDateTime/of 2026 1 1 0 0)
                    :urpx/hasPlanElements

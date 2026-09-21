@@ -365,7 +365,9 @@
       (is (= "urpx:Organization" (:jsonld/type org)))))
   (testing "rate plan + version + URPXDocument builders all produce the
             expected @types"
-    (let [rpv (dsl/rate-plan-version :urpx/effectiveDateTime "2026-01-01T00:00:00"
+    (let [rpv (dsl/rate-plan-version :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+                                     :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
+                                     :urpx/effectiveDateTime "2026-01-01T00:00:00"
                                      :urpx/hasPlanElements
                                      {:jsonld/type "urpx:PlanElements"
                                       :urpx/hasMetricInput
@@ -476,6 +478,8 @@
       :initial-effective-date "2025-07-01"
       :has-rate-plan-version
       (dsl/rate-plan-version
+       :change-reason {:jsonld/id "urpx:rateCase"}
+       :service-role {:jsonld/id "urpx:bundledServiceRole"}
        :effective-date-time "2025-07-01T00:00:00"
        :price-currency "USD"
        :has-plan-elements

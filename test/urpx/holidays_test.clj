@@ -67,6 +67,8 @@
   {:jsonld/type "urpx:RatePlan"
    :urpx/hasRatePlanVersion
    {:jsonld/type "urpx:RatePlanVersion"
+    :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/hasPlanElements
     {:jsonld/type "urpx:PlanElements"
      :urpx/hasHolidayCalendar

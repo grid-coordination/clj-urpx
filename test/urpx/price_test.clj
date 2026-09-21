@@ -291,6 +291,8 @@
    :urpx/initialEffectiveDate (java.time.LocalDate/of 2026 1 1)
    :urpx/hasRatePlanModifierVersion
    {:jsonld/type "urpx:RatePlanModifierVersion"
+    :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
     :urpx/priceCurrency "USD"
     :urpx/applicableToRatePlan [{:jsonld/id "test:base-plan"}]
@@ -378,6 +380,8 @@
    :urpx/initialEffectiveDate (java.time.LocalDate/of 2026 1 1)
    :urpx/hasRatePlanVersion
    {:jsonld/type "urpx:RatePlanVersion"
+    :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
     :urpx/priceCurrency "USD"
     :urpx/hasPlanElements
@@ -430,6 +434,8 @@
    :urpx/initialEffectiveDate (java.time.LocalDate/of 2026 1 1)
    :urpx/hasRatePlanModifierVersion
    {:jsonld/type "urpx:RatePlanModifierVersion"
+    :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
     :urpx/priceCurrency "USD"
     :urpx/applicableToRatePlan [{:jsonld/id "test:base-plan"}]
@@ -509,6 +515,8 @@
    :urpx/initialEffectiveDate (java.time.LocalDate/of 2026 1 1)
    :urpx/hasRatePlanModifierVersion
    {:jsonld/type "urpx:RatePlanModifierVersion"
+    :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
     :urpx/priceCurrency "USD"
     :urpx/applicableToRatePlan [{:jsonld/id "test:base-plan"}]
@@ -601,6 +609,8 @@
    :urpx/initialEffectiveDate (java.time.LocalDate/of 2026 1 1)
    :urpx/hasRatePlanVersion
    {:jsonld/type "urpx:RatePlanVersion"
+    :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
     :urpx/priceCurrency "USD"
     :urpx/hasPlanElements
@@ -760,6 +770,8 @@
    :urpx/initialEffectiveDate (java.time.LocalDate/of 2025 7 1)
    :urpx/hasRatePlanVersion
    {:jsonld/type "urpx:RatePlanVersion"
+    :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/effectiveDateTime (java.time.LocalDateTime/of 2025 7 1 0 0)
     :urpx/priceCurrency "USD"
     :urpx/hasPlanElements
@@ -940,6 +952,8 @@
    :urpx/initialEffectiveDate (java.time.LocalDate/of 2026 1 1)
    :urpx/hasRatePlanVersion
    {:jsonld/type "urpx:RatePlanVersion"
+    :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
     :urpx/hasPlanElements
     {:jsonld/type "urpx:PlanElements"

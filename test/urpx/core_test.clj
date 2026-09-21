@@ -372,6 +372,8 @@
                  :urpx/name "Plan One"
                  :urpx/hasRatePlanVersion
                  {:jsonld/type "urpx:RatePlanVersion"
+                  :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+                  :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
                   :urpx/effectiveDateTime "2026-01-01T00:00:00"
                   :urpx/hasPriceDefinition [{:jsonld/type "urpx:PriceDefinition"
                                              :urpx/name "PD-1"}

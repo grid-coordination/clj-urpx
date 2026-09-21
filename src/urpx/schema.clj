@@ -1197,7 +1197,7 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/version       {:optional true} :string]
    [:urpx/versionNumber {:optional true} :string]
-   [:urpx/changeReason  {:optional true} Ref]
+   [:urpx/changeReason  Ref]
    [:urpx/changeDescription {:optional true} :string]
    [:urpx/description   {:optional true} :string]
    ;; sh:minCount 0 sh:maxCount 1 on both version shapes, and it was NEVER
@@ -1217,7 +1217,7 @@
    [:urpx/commodity
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
-   [:urpx/serviceRole       {:optional true} Ref]
+   [:urpx/serviceRole       Ref]
    [:urpx/customerChoice    {:optional true} Ref]
    [:urpx/isDefault         {:optional true} :boolean]
    [:urpx/minimumTenure     {:optional true} IsoDuration]
@@ -1324,7 +1324,7 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/modifierVersionNumber :string]
    [:urpx/version    {:optional true} :string]
-   [:urpx/changeReason  {:optional true} Ref]
+   [:urpx/changeReason  Ref]
    [:urpx/changeDescription {:optional true} :string]
    [:urpx/description {:optional true} :string]
    ;; sh:minCount 0 sh:maxCount 1 on both version shapes, and it was NEVER
@@ -1340,7 +1340,7 @@
    [:urpx/commodity
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
-   [:urpx/serviceRole {:optional true} Ref]
+   [:urpx/serviceRole Ref]
    [:urpx/modifierType     {:optional true} Ref]
    [:urpx/modifierCategory {:optional true} Ref]
    [:urpx/publishedBy {:optional true} Organization]
