@@ -67,6 +67,8 @@ Findings are ranked by what they cost. `rejects-valid` and `arity` mean clj-urpx
 
 Deliberate divergence goes in [`dev/drift-baseline.edn`](dev/drift-baseline.edn) with a written reason. A known bug does not: silencing it there is how it stops being known.
 
+If you are about to propose generating the schemas from the shapes instead, read [SHACL and Malli](doc/shacl-and-malli.md) first. A generator was built, it worked, and the note records the measured reasons it is not what ships.
+
 The vendored fixtures under `test/resources/urpx-fixtures/` are pinned snapshots of corpus filings from [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans). See [`test/resources/urpx-fixtures/FIXTURES.md`](test/resources/urpx-fixtures/FIXTURES.md) for the table of pinned commits and the re-sync workflow (`scripts/sync-urpx-fixtures.sh <path-to-urpx-rate-plans-checkout>`). When the upstream corpus exposes a new shape that clj-urpx should handle, add the fixture there with provenance and bump the pin.
 
 ## Code of conduct
