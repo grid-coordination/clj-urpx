@@ -182,6 +182,24 @@
   [:map {:closed true}
    [:jsonld/id :string]])
 
+(def Context
+  "A JSON-LD @context, in any of the three forms the spec permits: an inline
+   definition object, an IRI string pointing at a remote context, or an array
+   mixing the two.
+
+   The array form is not hypothetical: every v0.5.1 test case shipped with
+   urpx-org/urpx carries
+     [\"https://urpx.org/ns/context/releases/v0.5.1/jsonld/urpx-context.jsonld\"
+      {\"prefix\": \"...\"}]
+   a remote context followed by a local prefix map, so typing this as :map
+   alone rejected the standard's own reference documents.
+
+   Deliberately permissive. clj-urpx never interprets @context: it round-trips
+   it untouched and urpx.emit attaches its own. There is no consumer path that
+   a tighter shape would protect, so the only thing a narrower type can do here
+   is reject valid input."
+  [:or :map :string [:vector [:or :map :string]]])
+
 (def NodeIdentity
   "Common JSON-LD identity fields present on most entities."
   [:map
@@ -1091,7 +1109,7 @@
   [:map
    [:jsonld/type [:= "urpx:RatePlan"]]
    [:jsonld/id {:optional true} :string]
-   [:jsonld/context {:optional true} :map]
+   [:jsonld/context {:optional true} Context]
    [:urpx/ratePlanUniqueIdentifier :string]
    [:urpx/name :string]
    [:urpx/initialEffectiveDate Date]
@@ -1183,7 +1201,7 @@
   [:map
    [:jsonld/type [:= "urpx:RatePlanModifier"]]
    [:jsonld/id {:optional true} :string]
-   [:jsonld/context {:optional true} :map]
+   [:jsonld/context {:optional true} Context]
    [:urpx/modifierUniqueIdentifier :string]
    [:urpx/name :string]
    [:urpx/initialEffectiveDate Date]
@@ -1220,7 +1238,7 @@
   [:map
    [:jsonld/type [:= "urpx:URPXDocument"]]
    [:jsonld/id {:optional true} :string]
-   [:jsonld/context {:optional true} :map]
+   [:jsonld/context {:optional true} Context]
    [:urpx/targetURPXVersion :string]
    [:urpx/name              {:optional true} :string]
    [:urpx/description       {:optional true} :string]
@@ -1261,7 +1279,7 @@
   [:map
    [:jsonld/type [:= "urpx:URPXPackage"]]
    [:jsonld/id {:optional true} :string]
-   [:jsonld/context {:optional true} :map]
+   [:jsonld/context {:optional true} Context]
    [:urpx/targetURPXVersion :string]
    [:urpx/name              {:optional true} :string]
    [:urpx/description       {:optional true} :string]

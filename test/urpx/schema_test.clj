@@ -610,3 +610,42 @@
                                    :urpx/exclusionReason {:jsonld/id "urpx:voided"}}})]
       (is (vector? (:urpx/hasModelExclusion coerced)))
       (is (m/validate s/Evaluation coerced)))))
+
+;; ---------------------------------------------------------------------------
+;; @context in all three JSON-LD encodings
+;; ---------------------------------------------------------------------------
+
+(deftest context-accepts-object-string-and-array
+  (let [remote "https://urpx.org/ns/context/releases/v0.5.1/jsonld/urpx-context.jsonld"
+        prefixes {"urpx" "https://urpx.org/ns/ontology/"}]
+    (testing "all three forms the JSON-LD spec permits"
+      (is (m/validate s/Context prefixes) "inline definition object")
+      (is (m/validate s/Context remote) "remote context IRI")
+      (is (m/validate s/Context [remote prefixes]) "array mixing the two")
+      (is (m/validate s/Context [remote]) "single-element array")
+      (is (m/validate s/Context [prefixes prefixes]) "array of objects"))
+    (testing "the array form is what every shipped v0.5.1 test case uses, and it
+              must validate on all four schemas that model @context"
+      (doseq [[label schema base]
+              [["RatePlan" s/RatePlan {:jsonld/type "urpx:RatePlan"
+                                       :urpx/ratePlanUniqueIdentifier "P1"
+                                       :urpx/name "Plan One"
+                                       :urpx/initialEffectiveDate (LocalDate/of 2026 1 1)}]
+               ["RatePlanModifier" s/RatePlanModifier
+                {:jsonld/type "urpx:RatePlanModifier"
+                 :urpx/modifierUniqueIdentifier "M1"
+                 :urpx/name "Mod One"
+                 :urpx/initialEffectiveDate (LocalDate/of 2026 1 1)}]
+               ["URPXDocument" s/URPXDocument
+                {:jsonld/type "urpx:URPXDocument"
+                 :urpx/targetURPXVersion "https://example.com/v0.2.0"}]
+               ["URPXPackage" s/URPXPackage
+                {:jsonld/type "urpx:URPXPackage"
+                 :urpx/targetURPXVersion "https://example.com/v0.5.1"}]]]
+        (is (m/validate schema (assoc base :jsonld/context [remote prefixes]))
+            (str label " must accept an array @context"))
+        (is (m/validate schema (assoc base :jsonld/context prefixes))
+            (str label " must still accept an object @context"))))
+    (testing "a number is not a context in any encoding"
+      (is (not (m/validate s/Context 42)))
+      (is (not (m/validate s/Context [42]))))))
