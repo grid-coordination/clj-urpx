@@ -122,8 +122,8 @@ That covers the consume side end-to-end. For emit and authoring, jump to [Writin
          '[urpx.schedule :as schedule])
 (import '[java.time LocalDate ZoneId ZonedDateTime])
 
-;; 1. Load and coerce a URPX rate plan document. v0.2.0 documents are
-;;    typically @graph bundles holding a urpx:RatePlan plus sibling
+;; 1. Load and coerce a URPX rate plan document. Filings are typically
+;;    @graph bundles holding a urpx:RatePlan plus sibling
 ;;    urpx:RatePlanModifier and metadata entities; load-rate-plan picks
 ;;    the unique RatePlan from the bundle.
 (def plan
@@ -417,7 +417,9 @@ The second is the more dangerous of the two, because `0M` is a legal price rathe
 
 ### Customer-profile alternatives
 
-URPX v0.2.0 introduced `urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives` for declarative customer-or-configuration choices — income-tier CARE / FERA / Standard, voltage configurations, vintage-PCIA default tier, and similar. The plan declares a `urpx:ProfileAlternatives` at `PlanElements.hasProfileAlternatives` (each named alternative carries its own `hasConditionExpression`), and a sibling `urpx:PriceSetAlternatives` at `Prices.hasPriceSetAlternatives` exposes one Price-bearing `PriceSetAlternative` per alternative.
+`urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives` express declarative customer-or-configuration choices: income-tier CARE / FERA / Standard, voltage configurations, vintage-PCIA departure year, and similar. The plan declares a `urpx:ProfileAlternatives` at `PlanElements.hasProfileAlternatives` (each named alternative carries its own `hasConditionExpression`), and a sibling `urpx:PriceSetAlternatives` at `Prices.hasPriceSetAlternatives` exposes one Price-bearing `PriceSetAlternative` per alternative.
+
+This is the **selection layer**, and URPX is explicit that it is distinct from the automatic filtering layer of `urpx:ApplicabilityRule`: alternatives are mutually exclusive options requiring a choice, and the exclusivity is declared structurally rather than implied by predicates. That distinction is what makes them readable to a consumer that cannot evaluate conditions — it can see the set is exclusive, refuse to aggregate it, and be handed a selection by `@id`, without evaluating anything. A set of prices made exclusive only by `ApplicabilityRule` predicates offers no such signal and will be summed.
 
 `resolve-prices` selects the active alternative explicitly via the `:profile-alternatives` opt — a `{<ProfileAlternatives @id> <chosen ProfileAlternative @id>}` map. `resolve-prices-with-modifiers` honors the same opt on the modifier path, which is how a matrix modifier's alternatives are chosen:
 
@@ -567,7 +569,7 @@ Resolution is eager (declare-before-reference); unknown refs and duplicate decla
                     :urpx/hasTimeBracket []))
 ```
 
-The named builders (`season`, `metric-input`, `price-definition`, `rate-plan`, `urpx-package`, `coverage-claim`, …) are each just `(def name (make-builder schema/X))`, one for every entity-type schema in `urpx.schema` with no exceptions — a test pins that, because the claim had quietly become false for eleven schemas. Where a schema dual-accepts two `@type` spellings (`source-publication`), the builder sets the v0.5.1 one and the schema still validates the v0.2.x one on parse.
+The named builders (`season`, `metric-input`, `price-definition`, `rate-plan`, `urpx-package`, `coverage-claim`, …) are each just `(def name (make-builder schema/X))`, one for every entity-type schema in `urpx.schema` with no exceptions — a test pins that. Where a schema dual-accepts two `@type` spellings (`source-publication`), the builder sets the v0.5.1 one and the schema still validates the v0.2.x one on parse.
 
 For a longer worked walkthrough that mirrors selected examples from the upstream [URPX Tutorial](https://github.com/urpx-org/urpx/blob/main/documentation/pages/urpx-tutorial.md), see [`doc/dsl-tutorial.md`](doc/dsl-tutorial.md) — each example shows the canonical URPX JSON-LD shape and the equivalent DSL form, with deep-links back to the upstream source section.
 
@@ -619,7 +621,7 @@ Currently covered:
 - Block-tier surfacing via the v0.2.0 `urpx:ServiceTiers` container — every tier surfaces with its bounds and bound operators
 - Active-price selection by latest `startDate ≤ query-date`, drawing from flat top-level prices, `PriceSet`-scoped prices, and PriceSets that omit `startDate` and fall through to per-Price dates (CPAU E-2 shape, per `urpx:PriceSetShape` `sh:minCount 0`)
 - Modifier resolution alongside the base plan (vintage-PCIA pattern: many Prices share one PD, discriminated by `urpx:PriceSetAlternatives` / `urpx:referencesProfileAlternative`, and selected with `:profile-alternatives`)
-- `urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives` — the v0.2.0 idiom for declarative customer-or-configuration choices (income tier CARE/FERA/Standard, voltage configuration, vintage-PCIA default tier). Coerce + validate full schemas; resolve-prices selects the active alternative via an explicit `:profile-alternatives` opt; emit round-trips cleanly. Programmatic `ConditionExpression` evaluation against a customer profile is a future enhancement
+- `urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives`, the selection layer for declarative customer-or-configuration choices (income tier CARE/FERA/Standard, voltage configuration, vintage-PCIA departure year). Coerce + validate full schemas; resolve-prices selects the active alternative via an explicit `:profile-alternatives` opt; emit round-trips cleanly. `urpx:referencesProfileAlternative` is read on `PriceSetAlternative` only, not yet on the `PriceDefinition`-level slot the shapes also allow. Programmatic `ConditionExpression` evaluation against a customer profile is a future enhancement
 - Configurable schedule step (hourly default; sub-hour available via `:step`)
 - Symmetric write-side: `urpx.emit` emits JSON-LD from any coerced `RatePlan` / `RatePlanModifier` / `URPXDocument`; the vendored-fixture round-trip suite verifies `parse → coerce → emit → re-parse → re-coerce` is a fixed point for every PG&E filing × {RatePlan, Modifier} plus a URPXDocument-wrapped E-ELEC test case
 - Authoring DSL (`urpx.dsl`): named builders for every entity-type schema, kebab-case kwarg aliases, auto-coercion of raw inputs (numbers → BigDecimal, ISO strings → java.time, `--MM` → int month), validation-on-construct, and local-symbol refs scoped via `dsl-scope`
