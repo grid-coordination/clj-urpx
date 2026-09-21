@@ -17,8 +17,9 @@
   grid falls. Pass `{:step (Duration/ofMinutes 15)}` etc. for finer granularity
   when a rate plan defines sub-hour TOU bracket transitions."
   (:require [urpx.price :as price])
-  (:import [java.time Duration Instant ZonedDateTime ZoneId]
-           [java.time.temporal ChronoUnit]))
+  (:import [java.time Duration Instant LocalDate LocalDateTime LocalTime ZonedDateTime ZoneId]
+           [java.time.temporal ChronoUnit]
+           [java.time.zone ZoneRules]))
 
 (defn- plan-zone
   "Return the java.time.ZoneId declared by the rate plan's
@@ -169,3 +170,218 @@
   ([rate-plan modifiers ^Instant start days zone opts]
    (price-schedule-with-modifiers
     rate-plan modifiers start (.plus start (Duration/ofDays days)) zone opts)))
+
+
+;; ---------------------------------------------------------------------------
+;; Exact segments
+;;
+;; `price-schedule` above samples a fixed grid and merges adjacent equal
+;; results, so its boundaries are snapped to the grid. That is right only when
+;; every real transition happens to land on it. This section derives the
+;; transition instants from the documents instead, so boundaries are exact by
+;; construction.
+;;
+;; THE SAFETY PROPERTY. The candidate set must be a SUPERSET of true
+;; transitions. An extra candidate is harmless: it resolves the same as its
+;; neighbour and merges away. A MISSED candidate is a silently wrong boundary.
+;; The superset argument rests on one checkable fact: `urpx.price` reads the
+;; query instant through exactly four projections, `.toLocalDateTime`,
+;; `.toLocalDate`, `.toLocalTime` and `.getDayOfWeek`, and never through
+;; `.toInstant`, `.getOffset` or `.getZone`. Resolution is therefore a pure
+;; function of the LOCAL date-time, so it can only change where some comparison
+;; against a literal read out of a document changes. `urpx.schedule-test` pins
+;; that projection set, because a future resolver reading the offset would
+;; invalidate everything here without touching this file.
+;; ---------------------------------------------------------------------------
+
+(def ^:private uncoerced-re #"^(\d{2}:\d{2}|\d{4}-\d{2}-\d{2})")
+
+(defn- harvest-literals
+  "Walk a COERCED document and collect every temporal literal by java.time TYPE:
+   LocalTimes, LocalDates and LocalDateTimes.
+
+   By type rather than by property name, deliberately. A name list would have
+   to be kept in step with the vocabulary, and the one it missed would be a
+   missing candidate, which is a silently wrong boundary rather than a loud
+   failure. Typing picks up urpx:startTime and urpx:endTime, every effective,
+   expiration and start date, and anything temporal URPX adds later, for free.
+
+   Throws on a document that was never coerced: raw JSON-LD leaves these as
+   strings, which would harvest nothing and yield a candidate set narrowed to
+   the midnight grid, quietly."
+  [doc]
+  (let [acc (volatile! {:times #{} :dates #{} :date-times #{}})]
+    (letfn [(walk [x]
+              (cond
+                (instance? LocalTime x)     (vswap! acc update :times conj x)
+                (instance? LocalDateTime x) (vswap! acc update :date-times conj x)
+                (instance? LocalDate x)     (vswap! acc update :dates conj x)
+                (string? x) (when (re-find uncoerced-re x)
+                              (throw (ex-info (str "price-segments needs a COERCED document: found the "
+                                                   "raw temporal string " (pr-str x) ". Run it through "
+                                                   "urpx.coerce first; harvesting an uncoerced document "
+                                                   "silently narrows the candidate set to midnights.")
+                                              {:reason :uncoerced-document :value x})))
+                (map? x) (run! walk (vals x))
+                (sequential? x) (run! walk x)
+                :else nil))]
+      (walk doc))
+    @acc))
+
+(defn- local->instants
+  "Every instant the local date-time `ldt` corresponds to in `zone`.
+
+   Three cases, and each is a DST correctness decision:
+     normal   one offset, one instant.
+     GAP      spring-forward skipped this local time, so it never occurs.
+              Clamp to the transition instant. `ZonedDateTime/of` would push
+              forward by the gap's width instead, leaving the preceding bracket
+              applying past its wall-clock end, and the width is not always an
+              hour.
+     OVERLAP  fall-back repeats this local time, so it occurs TWICE. Emit both.
+              Resolution is a pure function of the local date-time, so the
+              repeated hour replays the same local sequence on the instant line;
+              emitting one instant would merge the repeat away and misprice the
+              second pass."
+  [^ZoneRules rules ^LocalDateTime ldt]
+  (let [offs (.getValidOffsets rules ldt)]
+    (case (count offs)
+      0 (when-let [tr (.getTransition rules ldt)] [(.getInstant tr)])
+      (mapv #(.toInstant ldt %) offs))))
+
+(defn- zone-transitions
+  "Every DST transition instant in [start, end).
+
+   Iterated from the zone rules rather than computed as two dates a year: real
+   tzdb data does not oblige. America/Metlakatla has a spring gap in 2018 with
+   no matching fall-back and three transitions in 2019, one of them in January.
+   This is also the only instant-line discontinuity with no local-time
+   counterpart, being exactly where the earlier bracket resumes at the start of
+   a repeated hour."
+  [^ZoneRules rules ^Instant start ^Instant end]
+  (loop [i start acc []]
+    (if-let [tr (.nextTransition rules i)]
+      (let [t (.getInstant tr)]
+        (if (.isBefore t end) (recur t (conj acc t)) acc))
+      acc)))
+
+(defn- candidate-instants
+  "Every instant in [start, end) at which the resolved prices could change.
+
+   A superset by construction: every local midnight in the window is included
+   unconditionally, which absorbs every date-granularity gate at once - day of
+   week, holidays including observance shifting, month and season boundaries,
+   applicability month rules, and every startDate, effectiveDate and
+   expirationDate literal - with no holiday parsing, no month arithmetic and no
+   per-property list to keep in step with the vocabulary."
+  [docs ^Instant start ^Instant end ^ZoneId zone]
+  (let [rules (.getRules zone)
+        {:keys [times dates date-times]} (reduce (fn [a d]
+                                                   (merge-with into a (harvest-literals d)))
+                                                 {:times #{} :dates #{} :date-times #{}}
+                                                 docs)
+        times  (conj times LocalTime/MIDNIGHT)
+        d0     (.toLocalDate (.atZone start zone))
+        dN     (.toLocalDate (.atZone end zone))
+        ;; LocalDate.plusDays, never ZonedDateTime.plusDays: the latter is not
+        ;; round-trip safe through a gap and retains the source offset in an
+        ;; overlap, which makes the walk direction-dependent.
+        days   (take-while #(not (.isAfter ^LocalDate % dN))
+                           (iterate #(.plusDays ^LocalDate % 1) d0))
+        locals (concat (for [d days, t times] (.atTime ^LocalDate d ^LocalTime t))
+                       date-times
+                       (map #(.atStartOfDay ^LocalDate %) dates))]
+    (->> (concat (mapcat #(local->instants rules %) locals)
+                 (zone-transitions rules start end)
+                 [start])
+         (remove nil?)
+         (filter #(and (not (.isBefore ^Instant % start)) (.isBefore ^Instant % end)))
+         distinct
+         sort
+         vec)))
+
+(defn- refusal-key
+  "The part of a refusal that identifies WHICH refusal it is, with the
+   time-varying detail stripped.
+
+   A refusal's ex-data names the instant it was raised at, and its message
+   embeds it. Merging on the raw map therefore never merges: an uncovered
+   stretch fragments into one segment per candidate, which reports a boundary
+   at every midnight where there is really only one. Temporal values and the
+   message are dropped so equal refusals collapse, while the retained keys
+   still separate genuinely different ones."
+  [refused]
+  (when refused
+    (into {} (remove (fn [[k v]]
+                       (or (= :message k)
+                           (instance? java.time.temporal.Temporal v)
+                           (and (sequential? v)
+                                (some #(instance? java.time.temporal.Temporal %) v))))
+                     refused))))
+
+(defn price-segments
+  "A piecewise-constant price schedule across `[start, end)`, with EXACT
+   boundaries derived from the documents rather than discovered by sampling.
+
+   Each entry is:
+     {:tick/beginning         ZonedDateTime
+      :tick/end               ZonedDateTime
+      :urpx.interval/resolved <full price/resolve-prices result>}
+
+   the same shape `price-schedule` emits, so the two are interchangeable at a
+   call site. The difference is where the boundaries fall: `price-schedule`
+   snaps them to its step grid, this puts them where the tariff actually
+   changes. For a client building a horizon and handing segments to an
+   optimizer, that is the difference between a schedule that is right and one
+   that is right only because every bracket in that plan happens to sit on an
+   hour.
+
+   Segments are merged on the FULL resolved value, not only on its ledgers: a
+   change of TOU period name or season with identical prices is still a real
+   boundary, and merging it away would leave the earlier value misstating the
+   later part.
+
+   Takes `modifiers` so the composed result is segmented as one thing; pass an
+   empty collection for a base plan alone. Every document passed here is
+   harvested for candidate instants, so a version snapshot the caller did not
+   load cannot contribute a boundary; that is a property of what was supplied
+   rather than a limit of this function.
+
+   A resolution that THROWS - no version in effect at that instant, an
+   ambiguous version - becomes a segment carrying `:urpx.interval/refused`
+   with the ex-data, rather than aborting the window. Equal refusals merge, so
+   an uncovered stretch is one segment and not one per candidate.
+
+   Optional `opts` are passed through to the resolver, and `:holiday?` is
+   worth supplying when the plan has no embedded calendar."
+  ([rate-plan modifiers start end] (price-segments rate-plan modifiers start end nil nil))
+  ([rate-plan modifiers start end zone] (price-segments rate-plan modifiers start end zone nil))
+  ([rate-plan modifiers ^Instant start ^Instant end zone opts]
+   (let [zone    (resolve-zone rate-plan zone)
+         docs    (cons rate-plan (seq modifiers))
+         cands   (candidate-instants docs start end zone)
+         win-end (.atZone end zone)
+         ends    (concat (rest cands) [end])
+         segs    (mapv (fn [^Instant a ^Instant b]
+                         (let [zdt (.atZone a zone)]
+                           (merge {:tick/beginning zdt
+                                   :tick/end       (.atZone ^Instant b zone)}
+                                  (try {:urpx.interval/resolved
+                                        (if (seq modifiers)
+                                          (price/resolve-prices-with-modifiers rate-plan modifiers zdt opts)
+                                          (price/resolve-prices rate-plan zdt opts))}
+                                       (catch clojure.lang.ExceptionInfo e
+                                         {:urpx.interval/refused (assoc (ex-data e) :message (.getMessage e))})))))
+                       cands ends)]
+     (->> segs
+          (reduce (fn [acc iv]
+                    (let [prev (peek acc)]
+                      (if (and prev
+                               (= (:urpx.interval/resolved prev) (:urpx.interval/resolved iv))
+                               (= (refusal-key (:urpx.interval/refused prev))
+                                  (refusal-key (:urpx.interval/refused iv))))
+                        (conj (pop acc) (assoc prev :tick/end (:tick/end iv)))
+                        (conj acc iv))))
+                  [])
+          (mapv #(cond-> % (.isAfter ^ZonedDateTime (:tick/end %) win-end)
+                         (assoc :tick/end win-end)))))))

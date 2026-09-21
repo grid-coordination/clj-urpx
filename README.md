@@ -308,6 +308,36 @@ The conjunctive reading (sum the bases) is already covered by `urpx:PriceSummary
 
 Note that this is a second, independent way to express CARE and FERA. The `urpx:ProfileAlternatives` mechanism below files the already-discounted prices directly as an alternative price set; this one files the discount as arithmetic over the undiscounted prices. Which a plan uses is the filer's choice, and a reader should expect either.
 
+### Horizons: exact price segments
+
+`marginal-unit-rate` answers "what does the next kWh cost right now". A client optimizing load wants something else: the price now **and** for the next N hours, as a piecewise-constant schedule it can hand to a solver.
+
+`price-segments` derives that from the documents:
+
+```clojure
+(schedule/price-segments plan modifiers start end zone opts)
+;; => [{:tick/beginning ZonedDateTime
+;;      :tick/end       ZonedDateTime
+;;      :urpx.interval/resolved {...}}   ; or :urpx.interval/refused
+;;     ...]
+```
+
+Each segment's prices are constant throughout it, segments tile the window with no gap or overlap, and the first begins exactly at `start` and the last ends exactly at `end`.
+
+**Why not just sample.** `price-schedule` walks a fixed grid and merges adjacent equal results, so its boundaries are snapped to that grid. For most plans in practice the two agree, because nearly every TOU bracket sits on an hour. That agreement is luck, not design: one filing family already carries a `23:59:59` boundary, which no hourly grid can express and a 15-minute grid would cost 288 samples a day and still miss. Segments place it exactly, and typically cost *fewer* resolutions than hourly sampling rather than more.
+
+**How the boundaries are found.** Temporal literals are harvested from the documents by java.time **type** rather than by property name, so a temporal property added to URPX later is picked up without changing this code. Those times are crossed with every local date the window touches, every local midnight is included unconditionally, and the zone's own DST transitions are added.
+
+Every local midnight being a candidate is what absorbs the whole family of date-granularity gates at once: day of week, holidays including observance shifting, season and month boundaries, applicability month rules, and every start, effective and expiration date. No holiday parsing, no month arithmetic, no list of properties to keep in step with the vocabulary.
+
+This is a deliberate over-approximation. An extra candidate costs one resolution and merges away; a missed one is a silently wrong boundary.
+
+**DST is handled at the instant level.** A local time inside the spring-forward gap never occurs and is clamped to the transition instant, where the obvious `ZonedDateTime/of` would instead land past it by the gap's width. A local time in the fall-back overlap occurs twice and yields **both** instants, so the repeated hour is priced twice rather than merged away. Ask for "the next 72 hours" with a `Duration` and you get 72 elapsed hours, which across a transition is 71 or 73 hours of clock face.
+
+**Refusals become segments.** If resolution throws partway through a horizon (most plausibly `:no-version-in-effect` at an instant before the plan existed), that stretch is reported as a segment carrying `:urpx.interval/refused` rather than aborting the window. Equal refusals merge, so an uncovered stretch is one segment and not one per candidate.
+
+Segments merge on the **full** resolved value, not only its ledgers: a change of TOU period or season with identical prices is still a real boundary.
+
 ### Which version applies
 
 A filing holds one `urpx:RatePlanVersion`, and a plan accumulates several over time. Resolving one document needs no choice and makes none: a single candidate is used as-is, at any instant.

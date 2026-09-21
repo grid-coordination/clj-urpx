@@ -9,6 +9,26 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [0.18.0] — 2026-09-21
+
+Horizons.
+
+### Added
+
+- **`urpx.schedule/price-segments`**, a piecewise-constant price schedule whose boundaries are derived from the documents rather than discovered by sampling. Built for a client that wants the price now and for the next N hours as intervals to hand a solver, rather than N point resolutions.
+
+  Temporal literals are harvested by java.time **type** rather than by property name, so a temporal property URPX adds later is picked up without this code changing; a name list would have to be kept in step, and the one it missed would be a missing candidate. Those times are crossed with every local date the window touches, every local midnight is included unconditionally, and the zone's DST transitions are added. The candidate set is a deliberate over-approximation: an extra candidate costs one resolution and merges away, a missed one is a silently wrong boundary.
+
+  Every local midnight being a candidate is what absorbs every date-granularity gate at once: day of week, holidays including observance shifting, season and month boundaries, applicability month rules, and every start, effective and expiration date.
+
+- **DST handled at the instant level.** A local time inside the spring-forward gap never occurs and is clamped to the transition instant; `ZonedDateTime/of` would land past it by the gap's width, which is not always an hour. A local time in the fall-back overlap occurs twice and yields **both** instants, so the repeated hour is priced twice rather than merged away. Zone transitions are enumerated by iterating `ZoneRules.nextTransition` rather than assuming two a year, because real tzdb data does not oblige.
+- **Refusals become segments.** A resolution that throws partway through a horizon is reported as `:urpx.interval/refused` rather than aborting the window, and equal refusals merge so an uncovered stretch is one segment rather than one per candidate.
+- A test pinning the premise the whole design rests on: `urpx.price` reads the query instant through exactly `.toLocalDateTime`, `.toLocalDate`, `.toLocalTime` and `.getDayOfWeek`, and never through `.toInstant`, `.getOffset` or `.getZone`. Resolution is therefore a pure function of the local date-time, which is why boundaries can be derived from literals at all. A resolver that read the offset would invalidate the candidate rule without touching the file that implements it.
+
+### Fixed
+
+- **`price-schedule` reported prices outside the requested window.** The step grid is anchored to the start of `start`'s hour, and that anchoring leaked: a request beginning at 17:23 returned a first interval beginning at 17:00 and a last interval ending up to a full step past `end`. Intervals are now clipped to the window, and clipped before merging, while interior boundaries still fall on clock hours.
+
 ## [0.17.0] — 2026-09-21
 
 Version selection is time-aware.
@@ -168,6 +188,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.18.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.18.0
 [0.17.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.17.0
 [0.16.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.16.0
 [0.15.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.15.0
