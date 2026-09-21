@@ -236,3 +236,46 @@
               plan [modifier] start (.plus start (Duration/ofDays 1)) la-zone)
              (schedule/price-schedule-days-with-modifiers
               plan [modifier] start 1 la-zone))))))
+
+(deftest intervals-are-clipped-to-the-requested-window
+  (testing "the step grid is anchored to the start of `start`'s hour so interior
+            boundaries fall on clock hours, but that anchoring used to leak past
+            the window on both sides: a request beginning at 17:23 reported an
+            interval beginning at 17:00, and the last interval ran up to a full
+            step past `end`. Both attributed prices to instants the caller never
+            asked about, which for a client building a 72-hour horizon means the
+            horizon silently covers something else."
+    (let [plan  (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          beg   (ZonedDateTime/of 2026 7 15 17 23 0 0 la-zone)
+          fin   (ZonedDateTime/of 2026 7 16 6 47 0 0 la-zone)
+          sched (schedule/price-schedule plan (.toInstant beg) (.toInstant fin) la-zone)]
+      (is (seq sched))
+      (is (= beg (:tick/beginning (first sched)))
+          "the first interval begins exactly at the requested start")
+      (is (= fin (:tick/end (last sched)))
+          "the last interval ends exactly at the requested end")
+
+      (testing "no interval escapes the window at either edge"
+        (is (not-any? #(.isBefore ^ZonedDateTime (:tick/beginning %) beg) sched))
+        (is (not-any? #(.isAfter ^ZonedDateTime (:tick/end %) fin) sched)))
+
+      (testing "the intervals tile the window with no gap and no overlap"
+        (is (= (map :tick/beginning (rest sched))
+               (map :tick/end (butlast sched)))))
+
+      (testing "interior boundaries still fall on clock hours, so clipping did
+                not cost the grid alignment the anchoring exists for"
+        (let [interior (map :tick/beginning (rest sched))]
+          (is (seq interior) "sanity: this window does cross a TOU boundary")
+          (is (every? #(and (zero? (.getMinute ^ZonedDateTime %))
+                            (zero? (.getSecond ^ZonedDateTime %)))
+                      interior))))))
+
+  (testing "a window already aligned to the grid is unchanged"
+    (let [plan  (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          beg   (start-of-day-zdt 2026 7 15)
+          fin   (.plusDays beg 1)
+          sched (schedule/price-schedule plan (.toInstant beg) (.toInstant fin) la-zone)]
+      (is (= beg (:tick/beginning (first sched))))
+      (is (= fin (:tick/end (last sched))))
+      (is (= 3 (count sched)) "off-peak, peak, off-peak"))))

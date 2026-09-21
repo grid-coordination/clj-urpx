@@ -11,9 +11,11 @@
   `:urpx.interval/resolved`. Callers that want plain `java.time.Instant`
   values invoke `.toInstant` themselves at the call site.
 
-  Default step is 1 hour, anchored to the start-of-hour of `start`. Pass
-  `{:step (Duration/ofMinutes 15)}` etc. for finer granularity when a rate
-  plan defines sub-hour TOU bracket transitions."
+  Default step is 1 hour, anchored to the start-of-hour of `start`, so interior
+  boundaries fall on clock hours. Intervals are CLIPPED to the requested
+  window: the first begins at `start` and the last ends at `end`, however the
+  grid falls. Pass `{:step (Duration/ofMinutes 15)}` etc. for finer granularity
+  when a rate plan defines sub-hour TOU bracket transitions."
   (:require [urpx.price :as price])
   (:import [java.time Duration Instant ZonedDateTime ZoneId]
            [java.time.temporal ChronoUnit]))
@@ -78,12 +80,23 @@
    under daylight transitions because the wall-clock walk preserves zone).
    Callers that want plain `Instant` call `.toInstant` themselves."
   [rate-plan ^Instant start ^Instant end zone opts resolve-fn]
-  (let [zone  (resolve-zone rate-plan zone)
-        step  (or (:step opts) (Duration/ofHours 1))
-        steps (step-zdts start end zone step)
+  (let [zone    (resolve-zone rate-plan zone)
+        step    (or (:step opts) (Duration/ofHours 1))
+        win-beg (.atZone start zone)
+        win-end (.atZone end zone)
+        steps   (step-zdts start end zone step)
         intervals (mapv (fn [^ZonedDateTime zdt]
-                          {:tick/beginning         zdt
-                           :tick/end               (.plus zdt step)
+                          ;; Clipped to the requested window. The step grid is
+                          ;; anchored to the start of `start`'s hour so interior
+                          ;; boundaries stay on clock hours, but that anchoring
+                          ;; used to LEAK: a window beginning at 17:23 reported
+                          ;; an interval beginning at 17:00, and the final
+                          ;; interval ran past `end` by up to one step. Both
+                          ;; attributed prices to instants the caller did not
+                          ;; ask about, on either side of their window.
+                          {:tick/beginning         (if (.isBefore zdt win-beg) win-beg zdt)
+                           :tick/end               (let [e (.plus zdt step)]
+                                                     (if (.isAfter e win-end) win-end e))
                            :urpx.interval/resolved (resolve-fn zdt)})
                         steps)]
     (merge-adjacent intervals)))
