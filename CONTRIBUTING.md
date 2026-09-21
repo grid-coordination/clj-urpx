@@ -1,6 +1,6 @@
 # Contributing to clj-urpx
 
-Thanks for your interest in contributing! This repo is a Clojure library for [URPX](https://github.com/urpx-org/urpx) — parse, coerce, resolve, emit, and author URPX rate-plan documents in idiomatic Clojure. It targets the v0.2.0 ontology snapshot and is the validator-of-last-resort the [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) corpus leans on for end-to-end load → coerce → resolve checks.
+Thanks for your interest in contributing! This repo is a Clojure library for [URPX](https://github.com/urpx-org/urpx) — parse, coerce, resolve, emit, and author URPX rate-plan documents in idiomatic Clojure. It targets the URPX v0.5.1 ontology snapshot while continuing to accept v0.2.x in full, and is the validator-of-last-resort the [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) corpus leans on for end-to-end load → coerce → resolve checks.
 
 ## How to contribute
 
