@@ -744,7 +744,13 @@
                 dow        (.getDayOfWeek zdt)
                 hol?       (or holiday? (constantly false))]
             (:urpx/touPeriodNumber
-             (find-tou-period own-schedules season-id query-date local-time dow (hol? query-date)))))
+             ;; hol?, not (hol? query-date): find-tou-period takes the PREDICATE
+             ;; and applies it per bracket. Passing the boolean made
+             ;; holiday-status-matches? call `true` as a function, which threw
+             ;; ClassCastException once a bracket actually reached the holiday
+             ;; check (it needs the modifier to carry its own seasons as well as
+             ;; its own schedule, which is why no fixture caught it).
+             (find-tou-period own-schedules season-id query-date local-time dow hol?))))
         gate-period (if (seq own-schedules) own-period-num base-period-num)
         gate?       (or (seq own-schedules) (some? base-period-num))
         pd->prices  (all-active-prices-by-pd prices query-date)
@@ -767,6 +773,12 @@
                                     (:urpx/hasDynamicPricing price)
                                     (assoc :urpx.resolved/dynamic-pricing
                                            (:urpx/hasDynamicPricing price))))))
+                      ;; Sorted like the base path. marginal-unit-rate documents
+                      ;; itself as taking the LOWEST tier and implements that as
+                      ;; `first`, which only holds if the vector is ordered by
+                      ;; tier number. Unsorted, the modifier path handed it
+                      ;; whatever came first in the document.
+                      (sort-by #(or (:urpx.resolved/tier-number %) 0))
                       vec)]
            :when (seq tier-entries)]
        (merge {:urpx.resolved/ledger-id   (:jsonld/id ledger)
@@ -818,7 +830,12 @@
          plan-id         (:jsonld/id rate-plan)
          base-period-num (:urpx.resolved/tou-period-number base)
          holiday?        (or (:holiday? opts) (holidays/derive-predicate rate-plan))
-         extra           (mapcat #(when (modifier-applies-to? % plan-id)
+         ;; opts, not the 2-arity: without it plan-version can only follow the
+         ;; nested down-pointer, so a v0.5.1 modifier that states the link only
+         ;; through its urpx:forRatePlanModifier back-pointer resolved to a nil
+         ;; version, matched no applicableToRatePlan, and was dropped from the
+         ;; composition without a word.
+         extra           (mapcat #(when (modifier-applies-to? % plan-id opts)
                                     (modifier-ledger-results % zdt base-period-num holiday? opts))
                                  modifiers)]
      (update base :urpx.resolved/ledgers (fnil into []) extra))))

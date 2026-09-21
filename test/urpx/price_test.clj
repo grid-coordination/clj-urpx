@@ -1231,3 +1231,80 @@
                   gate is permissive: the regression this guards against"
           (is (contains? (names-of (price/resolve-prices plan' july {:rules-by-id {}}))
                          (:urpx/name gated))))))))
+
+;; ---------------------------------------------------------------------------
+;; Composition defects found by auditing the modifier path (2026-09-21)
+;;
+;; All three were reachable by conformant documents and invisible to the
+;; corpus, because no vendored fixture happens to have the triggering shape.
+;; Each test below FAILED before its fix.
+;; ---------------------------------------------------------------------------
+
+(defn- plan-elements [plan]
+  (get-in plan [:urpx/hasRatePlanVersion :urpx/hasPlanElements]))
+
+(deftest modifier-with-own-schedule-and-seasons-survives-a-holiday
+  (testing "find-tou-period takes a holiday PREDICATE and applies it per
+            bracket. The modifier path used to hand it the predicate's RESULT,
+            so holiday-status-matches? called `true` as a function.
+
+            It needed three things at once to bite, which is why nothing caught
+            it: the modifier must carry its own urpx:hasTOUSchedule (otherwise
+            find-tou-period is never called), its own urpx:hasSeasons (otherwise
+            no season resolves, no bracket matches, and the holiday check is
+            never reached), and the instant must fall on a holiday. Threw
+            ClassCastException before the fix."
+    (let [plan  (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          modi  (fixtures/load-modifier "pge-e-tou-c-2026-03-01")
+          pe    (plan-elements plan)
+          modi' (-> modi
+                    (assoc-in [:urpx/hasRatePlanModifierVersion :urpx/hasPlanElements
+                               :urpx/hasBillingModel :urpx/hasTOUSchedule]
+                              (get-in pe [:urpx/hasBillingModel :urpx/hasTOUSchedule]))
+                    (assoc-in [:urpx/hasRatePlanModifierVersion :urpx/hasPlanElements
+                               :urpx/hasSeasons]
+                              (:urpx/hasSeasons pe)))]
+      (doseq [holiday? [(constantly true) (constantly false)]]
+        (is (= 4 (count (:urpx.resolved/ledgers
+                         (price/resolve-prices-with-modifiers
+                          plan [modi'] (zdt 2026 7 15 17) {:holiday? holiday?}))))
+            "composition must not depend on whether the day is a holiday")))))
+
+(deftest un-nested-v051-modifier-is-not-dropped
+  (testing "a v0.5.1 document may state the modifier-to-version link only
+            upward, through urpx:forRatePlanModifier, with the snapshot
+            top-level. resolve-prices-with-modifiers called modifier-applies-to?
+            without opts, so plan-version could only follow the nested
+            down-pointer; the version came back nil, applicableToRatePlan was
+            empty, and the modifier was dropped from the composition in
+            silence. The composed result was indistinguishable from one with no
+            modifier at all, which is the worst way to lose a whole ledger."
+    (let [plan     (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          modi     (fixtures/load-modifier "pge-e-tou-c-2026-03-01")
+          mver     (:urpx/hasRatePlanModifierVersion modi)
+          unnested (dissoc modi :urpx/hasRatePlanModifierVersion)
+          mver'    (assoc mver :urpx/forRatePlanModifier {:jsonld/id (:jsonld/id modi)})
+          opts     {:versions-by-plan (index/versions-by-plan [unnested mver'])}
+          n-of     (fn [r] (count (:urpx.resolved/ledgers r)))
+          base     (n-of (price/resolve-prices plan (zdt 2026 7 15 17)))
+          nested   (n-of (price/resolve-prices-with-modifiers plan [modi] (zdt 2026 7 15 17)))]
+      (is (< base nested) "sanity: the nested form does contribute a ledger")
+      (is (= nested
+             (n-of (price/resolve-prices-with-modifiers
+                    plan [unnested] (zdt 2026 7 15 17) opts)))
+          "the un-nested form must contribute the same ledgers as the nested one"))))
+
+(deftest modifier-tiers-are-ordered-like-base-tiers
+  (testing "marginal-unit-rate documents itself as taking the LOWEST tier and
+            implements that as `first`, which holds only if the tier vector is
+            ordered by tier number. resolve-prices sorted; the modifier path did
+            not, so it handed marginal-unit-rate whatever came first in the
+            document."
+    (let [r (price/resolve-prices-with-modifiers
+             (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+             [(fixtures/load-modifier "pge-e-tou-c-2026-03-01")]
+             (zdt 2026 7 15 17))]
+      (doseq [ledger (:urpx.resolved/ledgers r)]
+        (let [ns- (map #(or (:urpx.resolved/tier-number %) 0) (:urpx.resolved/tiers ledger))]
+          (is (= ns- (sort ns-))
+              (str "tiers out of order in " (:urpx.resolved/ledger-id ledger))))))))
