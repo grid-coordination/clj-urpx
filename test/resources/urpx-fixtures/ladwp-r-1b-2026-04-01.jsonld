@@ -1,0 +1,908 @@
+{
+  "@context": {
+    "urpx": "https://urpx.org/ns/ontology/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "org": "https://rate-plans.grid-coordination.energy/organizations/",
+    "ladwp": "https://rate-plans.grid-coordination.energy/ladwp/",
+    "urpx:unitPrice": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:effectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:effectiveDateTime": {
+      "@type": "xsd:dateTime"
+    },
+    "urpx:baseQuantity": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:startTime": {
+      "@type": "xsd:time"
+    },
+    "urpx:endTime": {
+      "@type": "xsd:time"
+    },
+    "urpx:initialEffectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:startDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:url": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:month": {
+      "@type": "xsd:gMonth"
+    },
+    "urpx:intervalDuration": {
+      "@type": "xsd:duration"
+    },
+    "urpx:touTierNumber": {
+      "@type": "xsd:integer"
+    },
+    "urpx:touPeriodNumber": {
+      "@type": "xsd:integer"
+    },
+    "urpx:pageStart": {
+      "@type": "xsd:integer"
+    },
+    "urpx:pageEnd": {
+      "@type": "xsd:integer"
+    },
+    "urpx:accessURL": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:dateRetrieved": {
+      "@type": "xsd:date"
+    },
+    "urpx:targetURPXVersion": {
+      "@type": "xsd:anyURI"
+    },
+    "skos": "http://www.w3.org/2004/02/skos/core#"
+  },
+  "@type": "urpx:URPXPackage",
+  "@id": "ladwp:doc-r-1b-2026-04-01",
+  "urpx:targetURPXVersion": "https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl",
+  "urpx:hasRatePlan": {
+    "@type": "urpx:RatePlan",
+    "@id": "ladwp:r-1b",
+    "urpx:name": "Schedule R-1(B) Residential Service — Time-of-Use",
+    "urpx:ratePlanUniqueIdentifier": "R-1B",
+    "urpx:initialEffectiveDate": "2008-09-01",
+    "urpx:timezoneIdentifier": "America/Los_Angeles",
+    "urpx:hasRatePlanVersion": {
+      "@type": "urpx:RatePlanVersion",
+      "@id": "ladwp:r-1b-2026-04-01",
+      "urpx:description": "LADWP's voluntary opt-in residential time-of-use schedule (and mandatory for residential customers whose annual monthly average consumption reaches or exceeds 3,000 kWh in the preceding 12-month period). Three TOU tiers — High Peak (1pm-5pm M-F), Low Peak (10am-1pm + 5pm-8pm M-F), Base (8pm-10am M-F + all weekend). TOU windows do NOT vary by season; only the per-tier prices vary between High Season (June-September) and Low Season (October-May). High-Peak summer rate ($0.15858/kWh) is materially higher than other periods; in winter the High Peak rate collapses to the Low Peak rate ($0.10018) — same flattening pattern as R-1A's Tier 3 winter collapse. Service Charge is a flat $12.00/month, independent of tier or season. Customer-facing all-in $/kWh = TOU energy charge (this snapshot) + sum of seven pass-through Adjustment Factors (ECA + ESA + RCA + IRCA + VEA + CRPSEA + VRPSEA), refreshed quarterly by LADWP. The factors captured here are the Apr-Jun 2026 quarterly values; subsequent quarterly refreshes will be filed as new RatePlanVersions. Mandatory-stay rule: customers electing Rate B may not revert to Rate A before 12 months have elapsed. Electric Vehicle Discount of $-0.025/kWh is referenced on the rate-summary sheet but is conditional on EV ownership; modeling deferred to a separate RatePlanModifier issue (will be filed as a child of grid-coordination/urpx-rate-plans#16 for the secondary LADWP epic).",
+      "urpx:effectiveDateTime": "2026-04-01T00:00:00",
+      "urpx:changeReason": {
+        "@id": "urpx:rateCase"
+      },
+      "urpx:priceCurrency": "USD",
+      "urpx:commodity": {
+        "@id": "urpx:electricity"
+      },
+      "urpx:serviceRole": {
+        "@id": "urpx:bundledServiceRole"
+      },
+      "urpx:customerChoice": {
+        "@id": "urpx:voluntaryChoice"
+      },
+      "urpx:isDefault": false,
+      "urpx:hasDataSourceReference": {
+        "@type": "urpx:DataSourceReference",
+        "urpx:fileName": "Electric_Rate_Summary_effective_7_1_2019_with_factors_referenced_rev1.pdf",
+        "urpx:mediaType": {
+          "@id": "urpx:applicationPdf"
+        },
+        "urpx:accessURL": "https://www.ladwp.com/sites/default/files/documents/Electric_Rate_Summary_effective_7_1_2019_with_factors_referenced_rev1.pdf",
+        "urpx:dateRetrieved": "2026-04-30",
+        "urpx:dataSourceType": {
+          "@id": "urpx:utilityWebsiteSource"
+        },
+        "urpx:pageStart": 2,
+        "urpx:pageEnd": 2
+      },
+      "urpx:hasEligibilityRule": [
+        {
+          "@type": "urpx:EligibilityRule",
+          "@id": "ladwp:er-residential-r-1b",
+          "urpx:name": "Eligibility for Schedule R-1(B) Time-of-Use Residential Service",
+          "urpx:description": "Applicable to residential service in single-family dwellings, single-family-with-guest-house, individually-metered accommodations, and separately-metered common areas of condominiums and cooperatives devoted primarily to residential uses. Energy and capacity requirements must not exceed those for Small General Service Schedule A-1. NOT applicable to single-family residential customers with an on-site transformer dedicated solely to that individual customer (those take service on Schedule A-1). Mandatory enrollment for residential customers whose annual monthly average consumption reaches or exceeds 3,000 kWh in any preceding 12-month period. Below that threshold, customers may voluntarily elect either R-1(A) or R-1(B); customers transferring from R-1(B) to R-1(A) may not revert to R-1(B) before 12 months have elapsed.",
+          "urpx:hasConditionExpression": {
+            "@type": "urpx:ConditionExpression",
+            "@id": "ladwp:cx-residential-r-1b",
+            "urpx:rootNode": {
+              "@type": "urpx:ComparisonNode",
+              "@id": "ladwp:cn-residential-r-1b",
+              "urpx:operator": {
+                "@id": "urpx:equalsOperator"
+              },
+              "urpx:leftOperand": {
+                "@type": "urpx:ObjectOperandNode",
+                "urpx:conditionProperty": {
+                  "@id": "urpx:hasCustomerKind"
+                }
+              },
+              "urpx:rightOperand": {
+                "@type": "urpx:ObjectOperandNode",
+                "urpx:referencesValue": {
+                  "@id": "urpx:residentialKind"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "urpx:hasPlanElements": {
+        "@type": "urpx:PlanElements",
+        "urpx:hasSeasons": [
+          {
+            "@type": "urpx:Season",
+            "@id": "ladwp:season-high",
+            "urpx:seasonName": "High Season",
+            "urpx:month": [
+              "--06",
+              "--07",
+              "--08",
+              "--09"
+            ]
+          },
+          {
+            "@type": "urpx:Season",
+            "@id": "ladwp:season-low",
+            "urpx:seasonName": "Low Season",
+            "urpx:month": [
+              "--10",
+              "--11",
+              "--12",
+              "--01",
+              "--02",
+              "--03",
+              "--04",
+              "--05"
+            ]
+          }
+        ],
+        "urpx:hasMetricInput": [
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "ladwp:mi-energy",
+            "urpx:name": "kWh Energy Consumption Prices",
+            "urpx:metricInputType": {
+              "@id": "urpx:measuredMetricInput"
+            },
+            "urpx:hasMetricSpecification": {
+              "@type": "urpx:MetricSpecification",
+              "@id": "ladwp:ms-energy",
+              "urpx:measurementKind": {
+                "@id": "urpx:energy"
+              },
+              "urpx:unitOfMeasure": {
+                "@id": "urpx:kWh"
+              }
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "ladwp:mi-meter-count",
+            "urpx:name": "Per Meter Prices",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            },
+            "urpx:profileMetricProperty": {
+              "@id": "urpx:numberOfMeters"
+            }
+          }
+        ],
+        "urpx:hasBillingModel": {
+          "@type": "urpx:BillingModel",
+          "urpx:hasTOUSchedule": {
+            "@type": "urpx:TOUSchedule",
+            "@id": "ladwp:tou-r-1b",
+            "urpx:referencesMetricInput": {
+              "@id": "ladwp:mi-energy"
+            },
+            "urpx:hasTOUTier": [
+              {
+                "@type": "urpx:TOUTier",
+                "@id": "ladwp:tou-tier-high-peak",
+                "urpx:tierSourceName": "High Peak",
+                "urpx:touTierStandardName": {
+                  "@id": "urpx:peakTier"
+                },
+                "urpx:touTierNumber": 1,
+                "urpx:hasTOUPeriod": [
+                  {
+                    "@type": "urpx:TOUPeriod",
+                    "@id": "ladwp:tou-period-summer-high-peak",
+                    "urpx:name": "Summer High Peak Period (1pm-5pm Monday-Friday)",
+                    "urpx:touPeriodNumber": 1,
+                    "urpx:hasTimeBracket": [
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "ladwp:time-bracket-summer-high-peak",
+                        "urpx:startTime": "13:00:00",
+                        "urpx:endTime": "17:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "ladwp:season-high"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:weekdayDays"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "@type": "urpx:TOUPeriod",
+                    "@id": "ladwp:tou-period-winter-high-peak",
+                    "urpx:name": "Winter High Peak Period (1pm-5pm Monday-Friday)",
+                    "urpx:touPeriodNumber": 4,
+                    "urpx:hasTimeBracket": [
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "ladwp:time-bracket-winter-high-peak",
+                        "urpx:startTime": "13:00:00",
+                        "urpx:endTime": "17:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "ladwp:season-low"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:weekdayDays"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "@type": "urpx:TOUTier",
+                "@id": "ladwp:tou-tier-low-peak",
+                "urpx:tierSourceName": "Low Peak",
+                "urpx:touTierStandardName": {
+                  "@id": "urpx:midPeakTier"
+                },
+                "urpx:touTierNumber": 2,
+                "urpx:hasTOUPeriod": [
+                  {
+                    "@type": "urpx:TOUPeriod",
+                    "@id": "ladwp:tou-period-summer-low-peak",
+                    "urpx:name": "Summer Low Peak Period (10am-1pm and 5pm-8pm Monday-Friday)",
+                    "urpx:touPeriodNumber": 2,
+                    "urpx:hasTimeBracket": [
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "ladwp:time-bracket-summer-low-peak-am",
+                        "urpx:startTime": "10:00:00",
+                        "urpx:endTime": "13:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "ladwp:season-high"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:weekdayDays"
+                        }
+                      },
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "ladwp:time-bracket-summer-low-peak-pm",
+                        "urpx:startTime": "17:00:00",
+                        "urpx:endTime": "20:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "ladwp:season-high"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:weekdayDays"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "@type": "urpx:TOUPeriod",
+                    "@id": "ladwp:tou-period-winter-low-peak",
+                    "urpx:name": "Winter Low Peak Period (10am-1pm and 5pm-8pm Monday-Friday)",
+                    "urpx:touPeriodNumber": 5,
+                    "urpx:hasTimeBracket": [
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "ladwp:time-bracket-winter-low-peak-am",
+                        "urpx:startTime": "10:00:00",
+                        "urpx:endTime": "13:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "ladwp:season-low"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:weekdayDays"
+                        }
+                      },
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "ladwp:time-bracket-winter-low-peak-pm",
+                        "urpx:startTime": "17:00:00",
+                        "urpx:endTime": "20:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "ladwp:season-low"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:weekdayDays"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "@type": "urpx:TOUTier",
+                "@id": "ladwp:tou-tier-base",
+                "urpx:tierSourceName": "Base",
+                "urpx:touTierStandardName": {
+                  "@id": "urpx:offPeakTier"
+                },
+                "urpx:touTierNumber": 3,
+                "urpx:hasTOUPeriod": [
+                  {
+                    "@type": "urpx:TOUPeriod",
+                    "@id": "ladwp:tou-period-summer-base",
+                    "urpx:name": "Summer Base Period (8pm-10am weekdays + all weekend)",
+                    "urpx:touPeriodNumber": 3,
+                    "urpx:hasTimeBracket": [
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "ladwp:time-bracket-summer-base-weekday-evening",
+                        "urpx:startTime": "20:00:00",
+                        "urpx:endTime": "00:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "ladwp:season-high"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:weekdayDays"
+                        }
+                      },
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "ladwp:time-bracket-summer-base-weekday-morning",
+                        "urpx:startTime": "00:00:00",
+                        "urpx:endTime": "10:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "ladwp:season-high"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:weekdayDays"
+                        }
+                      },
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "ladwp:time-bracket-summer-base-weekend",
+                        "urpx:startTime": "00:00:00",
+                        "urpx:endTime": "00:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "ladwp:season-high"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:weekendDays"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "@type": "urpx:TOUPeriod",
+                    "@id": "ladwp:tou-period-winter-base",
+                    "urpx:name": "Winter Base Period (8pm-10am weekdays + all weekend)",
+                    "urpx:touPeriodNumber": 6,
+                    "urpx:hasTimeBracket": [
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "ladwp:time-bracket-winter-base-weekday-evening",
+                        "urpx:startTime": "20:00:00",
+                        "urpx:endTime": "00:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "ladwp:season-low"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:weekdayDays"
+                        }
+                      },
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "ladwp:time-bracket-winter-base-weekday-morning",
+                        "urpx:startTime": "00:00:00",
+                        "urpx:endTime": "10:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "ladwp:season-low"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:weekdayDays"
+                        }
+                      },
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "ladwp:time-bracket-winter-base-weekend",
+                        "urpx:startTime": "00:00:00",
+                        "urpx:endTime": "00:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "ladwp:season-low"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:weekendDays"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "urpx:hasLedger": [
+            {
+              "@type": "urpx:Ledger",
+              "@id": "ladwp:ledger-energy",
+              "urpx:name": "Energy Charges (TOU-varying)",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "ladwp:mi-energy"
+              }
+            },
+            {
+              "@type": "urpx:Ledger",
+              "@id": "ladwp:ledger-adjustments",
+              "urpx:name": "Pass-through Adjustment Factors (quarterly)",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "ladwp:mi-energy"
+              }
+            },
+            {
+              "@type": "urpx:Ledger",
+              "@id": "ladwp:ledger-service-charge",
+              "urpx:name": "Service Charge",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "ladwp:mi-meter-count"
+              }
+            }
+          ],
+          "urpx:hasPriceDefinition": [
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-energy-summer-high-peak",
+              "urpx:name": "Energy Charge — High Peak Period, Summer",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:touPeriodNumber": 1,
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-energy"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-energy-summer-low-peak",
+              "urpx:name": "Energy Charge — Low Peak Period, Summer",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:touPeriodNumber": 2,
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-energy"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-energy-summer-base",
+              "urpx:name": "Energy Charge — Base Period, Summer",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:touPeriodNumber": 3,
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-energy"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-energy-winter-high-peak",
+              "urpx:name": "Energy Charge — High Peak Period, Winter",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:touPeriodNumber": 4,
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-energy"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-energy-winter-low-peak",
+              "urpx:name": "Energy Charge — Low Peak Period, Winter",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:touPeriodNumber": 5,
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-energy"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-energy-winter-base",
+              "urpx:name": "Energy Charge — Base Period, Winter",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:touPeriodNumber": 6,
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-energy"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-service-charge",
+              "urpx:name": "Service Charge — flat monthly",
+              "urpx:chargeType": {
+                "@id": "urpx:facilities"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-service-charge"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-eca",
+              "urpx:name": "Energy Cost Adjustment (ECA)",
+              "urpx:chargeType": {
+                "@id": "urpx:adjustmentPowerCost"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-adjustments"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-esa",
+              "urpx:name": "Electric Subsidy Adjustment (ESA)",
+              "urpx:chargeType": {
+                "@id": "urpx:adjustmentPowerCost"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-adjustments"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-rca",
+              "urpx:name": "Reliability Cost Adjustment (RCA)",
+              "urpx:chargeType": {
+                "@id": "urpx:reliabilityCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-adjustments"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-irca",
+              "urpx:name": "Incremental Reliability Cost Adjustment (IRCA)",
+              "urpx:chargeType": {
+                "@id": "urpx:reliabilityCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-adjustments"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-vea",
+              "urpx:name": "Variable Energy Adjustment (VEA)",
+              "urpx:chargeType": {
+                "@id": "urpx:adjustmentPowerCost"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-adjustments"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-crpsea",
+              "urpx:name": "Capped Renewable Portfolio Standard Energy Adjustment (CRPSEA)",
+              "urpx:chargeType": {
+                "@id": "urpx:environmentalFunding"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:environmental"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-adjustments"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-vrpsea",
+              "urpx:name": "Variable Renewable Portfolio Standard Energy Adjustment (VRPSEA)",
+              "urpx:chargeType": {
+                "@id": "urpx:environmentalFunding"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:environmental"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-adjustments"
+              }
+            }
+          ]
+        }
+      },
+      "urpx:hasPrices": {
+        "@type": "urpx:Prices",
+        "urpx:hasPrice": [
+          {
+            "@type": "urpx:Price",
+            "@id": "ladwp:price-service-charge",
+            "urpx:referencesPriceDefinition": {
+              "@id": "ladwp:pd-service-charge"
+            },
+            "urpx:startDate": "2019-07-01",
+            "urpx:name": "Service Charge",
+            "urpx:unitPrice": "12.00"
+          }
+        ],
+        "urpx:hasPriceSet": [
+          {
+            "@type": "urpx:PriceSet",
+            "@id": "ladwp:ps-energy-tou",
+            "urpx:startDate": "2019-07-01",
+            "urpx:hasPrice": [
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-summer-high-peak",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-summer-high-peak"
+                },
+                "urpx:name": "Energy Charge — Summer High Peak",
+                "urpx:unitPrice": "0.15858"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-summer-low-peak",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-summer-low-peak"
+                },
+                "urpx:name": "Energy Charge — Summer Low Peak",
+                "urpx:unitPrice": "0.10018"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-summer-base",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-summer-base"
+                },
+                "urpx:name": "Energy Charge — Summer Base",
+                "urpx:unitPrice": "0.07274"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-winter-high-peak",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-winter-high-peak"
+                },
+                "urpx:name": "Energy Charge — Winter High Peak (collapsed to Low Peak rate)",
+                "urpx:unitPrice": "0.10018"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-winter-low-peak",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-winter-low-peak"
+                },
+                "urpx:name": "Energy Charge — Winter Low Peak",
+                "urpx:unitPrice": "0.10018"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-winter-base",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-winter-base"
+                },
+                "urpx:name": "Energy Charge — Winter Base",
+                "urpx:unitPrice": "0.07664"
+              }
+            ]
+          },
+          {
+            "@type": "urpx:PriceSet",
+            "@id": "ladwp:ps-adjustment-factors-2026-q2",
+            "urpx:startDate": "2026-04-01",
+            "urpx:hasPrice": [
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-eca-2026-q2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-eca"
+                },
+                "urpx:name": "Energy Cost Adjustment (Apr-Jun 2026)",
+                "urpx:unitPrice": "0.05690"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-esa-2026-q2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-esa"
+                },
+                "urpx:name": "Electric Subsidy Adjustment (Apr-Jun 2026)",
+                "urpx:unitPrice": "0.00147"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-rca-2026-q2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-rca"
+                },
+                "urpx:name": "Reliability Cost Adjustment (Apr-Jun 2026)",
+                "urpx:unitPrice": "0.00300"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-irca-2026-q2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-irca"
+                },
+                "urpx:name": "Incremental Reliability Cost Adjustment (Apr-Jun 2026)",
+                "urpx:unitPrice": "0.05505"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-vea-2026-q2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-vea"
+                },
+                "urpx:name": "Variable Energy Adjustment (Apr-Jun 2026)",
+                "urpx:unitPrice": "0.00503"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-crpsea-2026-q2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-crpsea"
+                },
+                "urpx:name": "Capped Renewable Portfolio Standard Energy Adjustment (Apr-Jun 2026)",
+                "urpx:unitPrice": "0.01779"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-vrpsea-2026-q2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-vrpsea"
+                },
+                "urpx:name": "Variable Renewable Portfolio Standard Energy Adjustment (Apr-Jun 2026)",
+                "urpx:unitPrice": "0.03296"
+              }
+            ]
+          }
+        ]
+      },
+      "urpx:offeredBy": {
+        "@type": "urpx:Organization",
+        "@id": "org:utility-ladwp",
+        "urpx:legalName": "Los Angeles Department of Water and Power",
+        "urpx:organizationType": {
+          "@id": "urpx:utilityOrganization"
+        },
+        "urpx:hasIdentity": {
+          "@id": "org:utility-ladwp-identity",
+          "@type": "urpx:OrganizationIdentity",
+          "urpx:hasName": {
+            "@id": "org:utility-ladwp-name",
+            "@type": "urpx:OrganizationName",
+            "urpx:name": "Los Angeles Department of Water and Power"
+          },
+          "urpx:hasIdentifier": {
+            "@id": "org:utility-ladwp-eia",
+            "@type": "urpx:OrganizationIdentifier",
+            "urpx:scheme": {
+              "@id": "urpx:eiaScheme"
+            },
+            "skos:notation": "11208"
+          }
+        }
+      },
+      "urpx:forRatePlan": {
+        "@id": "ladwp:r-1b"
+      },
+      "urpx:hasCoverageClaim": {
+        "@id": "ladwp:r-1b-2026-04-01-coverage",
+        "@type": "urpx:CoverageClaim",
+        "urpx:completenessResult": {
+          "@id": "urpx:partial"
+        },
+        "urpx:selfContained": true
+      }
+    }
+  }
+}

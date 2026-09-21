@@ -38,14 +38,14 @@
   (coerce/coerce-rate-plan (core/load-rate-plan (fixture-path name))))
 
 (defn load-modifier
-  "Load the named fixture and return the unique urpx:RatePlanModifier
-   in its @graph (coerced). Throws if zero or multiple modifiers are
-   present in the document."
+  "Load the named fixture and return the unique urpx:RatePlanModifier (coerced).
+   Throws if zero or multiple modifiers are present.
+
+   Goes through `core/load-rate-plan-modifier` rather than filtering
+   `load-graph` itself: load-graph returns top-level entities only, so the
+   hand-rolled filter this replaced could not see a modifier inside a
+   urpx:URPXPackage and threw \"No urpx:RatePlanModifier\" on every wave-1
+   fixture. `load-rate-plan` above always used the descending loader, which is
+   why plans worked and modifiers did not."
   [name]
-  (let [entities (load-graph name)
-        mods (filter #(= "urpx:RatePlanModifier" (:jsonld/type %)) entities)]
-    (case (count mods)
-      0 (throw (ex-info (str "No urpx:RatePlanModifier in " name) {:name name}))
-      1 (coerce/coerce-rate-plan-modifier (first mods))
-      (throw (ex-info (str "Multiple urpx:RatePlanModifier entities in " name)
-                      {:name name :ids (mapv :jsonld/id mods)})))))
+  (coerce/coerce-rate-plan-modifier (core/load-rate-plan-modifier (fixture-path name))))

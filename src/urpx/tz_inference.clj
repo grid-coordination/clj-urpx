@@ -30,15 +30,37 @@
   {;; City of Palo Alto Utilities — California (Pacific only)
    "3203"  "America/Los_Angeles"
    ;; Pacific Gas & Electric Company — California (Pacific only)
-   "14328" "America/Los_Angeles"})
+   "14328" "America/Los_Angeles"
+   ;; Los Angeles Department of Water and Power — California (Pacific only)
+   "11208" "America/Los_Angeles"})
 
 (def ^:private default-legal-name->zone
   {"City of Palo Alto Utilities"     "America/Los_Angeles"
-   "Pacific Gas & Electric Company"  "America/Los_Angeles"})
+   "Pacific Gas & Electric Company"  "America/Los_Angeles"
+   "Los Angeles Department of Water and Power" "America/Los_Angeles"})
 
 ;; ---------------------------------------------------------------------------
 ;; Plan inspection
 ;; ---------------------------------------------------------------------------
+
+(defn- as-vec [v]
+  (cond (nil? v) [] (sequential? v) (vec v) :else [v]))
+
+(defn- eia-id
+  "The EIA utility id, from either place URPX has put it.
+
+   v0.2.x carried it as urpx:eiaId directly on the Organization. v0.5.1
+   reshaped OrganizationIdentifier and moved it into the identity chain:
+   urpx:hasIdentity -> urpx:hasIdentifier -> {urpx:scheme urpx:eiaScheme,
+   skos:notation \"<id>\"}. urpx:eiaId has zero occurrences in a v0.5.1
+   document, so reading only the old key silently loses eia-id inference the
+   moment a utility migrates, and falls back to legalName without saying so."
+  [org]
+  (or (:urpx/eiaId org)
+      (some (fn [ident]
+              (when (= "urpx:eiaScheme" (get-in ident [:urpx/scheme :jsonld/id]))
+                (:skos/notation ident)))
+            (as-vec (get-in org [:urpx/hasIdentity :urpx/hasIdentifier])))))
 
 (defn- published-by
   "Return the Organization (a map) that offers or published `plan`.
@@ -100,7 +122,7 @@
    (let [eia-table  (merge default-eia-id->zone   (:eia-id->zone opts))
          name-table (merge default-legal-name->zone (:legal-name->zone opts))
          org        (published-by plan (:version opts))
-         eia-id     (:urpx/eiaId org)
+         eia-id     (eia-id org)
          legal-name (:urpx/legalName org)]
      (or (when-let [iana (get eia-table eia-id)]
            {:zone (ZoneId/of iana)

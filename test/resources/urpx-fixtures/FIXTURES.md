@@ -10,7 +10,11 @@ JSON-LD rate-plan documents so that the clj-urpx test suite is hermetic —
 `clojure -M:test` works on a fresh clone with no sibling checkouts, no
 environment setup, no submodule dance.
 
-The fixtures are **URPX v0.2.0** documents. The library targets v0.5.1 and accepts v0.2.x in full, so these exercise the v0.2.x half; v0.5.1 fixtures arrive as the corpus migrates, wave by wave.
+The fixtures are deliberately **mixed-vocabulary**, because the corpus is: the four PG&E filings are **URPX v0.2.0** and the five LADWP filings are **URPX v0.5.1**, vendored from migration wave 1. Keeping both means the suite proves that one library loads both vocabularies in one process, rather than proving them one at a time. The v0.5.1 set is what actually exercises `urpx:URPXPackage` wrappers, `forRatePlan` back-links alongside the nested pointer, `hasCoverageClaim`, `offeredBy` in place of `publishedBy`, the flattened `DataSourceReference`, and the Organization identity chain that replaced `urpx:eiaId`.
+
+Three of the five LADWP filings are `urpx:RatePlanModifier`s, and `nem` is export-direction rather than a discount, so it is not redundant with `ez-save` and `lifeline`. Note their `@context` is the inline object form, not the array: upstream uses an array whose first element is a remote IRI that does not yet resolve, so the corpus deliberately inlines until `urpx.org/ns/context` serves.
+
+Historical note: these were formerly all v0.2.0. The library targets v0.5.1 and accepts v0.2.x in full, so these exercise the v0.2.x half; v0.5.1 fixtures arrive as the corpus migrates, wave by wave.
 
 ## Source and license
 
@@ -33,6 +37,11 @@ Fixtures are snapshots, pinned to a specific upstream commit on the
 | `pge-e-tou-c-2026-03-01.jsonld`      | `main`               | `177a761`     |
 | `pge-e-tou-d-2026-03-27.jsonld`      | `main`               | `177a761`     |
 | `pge-ev2-2026-03-27.jsonld`          | `main`               | `177a761`     |
+| `ladwp-r-1a-2026-04-01.jsonld`       | `main`               | `6453536`     |
+| `ladwp-r-1b-2026-04-01.jsonld`       | `main`               | `6453536`     |
+| `ladwp-ez-save-2008-09-01.jsonld`    | `main`               | `6453536`     |
+| `ladwp-lifeline-2008-09-01.jsonld`   | `main`               | `6453536`     |
+| `ladwp-nem-2008-09-01.jsonld`        | `main`               | `6453536`     |
 
 Each fixture is a JSON-LD `@graph` document bundling a `urpx:RatePlan` with
 its sibling `urpx:RatePlanModifier`(s) plus surrounding metadata

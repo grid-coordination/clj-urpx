@@ -1,0 +1,259 @@
+{
+  "@context": {
+    "urpx": "https://urpx.org/ns/ontology/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "org": "https://rate-plans.grid-coordination.energy/organizations/",
+    "ladwp": "https://rate-plans.grid-coordination.energy/ladwp/",
+    "urpx:unitPrice": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:effectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:effectiveDateTime": {
+      "@type": "xsd:dateTime"
+    },
+    "urpx:baseQuantity": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:initialEffectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:startDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:url": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:intervalDuration": {
+      "@type": "xsd:duration"
+    },
+    "urpx:pageStart": {
+      "@type": "xsd:integer"
+    },
+    "urpx:pageEnd": {
+      "@type": "xsd:integer"
+    },
+    "urpx:accessURL": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:dateRetrieved": {
+      "@type": "xsd:date"
+    },
+    "urpx:targetURPXVersion": {
+      "@type": "xsd:anyURI"
+    },
+    "skos": "http://www.w3.org/2004/02/skos/core#"
+  },
+  "@type": "urpx:URPXPackage",
+  "@id": "ladwp:doc-ez-save-2008-09-01",
+  "urpx:targetURPXVersion": "https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl",
+  "urpx:hasRatePlanModifier": {
+    "@type": "urpx:RatePlanModifier",
+    "@id": "ladwp:ez-save",
+    "urpx:name": "LADWP EZ-Save (Electric Lifeline Subsidy)",
+    "urpx:modifierUniqueIdentifier": "EZ-SAVE",
+    "urpx:initialEffectiveDate": "2008-09-01",
+    "urpx:timezoneIdentifier": "America/Los_Angeles",
+    "urpx:hasRatePlanModifierVersion": {
+      "@type": "urpx:RatePlanModifierVersion",
+      "@id": "ladwp:ez-save-2008-09-01",
+      "urpx:version": "2008-09-01",
+      "urpx:modifierVersionNumber": "2008-09-01",
+      "urpx:changeReason": {
+        "@id": "urpx:initial"
+      },
+      "urpx:description": "LADWP's lower-tier income-qualified subsidy program. Up to $16.34 every two months credited on the customer's electric bill — modeled as -$0.2683/day per-meter (= $16.34/60.875 days = average 2-month period). Eligibility tied to household income guidelines (income-only eligibility — no categorical-program shortcut, distinct from CPUC CARE eligibility paths). Income thresholds revised 2025-07-01. Sister program: LADWP Lifeline ($35.42/2-mo for Senior Citizen / Disability customers) — administered separately; customer may qualify for one but not both. The 'subsidy should not exceed the customer's electric bill' cap (per LADWP residential rates page) is a cap-on-credit semantic similar to SMUD EAPR's usage-cap discount (URPX#24 territory) — not modeled here, edge case for very-low-usage customers. LADWP-specific provenance: source PDF is the multi-program LADWP Electric Rates Ordinance 180127 (which carries the regulatory framework + Lifeline Service / Rate E definitions that EZ-Save inherits structurally); the current $16.34/2-mo dollar value is published on the LADWP residential rates HTML page (cited as landing_page in tariff.toml). LADWP doesn't publish per-program tariff PDFs — same shared-source pattern as the existing LADWP NEM modifier (ca/pou/ladwp/nem/).",
+      "urpx:effectiveDateTime": "2008-09-01T00:00:00",
+      "urpx:priceCurrency": "USD",
+      "urpx:commodity": {
+        "@id": "urpx:electricity"
+      },
+      "urpx:serviceRole": {
+        "@id": "urpx:bundledServiceRole"
+      },
+      "urpx:applicableToRatePlan": [
+        {
+          "@id": "ladwp:r-1a"
+        },
+        {
+          "@id": "ladwp:r-1b"
+        }
+      ],
+      "urpx:hasDataSourceReference": {
+        "@type": "urpx:DataSourceReference",
+        "urpx:fileName": "LADWP_Electric_Rates.pdf",
+        "urpx:mediaType": {
+          "@id": "urpx:applicationPdf"
+        },
+        "urpx:accessURL": "https://www.ladwp.com/sites/default/files/documents/LADWP_Electric_Rates.pdf",
+        "urpx:dateRetrieved": "2026-05-04",
+        "urpx:dataSourceType": {
+          "@id": "urpx:utilityWebsiteSource"
+        }
+      },
+      "urpx:hasEligibilityRule": [
+        {
+          "@type": "urpx:EligibilityRule",
+          "@id": "ladwp:ez-save-2008-09-01-er-eligible",
+          "urpx:name": "EZ-Save-eligible residential customer",
+          "urpx:description": "Customer is a residential customer enrolled in the LADWP EZ-Save program. Eligibility is income-only (LADWP doesn't accept categorical-program shortcuts for EZ-Save eligibility, distinct from CPUC CARE which accepts public-assistance-program enrollment as an eligibility shortcut). Customer income must conform to LADWP's published income guidelines (revised 2025-07-01). Application + eligibility declaration required. The subsidy ($16.34/2-mo) is capped at the customer's electric bill amount per LADWP's residential rates page.",
+          "urpx:hasConditionExpression": {
+            "@type": "urpx:ConditionExpression",
+            "@id": "ladwp:ez-save-2008-09-01-cx-eligible",
+            "urpx:rootNode": {
+              "@type": "urpx:BooleanOperationNode",
+              "@id": "ladwp:ez-save-2008-09-01-bn-residential-and-enrolled",
+              "urpx:operator": {
+                "@id": "urpx:andOperator"
+              },
+              "urpx:operandNodes": [
+                {
+                  "@type": "urpx:ComparisonNode",
+                  "@id": "ladwp:ez-save-2008-09-01-cn-residential",
+                  "urpx:operator": {
+                    "@id": "urpx:equalsOperator"
+                  },
+                  "urpx:leftOperand": {
+                    "@type": "urpx:ObjectOperandNode",
+                    "urpx:conditionProperty": {
+                      "@id": "urpx:hasCustomerKind"
+                    }
+                  },
+                  "urpx:rightOperand": {
+                    "@type": "urpx:ObjectOperandNode",
+                    "urpx:referencesValue": {
+                      "@id": "urpx:residentialKind"
+                    }
+                  }
+                },
+                {
+                  "@type": "urpx:ComparisonNode",
+                  "@id": "ladwp:ez-save-2008-09-01-cn-program-enrollment",
+                  "urpx:operator": {
+                    "@id": "urpx:equalsOperator"
+                  },
+                  "urpx:leftOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "urpx:customConditionProperty": "Program Enrollment"
+                  },
+                  "urpx:rightOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "urpx:stringValue": "EZ-Save"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "urpx:hasPlanElements": {
+        "@type": "urpx:PlanElements",
+        "urpx:hasMetricInput": [
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "ladwp:ez-save-mi-meter-count",
+            "urpx:name": "Per Meter (for daily $/meter credits)",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            },
+            "urpx:profileMetricProperty": {
+              "@id": "urpx:numberOfMeters"
+            }
+          }
+        ],
+        "urpx:hasBillingModel": {
+          "@type": "urpx:BillingModel",
+          "urpx:hasLedger": [
+            {
+              "@type": "urpx:Ledger",
+              "@id": "ladwp:ez-save-ledger-subsidy",
+              "urpx:name": "EZ-Save Subsidy Credit",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "ladwp:ez-save-mi-meter-count"
+              }
+            }
+          ],
+          "urpx:hasPriceDefinition": [
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:ez-save-pd-subsidy-2008-09-01",
+              "urpx:name": "EZ-Save Subsidy Credit ($-16.34/2-months, modeled as $-0.2683/day = $16.34/60.875 days average bimonthly period)",
+              "urpx:chargeType": {
+                "@id": "urpx:creditMisc"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:discount"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "urpx:intervalDuration": "P1D"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ez-save-ledger-subsidy"
+              }
+            }
+          ]
+        }
+      },
+      "urpx:hasPrices": {
+        "@type": "urpx:Prices",
+        "urpx:hasPrice": [
+          {
+            "@type": "urpx:Price",
+            "@id": "ladwp:ez-save-price-subsidy-2008-09-01",
+            "urpx:referencesPriceDefinition": {
+              "@id": "ladwp:ez-save-pd-subsidy-2008-09-01"
+            },
+            "urpx:startDate": "2008-09-01",
+            "urpx:name": "EZ-Save Subsidy Credit",
+            "urpx:unitPrice": "-0.2683"
+          }
+        ]
+      },
+      "urpx:offeredBy": {
+        "@type": "urpx:Organization",
+        "@id": "org:utility-ladwp",
+        "urpx:legalName": "Los Angeles Department of Water and Power",
+        "urpx:organizationType": {
+          "@id": "urpx:utilityOrganization"
+        },
+        "urpx:hasIdentity": {
+          "@id": "org:utility-ladwp-identity",
+          "@type": "urpx:OrganizationIdentity",
+          "urpx:hasName": {
+            "@id": "org:utility-ladwp-name",
+            "@type": "urpx:OrganizationName",
+            "urpx:name": "Los Angeles Department of Water and Power"
+          },
+          "urpx:hasIdentifier": {
+            "@id": "org:utility-ladwp-eia",
+            "@type": "urpx:OrganizationIdentifier",
+            "urpx:scheme": {
+              "@id": "urpx:eiaScheme"
+            },
+            "skos:notation": "11208"
+          }
+        }
+      },
+      "urpx:forRatePlanModifier": {
+        "@id": "ladwp:ez-save"
+      },
+      "urpx:hasCoverageClaim": {
+        "@id": "ladwp:ez-save-2008-09-01-coverage",
+        "@type": "urpx:CoverageClaim",
+        "urpx:completenessResult": {
+          "@id": "urpx:partial"
+        },
+        "urpx:selfContained": true
+      }
+    }
+  }
+}

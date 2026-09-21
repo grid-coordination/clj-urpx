@@ -1,0 +1,894 @@
+{
+  "@context": {
+    "urpx": "https://urpx.org/ns/ontology/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "org": "https://rate-plans.grid-coordination.energy/organizations/",
+    "ladwp": "https://rate-plans.grid-coordination.energy/ladwp/",
+    "urpx:unitPrice": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:effectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:effectiveDateTime": {
+      "@type": "xsd:dateTime"
+    },
+    "urpx:baseQuantity": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:lowerBound": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:upperBound": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:initialEffectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:startDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:url": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:month": {
+      "@type": "xsd:gMonth"
+    },
+    "urpx:intervalDuration": {
+      "@type": "xsd:duration"
+    },
+    "urpx:serviceTierNumber": {
+      "@type": "xsd:integer"
+    },
+    "urpx:pageStart": {
+      "@type": "xsd:integer"
+    },
+    "urpx:pageEnd": {
+      "@type": "xsd:integer"
+    },
+    "urpx:accessURL": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:dateRetrieved": {
+      "@type": "xsd:date"
+    },
+    "urpx:targetURPXVersion": {
+      "@type": "xsd:anyURI"
+    },
+    "skos": "http://www.w3.org/2004/02/skos/core#"
+  },
+  "@type": "urpx:URPXPackage",
+  "@id": "ladwp:doc-r-1a-2026-04-01",
+  "urpx:targetURPXVersion": "https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl",
+  "urpx:hasRatePlan": {
+    "@type": "urpx:RatePlan",
+    "@id": "ladwp:r-1a",
+    "urpx:name": "Schedule R-1(A) Residential Service — Standard",
+    "urpx:ratePlanUniqueIdentifier": "R-1A",
+    "urpx:initialEffectiveDate": "2008-09-01",
+    "urpx:timezoneIdentifier": "America/Los_Angeles",
+    "urpx:hasRatePlanVersion": {
+      "@type": "urpx:RatePlanVersion",
+      "@id": "ladwp:r-1a-2026-04-01",
+      "urpx:description": "LADWP's standard residential rate (the default for ~95% of LADWP residential customers, ~1.34M of 1.41M). Three-tier inclining-block structure with zone-specific tier breakpoints (Zone 1 coastal: 350/1050 kWh boundaries; Zone 2 inland: 500/1500 kWh boundaries) and season-specific Tier 3 rates (high-season Tier 3 rate $0.21702/kWh; low-season Tier 3 collapses to Tier 2 rate $0.13001/kWh). Power Access Charge varies by tier ($2.30/$7.90/$22.70 per month for Tier 1/2/3 respectively) — same per-tier value across both zones. Customer-facing all-in $/kWh = energy charge (this snapshot) + sum of seven pass-through Adjustment Factors (ECA + ESA + RCA + IRCA + VEA + CRPSEA + VRPSEA, refreshed quarterly by LADWP). The factors captured here are the Apr-Jun 2026 quarterly values; subsequent quarterly refreshes will be filed as new RatePlanVersions. Base rates derive from LADWP's 2019-07-01 Electric Rate Summary, which has not changed since (rate evolution is captured via the quarterly factors). Modifiers not included: EZ-Save Lifeline subsidy (income-qualified credit, see grid-coordination/urpx-rate-plans#16), NEM Service Rider (net energy metering for solar customers), REO Service Rider (Renewable Energy Option Green Power program). Minimum Charge ($10/month, plus ECA + ESA + RCA per Special Conditions) modeled as a flat per-month service charge; bill resolution decides whether it applies (minimum-bill semantics).",
+      "urpx:effectiveDateTime": "2026-04-01T00:00:00",
+      "urpx:changeReason": {
+        "@id": "urpx:rateCase"
+      },
+      "urpx:priceCurrency": "USD",
+      "urpx:commodity": {
+        "@id": "urpx:electricity"
+      },
+      "urpx:serviceRole": {
+        "@id": "urpx:bundledServiceRole"
+      },
+      "urpx:customerChoice": {
+        "@id": "urpx:voluntaryChoice"
+      },
+      "urpx:isDefault": true,
+      "urpx:hasDataSourceReference": {
+        "@type": "urpx:DataSourceReference",
+        "urpx:fileName": "Electric_Rate_Summary_effective_7_1_2019_with_factors_referenced_rev1.pdf",
+        "urpx:mediaType": {
+          "@id": "urpx:applicationPdf"
+        },
+        "urpx:accessURL": "https://www.ladwp.com/sites/default/files/documents/Electric_Rate_Summary_effective_7_1_2019_with_factors_referenced_rev1.pdf",
+        "urpx:dateRetrieved": "2026-04-30",
+        "urpx:dataSourceType": {
+          "@id": "urpx:utilityWebsiteSource"
+        },
+        "urpx:pageStart": 1,
+        "urpx:pageEnd": 1
+      },
+      "urpx:hasEligibilityRule": [
+        {
+          "@type": "urpx:EligibilityRule",
+          "@id": "ladwp:er-residential-r-1a",
+          "urpx:name": "Eligibility for Schedule R-1(A) Standard Residential Service",
+          "urpx:description": "Applicable to residential service in single-family dwellings, single-family-with-guest-house, individually-metered accommodations, and separately-metered common areas of condominiums and cooperatives devoted primarily to residential uses. Battery chargers, motors, and appliances conforming to applicable electrical codes and the Department's Rules may be served under this schedule. Energy and capacity requirements must not exceed those for Small General Service Schedule A-1. NOT applicable to single-family residential customers with an on-site transformer dedicated solely to that individual customer (those customers take service on Schedule A-1 instead). Not a TOU schedule; opt-in to TOU is via Schedule R-1(B).",
+          "urpx:hasConditionExpression": {
+            "@type": "urpx:ConditionExpression",
+            "@id": "ladwp:cx-residential-r-1a",
+            "urpx:rootNode": {
+              "@type": "urpx:ComparisonNode",
+              "@id": "ladwp:cn-residential-r-1a",
+              "urpx:operator": {
+                "@id": "urpx:equalsOperator"
+              },
+              "urpx:leftOperand": {
+                "@type": "urpx:ObjectOperandNode",
+                "urpx:conditionProperty": {
+                  "@id": "urpx:hasCustomerKind"
+                }
+              },
+              "urpx:rightOperand": {
+                "@type": "urpx:ObjectOperandNode",
+                "urpx:referencesValue": {
+                  "@id": "urpx:residentialKind"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "urpx:hasPlanElements": {
+        "@type": "urpx:PlanElements",
+        "urpx:hasSeasons": [
+          {
+            "@type": "urpx:Season",
+            "@id": "ladwp:season-high",
+            "urpx:seasonName": "High Season",
+            "urpx:month": [
+              "--06",
+              "--07",
+              "--08",
+              "--09"
+            ]
+          },
+          {
+            "@type": "urpx:Season",
+            "@id": "ladwp:season-low",
+            "urpx:seasonName": "Low Season",
+            "urpx:month": [
+              "--10",
+              "--11",
+              "--12",
+              "--01",
+              "--02",
+              "--03",
+              "--04",
+              "--05"
+            ]
+          }
+        ],
+        "urpx:hasMetricInput": [
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "ladwp:mi-energy",
+            "urpx:name": "kWh Energy Consumption Prices",
+            "urpx:metricInputType": {
+              "@id": "urpx:measuredMetricInput"
+            },
+            "urpx:hasMetricSpecification": {
+              "@type": "urpx:MetricSpecification",
+              "@id": "ladwp:ms-energy",
+              "urpx:measurementKind": {
+                "@id": "urpx:energy"
+              },
+              "urpx:unitOfMeasure": {
+                "@id": "urpx:kWh"
+              }
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "ladwp:mi-meter-count",
+            "urpx:name": "Per Meter Prices",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            },
+            "urpx:profileMetricProperty": {
+              "@id": "urpx:numberOfMeters"
+            }
+          }
+        ],
+        "urpx:hasBillingModel": {
+          "@type": "urpx:BillingModel",
+          "urpx:hasServiceTiers": {
+            "@type": "urpx:ServiceTiers",
+            "@id": "ladwp:tiers-r-1a",
+            "urpx:referencesMetricInput": {
+              "@id": "ladwp:mi-energy"
+            },
+            "urpx:hasServiceTier": [
+              {
+                "@type": "urpx:ServiceTier",
+                "@id": "ladwp:tier-zone1-1",
+                "urpx:name": "Zone 1 Tier 1 — first 350 kWh per billing period",
+                "urpx:serviceTierNumber": 1,
+                "urpx:hasServiceBracket": {
+                  "@type": "urpx:ServiceBracket",
+                  "@id": "ladwp:tier-zone1-1-bracket",
+                  "urpx:lowerBound": "0",
+                  "urpx:lowerBoundOperator": {
+                    "@id": "urpx:greaterThanOrEqualOperator"
+                  },
+                  "urpx:upperBound": "350",
+                  "urpx:upperBoundOperator": {
+                    "@id": "urpx:lessThanOrEqualOperator"
+                  }
+                }
+              },
+              {
+                "@type": "urpx:ServiceTier",
+                "@id": "ladwp:tier-zone1-2",
+                "urpx:name": "Zone 1 Tier 2 — next 700 kWh (351-1050 kWh)",
+                "urpx:serviceTierNumber": 2,
+                "urpx:hasServiceBracket": {
+                  "@type": "urpx:ServiceBracket",
+                  "@id": "ladwp:tier-zone1-2-bracket",
+                  "urpx:lowerBound": "350",
+                  "urpx:lowerBoundOperator": {
+                    "@id": "urpx:greaterThanOperator"
+                  },
+                  "urpx:upperBound": "1050",
+                  "urpx:upperBoundOperator": {
+                    "@id": "urpx:lessThanOrEqualOperator"
+                  }
+                }
+              },
+              {
+                "@type": "urpx:ServiceTier",
+                "@id": "ladwp:tier-zone1-3",
+                "urpx:name": "Zone 1 Tier 3 — greater than 1050 kWh",
+                "urpx:serviceTierNumber": 3,
+                "urpx:hasServiceBracket": {
+                  "@type": "urpx:ServiceBracket",
+                  "@id": "ladwp:tier-zone1-3-bracket",
+                  "urpx:lowerBound": "1050",
+                  "urpx:lowerBoundOperator": {
+                    "@id": "urpx:greaterThanOperator"
+                  }
+                }
+              },
+              {
+                "@type": "urpx:ServiceTier",
+                "@id": "ladwp:tier-zone2-1",
+                "urpx:name": "Zone 2 Tier 1 — first 500 kWh per billing period",
+                "urpx:serviceTierNumber": 4,
+                "urpx:hasServiceBracket": {
+                  "@type": "urpx:ServiceBracket",
+                  "@id": "ladwp:tier-zone2-1-bracket",
+                  "urpx:lowerBound": "0",
+                  "urpx:lowerBoundOperator": {
+                    "@id": "urpx:greaterThanOrEqualOperator"
+                  },
+                  "urpx:upperBound": "500",
+                  "urpx:upperBoundOperator": {
+                    "@id": "urpx:lessThanOrEqualOperator"
+                  }
+                }
+              },
+              {
+                "@type": "urpx:ServiceTier",
+                "@id": "ladwp:tier-zone2-2",
+                "urpx:name": "Zone 2 Tier 2 — next 1000 kWh (501-1500 kWh)",
+                "urpx:serviceTierNumber": 5,
+                "urpx:hasServiceBracket": {
+                  "@type": "urpx:ServiceBracket",
+                  "@id": "ladwp:tier-zone2-2-bracket",
+                  "urpx:lowerBound": "500",
+                  "urpx:lowerBoundOperator": {
+                    "@id": "urpx:greaterThanOperator"
+                  },
+                  "urpx:upperBound": "1500",
+                  "urpx:upperBoundOperator": {
+                    "@id": "urpx:lessThanOrEqualOperator"
+                  }
+                }
+              },
+              {
+                "@type": "urpx:ServiceTier",
+                "@id": "ladwp:tier-zone2-3",
+                "urpx:name": "Zone 2 Tier 3 — greater than 1500 kWh",
+                "urpx:serviceTierNumber": 6,
+                "urpx:hasServiceBracket": {
+                  "@type": "urpx:ServiceBracket",
+                  "@id": "ladwp:tier-zone2-3-bracket",
+                  "urpx:lowerBound": "1500",
+                  "urpx:lowerBoundOperator": {
+                    "@id": "urpx:greaterThanOperator"
+                  }
+                }
+              }
+            ]
+          },
+          "urpx:hasLedger": [
+            {
+              "@type": "urpx:Ledger",
+              "@id": "ladwp:ledger-energy",
+              "urpx:name": "Energy Charges (Tier-varying)",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "ladwp:mi-energy"
+              }
+            },
+            {
+              "@type": "urpx:Ledger",
+              "@id": "ladwp:ledger-adjustments",
+              "urpx:name": "Pass-through Adjustment Factors (quarterly)",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "ladwp:mi-energy"
+              }
+            },
+            {
+              "@type": "urpx:Ledger",
+              "@id": "ladwp:ledger-power-access",
+              "urpx:name": "Power Access Charge (Tier-varying service charge)",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "ladwp:mi-meter-count"
+              }
+            },
+            {
+              "@type": "urpx:Ledger",
+              "@id": "ladwp:ledger-minimum-charge",
+              "urpx:name": "Minimum Charge",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "ladwp:mi-meter-count"
+              }
+            }
+          ],
+          "urpx:hasPriceDefinition": [
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-energy-high-season",
+              "urpx:name": "Energy Charge — High Season (June-September), tier-varying",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:hasApplicabilityRule": {
+                "@type": "urpx:ApplicabilityRule",
+                "urpx:month": [
+                  "--06",
+                  "--07",
+                  "--08",
+                  "--09"
+                ]
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-energy"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-energy-low-season",
+              "urpx:name": "Energy Charge — Low Season (October-May), tier-varying",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:hasApplicabilityRule": {
+                "@type": "urpx:ApplicabilityRule",
+                "urpx:month": [
+                  "--10",
+                  "--11",
+                  "--12",
+                  "--01",
+                  "--02",
+                  "--03",
+                  "--04",
+                  "--05"
+                ]
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-energy"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-power-access-charge",
+              "urpx:name": "Power Access Charge — tier-varying monthly service charge",
+              "urpx:chargeType": {
+                "@id": "urpx:facilities"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-power-access"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-eca",
+              "urpx:name": "Energy Cost Adjustment (ECA)",
+              "urpx:chargeType": {
+                "@id": "urpx:adjustmentPowerCost"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-adjustments"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-esa",
+              "urpx:name": "Electric Subsidy Adjustment (ESA)",
+              "urpx:chargeType": {
+                "@id": "urpx:adjustmentPowerCost"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-adjustments"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-rca",
+              "urpx:name": "Reliability Cost Adjustment (RCA)",
+              "urpx:chargeType": {
+                "@id": "urpx:reliabilityCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-adjustments"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-irca",
+              "urpx:name": "Incremental Reliability Cost Adjustment (IRCA)",
+              "urpx:chargeType": {
+                "@id": "urpx:reliabilityCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-adjustments"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-vea",
+              "urpx:name": "Variable Energy Adjustment (VEA)",
+              "urpx:chargeType": {
+                "@id": "urpx:adjustmentPowerCost"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-adjustments"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-crpsea",
+              "urpx:name": "Capped Renewable Portfolio Standard Energy Adjustment (CRPSEA)",
+              "urpx:chargeType": {
+                "@id": "urpx:environmentalFunding"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:environmental"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-adjustments"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-vrpsea",
+              "urpx:name": "Variable Renewable Portfolio Standard Energy Adjustment (VRPSEA)",
+              "urpx:chargeType": {
+                "@id": "urpx:environmentalFunding"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:environmental"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-adjustments"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:pd-minimum-charge",
+              "urpx:name": "Minimum Charge",
+              "urpx:chargeType": {
+                "@id": "urpx:minimumBill"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:ledger-minimum-charge"
+              }
+            }
+          ]
+        }
+      },
+      "urpx:hasPrices": {
+        "@type": "urpx:Prices",
+        "urpx:hasPrice": [
+          {
+            "@type": "urpx:Price",
+            "@id": "ladwp:price-minimum-charge",
+            "urpx:referencesPriceDefinition": {
+              "@id": "ladwp:pd-minimum-charge"
+            },
+            "urpx:startDate": "2019-07-01",
+            "urpx:name": "Minimum Charge",
+            "urpx:unitPrice": "10.00"
+          }
+        ],
+        "urpx:hasPriceSet": [
+          {
+            "@type": "urpx:PriceSet",
+            "@id": "ladwp:ps-energy-tiers",
+            "urpx:startDate": "2019-07-01",
+            "urpx:hasPrice": [
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-high-zone1-t1",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-high-season"
+                },
+                "urpx:name": "Energy Charge — Zone 1 Tier 1, High Season",
+                "urpx:unitPrice": "0.07142",
+                "urpx:serviceTierNumber": 1
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-high-zone1-t2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-high-season"
+                },
+                "urpx:name": "Energy Charge — Zone 1 Tier 2, High Season",
+                "urpx:unitPrice": "0.13001",
+                "urpx:serviceTierNumber": 2
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-high-zone1-t3",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-high-season"
+                },
+                "urpx:name": "Energy Charge — Zone 1 Tier 3, High Season",
+                "urpx:unitPrice": "0.21702",
+                "urpx:serviceTierNumber": 3
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-high-zone2-t1",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-high-season"
+                },
+                "urpx:name": "Energy Charge — Zone 2 Tier 1, High Season",
+                "urpx:unitPrice": "0.07142",
+                "urpx:serviceTierNumber": 4
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-high-zone2-t2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-high-season"
+                },
+                "urpx:name": "Energy Charge — Zone 2 Tier 2, High Season",
+                "urpx:unitPrice": "0.13001",
+                "urpx:serviceTierNumber": 5
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-high-zone2-t3",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-high-season"
+                },
+                "urpx:name": "Energy Charge — Zone 2 Tier 3, High Season",
+                "urpx:unitPrice": "0.21702",
+                "urpx:serviceTierNumber": 6
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-low-zone1-t1",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-low-season"
+                },
+                "urpx:name": "Energy Charge — Zone 1 Tier 1, Low Season",
+                "urpx:unitPrice": "0.07142",
+                "urpx:serviceTierNumber": 1
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-low-zone1-t2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-low-season"
+                },
+                "urpx:name": "Energy Charge — Zone 1 Tier 2, Low Season",
+                "urpx:unitPrice": "0.13001",
+                "urpx:serviceTierNumber": 2
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-low-zone1-t3",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-low-season"
+                },
+                "urpx:name": "Energy Charge — Zone 1 Tier 3, Low Season (collapsed to Tier 2 rate)",
+                "urpx:unitPrice": "0.13001",
+                "urpx:serviceTierNumber": 3
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-low-zone2-t1",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-low-season"
+                },
+                "urpx:name": "Energy Charge — Zone 2 Tier 1, Low Season",
+                "urpx:unitPrice": "0.07142",
+                "urpx:serviceTierNumber": 4
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-low-zone2-t2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-low-season"
+                },
+                "urpx:name": "Energy Charge — Zone 2 Tier 2, Low Season",
+                "urpx:unitPrice": "0.13001",
+                "urpx:serviceTierNumber": 5
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-energy-low-zone2-t3",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-energy-low-season"
+                },
+                "urpx:name": "Energy Charge — Zone 2 Tier 3, Low Season (collapsed to Tier 2 rate)",
+                "urpx:unitPrice": "0.13001",
+                "urpx:serviceTierNumber": 6
+              }
+            ]
+          },
+          {
+            "@type": "urpx:PriceSet",
+            "@id": "ladwp:ps-power-access",
+            "urpx:startDate": "2019-07-01",
+            "urpx:hasPrice": [
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-power-access-zone1-t1",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-power-access-charge"
+                },
+                "urpx:name": "Power Access Charge — Zone 1 Tier 1",
+                "urpx:unitPrice": "2.30",
+                "urpx:serviceTierNumber": 1
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-power-access-zone1-t2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-power-access-charge"
+                },
+                "urpx:name": "Power Access Charge — Zone 1 Tier 2",
+                "urpx:unitPrice": "7.90",
+                "urpx:serviceTierNumber": 2
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-power-access-zone1-t3",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-power-access-charge"
+                },
+                "urpx:name": "Power Access Charge — Zone 1 Tier 3",
+                "urpx:unitPrice": "22.70",
+                "urpx:serviceTierNumber": 3
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-power-access-zone2-t1",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-power-access-charge"
+                },
+                "urpx:name": "Power Access Charge — Zone 2 Tier 1",
+                "urpx:unitPrice": "2.30",
+                "urpx:serviceTierNumber": 4
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-power-access-zone2-t2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-power-access-charge"
+                },
+                "urpx:name": "Power Access Charge — Zone 2 Tier 2",
+                "urpx:unitPrice": "7.90",
+                "urpx:serviceTierNumber": 5
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-power-access-zone2-t3",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-power-access-charge"
+                },
+                "urpx:name": "Power Access Charge — Zone 2 Tier 3",
+                "urpx:unitPrice": "22.70",
+                "urpx:serviceTierNumber": 6
+              }
+            ]
+          },
+          {
+            "@type": "urpx:PriceSet",
+            "@id": "ladwp:ps-adjustment-factors-2026-q2",
+            "urpx:startDate": "2026-04-01",
+            "urpx:hasPrice": [
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-eca-2026-q2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-eca"
+                },
+                "urpx:name": "Energy Cost Adjustment (Apr-Jun 2026)",
+                "urpx:unitPrice": "0.05690"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-esa-2026-q2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-esa"
+                },
+                "urpx:name": "Electric Subsidy Adjustment (Apr-Jun 2026)",
+                "urpx:unitPrice": "0.00147"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-rca-2026-q2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-rca"
+                },
+                "urpx:name": "Reliability Cost Adjustment (Apr-Jun 2026)",
+                "urpx:unitPrice": "0.00300"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-irca-2026-q2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-irca"
+                },
+                "urpx:name": "Incremental Reliability Cost Adjustment (Apr-Jun 2026)",
+                "urpx:unitPrice": "0.05505"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-vea-2026-q2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-vea"
+                },
+                "urpx:name": "Variable Energy Adjustment (Apr-Jun 2026)",
+                "urpx:unitPrice": "0.00503"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-crpsea-2026-q2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-crpsea"
+                },
+                "urpx:name": "Capped Renewable Portfolio Standard Energy Adjustment (Apr-Jun 2026)",
+                "urpx:unitPrice": "0.01779"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "ladwp:price-vrpsea-2026-q2",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "ladwp:pd-vrpsea"
+                },
+                "urpx:name": "Variable Renewable Portfolio Standard Energy Adjustment (Apr-Jun 2026)",
+                "urpx:unitPrice": "0.03296"
+              }
+            ]
+          }
+        ]
+      },
+      "urpx:offeredBy": {
+        "@type": "urpx:Organization",
+        "@id": "org:utility-ladwp",
+        "urpx:legalName": "Los Angeles Department of Water and Power",
+        "urpx:organizationType": {
+          "@id": "urpx:utilityOrganization"
+        },
+        "urpx:hasIdentity": {
+          "@id": "org:utility-ladwp-identity",
+          "@type": "urpx:OrganizationIdentity",
+          "urpx:hasName": {
+            "@id": "org:utility-ladwp-name",
+            "@type": "urpx:OrganizationName",
+            "urpx:name": "Los Angeles Department of Water and Power"
+          },
+          "urpx:hasIdentifier": {
+            "@id": "org:utility-ladwp-eia",
+            "@type": "urpx:OrganizationIdentifier",
+            "urpx:scheme": {
+              "@id": "urpx:eiaScheme"
+            },
+            "skos:notation": "11208"
+          }
+        }
+      },
+      "urpx:forRatePlan": {
+        "@id": "ladwp:r-1a"
+      },
+      "urpx:hasCoverageClaim": {
+        "@id": "ladwp:r-1a-2026-04-01-coverage",
+        "@type": "urpx:CoverageClaim",
+        "urpx:completenessResult": {
+          "@id": "urpx:complete"
+        },
+        "urpx:selfContained": true
+      }
+    }
+  }
+}

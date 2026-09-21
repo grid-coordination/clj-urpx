@@ -1,0 +1,277 @@
+{
+  "@context": {
+    "urpx": "https://urpx.org/ns/ontology/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "org": "https://rate-plans.grid-coordination.energy/organizations/",
+    "ladwp": "https://rate-plans.grid-coordination.energy/ladwp/",
+    "urpx:unitPrice": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:effectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:effectiveDateTime": {
+      "@type": "xsd:dateTime"
+    },
+    "urpx:baseQuantity": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:initialEffectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:startDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:url": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:intervalDuration": {
+      "@type": "xsd:duration"
+    },
+    "urpx:pageStart": {
+      "@type": "xsd:integer"
+    },
+    "urpx:pageEnd": {
+      "@type": "xsd:integer"
+    },
+    "urpx:accessURL": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:dateRetrieved": {
+      "@type": "xsd:date"
+    },
+    "urpx:targetURPXVersion": {
+      "@type": "xsd:anyURI"
+    },
+    "skos": "http://www.w3.org/2004/02/skos/core#"
+  },
+  "@type": "urpx:URPXPackage",
+  "@id": "ladwp:doc-nem-2008-09-01",
+  "urpx:targetURPXVersion": "https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl",
+  "urpx:hasRatePlanModifier": {
+    "@type": "urpx:RatePlanModifier",
+    "@id": "ladwp:nem",
+    "urpx:name": "Service Rider NEM — Net Energy Metering",
+    "urpx:modifierUniqueIdentifier": "NEM",
+    "urpx:initialEffectiveDate": "2008-09-01",
+    "urpx:timezoneIdentifier": "America/Los_Angeles",
+    "urpx:hasRatePlanModifierVersion": {
+      "@type": "urpx:RatePlanModifierVersion",
+      "@id": "ladwp:nem-2008-09-01",
+      "urpx:version": "2008-09-01",
+      "urpx:modifierVersionNumber": "2008-09-01",
+      "urpx:changeReason": {
+        "@id": "urpx:initial"
+      },
+      "urpx:description": "LADWP Service Rider NEM — Net Energy Metering. Customer-generation overlay applied on top of the customer's base LADWP residential rate (R-1A or R-1B) for solar/wind/hybrid generators ≤1MW. Effective September 1, 2008; terms unchanged since. Estimated ~140K LADWP solar customers — highest-customer-count electrification-targeted rate plan modeled in the LADWP electrification effort. Net-metering semantics: bidirectional metering measures the difference between electricity supplied from the grid and electricity generated and delivered back. If grid-supplied kWh ≥ customer-generated kWh, customer pays for the net at the applicable base-rate energy charges. If customer-generated kWh > grid-supplied kWh (excess generation), customer pays applicable monthly billing charges except energy charges; receives a credit equal to the applicable Rate Schedule energy pricing × excess kWh. Credit balances roll forward to subsequent bills (excluding Taxes and Minimum Charges) until consumed; balance zeroes at termination of service. NOT MODELED in this filing: the per-kWh credit value itself. The credit equals the applicable base-rate energy charge (a value that depends on which base schedule the customer is on, what tier, what season). URPX has no primitive for 'compute credit at the base rate's applicable energy price' — same family of vocabulary gap as the bill-percentage-discount issue tracked at urpx-org/urpx#24. Placeholder Price with unitPrice='0' included for SHACL conformance; actual NEM credit at billing time is computed by the consumer (price-server) using the customer's base rate. Filing source is the LADWP Electric Rates Ordinance PDF, pages 19-21 (Section 'SERVICE RIDER NEM'); no separate NEM PDF is published. Customers with NEM-eligible generation >10kW nameplate must sign a Solar-Powered Customer Generation Interconnection Agreement. Not applicable to commercial customer-generation schedules CG-2 / CG-3. Customer may elect Green Power via Service Rider REO for net energy supplied by LADWP.",
+      "urpx:effectiveDateTime": "2008-09-01T00:00:00",
+      "urpx:priceCurrency": "USD",
+      "urpx:commodity": {
+        "@id": "urpx:electricity"
+      },
+      "urpx:serviceRole": {
+        "@id": "urpx:bundledServiceRole"
+      },
+      "urpx:applicableToRatePlan": [
+        {
+          "@id": "ladwp:r-1a"
+        },
+        {
+          "@id": "ladwp:r-1b"
+        }
+      ],
+      "urpx:hasDataSourceReference": {
+        "@type": "urpx:DataSourceReference",
+        "urpx:fileName": "LADWP_Electric_Rates.pdf",
+        "urpx:mediaType": {
+          "@id": "urpx:applicationPdf"
+        },
+        "urpx:accessURL": "https://www.ladwp.com/sites/default/files/documents/LADWP_Electric_Rates.pdf",
+        "urpx:dateRetrieved": "2026-05-01",
+        "urpx:dataSourceType": {
+          "@id": "urpx:utilityWebsiteSource"
+        },
+        "urpx:pageStart": 19,
+        "urpx:pageEnd": 21
+      },
+      "urpx:hasEligibilityRule": [
+        {
+          "@type": "urpx:EligibilityRule",
+          "@id": "ladwp:er-nem-eligible",
+          "urpx:name": "NEM-eligible customer-generator",
+          "urpx:description": "Customer must own and operate a permanent solar / wind turbine / hybrid electrical generating facility on the customer's premises with capacity ≤1MW. Facility must operate in parallel with LADWP's transmission and distribution facilities, primarily offset the customer's own electricity requirements, and be served under a published Rate Schedule. Customer pays interconnection costs. Generation systems with nameplate capacity >10kW require a signed Solar-Powered Customer Generation Interconnection Agreement. NOT applicable to: emergency / standby / temporary / mobile generating facilities, or to customers under commercial customer-generation Schedules CG-2 / CG-3. Final eligibility determination resides with LADWP. Customer may optionally elect Green Power via Service Rider REO for net energy supplied by LADWP (separate modifier, deferred).",
+          "urpx:hasConditionExpression": {
+            "@type": "urpx:ConditionExpression",
+            "@id": "ladwp:cx-nem-eligible",
+            "urpx:rootNode": {
+              "@type": "urpx:BooleanOperationNode",
+              "@id": "ladwp:bn-nem-customer-generator-and-conditions",
+              "urpx:operator": {
+                "@id": "urpx:andOperator"
+              },
+              "urpx:operandNodes": [
+                {
+                  "@type": "urpx:ComparisonNode",
+                  "@id": "ladwp:cn-nem-customer-generator",
+                  "urpx:operator": {
+                    "@id": "urpx:equalsOperator"
+                  },
+                  "urpx:leftOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "urpx:customConditionProperty": "Customer-Generator (on-site PV/wind/hybrid)"
+                  },
+                  "urpx:rightOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "urpx:stringValue": "true"
+                  }
+                },
+                {
+                  "@type": "urpx:ComparisonNode",
+                  "@id": "ladwp:cn-nem-bidirectional-meter",
+                  "urpx:operator": {
+                    "@id": "urpx:equalsOperator"
+                  },
+                  "urpx:leftOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "urpx:customConditionProperty": "metering"
+                  },
+                  "urpx:rightOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "urpx:stringValue": "Bidirectional meter"
+                  }
+                },
+                {
+                  "@type": "urpx:ComparisonNode",
+                  "@id": "ladwp:cn-nem-capacity-limit",
+                  "urpx:operator": {
+                    "@id": "urpx:lessThanOrEqualOperator"
+                  },
+                  "urpx:leftOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "urpx:customConditionProperty": "Generation nameplate capacity (MW)"
+                  },
+                  "urpx:rightOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "urpx:stringValue": "1.0"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "urpx:hasPlanElements": {
+        "@type": "urpx:PlanElements",
+        "urpx:hasMetricInput": [
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "ladwp:nem-mi-energy-export",
+            "urpx:name": "Energy Exported to Grid (kWh, reverse flow)",
+            "urpx:metricInputType": {
+              "@id": "urpx:measuredMetricInput"
+            },
+            "urpx:hasMetricSpecification": {
+              "@type": "urpx:MetricSpecification",
+              "@id": "ladwp:nem-ms-energy-export",
+              "urpx:measurementKind": {
+                "@id": "urpx:energy"
+              },
+              "urpx:unitOfMeasure": {
+                "@id": "urpx:kWh"
+              },
+              "urpx:flowDirection": {
+                "@id": "urpx:reverse"
+              }
+            }
+          }
+        ],
+        "urpx:hasBillingModel": {
+          "@type": "urpx:BillingModel",
+          "urpx:hasLedger": [
+            {
+              "@type": "urpx:Ledger",
+              "@id": "ladwp:nem-ledger-net-credit",
+              "urpx:name": "NEM Net Energy Credit (computed at applicable base-rate energy pricing)",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "ladwp:nem-mi-energy-export"
+              }
+            }
+          ],
+          "urpx:hasPriceDefinition": [
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:nem-pd-net-credit",
+              "urpx:name": "NEM Net Metering Credit (placeholder — actual credit computed at applicable base-rate energy pricing)",
+              "urpx:chargeType": {
+                "@id": "urpx:creditEnergy"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:discount"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:nem-ledger-net-credit"
+              }
+            }
+          ]
+        }
+      },
+      "urpx:hasPrices": {
+        "@type": "urpx:Prices",
+        "urpx:hasPrice": [
+          {
+            "@type": "urpx:Price",
+            "@id": "ladwp:nem-price-net-credit-placeholder",
+            "urpx:referencesPriceDefinition": {
+              "@id": "ladwp:nem-pd-net-credit"
+            },
+            "urpx:startDate": "2008-09-01",
+            "urpx:name": "NEM Net Metering Credit (placeholder; actual credit = applicable base-rate energy charge × excess exported kWh)",
+            "urpx:unitPrice": "0"
+          }
+        ]
+      },
+      "urpx:offeredBy": {
+        "@type": "urpx:Organization",
+        "@id": "org:utility-ladwp",
+        "urpx:legalName": "Los Angeles Department of Water and Power",
+        "urpx:organizationType": {
+          "@id": "urpx:utilityOrganization"
+        },
+        "urpx:hasIdentity": {
+          "@id": "org:utility-ladwp-identity",
+          "@type": "urpx:OrganizationIdentity",
+          "urpx:hasName": {
+            "@id": "org:utility-ladwp-name",
+            "@type": "urpx:OrganizationName",
+            "urpx:name": "Los Angeles Department of Water and Power"
+          },
+          "urpx:hasIdentifier": {
+            "@id": "org:utility-ladwp-eia",
+            "@type": "urpx:OrganizationIdentifier",
+            "urpx:scheme": {
+              "@id": "urpx:eiaScheme"
+            },
+            "skos:notation": "11208"
+          }
+        }
+      },
+      "urpx:forRatePlanModifier": {
+        "@id": "ladwp:nem"
+      },
+      "urpx:hasCoverageClaim": {
+        "@id": "ladwp:nem-2008-09-01-coverage",
+        "@type": "urpx:CoverageClaim",
+        "urpx:completenessResult": {
+          "@id": "urpx:partial"
+        },
+        "urpx:selfContained": true
+      }
+    }
+  }
+}

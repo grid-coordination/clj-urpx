@@ -1,0 +1,259 @@
+{
+  "@context": {
+    "urpx": "https://urpx.org/ns/ontology/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "org": "https://rate-plans.grid-coordination.energy/organizations/",
+    "ladwp": "https://rate-plans.grid-coordination.energy/ladwp/",
+    "urpx:unitPrice": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:effectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:effectiveDateTime": {
+      "@type": "xsd:dateTime"
+    },
+    "urpx:baseQuantity": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:initialEffectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:startDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:url": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:intervalDuration": {
+      "@type": "xsd:duration"
+    },
+    "urpx:pageStart": {
+      "@type": "xsd:integer"
+    },
+    "urpx:pageEnd": {
+      "@type": "xsd:integer"
+    },
+    "urpx:accessURL": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:dateRetrieved": {
+      "@type": "xsd:date"
+    },
+    "urpx:targetURPXVersion": {
+      "@type": "xsd:anyURI"
+    },
+    "skos": "http://www.w3.org/2004/02/skos/core#"
+  },
+  "@type": "urpx:URPXPackage",
+  "@id": "ladwp:doc-lifeline-2008-09-01",
+  "urpx:targetURPXVersion": "https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl",
+  "urpx:hasRatePlanModifier": {
+    "@type": "urpx:RatePlanModifier",
+    "@id": "ladwp:lifeline",
+    "urpx:name": "LADWP Lifeline (Senior Citizen / Disability Subsidy)",
+    "urpx:modifierUniqueIdentifier": "LIFELINE",
+    "urpx:initialEffectiveDate": "2008-09-01",
+    "urpx:timezoneIdentifier": "America/Los_Angeles",
+    "urpx:hasRatePlanModifierVersion": {
+      "@type": "urpx:RatePlanModifierVersion",
+      "@id": "ladwp:lifeline-2008-09-01",
+      "urpx:version": "2008-09-01",
+      "urpx:modifierVersionNumber": "2008-09-01",
+      "urpx:changeReason": {
+        "@id": "urpx:initial"
+      },
+      "urpx:description": "LADWP's higher-tier income- and condition-qualified subsidy program for Senior Citizen and Disability-qualified customers. Up to $35.42 every two months credited on the customer's electric bill — modeled as -$0.5817/day per-meter (= $35.42/60.875 days = average 2-month period). Eligibility: residential customer who is either 62+ years of age (Senior Citizen) OR has a qualifying disability AND meets income guidelines (income thresholds revised periodically). Sister program: LADWP EZ-Save ($16.34/2-mo for income-qualified customers without senior/disability categorical eligibility) — administered separately; customer may qualify for one but not both. The 'subsidy should not exceed the customer's electric bill' cap (per LADWP residential rates page) is a cap-on-credit semantic similar to SMUD EAPR's usage-cap discount (URPX#24 territory) — not modeled here, edge case for very-low-usage customers. LADWP-specific provenance: source PDF is the multi-program LADWP Electric Rates Ordinance 180127 (which carries the regulatory framework + Lifeline Service / Rate E definitions); the current $35.42/2-mo dollar value is published on the LADWP residential rates HTML page (cited as landing_page in tariff.toml). Same shared-source pattern as the existing LADWP NEM and EZ-Save modifiers — LADWP doesn't publish per-program tariff PDFs.",
+      "urpx:effectiveDateTime": "2008-09-01T00:00:00",
+      "urpx:priceCurrency": "USD",
+      "urpx:commodity": {
+        "@id": "urpx:electricity"
+      },
+      "urpx:serviceRole": {
+        "@id": "urpx:bundledServiceRole"
+      },
+      "urpx:applicableToRatePlan": [
+        {
+          "@id": "ladwp:r-1a"
+        },
+        {
+          "@id": "ladwp:r-1b"
+        }
+      ],
+      "urpx:hasDataSourceReference": {
+        "@type": "urpx:DataSourceReference",
+        "urpx:fileName": "LADWP_Electric_Rates.pdf",
+        "urpx:mediaType": {
+          "@id": "urpx:applicationPdf"
+        },
+        "urpx:accessURL": "https://www.ladwp.com/sites/default/files/documents/LADWP_Electric_Rates.pdf",
+        "urpx:dateRetrieved": "2026-05-04",
+        "urpx:dataSourceType": {
+          "@id": "urpx:utilityWebsiteSource"
+        }
+      },
+      "urpx:hasEligibilityRule": [
+        {
+          "@type": "urpx:EligibilityRule",
+          "@id": "ladwp:lifeline-2008-09-01-er-eligible",
+          "urpx:name": "Lifeline-eligible residential customer",
+          "urpx:description": "Customer is a residential customer enrolled in the LADWP Lifeline program. Eligibility requires BOTH (a) a qualifying status — Senior Citizen (typically 62+ years of age) OR Disability qualification — AND (b) income guideline conformance per LADWP's published thresholds (revised periodically). Application + eligibility declaration required. Lifeline is the higher-tier subsidy ($35.42/2-mo) than EZ-Save ($16.34/2-mo); customer qualifies for one but not both.",
+          "urpx:hasConditionExpression": {
+            "@type": "urpx:ConditionExpression",
+            "@id": "ladwp:lifeline-2008-09-01-cx-eligible",
+            "urpx:rootNode": {
+              "@type": "urpx:BooleanOperationNode",
+              "@id": "ladwp:lifeline-2008-09-01-bn-residential-and-enrolled",
+              "urpx:operator": {
+                "@id": "urpx:andOperator"
+              },
+              "urpx:operandNodes": [
+                {
+                  "@type": "urpx:ComparisonNode",
+                  "@id": "ladwp:lifeline-2008-09-01-cn-residential",
+                  "urpx:operator": {
+                    "@id": "urpx:equalsOperator"
+                  },
+                  "urpx:leftOperand": {
+                    "@type": "urpx:ObjectOperandNode",
+                    "urpx:conditionProperty": {
+                      "@id": "urpx:hasCustomerKind"
+                    }
+                  },
+                  "urpx:rightOperand": {
+                    "@type": "urpx:ObjectOperandNode",
+                    "urpx:referencesValue": {
+                      "@id": "urpx:residentialKind"
+                    }
+                  }
+                },
+                {
+                  "@type": "urpx:ComparisonNode",
+                  "@id": "ladwp:lifeline-2008-09-01-cn-program-enrollment",
+                  "urpx:operator": {
+                    "@id": "urpx:equalsOperator"
+                  },
+                  "urpx:leftOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "urpx:customConditionProperty": "Program Enrollment"
+                  },
+                  "urpx:rightOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "urpx:stringValue": "Lifeline"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "urpx:hasPlanElements": {
+        "@type": "urpx:PlanElements",
+        "urpx:hasMetricInput": [
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "ladwp:lifeline-mi-meter-count",
+            "urpx:name": "Per Meter (for daily $/meter credits)",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            },
+            "urpx:profileMetricProperty": {
+              "@id": "urpx:numberOfMeters"
+            }
+          }
+        ],
+        "urpx:hasBillingModel": {
+          "@type": "urpx:BillingModel",
+          "urpx:hasLedger": [
+            {
+              "@type": "urpx:Ledger",
+              "@id": "ladwp:lifeline-ledger-subsidy",
+              "urpx:name": "Lifeline Subsidy Credit",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "ladwp:lifeline-mi-meter-count"
+              }
+            }
+          ],
+          "urpx:hasPriceDefinition": [
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "ladwp:lifeline-pd-subsidy-2008-09-01",
+              "urpx:name": "Lifeline Subsidy Credit ($-35.42/2-months, modeled as $-0.5817/day = $35.42/60.875 days average bimonthly period)",
+              "urpx:chargeType": {
+                "@id": "urpx:creditMisc"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:discount"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "urpx:intervalDuration": "P1D"
+              },
+              "urpx:referencesLedger": {
+                "@id": "ladwp:lifeline-ledger-subsidy"
+              }
+            }
+          ]
+        }
+      },
+      "urpx:hasPrices": {
+        "@type": "urpx:Prices",
+        "urpx:hasPrice": [
+          {
+            "@type": "urpx:Price",
+            "@id": "ladwp:lifeline-price-subsidy-2008-09-01",
+            "urpx:referencesPriceDefinition": {
+              "@id": "ladwp:lifeline-pd-subsidy-2008-09-01"
+            },
+            "urpx:startDate": "2008-09-01",
+            "urpx:name": "Lifeline Subsidy Credit",
+            "urpx:unitPrice": "-0.5817"
+          }
+        ]
+      },
+      "urpx:offeredBy": {
+        "@type": "urpx:Organization",
+        "@id": "org:utility-ladwp",
+        "urpx:legalName": "Los Angeles Department of Water and Power",
+        "urpx:organizationType": {
+          "@id": "urpx:utilityOrganization"
+        },
+        "urpx:hasIdentity": {
+          "@id": "org:utility-ladwp-identity",
+          "@type": "urpx:OrganizationIdentity",
+          "urpx:hasName": {
+            "@id": "org:utility-ladwp-name",
+            "@type": "urpx:OrganizationName",
+            "urpx:name": "Los Angeles Department of Water and Power"
+          },
+          "urpx:hasIdentifier": {
+            "@id": "org:utility-ladwp-eia",
+            "@type": "urpx:OrganizationIdentifier",
+            "urpx:scheme": {
+              "@id": "urpx:eiaScheme"
+            },
+            "skos:notation": "11208"
+          }
+        }
+      },
+      "urpx:forRatePlanModifier": {
+        "@id": "ladwp:lifeline"
+      },
+      "urpx:hasCoverageClaim": {
+        "@id": "ladwp:lifeline-2008-09-01-coverage",
+        "@type": "urpx:CoverageClaim",
+        "urpx:completenessResult": {
+          "@id": "urpx:partial"
+        },
+        "urpx:selfContained": true
+      }
+    }
+  }
+}

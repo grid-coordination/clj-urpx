@@ -36,6 +36,16 @@ fixtures=(
   "pge-e-tou-c-2026-03-01         177a761  us/ca/pge/electricity/e-tou-c/versions/2026-03-01/rate-plan_pge_e-tou-c_2026-03-01.jsonld"
   "pge-e-tou-d-2026-03-27         177a761  us/ca/pge/electricity/e-tou-d/versions/2026-03-27/rate-plan_pge_e-tou-d_2026-03-27.jsonld"
   "pge-ev2-2026-03-27             177a761  us/ca/pge/electricity/ev2/versions/2026-03-27/rate-plan_pge_ev2_2026-03-27.jsonld"
+
+  # LADWP, migration wave 1, URPX v0.5.1. Vendored ALONGSIDE the v0.2.x PG&E
+  # set rather than replacing it: the corpus is mixed-vocabulary for the whole
+  # migration, so the suite should exercise both at once. Three of the five are
+  # RatePlanModifiers, and NEM is export-direction rather than a discount.
+  "ladwp-r-1a-2026-04-01          6453536  us/ca/ladwp/electricity/r-1a/versions/2026-04-01/rate-plan_ladwp_r-1a_2026-04-01.jsonld"
+  "ladwp-r-1b-2026-04-01          6453536  us/ca/ladwp/electricity/r-1b/versions/2026-04-01/rate-plan_ladwp_r-1b_2026-04-01.jsonld"
+  "ladwp-ez-save-2008-09-01       6453536  us/ca/ladwp/electricity/ez-save/versions/2008-09-01/rate-plan-modifier_ladwp_ez-save_2008-09-01.jsonld"
+  "ladwp-lifeline-2008-09-01      6453536  us/ca/ladwp/electricity/lifeline/versions/2008-09-01/rate-plan-modifier_ladwp_lifeline_2008-09-01.jsonld"
+  "ladwp-nem-2008-09-01           6453536  us/ca/ladwp/electricity/nem/versions/2008-09-01/rate-plan-modifier_ladwp_nem_2008-09-01.jsonld"
 )
 
 for entry in "${fixtures[@]}"; do
