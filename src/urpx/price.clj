@@ -1140,9 +1140,31 @@
    The second is why composing a PG&E plan with its vintage-PCIA modifier
    needs `:profile-alternatives`. Taking the first of eighteen mutually
    exclusive prices added an arbitrary 0.02973 to the rate; the eighteen span
-   0.06391/kWh, so there is no default worth inventing."
-  [resolved]
-  (let [energy     (->> (:urpx.resolved/ledgers resolved)
+   0.06391/kWh, so there is no default worth inventing.
+
+   EVENT-DRIVEN PRICES ARE EXCLUDED BY DEFAULT. A Price carrying
+   urpx:hasDynamicPricing applies only while its event is called: a critical
+   peak charge is real but exceptional, capped around 50 hours a summer against
+   roughly 2,200 summer hours. Summing it unconditionally answered `what would
+   this cost during an event', which read as the ordinary rate. The default is
+   now the non-event baseline, which is what a price signal means by `the next
+   kWh'. Unlike the alternatives above there IS a defensible default here,
+   because no-event-today is the ordinary state rather than an arbitrary pick.
+
+   Pass `{:include-dynamic-pricing? true}` for the during-event upper bound.
+   Either way `:urpx.resolved/dynamic-pricing` on the tier says which prices
+   are event-driven, so a caller can compute both."
+  ([resolved] (marginal-unit-rate resolved nil))
+  ([resolved opts]
+  (let [include-dyn? (:include-dynamic-pricing? opts false)
+        exclude-tier? (fn [t]
+                        (or
+                         ;; A recurring charge is priced per interval, not per
+                         ;; unit consumed, so it cannot go into a $/kWh sum
+                         ;; whatever its ledger is measured in.
+                         (:urpx.resolved/interval-duration t)
+                         (and (not include-dyn?) (:urpx.resolved/dynamic-pricing t))))
+        energy     (->> (:urpx.resolved/ledgers resolved)
                         (filter #(and (= "urpx:energy"
                                          (get-in % [:urpx.resolved/measurement-kind :jsonld/id]))
                                       (seq (:urpx.resolved/tiers %)))))
@@ -1153,14 +1175,10 @@
         ;; Pass :profile-alternatives to choose; there is no default worth
         ;; inventing here.
         unselected (filter :urpx.resolved/unselected-alternatives energy)
-        ;; A recurring charge is priced per interval, not per unit consumed, so
-        ;; it cannot go into a $/kWh sum whatever its ledger is measured in.
-        ;; Today no recurring ledger in the corpus is energy-kind, so this
-        ;; changes nothing; it is here so that a filing which does pair the two
-        ;; cannot quietly add a per-month figure to a per-kWh rate.
-        marginal   (->> energy
-                        (map #(first (:urpx.resolved/tiers %)))
-                        (remove :urpx.resolved/interval-duration))
+        ;; Excluded BEFORE taking the first tier, not after. A ledger mixing an
+        ;; event charge with an ordinary price should contribute the ordinary
+        ;; one, where filtering afterwards would drop the whole ledger.
+        marginal   (keep #(first (remove exclude-tier? (:urpx.resolved/tiers %))) energy)
         unvaluable (filter :urpx.resolved/unvaluable marginal)]
     ;; No energy ledger at all is not an answer of zero, it is a malformed
     ;; question. A street lighting schedule prices per lamp per month; its
@@ -1201,7 +1219,23 @@
                            "Inspect :urpx.resolved/unvaluable on the offending tiers.")
                       {:reason :unvaluable-marginal-tier
                        :unvaluable (mapv :urpx.resolved/unvaluable unvaluable)})))
+    ;; Every energy tier excluded is not an answer of zero either. A modifier
+    ;; resolved on its own whose only energy ledger IS the event charge would
+    ;; otherwise report free.
+    (when (empty? marginal)
+      (throw (ex-info (str "Cannot compute a marginal rate: every energy tier was "
+                           "excluded from the sum. "
+                           (if include-dyn?
+                             "All of them are recurring charges, priced per interval rather than per unit."
+                             (str "They are event-driven prices (urpx:hasDynamicPricing), "
+                                  "recurring charges, or both. Pass :include-dynamic-pricing? true "
+                                  "for the during-event upper bound."))
+                           " Inspect :urpx.resolved/dynamic-pricing and "
+                           ":urpx.resolved/interval-duration on the tiers.")
+                      {:reason :all-energy-tiers-excluded
+                       :include-dynamic-pricing? include-dyn?
+                       :energy-ledgers (mapv :urpx.resolved/ledger-id energy)})))
     (reduce (fn [^java.math.BigDecimal acc tier]
               (.add acc ^java.math.BigDecimal (:urpx.resolved/unit-price tier)))
             0M
-            marginal)))
+            marginal))))

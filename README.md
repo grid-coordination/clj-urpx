@@ -17,7 +17,7 @@ The standard's source of truth — ontology, SHACL shapes, JSON-LD context, deci
 - **Parse** URPX JSON-LD rate plan documents into Clojure data structures
 - **Validate & coerce** parsed data against [Malli](https://github.com/metosin/malli) schemas — string leaves become `BigDecimal`, `LocalDate`, `LocalTime`, `LocalDateTime`, `Duration`, `Period`, integer month numbers
 - **Resolve** the per-ledger, per-tier prices that apply at a given instant in a given timezone — TOU period, season, day-of-week, midnight-wrapping brackets, block-tier ladders
-- **Generate** contiguous price-interval schedules suitable for [OpenADR 3](https://www.openadr.org/) events
+- **Generate** contiguous price-interval schedules suitable for [OpenADR 3](https://www.openadr.org/) events, either sampled on a grid or as exact segments whose boundaries come from the tariff
 - **Emit** URPX JSON-LD from coerced Clojure entities (the inverse of parse + coerce) — useful for round-trip validation and programmatic authoring of URPX documents
 - **Author** URPX entities idiomatically in Clojure via `urpx.dsl` — per-entity builders with auto-coercion, validation-on-construct, and local-symbol refs scoped via `dsl-scope`
 
@@ -261,7 +261,13 @@ Matrix-style modifiers (e.g. PG&E vintage-PCIA, one ledger with a price per depa
 
 These prices are **alternatives, not tiers**: exactly one applies to any customer. Pass `:profile-alternatives` to choose one, exactly as on the base plan path, and only the chosen alternative surfaces. Without a selection all of them surface and the ledger carries `:urpx.resolved/unselected-alternatives`; `marginal-unit-rate` then **refuses**, because an aggregate that took one of eighteen mutually-exclusive prices would be reporting an arbitrary number as the marginal rate.
 
-Prices carrying `urpx:hasDynamicPricing` (CPP Event Charges, RTP overlays, other event-driven components — applicable to base PDs and modifier PDs alike per the SHACL Price shape) are surfaced with the DynamicPricing payload attached to the resolved tier under `:urpx.resolved/dynamic-pricing`. Consumers wanting a non-event marginal rate filter on the absence of that key; consumers evaluating event state at billing time read the nested `:urpx/dynamicPricingType`, `:urpx/priceSource`, `:urpx/updateFrequency`, and `:urpx/hasPriceUpdateRule`. The resolver itself does not (yet) gate on event state — that's a caller-side responsibility until URPX standardizes a consumer-facing event-state API.
+Prices carrying `urpx:hasDynamicPricing` (CPP Event Charges, RTP overlays, other event-driven components, applicable to base PDs and modifier PDs alike per the SHACL Price shape) are surfaced with the DynamicPricing payload attached to the resolved tier under `:urpx.resolved/dynamic-pricing`. Consumers evaluating event state at billing time read the nested `:urpx/dynamicPricingType`, `:urpx/priceSource`, `:urpx/updateFrequency`, and `:urpx/hasPriceUpdateRule`.
+
+**`marginal-unit-rate` excludes them by default.** An event charge applies only while its event is called: critical peak events are capped around 50 hours a summer against roughly 2,200 summer hours, so summing one unconditionally answers "what would this cost during an event" while reading as the ordinary rate. The default is the non-event baseline, which is what a price signal means by "the next kWh". Pass `{:include-dynamic-pricing? true}` for the during-event upper bound.
+
+Unlike the mutually-exclusive alternatives above, this has a defensible default rather than an arbitrary pick: no-event-today is the ordinary state.
+
+The resolver does **not** gate on event state, and that is a different and larger gap. A Price gated by a `urpx:ConditionExpression` (SCE PRIME-CPP's non-event credit, its grandfathered-customer credit, the DA-CRS and CCA-CRS vintage prices) still fires unconditionally, because this library does not evaluate those predicates. Excluding event-driven prices does not reach them: on SCE PRIME-CPP it leaves two ungated credits applying and the marginal rate goes negative. That number was already wrong before, mixing an event charge with credits that may not apply; it is now wrong more visibly. The fix is evaluating condition expressions, which URPX has not yet defined a consumer-facing shape for.
 
 ### Derived prices and price summaries
 
@@ -396,7 +402,7 @@ Ask first when sweeping a corpus, so the refusal is not a tax on every caller:
 ;;                                     caller can route rather than skip
 ```
 
-Every refusal `marginal-unit-rate` makes carries a `:reason` in its `ex-data`, so a sweeping consumer can classify instead of catching everything: `:no-energy-ledger`, `:unvaluable-marginal-tier`, and `:unselected-alternatives`.
+Every refusal `marginal-unit-rate` makes carries a `:reason` in its `ex-data`, so a sweeping consumer can classify instead of catching everything: `:no-energy-ledger`, `:unvaluable-marginal-tier`, `:unselected-alternatives`, and `:all-energy-tiers-excluded`.
 
 ### What the resolver needs that SHACL does not require
 
@@ -405,7 +411,7 @@ Two properties are optional in the shapes but load-bearing here, so a document c
 | Property | If omitted |
 |---|---|
 | `urpx:startDate` on a `urpx:Price` | The Price is **dropped silently** when nothing encloses it that carries a date. A Price inside a `urpx:PriceSet` inherits the set's `urpx:startDate`, so the omission is invisible there; a Price on the flat `urpx:hasPrice` list has nothing to inherit from and simply disappears. |
-| `urpx:referencesMetricInput` on a `urpx:Ledger` | The ledger and its tiers still resolve and still appear in `:urpx.resolved/ledgers`, so reading tiers shows no loss. But `marginal-unit-rate` decides which ledgers are energy from the referenced `MetricInput`'s `urpx:measurementKind`, so an unreferenced ledger contributes nothing and the aggregate comes back **quietly short**, or `0M` if no ledger qualifies. |
+| `urpx:referencesMetricInput` on a `urpx:Ledger` | The ledger and its tiers still resolve and still appear in `:urpx.resolved/ledgers`, so reading tiers shows no loss. But `marginal-unit-rate` decides which ledgers are energy from the referenced `MetricInput`'s `urpx:measurementKind`, so an unreferenced ledger contributes nothing and the aggregate comes back **quietly short**. If no ledger qualifies at all it refuses with `:no-energy-ledger` rather than returning a number. |
 
 The second is the more dangerous of the two, because `0M` is a legal price rather than an error. If a per-kWh ledger is missing from a marginal rate, check that its `MetricInput` exists and that its `urpx:measurementKind` is `urpx:energy`.
 

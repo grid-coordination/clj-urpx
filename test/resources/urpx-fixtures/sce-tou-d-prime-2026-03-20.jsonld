@@ -1,0 +1,1485 @@
+{
+  "@context": {
+    "urpx": "https://urpx.org/ns/ontology/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "org": "https://rate-plans.grid-coordination.energy/organizations/",
+    "sce": "https://rate-plans.grid-coordination.energy/sce/",
+    "urpx:unitPrice": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:effectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:effectiveDateTime": {
+      "@type": "xsd:dateTime"
+    },
+    "urpx:baseQuantity": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:startTime": {
+      "@type": "xsd:time"
+    },
+    "urpx:endTime": {
+      "@type": "xsd:time"
+    },
+    "urpx:initialEffectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:startDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:url": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:month": {
+      "@type": "xsd:gMonth"
+    },
+    "urpx:intervalDuration": {
+      "@type": "xsd:duration"
+    },
+    "urpx:touTierNumber": {
+      "@type": "xsd:integer"
+    },
+    "urpx:touPeriodNumber": {
+      "@type": "xsd:integer"
+    },
+    "urpx:pageStart": {
+      "@type": "xsd:integer"
+    },
+    "urpx:pageEnd": {
+      "@type": "xsd:integer"
+    },
+    "urpx:accessURL": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:dateRetrieved": {
+      "@type": "xsd:date"
+    },
+    "urpx:targetURPXVersion": {
+      "@type": "xsd:anyURI"
+    },
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "urpx:evaluatedOn": {
+      "@type": "xsd:dateTime"
+    }
+  },
+  "@type": "urpx:URPXPackage",
+  "@id": "sce:doc-tou-d-prime-2026-03-20",
+  "urpx:targetURPXVersion": "https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl",
+  "urpx:hasRatePlan": {
+    "@type": "urpx:RatePlan",
+    "@id": "sce:tou-d-prime",
+    "urpx:name": "Schedule TOU-D Time-Of-Use Domestic — Option PRIME",
+    "urpx:ratePlanUniqueIdentifier": "TOU-D-PRIME",
+    "urpx:initialEffectiveDate": "2020-09-01",
+    "urpx:timezoneIdentifier": "America/Los_Angeles",
+    "urpx:hasRatePlanVersion": {
+      "@type": "urpx:RatePlanVersion",
+      "@id": "sce:tou-d-prime-2026-03-20",
+      "urpx:description": "Voluntary residential time-of-use schedule for customers with qualifying load-modifying electric technologies: electric vehicles (EVs/PHEVs), behind-the-meter (BTM) energy storage, or electric heat pumps for water or space heating. Mandatory for new solar customers under the Net Billing Tariff (NBT) since 2023. Summer on-peak 4:00 p.m.-9:00 p.m. weekdays — same windows as TOU-D-4-9PM, but with no Baseline Credit and a different rate-component structure tuned for higher-usage customers. Customers with separately-metered EV load receive an EV Meter Credit of $(0.446)/meter/day; customers using a submeter for EV load receive an EV Submeter Credit of $(0.152)/meter/day. Replaces the prior Basic Charge + Minimum Charge structure with an income-graduated Base Services Charge (BSC) of $0.794/meter/day per Decision 24-05-028, with a Deed-Restricted discount of $(0.332)/meter/day. CARE/FERA discounts (32.5% / 18%) and the related BSC surcharge exemption + BSC discount adjustments are documented in Special Conditions and modeled separately as RatePlanModifiers at ca/iou/sce/care/ and ca/iou/sce/fera/; the Deed-Restricted discount referenced above is modeled at ca/iou/sce/deed-restricted/. The 100% Medical Line Item Discount is documented in Special Conditions but its RatePlanModifier is not yet modeled (deferred). Climate Credit ($-36.00/household, semi-annually) is applied per Special Conditions.",
+      "urpx:effectiveDateTime": "2026-03-20T00:00:00",
+      "urpx:changeReason": {
+        "@id": "urpx:rateCase"
+      },
+      "urpx:priceCurrency": "USD",
+      "urpx:commodity": {
+        "@id": "urpx:electricity"
+      },
+      "urpx:serviceRole": {
+        "@id": "urpx:bundledServiceRole"
+      },
+      "urpx:customerChoice": {
+        "@id": "urpx:voluntaryChoice"
+      },
+      "urpx:isDefault": false,
+      "urpx:hasDataSourceReference": {
+        "@type": "urpx:DataSourceReference",
+        "urpx:fileName": "ELECTRIC_SCHEDULES_TOU-D.pdf",
+        "urpx:mediaType": {
+          "@id": "urpx:applicationPdf"
+        },
+        "urpx:accessURL": "https://edisonintl.sharepoint.com/teams/Public/TM2/Shared%20Documents/Public/Regulatory/Tariff-SCE%20Tariff%20Books/Electric/Schedules/Residential%20Rates/ELECTRIC_SCHEDULES_TOU-D.pdf",
+        "urpx:dateRetrieved": "2026-05-04",
+        "urpx:dataSourceType": {
+          "@id": "urpx:utilityWebsiteSource"
+        },
+        "urpx:pageStart": 6,
+        "urpx:pageEnd": 7,
+        "urpx:leafStart": "90941-E",
+        "urpx:leafEnd": "90942-E"
+      },
+      "urpx:hasEligibilityRule": [
+        {
+          "@type": "urpx:EligibilityRule",
+          "@id": "sce:tou-d-prime-2026-03-20-er-residential",
+          "urpx:name": "Eligibility for Schedule TOU-D Option PRIME — residential customer",
+          "urpx:description": "Available to customers eligible for service under Schedule D (Domestic): residential customers individually metered by SCE in single-family accommodations or individually-metered single-family dwellings in a Multifamily Accommodation. Customers must additionally meet at least one of the qualifying-technology conditions below (or be enrolled in NBT for new solar service). 12-month minimum stay applies for elective rate changes; customers may transfer to TOU-D-4-9PM, TOU-D-5-8PM, Schedule D, or other applicable residential schedules subject to that rule.",
+          "urpx:hasConditionExpression": {
+            "@type": "urpx:ConditionExpression",
+            "@id": "sce:tou-d-prime-2026-03-20-cx-residential",
+            "urpx:rootNode": {
+              "@type": "urpx:ComparisonNode",
+              "@id": "sce:tou-d-prime-2026-03-20-cn-residential",
+              "urpx:operator": {
+                "@id": "urpx:equalsOperator"
+              },
+              "urpx:leftOperand": {
+                "@type": "urpx:ObjectOperandNode",
+                "@id": "sce:tou-d-prime-2026-03-20-cn-residential-left-operand",
+                "urpx:conditionProperty": {
+                  "@id": "urpx:hasCustomerKind"
+                }
+              },
+              "urpx:rightOperand": {
+                "@type": "urpx:ObjectOperandNode",
+                "@id": "sce:tou-d-prime-2026-03-20-cn-residential-right-operand",
+                "urpx:referencesValue": {
+                  "@id": "urpx:residentialKind"
+                }
+              }
+            }
+          }
+        },
+        {
+          "@type": "urpx:EligibilityRule",
+          "@id": "sce:tou-d-prime-2026-03-20-er-qualifying-technology",
+          "urpx:name": "Eligibility for Schedule TOU-D Option PRIME — qualifying electric technology or NBT enrollment",
+          "urpx:description": "Customers must own or lease at least one of: a battery-electric vehicle (BEV) or plug-in hybrid (PHEV) — both map to urpx:evChargingDER since URPX's DERTypeValue enum does not distinguish them; behind-the-meter energy storage (subject to interconnection requirements); or an electric heat pump as primary water-heating or climate-control source. New solar customers must take service on TOU-D-PRIME under the Net Billing Tariff (NBT) effective 2023; the NBT condition is included as a fourth OR-leaf and does not require any of the qualifying technologies above. Existing customers on closed schedules TOU-D-A, TOU-D-B, or TOU-D-T may also enroll without confirming qualifying technology (modeling deferred — first-cut captures the four primary OR-paths).",
+          "urpx:hasConditionExpression": {
+            "@type": "urpx:ConditionExpression",
+            "@id": "sce:tou-d-prime-2026-03-20-cx-qualifying-technology",
+            "urpx:rootNode": {
+              "@type": "urpx:BooleanOperationNode",
+              "@id": "sce:tou-d-prime-2026-03-20-bn-qualifying-technology-or",
+              "urpx:operator": {
+                "@id": "urpx:orOperator"
+              },
+              "urpx:operandNodes": [
+                {
+                  "@type": "urpx:ComparisonNode",
+                  "@id": "sce:tou-d-prime-2026-03-20-cn-storage",
+                  "urpx:operator": {
+                    "@id": "urpx:equalsOperator"
+                  },
+                  "urpx:leftOperand": {
+                    "@type": "urpx:ObjectOperandNode",
+                    "@id": "sce:tou-d-prime-2026-03-20-cn-storage-left-operand",
+                    "urpx:conditionProperty": {
+                      "@id": "urpx:derType"
+                    }
+                  },
+                  "urpx:rightOperand": {
+                    "@type": "urpx:ObjectOperandNode",
+                    "@id": "sce:tou-d-prime-2026-03-20-cn-storage-right-operand",
+                    "urpx:referencesValue": {
+                      "@id": "urpx:storageDER"
+                    }
+                  }
+                },
+                {
+                  "@type": "urpx:ComparisonNode",
+                  "@id": "sce:tou-d-prime-2026-03-20-cn-ev-charging",
+                  "urpx:operator": {
+                    "@id": "urpx:equalsOperator"
+                  },
+                  "urpx:leftOperand": {
+                    "@type": "urpx:ObjectOperandNode",
+                    "@id": "sce:tou-d-prime-2026-03-20-cn-ev-charging-left-operand",
+                    "urpx:conditionProperty": {
+                      "@id": "urpx:derType"
+                    }
+                  },
+                  "urpx:rightOperand": {
+                    "@type": "urpx:ObjectOperandNode",
+                    "@id": "sce:tou-d-prime-2026-03-20-cn-ev-charging-right-operand",
+                    "urpx:referencesValue": {
+                      "@id": "urpx:evChargingDER"
+                    }
+                  }
+                },
+                {
+                  "@type": "urpx:ComparisonNode",
+                  "@id": "sce:tou-d-prime-2026-03-20-cn-heat-pump",
+                  "urpx:operator": {
+                    "@id": "urpx:equalsOperator"
+                  },
+                  "urpx:leftOperand": {
+                    "@type": "urpx:ObjectOperandNode",
+                    "@id": "sce:tou-d-prime-2026-03-20-cn-heat-pump-left-operand",
+                    "urpx:conditionProperty": {
+                      "@id": "urpx:hasHVAC"
+                    }
+                  },
+                  "urpx:rightOperand": {
+                    "@type": "urpx:ObjectOperandNode",
+                    "@id": "sce:tou-d-prime-2026-03-20-cn-heat-pump-right-operand",
+                    "urpx:referencesValue": {
+                      "@id": "urpx:airSourceHeatPump"
+                    }
+                  }
+                },
+                {
+                  "@type": "urpx:ComparisonNode",
+                  "@id": "sce:tou-d-prime-2026-03-20-cn-nbt",
+                  "urpx:operator": {
+                    "@id": "urpx:equalsOperator"
+                  },
+                  "urpx:leftOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "@id": "sce:tou-d-prime-2026-03-20-cn-nbt-left-operand",
+                    "urpx:customConditionProperty": "Program Enrollment"
+                  },
+                  "urpx:rightOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "@id": "sce:tou-d-prime-2026-03-20-cn-nbt-right-operand",
+                    "urpx:stringValue": "Net Billing Tariff (NBT)"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "urpx:hasPlanElements": {
+        "@type": "urpx:PlanElements",
+        "@id": "sce:tou-d-prime-2026-03-20-plan-elements",
+        "urpx:hasSeasons": [
+          {
+            "@type": "urpx:Season",
+            "@id": "sce:tou-d-prime-2026-03-20-season-summer",
+            "urpx:seasonName": "Summer",
+            "urpx:month": [
+              "--06",
+              "--07",
+              "--08",
+              "--09"
+            ]
+          },
+          {
+            "@type": "urpx:Season",
+            "@id": "sce:tou-d-prime-2026-03-20-season-winter",
+            "urpx:seasonName": "Winter",
+            "urpx:month": [
+              "--10",
+              "--11",
+              "--12",
+              "--01",
+              "--02",
+              "--03",
+              "--04",
+              "--05"
+            ]
+          }
+        ],
+        "urpx:hasMetricInput": [
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "sce:tou-d-prime-2026-03-20-mi-energy",
+            "urpx:name": "kWh Energy Consumption Prices",
+            "urpx:metricInputType": {
+              "@id": "urpx:measuredMetricInput"
+            },
+            "urpx:hasMetricSpecification": {
+              "@type": "urpx:MetricSpecification",
+              "@id": "sce:ms-energy",
+              "urpx:measurementKind": {
+                "@id": "urpx:energy"
+              },
+              "urpx:unitOfMeasure": {
+                "@id": "urpx:kWh"
+              }
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "sce:tou-d-prime-2026-03-20-mi-meter-count",
+            "urpx:name": "Per Meter Prices",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            },
+            "urpx:profileMetricProperty": {
+              "@id": "urpx:numberOfMeters"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "sce:tou-d-prime-2026-03-20-mi-household-count",
+            "urpx:name": "Per Household Prices",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            },
+            "urpx:profileMetricProperty": {
+              "@id": "urpx:householdCount"
+            }
+          }
+        ],
+        "urpx:hasBillingModel": {
+          "@type": "urpx:BillingModel",
+          "@id": "sce:tou-d-prime-2026-03-20-plan-elements-billing-model",
+          "urpx:hasTOUSchedule": {
+            "@type": "urpx:TOUSchedule",
+            "@id": "sce:tou-d-prime-2026-03-20-prime",
+            "urpx:referencesMetricInput": {
+              "@id": "sce:tou-d-prime-2026-03-20-mi-energy"
+            },
+            "urpx:hasTOUTier": [
+              {
+                "@type": "urpx:TOUTier",
+                "@id": "sce:tou-d-prime-2026-03-20-tier-on-peak",
+                "urpx:tierSourceName": "On-Peak",
+                "urpx:touTierStandardName": {
+                  "@id": "urpx:peakTier"
+                },
+                "urpx:touTierNumber": 1,
+                "urpx:hasTOUPeriod": [
+                  {
+                    "@type": "urpx:TOUPeriod",
+                    "@id": "sce:tou-d-prime-2026-03-20-period-summer-on-peak",
+                    "urpx:name": "Summer On-Peak Period (4 p.m.-9 p.m. weekdays excluding holidays)",
+                    "urpx:touPeriodNumber": 1,
+                    "urpx:hasTimeBracket": [
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "sce:tou-d-prime-2026-03-20-time-bracket-summer-on-peak",
+                        "urpx:startTime": "16:00:00",
+                        "urpx:endTime": "21:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "sce:tou-d-prime-2026-03-20-season-summer"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:weekdayDays"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "@type": "urpx:TOUTier",
+                "@id": "sce:tou-d-prime-2026-03-20-tier-mid-peak",
+                "urpx:tierSourceName": "Mid-Peak",
+                "urpx:touTierStandardName": {
+                  "@id": "urpx:midPeakTier"
+                },
+                "urpx:touTierNumber": 2,
+                "urpx:hasTOUPeriod": [
+                  {
+                    "@type": "urpx:TOUPeriod",
+                    "@id": "sce:tou-d-prime-2026-03-20-period-summer-mid-peak",
+                    "urpx:name": "Summer Mid-Peak Period (4 p.m.-9 p.m. weekends and holidays)",
+                    "urpx:touPeriodNumber": 2,
+                    "urpx:hasTimeBracket": [
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "sce:tou-d-prime-2026-03-20-time-bracket-summer-mid-peak",
+                        "urpx:startTime": "16:00:00",
+                        "urpx:endTime": "21:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "sce:tou-d-prime-2026-03-20-season-summer"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:weekendDays"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "@type": "urpx:TOUPeriod",
+                    "@id": "sce:tou-d-prime-2026-03-20-period-winter-mid-peak",
+                    "urpx:name": "Winter Mid-Peak Period (4 p.m.-9 p.m. all days)",
+                    "urpx:touPeriodNumber": 4,
+                    "urpx:hasTimeBracket": [
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "sce:tou-d-prime-2026-03-20-time-bracket-winter-mid-peak",
+                        "urpx:startTime": "16:00:00",
+                        "urpx:endTime": "21:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "sce:tou-d-prime-2026-03-20-season-winter"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:allDays"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "@type": "urpx:TOUTier",
+                "@id": "sce:tou-d-prime-2026-03-20-tier-off-peak",
+                "urpx:tierSourceName": "Off-Peak",
+                "urpx:touTierStandardName": {
+                  "@id": "urpx:offPeakTier"
+                },
+                "urpx:touTierNumber": 3,
+                "urpx:hasTOUPeriod": [
+                  {
+                    "@type": "urpx:TOUPeriod",
+                    "@id": "sce:tou-d-prime-2026-03-20-period-summer-off-peak",
+                    "urpx:name": "Summer Off-Peak Period (all hours outside 4 p.m.-9 p.m., all days)",
+                    "urpx:touPeriodNumber": 3,
+                    "urpx:hasTimeBracket": [
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "sce:tou-d-prime-2026-03-20-time-bracket-summer-off-peak-am",
+                        "urpx:startTime": "00:00:00",
+                        "urpx:endTime": "16:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "sce:tou-d-prime-2026-03-20-season-summer"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:allDays"
+                        }
+                      },
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "sce:tou-d-prime-2026-03-20-time-bracket-summer-off-peak-pm",
+                        "urpx:startTime": "21:00:00",
+                        "urpx:endTime": "00:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "sce:tou-d-prime-2026-03-20-season-summer"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:allDays"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "@type": "urpx:TOUPeriod",
+                    "@id": "sce:tou-d-prime-2026-03-20-period-winter-off-peak",
+                    "urpx:name": "Winter Off-Peak Period (12 a.m.-8 a.m. and 9 p.m.-12 a.m. all days)",
+                    "urpx:touPeriodNumber": 5,
+                    "urpx:hasTimeBracket": [
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "sce:tou-d-prime-2026-03-20-time-bracket-winter-off-peak-am",
+                        "urpx:startTime": "00:00:00",
+                        "urpx:endTime": "08:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "sce:tou-d-prime-2026-03-20-season-winter"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:allDays"
+                        }
+                      },
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "sce:tou-d-prime-2026-03-20-time-bracket-winter-off-peak-pm",
+                        "urpx:startTime": "21:00:00",
+                        "urpx:endTime": "00:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "sce:tou-d-prime-2026-03-20-season-winter"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:allDays"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "@type": "urpx:TOUTier",
+                "@id": "sce:tou-d-prime-2026-03-20-tier-super-off-peak",
+                "urpx:tierSourceName": "Super-Off-Peak",
+                "urpx:touTierStandardName": {
+                  "@id": "urpx:superOffPeakTier"
+                },
+                "urpx:touTierNumber": 4,
+                "urpx:hasTOUPeriod": [
+                  {
+                    "@type": "urpx:TOUPeriod",
+                    "@id": "sce:tou-d-prime-2026-03-20-period-winter-super-off-peak",
+                    "urpx:name": "Winter Super-Off-Peak Period (8 a.m.-4 p.m. all days)",
+                    "urpx:touPeriodNumber": 6,
+                    "urpx:hasTimeBracket": [
+                      {
+                        "@type": "urpx:TimeBracket",
+                        "@id": "sce:tou-d-prime-2026-03-20-time-bracket-winter-super-off-peak",
+                        "urpx:startTime": "08:00:00",
+                        "urpx:endTime": "16:00:00",
+                        "urpx:appliesInSeason": {
+                          "@id": "sce:tou-d-prime-2026-03-20-season-winter"
+                        },
+                        "urpx:dayType": {
+                          "@id": "urpx:allDays"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "urpx:hasLedger": [
+            {
+              "@type": "urpx:Ledger",
+              "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-supply",
+              "urpx:name": "Energy Supply Prices (Generation)",
+              "urpx:ledgerType": {
+                "@id": "urpx:supplyLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "sce:tou-d-prime-2026-03-20-mi-energy"
+              }
+            },
+            {
+              "@type": "urpx:Ledger",
+              "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-delivery",
+              "urpx:name": "Energy Delivery Prices",
+              "urpx:ledgerType": {
+                "@id": "urpx:deliveryLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "sce:tou-d-prime-2026-03-20-mi-energy"
+              }
+            },
+            {
+              "@type": "urpx:Ledger",
+              "@id": "sce:tou-d-prime-2026-03-20-ledger-adjustments",
+              "urpx:name": "Bundled Energy Adjustments",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "sce:tou-d-prime-2026-03-20-mi-energy"
+              }
+            },
+            {
+              "@type": "urpx:Ledger",
+              "@id": "sce:tou-d-prime-2026-03-20-ledger-base-services-charge",
+              "urpx:name": "Base Services Charge",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "sce:tou-d-prime-2026-03-20-mi-meter-count"
+              }
+            },
+            {
+              "@type": "urpx:Ledger",
+              "@id": "sce:tou-d-prime-2026-03-20-ledger-climate-credit",
+              "urpx:name": "California Climate Credit",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "sce:tou-d-prime-2026-03-20-mi-household-count"
+              }
+            }
+          ],
+          "urpx:hasPriceDefinition": [
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-gen-summer-on-peak",
+              "urpx:name": "Generation Summer On-Peak (UG)",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:supplyPortion"
+              },
+              "urpx:touPeriodNumber": 1,
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-supply"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-gen-summer-mid-peak",
+              "urpx:name": "Generation Summer Mid-Peak (UG)",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:supplyPortion"
+              },
+              "urpx:touPeriodNumber": 2,
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-supply"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-gen-summer-off-peak",
+              "urpx:name": "Generation Summer Off-Peak (UG)",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:supplyPortion"
+              },
+              "urpx:touPeriodNumber": 3,
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-supply"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-gen-winter-mid-peak",
+              "urpx:name": "Generation Winter Mid-Peak (UG)",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:supplyPortion"
+              },
+              "urpx:touPeriodNumber": 4,
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-supply"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-gen-winter-off-peak",
+              "urpx:name": "Generation Winter Off-Peak (UG)",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:supplyPortion"
+              },
+              "urpx:touPeriodNumber": 5,
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-supply"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-gen-winter-super-off-peak",
+              "urpx:name": "Generation Winter Super-Off-Peak (UG)",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:supplyPortion"
+              },
+              "urpx:touPeriodNumber": 6,
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-supply"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-gen-dwrec",
+              "urpx:name": "Generation — DWR Energy Credit (DWREC)",
+              "urpx:chargeType": {
+                "@id": "urpx:adjustmentPowerCost"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:supplyPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-supply"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-dist-summer-on-peak",
+              "urpx:name": "Distribution Summer On-Peak",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:deliveryPortion"
+              },
+              "urpx:touPeriodNumber": 1,
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-delivery"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-dist-summer-mid-peak",
+              "urpx:name": "Distribution Summer Mid-Peak",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:deliveryPortion"
+              },
+              "urpx:touPeriodNumber": 2,
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-delivery"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-dist-summer-off-peak",
+              "urpx:name": "Distribution Summer Off-Peak",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:deliveryPortion"
+              },
+              "urpx:touPeriodNumber": 3,
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-delivery"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-dist-winter-mid-peak",
+              "urpx:name": "Distribution Winter Mid-Peak",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:deliveryPortion"
+              },
+              "urpx:touPeriodNumber": 4,
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-delivery"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-dist-winter-off-peak",
+              "urpx:name": "Distribution Winter Off-Peak",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:deliveryPortion"
+              },
+              "urpx:touPeriodNumber": 5,
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-delivery"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-dist-winter-super-off-peak",
+              "urpx:name": "Distribution Winter Super-Off-Peak",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:auxiliaryCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:deliveryPortion"
+              },
+              "urpx:touPeriodNumber": 6,
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-delivery"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-transmission",
+              "urpx:name": "Transmission (Trans, includes TOTCA components)",
+              "urpx:chargeType": {
+                "@id": "urpx:transmission"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:deliveryPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-delivery"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-nsgc",
+              "urpx:name": "New System Generation Charge (NSGC)",
+              "urpx:chargeType": {
+                "@id": "urpx:usageCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:deliveryPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-delivery"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-ndc",
+              "urpx:name": "Nuclear Decommissioning Charge (NDC)",
+              "urpx:chargeType": {
+                "@id": "urpx:environmentalFunding"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:environmental"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:deliveryPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-delivery"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-pppc",
+              "urpx:name": "Public Purpose Programs Charge (PPPC)",
+              "urpx:chargeType": {
+                "@id": "urpx:publicBenefits"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:regulatory"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:deliveryPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-delivery"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-cia",
+              "urpx:name": "Conservation Incentive Adjustment (CIA)",
+              "urpx:chargeType": {
+                "@id": "urpx:adjustmentPowerCost"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:deliveryPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-delivery"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-wfc",
+              "urpx:name": "Wildfire Fund Non-Bypassable Charge (WFC)",
+              "urpx:chargeType": {
+                "@id": "urpx:environmentalFunding"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:environmental"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:deliveryPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-delivery"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-pucrf",
+              "urpx:name": "PUC Reimbursement Fee (PUCRF)",
+              "urpx:chargeType": {
+                "@id": "urpx:recoverySurcharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:regulatory"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:deliveryPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-delivery"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-dwra",
+              "urpx:name": "DWR Refund (DWRA) — refund relating to DWR power purchases during the 2000-2001 energy crisis",
+              "urpx:chargeType": {
+                "@id": "urpx:adjustmentPowerCost"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:deliveryPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-energy-delivery"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-fixed-recovery-charge",
+              "urpx:name": "Fixed Recovery Charge",
+              "urpx:chargeType": {
+                "@id": "urpx:recoverySurcharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-adjustments"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-mcam",
+              "urpx:name": "Modified Cost Allocation Mechanism Charge (MCAM)",
+              "urpx:chargeType": {
+                "@id": "urpx:adjustmentPowerCost"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-adjustments"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-base-services-charge",
+              "urpx:name": "Base Services Charge (BSC)",
+              "urpx:chargeType": {
+                "@id": "urpx:minimumBill"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "sce:tou-d-prime-2026-03-20-pd-base-services-charge-calculation-method",
+                "urpx:intervalDuration": "P1D"
+              },
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-base-services-charge"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:pd-ev-meter-credit-2026-03-20",
+              "urpx:name": "EV Meter Credit (Separately Metered EV Option)",
+              "urpx:chargeType": {
+                "@id": "urpx:creditMisc"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "sce:pd-ev-meter-credit-2026-03-20-calculation-method",
+                "urpx:intervalDuration": "P1D"
+              },
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-base-services-charge"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:pd-ev-submeter-credit-2026-03-20",
+              "urpx:name": "EV Submeter Credit",
+              "urpx:chargeType": {
+                "@id": "urpx:creditMisc"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "sce:pd-ev-submeter-credit-2026-03-20-calculation-method",
+                "urpx:intervalDuration": "P1D"
+              },
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-base-services-charge"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:tou-d-prime-2026-03-20-pd-climate-credit",
+              "urpx:name": "California Climate Credit",
+              "urpx:chargeType": {
+                "@id": "urpx:creditEnergy"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:environmental"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasApplicabilityRule": {
+                "@type": "urpx:ApplicabilityRule",
+                "urpx:month": [
+                  "--04",
+                  "--10"
+                ]
+              },
+              "urpx:referencesLedger": {
+                "@id": "sce:tou-d-prime-2026-03-20-ledger-climate-credit"
+              }
+            }
+          ]
+        }
+      },
+      "urpx:hasPrices": {
+        "@type": "urpx:Prices",
+        "@id": "sce:tou-d-prime-2026-03-20-prices",
+        "urpx:hasPrice": [
+          {
+            "@type": "urpx:Price",
+            "@id": "sce:tou-d-prime-2026-03-20-price-base-services-charge",
+            "urpx:referencesPriceDefinition": {
+              "@id": "sce:tou-d-prime-2026-03-20-pd-base-services-charge"
+            },
+            "urpx:startDate": "2026-01-01",
+            "urpx:name": "Base Services Charge",
+            "urpx:unitPrice": "0.794"
+          },
+          {
+            "@type": "urpx:Price",
+            "@id": "sce:price-ev-meter-credit-2026-03-20",
+            "urpx:referencesPriceDefinition": {
+              "@id": "sce:pd-ev-meter-credit-2026-03-20"
+            },
+            "urpx:startDate": "2026-01-01",
+            "urpx:name": "EV Meter Credit (Separately Metered EV Option)",
+            "urpx:unitPrice": "-0.451"
+          },
+          {
+            "@type": "urpx:Price",
+            "@id": "sce:price-ev-submeter-credit-2026-03-20",
+            "urpx:referencesPriceDefinition": {
+              "@id": "sce:pd-ev-submeter-credit-2026-03-20"
+            },
+            "urpx:startDate": "2026-01-01",
+            "urpx:name": "EV Submeter Credit",
+            "urpx:unitPrice": "-0.152"
+          },
+          {
+            "@type": "urpx:Price",
+            "@id": "sce:tou-d-prime-2026-03-20-price-climate-credit",
+            "urpx:referencesPriceDefinition": {
+              "@id": "sce:tou-d-prime-2026-03-20-pd-climate-credit"
+            },
+            "urpx:startDate": "2026-01-01",
+            "urpx:name": "California Climate Credit",
+            "urpx:unitPrice": "-36.00"
+          }
+        ],
+        "urpx:hasPriceSet": [
+          {
+            "@type": "urpx:PriceSet",
+            "@id": "sce:tou-d-prime-2026-03-20-ps-generation-charges",
+            "urpx:startDate": "2026-01-01",
+            "urpx:hasPrice": [
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-gen-summer-on-peak",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-gen-summer-on-peak"
+                },
+                "urpx:name": "Generation Summer On-Peak (UG)",
+                "urpx:unitPrice": "0.29667"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-gen-summer-mid-peak",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-gen-summer-mid-peak"
+                },
+                "urpx:name": "Generation Summer Mid-Peak (UG)",
+                "urpx:unitPrice": "0.10558"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-gen-summer-off-peak",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-gen-summer-off-peak"
+                },
+                "urpx:name": "Generation Summer Off-Peak (UG)",
+                "urpx:unitPrice": "0.07049"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-gen-winter-mid-peak",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-gen-winter-mid-peak"
+                },
+                "urpx:name": "Generation Winter Mid-Peak (UG)",
+                "urpx:unitPrice": "0.26489"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-gen-winter-off-peak",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-gen-winter-off-peak"
+                },
+                "urpx:name": "Generation Winter Off-Peak (UG)",
+                "urpx:unitPrice": "0.05958"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-gen-winter-super-off-peak",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-gen-winter-super-off-peak"
+                },
+                "urpx:name": "Generation Winter Super-Off-Peak (UG)",
+                "urpx:unitPrice": "0.05958"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-gen-dwrec",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-gen-dwrec"
+                },
+                "urpx:name": "Generation — DWR Energy Credit (DWREC)",
+                "urpx:unitPrice": "0.00000"
+              }
+            ]
+          },
+          {
+            "@type": "urpx:PriceSet",
+            "@id": "sce:tou-d-prime-2026-03-20-ps-distribution-charges",
+            "urpx:startDate": "2026-01-01",
+            "urpx:hasPrice": [
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-dist-summer-on-peak",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-dist-summer-on-peak"
+                },
+                "urpx:name": "Distribution Summer On-Peak",
+                "urpx:unitPrice": "0.24922"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-dist-summer-mid-peak",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-dist-summer-mid-peak"
+                },
+                "urpx:name": "Distribution Summer Mid-Peak",
+                "urpx:unitPrice": "0.24922"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-dist-summer-off-peak",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-dist-summer-off-peak"
+                },
+                "urpx:name": "Distribution Summer Off-Peak",
+                "urpx:unitPrice": "0.15101"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-dist-winter-mid-peak",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-dist-winter-mid-peak"
+                },
+                "urpx:name": "Distribution Winter Mid-Peak",
+                "urpx:unitPrice": "0.25455"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-dist-winter-off-peak",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-dist-winter-off-peak"
+                },
+                "urpx:name": "Distribution Winter Off-Peak",
+                "urpx:unitPrice": "0.14149"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-dist-winter-super-off-peak",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-dist-winter-super-off-peak"
+                },
+                "urpx:name": "Distribution Winter Super-Off-Peak",
+                "urpx:unitPrice": "0.14149"
+              }
+            ]
+          },
+          {
+            "@type": "urpx:PriceSet",
+            "@id": "sce:tou-d-prime-2026-03-20-ps-delivery-surcharges",
+            "urpx:startDate": "2026-01-01",
+            "urpx:hasPrice": [
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-transmission",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-transmission"
+                },
+                "urpx:name": "Transmission",
+                "urpx:unitPrice": "0.02586"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-nsgc",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-nsgc"
+                },
+                "urpx:name": "New System Generation Charge",
+                "urpx:unitPrice": "0.00829"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-ndc",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-ndc"
+                },
+                "urpx:name": "Nuclear Decommissioning Charge",
+                "urpx:unitPrice": "0.00003"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-pppc",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-pppc"
+                },
+                "urpx:name": "Public Purpose Programs Charge",
+                "urpx:unitPrice": "0.00527"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-cia",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-cia"
+                },
+                "urpx:name": "Conservation Incentive Adjustment",
+                "urpx:unitPrice": "0.00000"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-wfc",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-wfc"
+                },
+                "urpx:name": "Wildfire Fund Non-Bypassable Charge",
+                "urpx:unitPrice": "0.00591"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-dwra",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-dwra"
+                },
+                "urpx:name": "DWR Refund (DWRA)",
+                "urpx:unitPrice": "0.00000"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-pucrf",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-pucrf"
+                },
+                "urpx:name": "PUC Reimbursement Fee",
+                "urpx:unitPrice": "0.00100"
+              }
+            ],
+            "urpx:hasPriceSummary": [
+              {
+                "@type": "urpx:PriceSummary",
+                "@id": "sce:tou-d-prime-2026-03-20-summary-discountable",
+                "urpx:name": "Discountable subtotal for TOU-D-PRIME. The 24 bill components the CARE and FERA percentage discounts both apply to. Schedule D-CARE Sheet 1 applies the discount before the PUCRF, user fees, taxes and late payment charges, so the PUCRF is excluded, and the California Climate Credit is excluded because Special Condition 12 applies it after those taxes. Both programs discount the same components and differ only in rate, so one subtotal serves both.",
+                "urpx:includesPrice": [
+                  {
+                    "@id": "sce:price-ev-meter-credit-2026-03-20"
+                  },
+                  {
+                    "@id": "sce:price-ev-submeter-credit-2026-03-20"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-gen-summer-on-peak"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-gen-summer-mid-peak"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-gen-summer-off-peak"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-gen-winter-mid-peak"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-gen-winter-off-peak"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-gen-winter-super-off-peak"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-gen-dwrec"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-dist-summer-on-peak"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-dist-summer-mid-peak"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-dist-summer-off-peak"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-dist-winter-mid-peak"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-dist-winter-off-peak"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-dist-winter-super-off-peak"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-transmission"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-nsgc"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-ndc"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-pppc"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-cia"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-wfc"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-dwra"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-fixed-recovery-charge"
+                  },
+                  {
+                    "@id": "sce:tou-d-prime-2026-03-20-price-mcam"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "@type": "urpx:PriceSet",
+            "@id": "sce:tou-d-prime-2026-03-20-ps-bundled-adjustments",
+            "urpx:startDate": "2026-01-01",
+            "urpx:hasPrice": [
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-fixed-recovery-charge",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-fixed-recovery-charge"
+                },
+                "urpx:name": "Fixed Recovery Charge",
+                "urpx:unitPrice": "0.00619"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "sce:tou-d-prime-2026-03-20-price-mcam",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "sce:tou-d-prime-2026-03-20-pd-mcam"
+                },
+                "urpx:name": "Modified Cost Allocation Mechanism Charge",
+                "urpx:unitPrice": "0.00223"
+              }
+            ]
+          }
+        ]
+      },
+      "urpx:offeredBy": {
+        "@type": "urpx:Organization",
+        "@id": "org:utility-sce",
+        "urpx:legalName": "Southern California Edison Company",
+        "urpx:organizationType": {
+          "@id": "urpx:utilityOrganization"
+        },
+        "urpx:hasIdentity": {
+          "@id": "org:utility-sce-identity",
+          "@type": "urpx:OrganizationIdentity",
+          "urpx:hasName": {
+            "@id": "org:utility-sce-name",
+            "@type": "urpx:OrganizationName",
+            "urpx:name": "Southern California Edison Company"
+          },
+          "urpx:hasIdentifier": {
+            "@id": "org:utility-sce-eia",
+            "@type": "urpx:OrganizationIdentifier",
+            "urpx:scheme": {
+              "@id": "urpx:eiaScheme"
+            },
+            "skos:notation": "17609"
+          }
+        }
+      },
+      "urpx:forRatePlan": {
+        "@id": "sce:tou-d-prime"
+      },
+      "urpx:hasCoverageClaim": {
+        "@id": "sce:cc-tou-d-prime-2026-03-20",
+        "@type": "urpx:CoverageClaim",
+        "urpx:completenessResult": {
+          "@id": "urpx:partial"
+        },
+        "urpx:selfContained": true,
+        "urpx:explainedBy": {
+          "@type": "urpx:Evaluation",
+          "@id": "sce:cc-tou-d-prime-2026-03-20-evaluation",
+          "urpx:evaluationKind": {
+            "@id": "urpx:coverageEvaluation"
+          },
+          "urpx:description": "Two conditional credits on Sheet 6 are carried here without the conditions that gate them. The sheet labels them EV Meter Credit (Separately Metered EV Option) at $(0.451) per meter per day and EV Submeter Credit at $(0.152) per meter per day, and Special Conditions 6 and 19 restrict them to a customer with a separate SCE-provided electric vehicle meter and to a customer using a submeter meeting the Plug-In Electric Vehicle Submetering Protocol respectively. This filing states both as unconditional price definitions, so a consumer computing a bill will apply both to every Option PRIME customer. The two pilot bill discounts in Special Conditions 15 and 16 are also unrepresented: the San Joaquin Valley Disadvantaged Communities Pilot Bill Protection Discount (20 percent in years 1 through 5, then 10 or 20 percent in years 6 through 10) and the 20 percent Transitional Community Solar Discount. Option PRIME has no Baseline Credit line, so the baseline-allocation limitation affecting the other SCE residential options does not arise here. Several things are out of scope rather than missing: the Option PRIME-CPP prices printed on the same sheet are filed as a companion modifier overlay in this corpus rather than here; the Deed Restricted Base Services Charge adjustment of $(0.332) per meter per day, the CARE and FERA discount lines, and the Medical Baseline Credit line shown at 100.00 are cross-references to separate schedules each filed on its own; and the attestation-based eligibility of Special Condition 5, the twelve-month rate change restriction of Special Condition 7 and the Arrearage Management Plan of Special Condition 10 govern enrollment and account administration rather than price.",
+          "urpx:evaluatedOn": "2026-09-21T00:00:00"
+        }
+      }
+    }
+  }
+}

@@ -9,6 +9,31 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [0.19.0] — 2026-09-21
+
+Event-driven prices, and a fix for a guard that shipped broken in 0.18.0.
+
+### Fixed
+
+- **`price-segments` rejected every modifier filing in the corpus.** Its uncoerced-document guard threw on any date-shaped string, which is incoherent next to harvesting by java.time type: after coercion a genuine temporal *is* a java.time value, so a residual date-shaped string is evidence of nothing. `urpx:version` is `rdfs:range xsd:string` and every filing uses its effective date as the version label, so `"2026-03-20"` is a perfectly coerced string. All 33 modifier filings and 3 base plans were refused, and therefore every composed horizon. The guard now tests the signature of an uncoerced document (no java.time values anywhere while date-shaped strings are present) rather than the shape of a string.
+
+### Changed
+
+- **`marginal-unit-rate` excludes event-driven prices by default**, closing the open half of [#5](https://github.com/grid-coordination/clj-urpx/issues/5). A Price carrying `urpx:hasDynamicPricing` applies only while its event is called: critical peak events are capped around 50 hours a summer against roughly 2,200 summer hours, so summing one unconditionally answered "what would this cost during an event" while reading as the ordinary rate. Measured on SMUD CPP, composing the modifier moved the rate from 0.3765 to 0.8765; it now stays at 0.3765, which is the non-event baseline the issue predicted. Pass `{:include-dynamic-pricing? true}` for the during-event upper bound.
+
+  Unlike the mutually-exclusive alternatives this function also refuses on, there is a defensible default here rather than an arbitrary pick: no-event-today is the ordinary state.
+
+- Tiers are now excluded **before** the first tier is taken rather than after, so a ledger mixing an event charge with an ordinary price contributes the ordinary one instead of dropping out entirely.
+- A new refusal, `:all-energy-tiers-excluded`, for the case where exclusions empty the sum. Returning `0M` there would be the nil-reads-as-free failure one level up again.
+
+### Added
+
+- **Four fixtures for the event-driven pair**: SMUD TOD-5-8PM with its CPP modifier, and SCE TOU-D-PRIME with its PRIME-CPP modifier. SMUD is the clean case. SCE is vendored because it is the honest half of the story: its two credits are gated by `urpx:ConditionExpression` predicates this library does not evaluate, so excluding the event charge leaves them applying and the marginal rate goes **negative**. That number was already wrong; it is now wrong more visibly. A test pins it so the limit is not mistaken for a fix.
+
+### Documentation
+
+- Four stale README claims corrected, all from recent releases: that consumers wanting a non-event rate must filter the tiers themselves (now the default); a refusal-reason list missing `:all-energy-tiers-excluded`; a claim that a ledger with no `MetricInput` makes the aggregate return `0M` when since 0.15.0 it refuses; and a feature bullet predating `price-segments`.
+
 ## [0.18.0] — 2026-09-21
 
 Horizons.
@@ -188,6 +213,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.19.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.19.0
 [0.18.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.18.0
 [0.17.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.17.0
 [0.16.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.16.0

@@ -79,6 +79,18 @@ fixtures=(
   # rule that picked the wrong one produces a visibly wrong rate rather than a
   # subtly wrong one.
   "sce-d-2025-11-15               28390dc  us/ca/sce/electricity/d/versions/2025-11-15/rate-plan_sce_d_2025-11-15.jsonld"
+
+  # The two event-driven (urpx:hasDynamicPricing) pairs in the corpus, vendored
+  # for GH#5. SMUD is the clean case: a critical peak Event Charge and nothing
+  # else, so excluding it yields exactly the non-event baseline. SCE is the
+  # case that shows the LIMIT: its two credits are gated by ConditionExpression
+  # predicates this library does not evaluate, so they fire unconditionally and
+  # the marginal rate goes negative once the event charge is excluded. Both are
+  # vendored because the second is the honest half of the story.
+  "smud-tod-5-8pm-2026-01-01      28390dc  us/ca/smud/electricity/tod-5-8pm/versions/2026-01-01/rate-plan_smud_tod-5-8pm_2026-01-01.jsonld"
+  "smud-cpp-2026-01-01            28390dc  us/ca/smud/electricity/cpp/versions/2026-01-01/rate-plan-modifier_smud_cpp_2026-01-01.jsonld"
+  "sce-tou-d-prime-2026-03-20     28390dc  us/ca/sce/electricity/tou-d-prime/versions/2026-03-20/rate-plan_sce_tou-d-prime_2026-03-20.jsonld"
+  "sce-tou-d-prime-cpp-2026-03-20 28390dc  us/ca/sce/electricity/tou-d-prime-cpp/versions/2026-03-20/rate-plan-modifier_sce_tou-d-prime-cpp_2026-03-20.jsonld"
 )
 
 for entry in "${fixtures[@]}"; do

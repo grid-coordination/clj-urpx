@@ -1527,3 +1527,103 @@
       (is (thrown-with-msg? clojure.lang.ExceptionInfo
                             #"none of them measured in a urpx:measurementKind"
                             (price/marginal-unit-rate r))))))
+
+(deftest event-driven-prices-are-excluded-from-the-marginal-rate
+  (testing "a Price carrying urpx:hasDynamicPricing applies only while its
+            event is called. A critical peak charge is real but exceptional,
+            capped around 50 hours a summer against roughly 2,200 summer hours,
+            so summing it unconditionally answered `what would this cost during
+            an event' while reading as the ordinary rate. A price server
+            consuming that would have charged every summer kWh as an event
+            hour.
+
+            Unlike the mutually-exclusive alternatives this function also
+            refuses on, there IS a defensible default here: no-event-today is
+            the ordinary state rather than an arbitrary pick."
+    (let [plan (fixtures/load-rate-plan "smud-tod-5-8pm-2026-01-01")
+          cpp  (fixtures/load-modifier "smud-cpp-2026-01-01")
+          when- (zdt 2026 7 15 17)
+          base (price/resolve-prices plan when-)
+          comp- (price/resolve-prices-with-modifiers plan [cpp] when-)]
+
+      (testing "the event charge is surfaced and tagged, which option (1) did"
+        (let [dyn (->> (:urpx.resolved/ledgers comp-)
+                       (mapcat :urpx.resolved/tiers)
+                       (filter :urpx.resolved/dynamic-pricing))]
+          (is (= 1 (count dyn)))
+          (is (= 0.5000M (:urpx.resolved/unit-price (first dyn))))
+          (is (= "urpx:criticalPeakPricing"
+                 (get-in (first dyn) [:urpx.resolved/dynamic-pricing
+                                      :urpx/dynamicPricingType :jsonld/id])))))
+
+      (testing "the default is the non-event baseline: composing the CPP
+                modifier no longer changes the marginal rate"
+        (is (= 0.3765M (price/marginal-unit-rate base)))
+        (is (= 0.3765M (price/marginal-unit-rate comp-))))
+
+      (testing "and the during-event upper bound is still available on request"
+        (is (= 0.8765M (price/marginal-unit-rate comp- {:include-dynamic-pricing? true})))))))
+
+(deftest excluding-every-energy-tier-is-refused-not-zeroed
+  (testing "if every energy tier is excluded the sum would be 0M, which is the
+            nil-reads-as-free failure one level up again: a modifier whose only
+            energy ledger IS its event charge would report free.
+
+            Tested on a constructed resolved value rather than a fixture,
+            because no filing in the corpus has that shape: SMUD CPP comes
+            closest and still carries two discount ledgers alongside its event
+            charge, so excluding the charge leaves a real answer."
+    (let [only-event {:urpx.resolved/ledgers
+                      [{:urpx.resolved/ledger-id "x:ledger-event"
+                        :urpx.resolved/measurement-kind {:jsonld/id "urpx:energy"}
+                        :urpx.resolved/tiers
+                        [{:urpx.resolved/price-id "x:event"
+                          :urpx.resolved/unit-price 0.50M
+                          :urpx.resolved/dynamic-pricing
+                          {:urpx/dynamicPricingType {:jsonld/id "urpx:criticalPeakPricing"}}}]}]}]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"every energy tier was excluded"
+                            (price/marginal-unit-rate only-event)))
+      (is (= :all-energy-tiers-excluded
+             (try (price/marginal-unit-rate only-event) nil
+                  (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))))
+      (testing "and asking for the during-event bound resolves it"
+        (is (= 0.50M (price/marginal-unit-rate only-event {:include-dynamic-pricing? true})))))))
+
+(deftest condition-gated-prices-still-fire-unconditionally
+  (testing "THE LIMIT OF THIS CHANGE, pinned so it is not mistaken for a fix.
+            SCE PRIME-CPP carries three prices: an event charge tagged with
+            urpx:hasDynamicPricing, and two CREDITS gated by
+            urpx:ConditionExpression predicates this library does not evaluate
+            (`Is CPP Event Today' = false, and a grandfathered-customer
+            attribute). Excluding the event charge leaves both credits applying
+            unconditionally, so the marginal rate goes NEGATIVE.
+
+            That is not a regression introduced here: the number was already
+            wrong, mixing an event charge with credits that may not apply. It
+            is now wrong in a more visible direction, which under this
+            library's habits is preferable to a plausible wrong number. The
+            real fix is evaluating the condition expressions, which URPX has
+            not yet defined a consumer-facing shape for."
+    (let [plan (fixtures/load-rate-plan "sce-tou-d-prime-2026-03-20")
+          cpp  (fixtures/load-modifier "sce-tou-d-prime-cpp-2026-03-20")
+          when- (zdt 2026 7 15 17)
+          comp- (price/resolve-prices-with-modifiers plan [cpp] when-)]
+      (is (= 0.55208M (price/marginal-unit-rate (price/resolve-prices plan when-)))
+          "the base plan alone is right")
+      (is (neg? (price/marginal-unit-rate comp-))
+          "and the composed rate is visibly wrong, because two credits fire ungated")
+      (testing "the credits carry applicability rules, which is what marks them
+                as gated by something unevaluated"
+        (let [ids (->> (:urpx.resolved/ledgers comp-)
+                       (mapcat :urpx.resolved/tiers)
+                       (map :urpx.resolved/price-id)
+                       (filter #(re-find #"tou-d-prime-cpp-price-.*credit" (str %))))]
+          (is (= 2 (count ids)) (pr-str ids))))
+      (testing "and neither credit is tagged as event-driven, which is exactly
+                why excluding event-driven prices does not reach them"
+        (is (not-any? :urpx.resolved/dynamic-pricing
+                      (->> (:urpx.resolved/ledgers comp-)
+                           (mapcat :urpx.resolved/tiers)
+                           (filter #(re-find #"tou-d-prime-cpp-price-.*credit"
+                                             (str (:urpx.resolved/price-id %)))))))))))

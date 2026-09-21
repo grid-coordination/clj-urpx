@@ -1,0 +1,397 @@
+{
+  "@context": {
+    "urpx": "https://urpx.org/ns/ontology/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "org": "https://rate-plans.grid-coordination.energy/organizations/",
+    "smud": "https://rate-plans.grid-coordination.energy/smud/",
+    "urpx:unitPrice": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:effectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:effectiveDateTime": {
+      "@type": "xsd:dateTime"
+    },
+    "urpx:baseQuantity": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:initialEffectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:startDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:url": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:month": {
+      "@type": "xsd:gMonth"
+    },
+    "urpx:intervalDuration": {
+      "@type": "xsd:duration"
+    },
+    "urpx:touPeriodNumber": {
+      "@type": "xsd:integer"
+    },
+    "urpx:pageStart": {
+      "@type": "xsd:integer"
+    },
+    "urpx:pageEnd": {
+      "@type": "xsd:integer"
+    },
+    "urpx:accessURL": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:dateRetrieved": {
+      "@type": "xsd:date"
+    },
+    "urpx:targetURPXVersion": {
+      "@type": "xsd:anyURI"
+    },
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "urpx:evaluatedOn": {
+      "@type": "xsd:dateTime"
+    }
+  },
+  "@type": "urpx:URPXPackage",
+  "@id": "smud:doc-cpp-2026-01-01",
+  "urpx:targetURPXVersion": "https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl",
+  "urpx:hasRatePlanModifier": {
+    "@type": "urpx:RatePlanModifier",
+    "@id": "smud:cpp",
+    "urpx:name": "Schedule R-TOD Optional Critical Peak Pricing (CPP) Rate (RTC1)",
+    "urpx:modifierUniqueIdentifier": "RTC1",
+    "urpx:initialEffectiveDate": "2026-01-01",
+    "urpx:timezoneIdentifier": "America/Los_Angeles",
+    "urpx:hasRatePlanModifierVersion": {
+      "@type": "urpx:RatePlanModifierVersion",
+      "@id": "smud:cpp-2026-01-01",
+      "urpx:version": "2026-01-01",
+      "urpx:modifierVersionNumber": "2026-01-01",
+      "urpx:changeReason": {
+        "@id": "urpx:initial"
+      },
+      "urpx:description": "SMUD's Optional Critical Peak Pricing Rate (regulatory rate category RTC1) — a customer-elected DR overlay applied on top of the customer's R-TOD base RatePlan (smud:tod-5-8pm RT02 or smud:tod-low-use RTL1). Maximum 30,000 customer enrollment cap. Mandatory for customers who have accepted a SMUD storage incentive under certain Solar+Storage Rate incentive programs (duration per SMUD program rules on smud.org); voluntary for other R-TOD customers. Compensation has TWO components, both updated annually at SMUD's discretion and posted on smud.org (current values per the SMUD residential rates HTML page, retrieved 2026-05-04): (1) During CPP Events: customer charged at applicable TOU period rate PLUS the CPP Event Price of +$0.5000/kWh (events range from 1-4 hours but not more than once/day, called any time of day during summer months including holidays and weekends, up to 50 hours per summer total, day-ahead announcement, may be same-day in system emergencies, energy exported to the grid during Events compensated at the same +$0.5000/kWh Event Price). (2) During non-Event summer hours: customer receives a discount of -$0.0200/kWh on Mid-Peak prices ($0.2139 → $0.1939) and -$0.0200/kWh on Off-Peak prices ($0.1550 → $0.1350) — Peak prices are unchanged ($0.3765, same as RT02). Non-summer pricing is identical to the underlying R-TOD base (no CPP discount or surcharge). Ties to SMUD's My Energy Optimizer thermostat program. CPP Events span multiple time-of-day periods. Source PDF (1-R-TOD.ashx Sec II.C and III.C) carries the regulatory framework but does NOT carry the actual Event Price or Discount values — those are published annually on the SMUD residential rates HTML page (cited as the modifier's authoritative price source). Same source PDF + Board Resolution (25-06-15 adopted June 19 2025) as the smud:tod-5-8pm and smud:tod-low-use sub-rates that share the R-TOD schedule umbrella. CPP Rate base prices per time-of-day period are the SAME as RT02 (per Sec II.C.1) — RTC1 doesn't have its own base rate trajectory. Discount Prices reference touPeriodNumber=2 (Mid-Peak) and touPeriodNumber=3 (Off-Peak) — the resolver matches these against the BASE RatePlan's Summer Mid-Peak/Off-Peak periods (RT02 and RTL1 share the same touPeriodNumber assignments). The Event Charge uses urpx:hasDynamicPricing with dynamicPricingType=urpx:criticalPeakPricing + updateFrequency=urpx:eventTriggeredUpdates + a urpx:PriceUpdateRule whose description carries the trigger semantics (called by SMUD ops, summer-only, day-ahead, etc.) — the canonical URPX v0.5.1 vocabulary for event-driven pricing demonstrated in the urpx-org/urpx PG&E B6-PDP example. A complementary ApplicabilityRule with month=summer is retained on the Event Charge Price for resolver-evaluable seasonal gating; the day-of and hour-of event-window gating are consumer-side (price-server) responsibilities since the resolver does not yet evaluate DynamicPricing semantically.",
+      "urpx:effectiveDateTime": "2026-01-01T00:00:00",
+      "urpx:priceCurrency": "USD",
+      "urpx:commodity": {
+        "@id": "urpx:electricity"
+      },
+      "urpx:serviceRole": {
+        "@id": "urpx:bundledServiceRole"
+      },
+      "urpx:applicableToRatePlan": [
+        {
+          "@id": "smud:tod-5-8pm"
+        },
+        {
+          "@id": "smud:tod-low-use"
+        }
+      ],
+      "urpx:hasDataSourceReference": {
+        "@type": "urpx:DataSourceReference",
+        "urpx:fileName": "SMUD_SCHEDULE_R-TOD.pdf",
+        "urpx:mediaType": {
+          "@id": "urpx:applicationPdf"
+        },
+        "urpx:accessURL": "https://www.smud.org/-/media/Documents/Rate-Information/Rates/1-R-TOD.ashx",
+        "urpx:dateRetrieved": "2026-05-04",
+        "urpx:dataSourceType": {
+          "@id": "urpx:utilityWebsiteSource"
+        },
+        "urpx:pageStart": 1,
+        "urpx:pageEnd": 5,
+        "urpx:leafStart": "R-TOD-1",
+        "urpx:leafEnd": "R-TOD-5"
+      },
+      "urpx:hasEligibilityRule": [
+        {
+          "@type": "urpx:EligibilityRule",
+          "@id": "smud:cpp-2026-01-01-er-eligible",
+          "urpx:name": "CPP-elected residential customer",
+          "urpx:description": "Customer is a residential customer enrolled in SMUD's Optional Critical Peak Pricing Rate (RTC1). Eligibility paths (Sec I.C.1): (a) voluntary enrollment for any R-TOD customer participating in a qualifying program (e.g., My Energy Optimizer thermostat program); (b) MANDATORY enrollment for customers who have accepted a storage incentive under certain SMUD Solar+Storage Rate incentive programs, for a duration determined by SMUD program rules posted on smud.org. Maximum 30,000 customers may be enrolled at any given time (Sec I.C.2). Customer must be on R-TOD base rate (RT02 or RTL1) — CPP applies on top of either base. Encoded as a 'Program Enrollment' = 'CPP' predicate; the storage-incentive-mandatory and 30,000-cap conditions are documented in description prose but not modeled as ConditionExpression operands.",
+          "urpx:hasConditionExpression": {
+            "@type": "urpx:ConditionExpression",
+            "@id": "smud:cpp-2026-01-01-cx-eligible",
+            "urpx:rootNode": {
+              "@type": "urpx:BooleanOperationNode",
+              "@id": "smud:cpp-2026-01-01-bn-residential-and-enrolled",
+              "urpx:operator": {
+                "@id": "urpx:andOperator"
+              },
+              "urpx:operandNodes": [
+                {
+                  "@type": "urpx:ComparisonNode",
+                  "@id": "smud:cpp-2026-01-01-cn-residential",
+                  "urpx:operator": {
+                    "@id": "urpx:equalsOperator"
+                  },
+                  "urpx:leftOperand": {
+                    "@type": "urpx:ObjectOperandNode",
+                    "@id": "smud:cpp-2026-01-01-cn-residential-left-operand",
+                    "urpx:conditionProperty": {
+                      "@id": "urpx:hasCustomerKind"
+                    }
+                  },
+                  "urpx:rightOperand": {
+                    "@type": "urpx:ObjectOperandNode",
+                    "@id": "smud:cpp-2026-01-01-cn-residential-right-operand",
+                    "urpx:referencesValue": {
+                      "@id": "urpx:residentialKind"
+                    }
+                  }
+                },
+                {
+                  "@type": "urpx:ComparisonNode",
+                  "@id": "smud:cpp-2026-01-01-cn-program-enrollment",
+                  "urpx:operator": {
+                    "@id": "urpx:equalsOperator"
+                  },
+                  "urpx:leftOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "@id": "smud:cpp-2026-01-01-cn-program-enrollment-left-operand",
+                    "urpx:customConditionProperty": "Program Enrollment"
+                  },
+                  "urpx:rightOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "@id": "smud:cpp-2026-01-01-cn-program-enrollment-right-operand",
+                    "urpx:stringValue": "CPP"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "urpx:hasPlanElements": {
+        "@type": "urpx:PlanElements",
+        "@id": "smud:cpp-2026-01-01-plan-elements",
+        "urpx:hasMetricInput": [
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "smud:cpp-mi-energy",
+            "urpx:name": "kWh Energy Consumption Prices",
+            "urpx:metricInputType": {
+              "@id": "urpx:measuredMetricInput"
+            },
+            "urpx:hasMetricSpecification": {
+              "@type": "urpx:MetricSpecification",
+              "@id": "smud:cpp-ms-energy",
+              "urpx:measurementKind": {
+                "@id": "urpx:energy"
+              },
+              "urpx:unitOfMeasure": {
+                "@id": "urpx:kWh"
+              }
+            }
+          }
+        ],
+        "urpx:hasBillingModel": {
+          "@type": "urpx:BillingModel",
+          "@id": "smud:cpp-2026-01-01-plan-elements-billing-model",
+          "urpx:hasLedger": [
+            {
+              "@type": "urpx:Ledger",
+              "@id": "smud:cpp-ledger-event-charge",
+              "urpx:name": "CPP Event Energy Charge",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "smud:cpp-mi-energy"
+              }
+            },
+            {
+              "@type": "urpx:Ledger",
+              "@id": "smud:cpp-ledger-summer-mid-peak-discount",
+              "urpx:name": "CPP Summer Mid-Peak Discount",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "smud:cpp-mi-energy"
+              }
+            },
+            {
+              "@type": "urpx:Ledger",
+              "@id": "smud:cpp-ledger-summer-off-peak-discount",
+              "urpx:name": "CPP Summer Off-Peak Discount",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "smud:cpp-mi-energy"
+              }
+            }
+          ],
+          "urpx:hasPriceDefinition": [
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "smud:cpp-pd-event-charge",
+              "urpx:name": "CPP Event Energy Charge — applies during called CPP Event windows (any time of day in summer months, day-ahead announced; gated via Price.hasDynamicPricing + summer-month ApplicabilityRule)",
+              "urpx:chargeType": {
+                "@id": "urpx:adjustmentPowerCost"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "smud:cpp-ledger-event-charge"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "smud:cpp-pd-summer-mid-peak-discount",
+              "urpx:name": "CPP Summer Mid-Peak Discount — gates on base RatePlan's Summer Mid-Peak period (touPeriodNumber=2 in RT02 and RTL1)",
+              "urpx:chargeType": {
+                "@id": "urpx:creditEnergy"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:discount"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:touPeriodNumber": 2,
+              "urpx:referencesLedger": {
+                "@id": "smud:cpp-ledger-summer-mid-peak-discount"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "smud:cpp-pd-summer-off-peak-discount",
+              "urpx:name": "CPP Summer Off-Peak Discount — gates on base RatePlan's Summer Off-Peak period (touPeriodNumber=3 in RT02 and RTL1)",
+              "urpx:chargeType": {
+                "@id": "urpx:creditEnergy"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:discount"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:touPeriodNumber": 3,
+              "urpx:referencesLedger": {
+                "@id": "smud:cpp-ledger-summer-off-peak-discount"
+              }
+            }
+          ]
+        }
+      },
+      "urpx:hasPrices": {
+        "@type": "urpx:Prices",
+        "@id": "smud:cpp-2026-01-01-prices",
+        "urpx:hasPrice": [
+          {
+            "@type": "urpx:Price",
+            "@id": "smud:cpp-price-event-charge-2026-01-01",
+            "urpx:referencesPriceDefinition": {
+              "@id": "smud:cpp-pd-event-charge"
+            },
+            "urpx:startDate": "2026-01-01",
+            "urpx:name": "CPP Event Energy Charge",
+            "urpx:unitPrice": "0.5000",
+            "urpx:hasApplicabilityRule": {
+              "@type": "urpx:ApplicabilityRule",
+              "@id": "smud:cpp-2026-01-01-ar-event-charge",
+              "urpx:name": "Resolver-evaluable seasonal gate (Jun-Sept); the day-and-hour event-window gate is consumer-side via hasDynamicPricing/PriceUpdateRule",
+              "urpx:month": [
+                "--06",
+                "--07",
+                "--08",
+                "--09"
+              ]
+            },
+            "urpx:hasDynamicPricing": {
+              "@type": "urpx:DynamicPricing",
+              "@id": "smud:cpp-2026-01-01-dp-event-charge",
+              "urpx:dynamicPricingType": {
+                "@id": "urpx:criticalPeakPricing"
+              },
+              "urpx:updateFrequency": {
+                "@id": "urpx:eventTriggeredUpdates"
+              },
+              "urpx:hasPriceUpdateRule": {
+                "@type": "urpx:PriceUpdateRule",
+                "@id": "smud:cpp-2026-01-01-pur-event-trigger",
+                "urpx:name": "SMUD CPP Event Day Trigger Rule",
+                "urpx:description": "CPP Events are called by SMUD operations during summer months (June 1 - September 30) when system conditions warrant load reduction. Each event lasts 1-4 hours, max one event per day, up to 50 hours per summer total. Events may be called during ANY hour of the day (not restricted to TOU Peak hours), including holidays and weekends. Day-ahead announcement is the standard cadence; in the event of a system emergency, SMUD may announce same-day. The +$0.5000/kWh adder applies to the customer's metered consumption AND to energy exported to the grid during the event window — bidirectional event-window pricing. The Event Charge value is updated annually at SMUD's discretion and posted on www.smud.org. priceSource is intentionally omitted from this DynamicPricing — none of the v0.5.1 PriceSourceValue enum members (algorithmicSource, capacityAuctionSource, demandForecastSource, gasIndexSource, manualOverrideSource, renewableForecastSource, wholesaleMarketSource) cleanly fits SMUD's case. SMUD operates as its own Balancing Authority distinct from CAISO BA, while participating in CAISO-operated markets (EIM since 2019, EDAM more recently); CPP event calls are a SMUD operations decision based on local system conditions plus market signals. Closest fits: demandForecastSource (events partly driven by SMUD's load forecasts in heat-wave conditions) or manualOverrideSource (ultimate decision is operator discretion). Documenting as a small upstream observation only — not blocking."
+              }
+            }
+          },
+          {
+            "@type": "urpx:Price",
+            "@id": "smud:cpp-price-summer-mid-peak-discount-2026-01-01",
+            "urpx:referencesPriceDefinition": {
+              "@id": "smud:cpp-pd-summer-mid-peak-discount"
+            },
+            "urpx:startDate": "2026-01-01",
+            "urpx:name": "Summer Mid-Peak CPP Discount",
+            "urpx:unitPrice": "-0.0200",
+            "urpx:touPeriodNumber": 2
+          },
+          {
+            "@type": "urpx:Price",
+            "@id": "smud:cpp-price-summer-off-peak-discount-2026-01-01",
+            "urpx:referencesPriceDefinition": {
+              "@id": "smud:cpp-pd-summer-off-peak-discount"
+            },
+            "urpx:startDate": "2026-01-01",
+            "urpx:name": "Summer Off-Peak CPP Discount",
+            "urpx:unitPrice": "-0.0200",
+            "urpx:touPeriodNumber": 3
+          }
+        ]
+      },
+      "urpx:offeredBy": {
+        "@type": "urpx:Organization",
+        "@id": "org:utility-smud",
+        "urpx:legalName": "Sacramento Municipal Utility District",
+        "urpx:organizationType": {
+          "@id": "urpx:utilityOrganization"
+        },
+        "urpx:hasIdentity": {
+          "@id": "org:utility-smud-identity",
+          "@type": "urpx:OrganizationIdentity",
+          "urpx:hasName": {
+            "@id": "org:utility-smud-name",
+            "@type": "urpx:OrganizationName",
+            "urpx:name": "Sacramento Municipal Utility District"
+          },
+          "urpx:hasIdentifier": {
+            "@id": "org:utility-smud-eia",
+            "@type": "urpx:OrganizationIdentifier",
+            "urpx:scheme": {
+              "@id": "urpx:eiaScheme"
+            },
+            "skos:notation": "16534"
+          }
+        }
+      },
+      "urpx:forRatePlanModifier": {
+        "@id": "smud:cpp"
+      },
+      "urpx:hasCoverageClaim": {
+        "@id": "smud:cc-cpp-2026-01-01",
+        "@type": "urpx:CoverageClaim",
+        "urpx:completenessResult": {
+          "@id": "urpx:partial"
+        },
+        "urpx:selfContained": true,
+        "urpx:explainedBy": {
+          "@type": "urpx:Evaluation",
+          "@id": "smud:cc-cpp-2026-01-01-evaluation",
+          "urpx:evaluationKind": {
+            "@id": "urpx:coverageEvaluation"
+          },
+          "urpx:description": "This filing carries the three price components the CPP rate overlays on its Time-of-Day base plan: the Event Price of $0.5000 per kWh and the summer Mid-Peak and Off-Peak discounts of $0.0200 per kWh each. What is not represented is the machinery around them. Section I.C.3 limits Events to between one and four hours, not more than one per day, callable in any hour of a summer day including weekends and holidays, up to 50 hours per summer, and Section I.C.4 requires a day-ahead announcement except in a system emergency; the only structural gate this filing puts on the Event Price is that the month be June through September, with the rest of the trigger carried as prose on a price update rule, so nothing in the graph distinguishes an Event hour from an ordinary summer hour and a consumer must apply SMUD's event calendar itself. Section II.C.4 compensates energy exported to the grid during an Event at the same Event Price; the charge here is modeled in the consuming direction only, with the export side left in prose. Section I.C.2's cap of 30,000 enrolled customers and Section I.C.1's mandatory enrollment for customers who have accepted a storage incentive under certain SMUD Solar and Storage incentive programs both sit in the eligibility rule's description; its condition expression tests only that the customer is residential and carries a free-text 'Program Enrollment' of 'CPP'. That free-text predicate is itself forced: URPX's list of program types is closed and has no value for critical peak pricing, so no typed program enrollment can be attached. One provision is outside the tariff document rather than missing from the model: Section II.C.5 puts the Event Price and the discount on smud.org, updated annually at SMUD's discretion, so the values here are those posted at the retrieval date and each annual update needs a new version.",
+          "urpx:evaluatedOn": "2026-09-21T00:00:00"
+        }
+      }
+    }
+  }
+}
