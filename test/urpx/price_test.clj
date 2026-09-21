@@ -37,8 +37,15 @@
 
 (deftest e-tou-c-winter-off-peak
   (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
-        ;; January 15, 2026 at 12:00 — Winter, off-peak
+        ;; January 15, 2026 at 12:00 — Winter, off-peak. This instant PREDATES
+        ;; the filing's own 2026-03-01 version, so the result carries
+        ;; :urpx.resolved/outside-version-window and marginal-unit-rate refuses.
+        ;; Season and TOU period are structural questions about the plan's
+        ;; shape and are still answered, which is why the mark is on the result
+        ;; rather than a throw from resolve-prices.
         r (price/resolve-prices plan (zdt 2026 1 15 12))]
+    (is (some? (:urpx.resolved/outside-version-window r))
+        "sanity: this probe really is outside the filing's window")
     (is (= "Winter" (:urpx.resolved/season-name r)))
     (is (= 4 (:urpx.resolved/tou-period-number r))
         "TOU period 4 = Winter Off-Peak Period")))

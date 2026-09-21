@@ -77,14 +77,61 @@
              (try (price/resolve-prices plan (at 2025 1 1) opts) nil
                   (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))))))
 
-(deftest a-single-version-needs-no-time-reasoning
-  (testing "every filing in the corpus carries one version, and that path is
-            untouched: one candidate is used as-is, at any instant, including
-            instants before it took effect. Narrowing that would reject the
-            whole corpus to fix a case the corpus does not have."
-    (doseq [f [older newer "pge-e-tou-c-2026-03-01" "sdge-dr-2026-04-01"]]
-      (is (some? (price/resolve-prices (fixtures/load-rate-plan f) (at 2020 1 1)))
-          (str f " must resolve from its own nested version at any instant")))))
+(deftest a-single-version-still-has-to-cover-the-instant
+  (testing "0.17.0 routed the single-candidate case PAST the effective and
+            expiration tests, reasoning that one candidate is no choice to
+            make. That confused `no choice` with `applies at every instant`,
+            and every one of the 40 base filings carries exactly one version,
+            so it was the branch standalone resolution always took: SCE D
+            2026-03-20 answered 0.31085 five weeks before its version took
+            effect, byte-identical to the in-window answer.
+
+            The earlier version of this test asserted that behavior, which is
+            how it survived. It now asserts the opposite."
+    (let [plan (fixtures/load-rate-plan newer)]
+      (testing "in its own window it prices"
+        (is (some? (price/marginal-unit-rate (price/resolve-prices plan (at 2026 7 15))))))
+
+      (testing "before its effective instant the PRICE refuses"
+        (is (= :outside-version-window
+               (try (price/marginal-unit-rate (price/resolve-prices plan (at 2026 1 15))) nil
+                    (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))))
+
+      (testing "but the resolution still answers, carrying the mark, because a
+                filing can legitimately be asked which season an instant falls
+                in even when it does not price that instant"
+        (let [r (price/resolve-prices plan (at 2026 1 15))]
+          (is (some? (:urpx.resolved/outside-version-window r)))
+          (is (some? (:urpx.resolved/season-name r)))
+          (is (= (:jsonld/id (:urpx/hasRatePlanVersion plan))
+                 (:version-id (:urpx.resolved/outside-version-window r))))))
+
+      (testing "and inside the window there is no mark at all"
+        (is (nil? (:urpx.resolved/outside-version-window
+                   (price/resolve-prices plan (at 2026 7 15))))))))
+
+  (testing "a single version stating NO effective instant covers everything.
+            It cannot be ordered against anything and nothing says it has not
+            started, so refusing it would reject a conformant document over a
+            case the vocabulary permits."
+    (let [plan (fixtures/load-rate-plan newer)
+          undated (update plan :urpx/hasRatePlanVersion
+                          dissoc :urpx/effectiveDateTime :urpx/effectiveDate)]
+      (testing "no mark at an instant the DATED version would have refused"
+        (is (some? (:urpx.resolved/outside-version-window
+                    (price/resolve-prices plan (at 2026 1 15))))
+            "sanity: dated, and this instant is outside its window")
+        (is (nil? (:urpx.resolved/outside-version-window
+                   (price/resolve-prices undated (at 2026 1 15))))
+            "undated, so nothing says it has not started"))
+
+      (testing "the version gate is the only thing lifted: a Price whose own
+                startDate has not arrived is still excluded, so an undated
+                version resolved before its prices exist still refuses, for
+                that reason and not this one"
+        (is (= :no-energy-ledger
+               (try (price/marginal-unit-rate (price/resolve-prices undated (at 2020 1 1))) nil
+                    (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))))))))
 
 (deftest two-descriptions-of-one-version-are-ambiguous-not-arbitrary
   (testing "the corpus has two CPAU e-1 filings publishing the SAME version @id

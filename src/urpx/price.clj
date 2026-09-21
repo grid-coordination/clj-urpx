@@ -735,6 +735,18 @@
                              :at t
                              :ids (mapv :jsonld/id winners)}))))))))
 
+(defn- version-covers?
+  "True if `version` describes the instant `t`: in effect by then, and not
+   expired.
+
+   A version stating no effective instant covers everything. It cannot be
+   ordered against anything and nothing says it has not started, so refusing
+   it would reject a conformant document over a case the vocabulary permits."
+  [version ^LocalDateTime t]
+  (let [eff (version-effective-at version)]
+    (and (not (and eff (.isAfter ^LocalDateTime eff t)))
+         (not (version-expired-by? version t)))))
+
 (defn- plan-version
   "Resolve the version snapshot to read plan content from, at `zdt`.
 
@@ -772,6 +784,15 @@
             candidates (distinct (remove nil? (cons nested indexed)))]
         (case (count candidates)
           0 nil
+          ;; ONE candidate is used whatever the instant, and whether it COVERS
+          ;; the instant is reported separately by `version-covers?` rather than
+          ;; refused here. With several candidates and none in effect there is
+          ;; no version to resolve against at all, which is why that case
+          ;; throws; with one, there is a version, it simply may not describe
+          ;; the window asked about. Refusing here would also kill the
+          ;; structural questions resolve-prices answers, like which season and
+          ;; TOU period an instant falls in, which are legitimate to ask of a
+          ;; filing outside its own window.
           1 (first candidates)
           (select-version-at candidates (.toLocalDateTime zdt) plan-id)))))
 
@@ -942,10 +963,21 @@
                     :urpx.resolved/tiers       tier-entries}
                    (ledger-metric-info ledger mi-index))))]
 
-     {:urpx.resolved/season-name       (:urpx/seasonName season)
-      :urpx.resolved/tou-period-name   (:urpx/name tou-period)
-      :urpx.resolved/tou-period-number period-num
-      :urpx.resolved/ledgers           ledger-results})))
+     (merge
+      {:urpx.resolved/season-name       (:urpx/seasonName season)
+       :urpx.resolved/tou-period-name   (:urpx/name tou-period)
+       :urpx.resolved/tou-period-number period-num
+       :urpx.resolved/ledgers           ledger-results}
+      ;; The version was used, but it may not describe this instant. Reported
+      ;; rather than refused, so the structural answers above stay available
+      ;; for a filing queried outside its own window; marginal-unit-rate
+      ;; refuses on the mark, because a PRICE from a version that does not
+      ;; cover the instant is the confident wrong number this library refuses.
+      (when-not (version-covers? version (.toLocalDateTime zdt))
+        {:urpx.resolved/outside-version-window
+         {:version-id (:jsonld/id version)
+          :effective  (version-effective-at version)
+          :at         (.toLocalDateTime zdt)}})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Modifier resolution (URPX-yos)
@@ -1276,6 +1308,21 @@
                                  (conj (first (sort-by :urpx.resolved/tier-number numbered))))))
                            energy)
         unvaluable (filter :urpx.resolved/unvaluable marginal)]
+    ;; A price from a version that does not describe this instant is the
+    ;; confident wrong number this whole function exists to refuse. The
+    ;; structural answers alongside it (season, TOU period) stay available on
+    ;; the resolved map, which is why the mark is there rather than a throw
+    ;; from resolve-prices.
+    (when-let [w (:urpx.resolved/outside-version-window resolved)]
+      (throw (ex-info (str "Cannot compute a marginal rate: the version used, "
+                           (pr-str (:version-id w)) ", does not cover " (:at w)
+                           (when-let [e (:effective w)] (str "; it takes effect " e))
+                           ". Resolve at an instant the filing describes, or load "
+                           "the version that does and pass :versions-by-plan.")
+                      {:reason :outside-version-window
+                       :version-id (:version-id w)
+                       :effective (:effective w)
+                       :at (:at w)})))
     ;; No energy ledger at all is not an answer of zero, it is a malformed
     ;; question. A street lighting schedule prices per lamp per month; its
     ;; marginal unit is not a kWh. Returning 0M conflated that with a plan whose
