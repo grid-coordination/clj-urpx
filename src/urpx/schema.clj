@@ -161,6 +161,27 @@
    Resolved against the entity index built from the parsed document."
   [:map [:jsonld/id :string]])
 
+(def ExclusiveRef
+  "A JSON-LD @id reference used where an INLINE NODE is the alternative, as in
+   [:or SomeEntity ExclusiveRef]. Closed, unlike `Ref`, and that is the whole
+   point: `Ref` is an open map, so an [:or Node Ref] whose second arm is `Ref`
+   matches any map carrying a :jsonld/id and the node arm is never reached.
+   A malformed inline node then validates as though it were a reference.
+   Closing it means a bare reference still passes while anything richer must
+   satisfy the node schema.
+
+   Closed to @id ALONE, deliberately. A node that asserts an @type is asserting
+   something about itself and should be validated as a node of that type, not
+   waved through as a reference; without this, an @id paired with any @type at
+   all passes whatever slot it sits in.
+   Every one of the 15,295 bare references in the urpx-tariffs corpus carries
+   @id and nothing else, so this costs nothing real.
+
+   Use `Ref` for reference-only properties, where no inline form is permitted
+   and openness costs nothing."
+  [:map {:closed true}
+   [:jsonld/id :string]])
+
 (def NodeIdentity
   "Common JSON-LD identity fields present on most entities."
   [:map
@@ -728,8 +749,9 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     ;; Inline rule or a bare @id ref to one defined elsewhere in the document
     ;; (RDF merges a reference with its definition). Richer schema first so an
-    ;; inline node decodes through ApplicabilityRule, not Ref.
-    [:vector [:or ApplicabilityRule Ref]]]
+    ;; inline node decodes through ApplicabilityRule; ExclusiveRef rather than
+    ;; Ref so a malformed inline node cannot slip through the reference arm.
+    [:vector [:or ApplicabilityRule ExclusiveRef]]]
    [:urpx/hasCalculationMethod {:optional true} CalculationMethod]
    [:urpx/hasRateCase
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
@@ -872,8 +894,9 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     ;; Inline rule or a bare @id ref to one defined elsewhere in the document
     ;; (RDF merges a reference with its definition). Richer schema first so an
-    ;; inline node decodes through ApplicabilityRule, not Ref.
-    [:vector [:or ApplicabilityRule Ref]]]
+    ;; inline node decodes through ApplicabilityRule; ExclusiveRef rather than
+    ;; Ref so a malformed inline node cannot slip through the reference arm.
+    [:vector [:or ApplicabilityRule ExclusiveRef]]]
    [:urpx/hasCalculationMethod  {:optional true} CalculationMethod]
    [:urpx/hasDataSourceReference
     {:optional true :decode/urpx-jsonld single-or-vec->vec}

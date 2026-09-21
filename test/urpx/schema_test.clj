@@ -492,4 +492,30 @@
     (testing "a map that is neither a typed rule nor an @id reference is rejected"
       (is (not (m/validate s/Price
                            (assoc price :urpx/hasApplicabilityRule
-                                  [{:urpx/name "neither"}])))))))
+                                  [{:urpx/name "neither"}])))))
+    (testing "an @id alone does not buy a pass: the reference arm is closed, so a
+              node carrying @id plus anything else must satisfy ApplicabilityRule.
+              With an open Ref as the second arm these all validated, because the
+              permissive arm matched first and the rule arm was never reached."
+      (doseq [bad [{:jsonld/id "x:ar" :jsonld/type "urpx:TotalNonsense"}
+                   {:jsonld/type "urpx:ApplicabilityRule" :jsonld/id "x:ar"
+                    :urpx/month [13]}
+                   {:jsonld/id "x:ar" :urpx/month "not-a-vector"}]]
+        (is (not (m/validate s/Price (assoc price :urpx/hasApplicabilityRule [bad])))
+            (str "must reject: " (pr-str bad)))
+        (is (not (m/validate s/PriceSetAlternative
+                             (assoc psa :urpx/hasApplicabilityRule [bad])))
+            (str "must reject on PriceSetAlternative too: " (pr-str bad)))))
+    (testing "ExclusiveRef itself: a bare reference passes, a reference carrying
+              any other key does not"
+      (is (m/validate s/ExclusiveRef {:jsonld/id "x:ar"}))
+      (is (not (m/validate s/ExclusiveRef {:jsonld/id "x:ar" :urpx/month [1]})))
+      (is (not (m/validate s/ExclusiveRef {:jsonld/type "urpx:ApplicabilityRule"})))
+      (testing "a node asserting an @type is a node, not a reference: it must
+                validate through the entity arm, so a real rule type passes and
+                a bogus one does not"
+        (is (m/validate s/Price
+                        (assoc price :urpx/hasApplicabilityRule
+                               [{:jsonld/id "x:ar" :jsonld/type "urpx:ApplicabilityRule"}])))
+        (is (not (m/validate s/ExclusiveRef
+                             {:jsonld/id "x:ar" :jsonld/type "urpx:ApplicabilityRule"})))))))
