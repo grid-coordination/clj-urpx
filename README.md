@@ -424,7 +424,7 @@ For a longer worked walkthrough that mirrors selected examples from the upstream
 
 Targets **URPX v0.2.0**.
 
-Test fixtures are vendored from [urpx-tariffs](https://github.com/grid-coordination/urpx-tariffs) (the production rate-plan corpus) at pinned commits — see [`test/resources/urpx-fixtures/FIXTURES.md`](test/resources/urpx-fixtures/FIXTURES.md) for the table and the re-sync workflow.
+Test fixtures are vendored from [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) (the production rate-plan corpus) at pinned commits — see [`test/resources/urpx-fixtures/FIXTURES.md`](test/resources/urpx-fixtures/FIXTURES.md) for the table and the re-sync workflow.
 
 Currently covered:
 - All three v0.2.0 top-level document classes parse, coerce, and validate against Malli schemas: `urpx:RatePlan`, `urpx:RatePlanModifier`, and `urpx:URPXDocument` (the v0.2.0 wrapper class with required `urpx:targetURPXVersion` per Decision #103). The loader transparently descends through URPXDocument's `urpx:hasRatePlan` / `urpx:hasRatePlanModifier`, so consumers target inner entities by `@type` regardless of packaging shape (bare entity, `@graph` bundle, or URPXDocument wrapper)
@@ -451,7 +451,7 @@ Known gaps:
 ## See also
 
 - [URPX standard](https://github.com/urpx-org/urpx) — ontology, SHACL shapes, decision log, tutorial, and reference test cases (the upstream specification this library targets)
-- [urpx-tariffs](https://github.com/grid-coordination/urpx-tariffs) — production corpus of California utility rate-plan filings; vendored test fixtures here are pinned snapshots from there
+- [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) — production corpus of California utility rate-plan filings; vendored test fixtures here are pinned snapshots from there
 - [LF Energy URPX project page](https://lfenergy.org/projects/utility-rate-plan-exchange-urpx/) — broader context for the URPX initiative
 - [`doc/dsl-tutorial.md`](doc/dsl-tutorial.md) — worked DSL examples mirroring sections of the upstream URPX tutorial
 

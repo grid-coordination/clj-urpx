@@ -3,12 +3,12 @@
 # SPDX-License-Identifier: MIT
 #
 # Re-sync the vendored URPX test fixtures under
-# test/resources/urpx-fixtures/ from a local urpx-tariffs checkout.
+# test/resources/urpx-fixtures/ from a local urpx-rate-plans checkout.
 #
-# Usage: scripts/sync-urpx-fixtures.sh <path-to-urpx-tariffs-checkout>
+# Usage: scripts/sync-urpx-fixtures.sh <path-to-urpx-rate-plans-checkout>
 #
 # Each fixture is fetched at its pinned upstream commit via
-# `git show <commit>:<path>` so the working tree of the urpx-tariffs
+# `git show <commit>:<path>` so the working tree of the urpx-rate-plans
 # checkout does not affect the result.
 #
 # When you bump a pinned commit here, also update
@@ -17,7 +17,7 @@
 set -euo pipefail
 
 if [[ $# -ne 1 ]]; then
-  echo "usage: $0 <path-to-urpx-tariffs-checkout>" >&2
+  echo "usage: $0 <path-to-urpx-rate-plans-checkout>" >&2
   exit 2
 fi
 
@@ -32,10 +32,10 @@ dest=$repo_root/test/resources/urpx-fixtures
 
 # fixture-name                   upstream-commit  upstream-path
 fixtures=(
-  "pge-e-1-2026-03-01             fed8ab4  ca/iou/pge/e-1/versions/2026-03-01/rate-plan_pge_e-1_2026-03-01.jsonld"
-  "pge-e-tou-c-2026-03-01         fed8ab4  ca/iou/pge/e-tou-c/versions/2026-03-01/rate-plan_pge_e-tou-c_2026-03-01.jsonld"
-  "pge-e-tou-d-2026-03-27         fed8ab4  ca/iou/pge/e-tou-d/versions/2026-03-27/rate-plan_pge_e-tou-d_2026-03-27.jsonld"
-  "pge-ev2-2026-03-27             fed8ab4  ca/iou/pge/ev2/versions/2026-03-27/rate-plan_pge_ev2_2026-03-27.jsonld"
+  "pge-e-1-2026-03-01             177a761  us/ca/pge/electricity/e-1/versions/2026-03-01/rate-plan_pge_e-1_2026-03-01.jsonld"
+  "pge-e-tou-c-2026-03-01         177a761  us/ca/pge/electricity/e-tou-c/versions/2026-03-01/rate-plan_pge_e-tou-c_2026-03-01.jsonld"
+  "pge-e-tou-d-2026-03-27         177a761  us/ca/pge/electricity/e-tou-d/versions/2026-03-27/rate-plan_pge_e-tou-d_2026-03-27.jsonld"
+  "pge-ev2-2026-03-27             177a761  us/ca/pge/electricity/ev2/versions/2026-03-27/rate-plan_pge_ev2_2026-03-27.jsonld"
 )
 
 for entry in "${fixtures[@]}"; do

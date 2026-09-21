@@ -1,10 +1,9 @@
 {
   "@context": {
     "urpx": "https://urpx-org.github.io/urpx/ontology/",
-    "schema": "http://schema.org/",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
-    "org": "https://example.com/organizations/",
-    "pge": "https://example.com/pge/",
+    "org": "https://rate-plans.grid-coordination.energy/organizations/",
+    "pge": "https://rate-plans.grid-coordination.energy/pge/",
     "urpx:unitPrice": {
       "@type": "xsd:decimal"
     },
@@ -134,7 +133,7 @@
             "@id": "urpx:utilityOrganization"
           }
         },
-        "urpx:description": "Default non-TOU residential schedule. Energy is billed at three tiered rates based on percentage of baseline allowance: Tier 1 (0-100%), Tier 2 (101-400%), Tier 2 Continued (over 400%). Generation and Distribution components are tier-agnostic; the tier-varying piece is the Conservation Incentive Adjustment. Customers pay a daily base services charge that varies by income tier (CARE / FERA / standard). KNOWN LIMITATION: the baseline allowance varies by 10 territories × 2 codes (B/H) × 2 seasons; this filing models ONE cell (Territory P, Code B residential, summer 13.5 / winter 11.0 kWh/day). Full-matrix expansion is tracked under grid-coordination/urpx-tariffs#18, blocked on upstream urpx-org/urpx discussion #31 (PlanElements.hasProfileAlternatives maxCount=1 collides with the existing income-tier ProfileAlternatives at this PlanElements scope). Vintage PCIA for CCA/DA/TBS customers is modeled as a sibling RatePlanModifier in this file. (urpx:initialEffectiveDate set to 2001-01-01 as a placeholder for the post-restructuring modern PG&E E-1 era; the schedule predates this.)",
+        "urpx:description": "Default non-TOU residential schedule. Energy is billed at three tiered rates based on percentage of baseline allowance: Tier 1 (0-100%), Tier 2 (101-400%), Tier 2 Continued (over 400%). Generation and Distribution components are tier-agnostic; the tier-varying piece is the Conservation Incentive Adjustment. Customers pay a daily base services charge that varies by income tier (CARE / FERA / standard). KNOWN LIMITATION: the baseline allowance varies by 10 territories × 2 codes (B/H) × 2 seasons; this filing models ONE cell (Territory P, Code B residential, summer 13.5 / winter 11.0 kWh/day). Full-matrix expansion is tracked under grid-coordination/urpx-rate-plans#18, blocked on upstream urpx-org/urpx discussion #31 (PlanElements.hasProfileAlternatives maxCount=1 collides with the existing income-tier ProfileAlternatives at this PlanElements scope). Vintage PCIA for CCA/DA/TBS customers is modeled as a sibling RatePlanModifier in this file. (urpx:initialEffectiveDate set to 2001-01-01 as a placeholder for the post-restructuring modern PG&E E-1 era; the schedule predates this.)",
         "urpx:effectiveDateTime": "2026-03-01T00:00:00",
         "urpx:changeReason": {
           "@id": "urpx:rateCase"

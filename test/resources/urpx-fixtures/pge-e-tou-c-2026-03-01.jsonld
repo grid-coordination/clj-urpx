@@ -1,10 +1,9 @@
 {
   "@context": {
     "urpx": "https://urpx-org.github.io/urpx/ontology/",
-    "schema": "http://schema.org/",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
-    "org": "https://example.com/organizations/",
-    "pge": "https://example.com/pge/",
+    "org": "https://rate-plans.grid-coordination.energy/organizations/",
+    "pge": "https://rate-plans.grid-coordination.energy/pge/",
     "urpx:unitPrice": {
       "@type": "xsd:decimal"
     },

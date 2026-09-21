@@ -1,6 +1,6 @@
 # Contributing to clj-urpx
 
-Thanks for your interest in contributing! This repo is a Clojure library for [URPX](https://github.com/urpx-org/urpx) — parse, coerce, resolve, emit, and author URPX rate-plan documents in idiomatic Clojure. It targets the v0.2.0 ontology snapshot and is the validator-of-last-resort the [urpx-tariffs](https://github.com/grid-coordination/urpx-tariffs) corpus leans on for end-to-end load → coerce → resolve checks.
+Thanks for your interest in contributing! This repo is a Clojure library for [URPX](https://github.com/urpx-org/urpx) — parse, coerce, resolve, emit, and author URPX rate-plan documents in idiomatic Clojure. It targets the v0.2.0 ontology snapshot and is the validator-of-last-resort the [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) corpus leans on for end-to-end load → coerce → resolve checks.
 
 ## How to contribute
 
@@ -11,7 +11,7 @@ Use [Discussions](https://github.com/grid-coordination/clj-urpx/discussions) for
 - Questions about how to use the library — parsing, coercion, price resolution, schedule generation, the DSL, the write-side
 - API and design judgment calls — "should clj-urpx model X?" / "is this the right shape for the DSL builder for Y?"
 - URPX vocabulary gaps that affect clj-urpx — when you can't express a regulatory rule cleanly and want to scope what the library should do about it
-- Coordination with the upstream [URPX](https://github.com/urpx-org/urpx) standard or the [urpx-tariffs](https://github.com/grid-coordination/urpx-tariffs) corpus
+- Coordination with the upstream [URPX](https://github.com/urpx-org/urpx) standard or the [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) corpus
 - Sharing what you're building on top of clj-urpx
 
 Discussions are open-ended — a good place to think out loud or scope something before it becomes a concrete change. Aligned outcomes from a Discussion often turn into one or more Issues.
@@ -23,7 +23,7 @@ Use [Issues](https://github.com/grid-coordination/clj-urpx/issues) for actionabl
 - Bugs in parsing, coercion, schema validation, or price resolution against real URPX fixtures
 - v0.2.0 SHACL classes that aren't yet modeled and that a real consumer needs (`urpx:TariffPublication`, `urpx:ProgramEnrollment`, the non-RatePlan URPXDocument subclasses, etc. — see [README §Status](README.md#status) for the running list)
 - Test failures or unexpected behavior with concrete repro steps
-- Schema gaps surfaced by the urpx-tariffs corpus (a filing that should validate but doesn't, or coerces into a shape the resolver can't handle)
+- Schema gaps surfaced by the urpx-rate-plans corpus (a filing that should validate but doesn't, or coerces into a shape the resolver can't handle)
 - Documentation errors, unclear explanations, or stale prose in `README.md`, `doc/dsl-tutorial.md`, or namespace docstrings
 - Discussion outcomes that have alignment and a clear scope
 
@@ -47,7 +47,7 @@ clojure -M:nrepl                # nREPL on the port written to .nrepl-port
 clj-kondo --lint src test       # lint
 ```
 
-The vendored fixtures under `test/resources/urpx-fixtures/` are pinned snapshots of corpus filings from [urpx-tariffs](https://github.com/grid-coordination/urpx-tariffs). See [`test/resources/urpx-fixtures/FIXTURES.md`](test/resources/urpx-fixtures/FIXTURES.md) for the table of pinned commits and the re-sync workflow (`scripts/sync-urpx-fixtures.sh <path-to-urpx-tariffs-checkout>`). When the upstream corpus exposes a new shape that clj-urpx should handle, add the fixture there with provenance and bump the pin.
+The vendored fixtures under `test/resources/urpx-fixtures/` are pinned snapshots of corpus filings from [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans). See [`test/resources/urpx-fixtures/FIXTURES.md`](test/resources/urpx-fixtures/FIXTURES.md) for the table of pinned commits and the re-sync workflow (`scripts/sync-urpx-fixtures.sh <path-to-urpx-rate-plans-checkout>`). When the upstream corpus exposes a new shape that clj-urpx should handle, add the fixture there with provenance and bump the pin.
 
 ## Code of conduct
 

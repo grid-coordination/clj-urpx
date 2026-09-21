@@ -174,7 +174,7 @@
    something about itself and should be validated as a node of that type, not
    waved through as a reference; without this, an @id paired with any @type at
    all passes whatever slot it sits in.
-   Every one of the 15,295 bare references in the urpx-tariffs corpus carries
+   Every one of the 15,295 bare references in the urpx-rate-plans corpus carries
    @id and nothing else, so this costs nothing real.
 
    Use `Ref` for reference-only properties, where no inline form is permitted

@@ -1,10 +1,9 @@
 {
   "@context": {
     "urpx": "https://urpx-org.github.io/urpx/ontology/",
-    "schema": "http://schema.org/",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
-    "org": "https://example.com/organizations/",
-    "pge": "https://example.com/pge/",
+    "org": "https://rate-plans.grid-coordination.energy/organizations/",
+    "pge": "https://rate-plans.grid-coordination.energy/pge/",
     "urpx:unitPrice": {
       "@type": "xsd:decimal"
     },
@@ -290,7 +289,7 @@
             "@type": "urpx:EligibilityRule",
             "@id": "pge:er-annual-usage-cap",
             "urpx:name": "Annual usage cap: 800% of baseline allowance over rolling 12 months",
-            "urpx:description": "Customers taking service on this rate schedule cannot exceed 800% of their annual baseline allowance, measured as the total usage for the customer over the last 12 months divided by the total annual baseline allowance using the approved baseline allowances for those months. Customers at premises with total usage in excess of 800% of baseline over 12 consecutive months are removed from Schedule EV2 and prohibited from taking service on any electric vehicle rate schedule for 12 months. Such customers are defaulted to Schedule E-TOU-D. Modeled as ComparisonNode (lessThanOrEqualOperator) with leftOperand referencing pge:mi-energy-annual-rolling (rolling 12-month aligned kWh) and rightOperand integerValue 800. The percent-of-baseline UoM is still informal — the right-side 800 represents 800% of baseline, not 800 kWh. Full formalization pending URPX vocabulary for percent-of-baseline UoM (grid-coordination/urpx-tariffs#4).",
+            "urpx:description": "Customers taking service on this rate schedule cannot exceed 800% of their annual baseline allowance, measured as the total usage for the customer over the last 12 months divided by the total annual baseline allowance using the approved baseline allowances for those months. Customers at premises with total usage in excess of 800% of baseline over 12 consecutive months are removed from Schedule EV2 and prohibited from taking service on any electric vehicle rate schedule for 12 months. Such customers are defaulted to Schedule E-TOU-D. Modeled as ComparisonNode (lessThanOrEqualOperator) with leftOperand referencing pge:mi-energy-annual-rolling (rolling 12-month aligned kWh) and rightOperand integerValue 800. The percent-of-baseline UoM is still informal — the right-side 800 represents 800% of baseline, not 800 kWh. Full formalization pending URPX vocabulary for percent-of-baseline UoM (grid-coordination/urpx-rate-plans#4).",
             "urpx:hasConditionExpression": {
               "@type": "urpx:ConditionExpression",
               "@id": "pge:cx-annual-usage-cap",
