@@ -402,7 +402,12 @@
       (:urpx/measurementKind spec)
       (assoc :urpx.resolved/measurement-kind (:urpx/measurementKind spec))
       (:urpx/unitOfMeasure spec)
-      (assoc :urpx.resolved/unit-of-measure (:urpx/unitOfMeasure spec)))))
+      (assoc :urpx.resolved/unit-of-measure (:urpx/unitOfMeasure spec))
+      ;; urpx:flowDirection: forward, reverse, net or bidirectional. Surfaced
+      ;; because an export ledger and an import ledger are not the same kind of
+      ;; thing, and a consumer summing per-kWh charges needs to tell them apart.
+      (:urpx/flowDirection spec)
+      (assoc :urpx.resolved/flow-direction (:urpx/flowDirection spec)))))
 
 (defn- pd-active-in-month?
   "True if `pd`'s urpx:hasApplicabilityRule constraints (if any) admit the
@@ -1086,6 +1091,23 @@
                                  modifiers)]
      (update base :urpx.resolved/ledgers (fnil into []) extra))))
 
+(defn- import-energy-ledger?
+  "True if `ledger` measures energy flowing INTO the premises, which is what a
+   per-kWh marginal rate is about.
+
+   urpx:flowDirection urpx:reverse marks export: compensation for energy sent
+   back, not a cost of the next kWh consumed. Summing the two conflates a
+   credit with a charge. Composing PG&E E-ELEC with its NBT modifier produced
+   -213.15920 per kWh, because four export ledgers carrying 4,610 hourly
+   avoided-cost values were added to a 0.56006 import rate.
+
+   urpx:net and urpx:bidirectional are treated as contributing. Neither appears
+   in the corpus, so excluding them would be speculation; if one shows up, a
+   netted quantity in an import marginal is genuinely ambiguous and this is the
+   line to revisit."
+  [ledger]
+  (not= "urpx:reverse" (get-in ledger [:urpx.resolved/flow-direction :jsonld/id])))
+
 (defn measurement-kinds
   "The set of urpx:measurementKind @ids present across `resolved`'s ledgers.
 
@@ -1110,7 +1132,9 @@
    a marginal per-kWh rate is not a small number, it is a question that does not
    apply."
   [resolved]
-  (contains? (measurement-kinds resolved) "urpx:energy"))
+  (boolean (some #(and (= "urpx:energy" (get-in % [:urpx.resolved/measurement-kind :jsonld/id]))
+                       (import-energy-ledger? %))
+                 (:urpx.resolved/ledgers resolved))))
 
 (defn marginal-unit-rate
   "The marginal $/kWh at the start of a billing period: summed across all
@@ -1176,6 +1200,7 @@
         energy     (->> (:urpx.resolved/ledgers resolved)
                         (filter #(and (= "urpx:energy"
                                          (get-in % [:urpx.resolved/measurement-kind :jsonld/id]))
+                                      (import-energy-ledger? %)
                                       (seq (:urpx.resolved/tiers %)))))
         ;; A ledger of mutually-exclusive alternatives has no marginal tier
         ;; until the caller says which alternative applies. Taking the first

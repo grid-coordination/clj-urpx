@@ -393,6 +393,8 @@ They never enter `marginal-unit-rate`, which sums $/kWh: a per-interval figure i
 
 That distinction exists because a ledger is used for two different things. A block tier ladder is mutually exclusive, so only the marginal rung applies. An additive rate stack, which is how delivery charges are modeled throughout this corpus (transmission, distribution, public purpose, wildfire NBC, and the rest), is cumulative and all of it applies.
 
+Export ledgers are excluded entirely. `urpx:flowDirection urpx:reverse` marks compensation for energy sent back, which is not a cost of the next kWh consumed; summing the two conflates a credit with a charge. Composing PG&E E-ELEC with its NBT modifier produced **-213.15920/kWh** before this, because four export ledgers carrying 4,610 hourly avoided-cost values were added to a 0.56006 import rate. `urpx:net` and `urpx:bidirectional` still contribute: neither appears in the corpus, so excluding them would be speculation. Resolved ledgers carry `:urpx.resolved/flow-direction` when the filing declares one.
+
 `urpx:serviceTierNumber` is what separates them: a numbered tier belongs to a ladder, a bare one is a component. URPX has no vocabulary declaring which kind a ledger is, so this is the signal available rather than the signal designed. Across 40 base plans at four instants, multi-tier energy ledgers were 183 additive, 31 ladder, and 3 mixed — all three being the same ledger. A mixed ledger contributes its bare components plus the lowest numbered rung.
 
 ### Plans that price nothing per kWh

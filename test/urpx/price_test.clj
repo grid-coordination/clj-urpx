@@ -1692,3 +1692,60 @@
                       (keep :urpx.resolved/unit-price)
                       (reduce + 0M)))
               "a ladder's upper rungs are still excluded"))))))
+
+(deftest export-ledgers-do-not-enter-an-import-marginal-rate
+  (testing "urpx:flowDirection urpx:reverse marks an EXPORT ledger:
+            compensation for energy sent back, not a cost of the next kWh
+            consumed. Summing the two conflates a credit with a charge.
+
+            Measured on the real corpus before this fix: composing PG&E E-ELEC
+            with its NBT modifier returned -213.15920 per kWh, because four
+            export ledgers carrying 4,610 hourly avoided-cost values were added
+            to a 0.56006 import rate. Excluding them returns exactly 0.56006,
+            the base plan's own rate.
+
+            Constructed rather than fixture-driven: the PG&E NBT filing is 3 MB
+            against a 976 KB fixture set, and the behavior under test is the
+            flow-direction predicate rather than anything about that document."
+    (let [import-ledger {:urpx.resolved/ledger-id "x:import"
+                         :urpx.resolved/measurement-kind {:jsonld/id "urpx:energy"}
+                         :urpx.resolved/flow-direction {:jsonld/id "urpx:forward"}
+                         :urpx.resolved/tiers [{:urpx.resolved/unit-price 0.30M}]}
+          export-ledger {:urpx.resolved/ledger-id "x:export"
+                         :urpx.resolved/measurement-kind {:jsonld/id "urpx:energy"}
+                         :urpx.resolved/flow-direction {:jsonld/id "urpx:reverse"}
+                         :urpx.resolved/tiers [{:urpx.resolved/unit-price -192.95M}]}
+          unspecified   {:urpx.resolved/ledger-id "x:unspecified"
+                         :urpx.resolved/measurement-kind {:jsonld/id "urpx:energy"}
+                         :urpx.resolved/tiers [{:urpx.resolved/unit-price 0.05M}]}]
+
+      (testing "an export ledger contributes nothing"
+        (is (= 0.30M (price/marginal-unit-rate
+                      {:urpx.resolved/ledgers [import-ledger export-ledger]}))))
+
+      (testing "a ledger declaring no direction still contributes, since most
+                filings state none and excluding them would empty the rate"
+        (is (= 0.35M (price/marginal-unit-rate
+                      {:urpx.resolved/ledgers [import-ledger unspecified]}))))
+
+      (testing "a plan with ONLY export energy refuses rather than reporting a
+                credit as though it were a price"
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"no energy ledger"
+                              (price/marginal-unit-rate
+                               {:urpx.resolved/ledgers [export-ledger]}))))
+
+      (testing "has-energy-ledger? agrees with the aggregate rather than
+                contradicting it, so the guard cannot say yes where the sum
+                would refuse"
+        (is (false? (price/has-energy-ledger? {:urpx.resolved/ledgers [export-ledger]})))
+        (is (true? (price/has-energy-ledger? {:urpx.resolved/ledgers [import-ledger]}))))
+
+      (testing "urpx:net and urpx:bidirectional contribute, deliberately:
+                neither appears in the corpus, so excluding them would be
+                speculation"
+        (doseq [d ["urpx:net" "urpx:bidirectional"]]
+          (is (= 0.30M (price/marginal-unit-rate
+                        {:urpx.resolved/ledgers
+                         [(assoc import-ledger :urpx.resolved/flow-direction {:jsonld/id d})]}))
+              d))))))

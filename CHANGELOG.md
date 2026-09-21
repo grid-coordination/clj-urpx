@@ -9,6 +9,24 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [0.21.0] — 2026-09-21
+
+### Fixed
+
+- **Export ledgers were summed into the import marginal rate.** `urpx:flowDirection urpx:reverse` marks compensation for energy sent back, which is not a cost of the next kWh consumed. `marginal-unit-rate` ignored the property entirely, so an export ledger was added to an import rate as though it were a charge.
+
+  Measured: composing PG&E E-ELEC 2026-03-27 with its NBT modifier returned **-213.15920/kWh**, because four export ledgers carrying 4,610 hourly avoided-cost values were added to a 0.56006 import rate. It now returns 0.56006, the base plan's own rate. The audit that found it counted 22 compositions summing export compensation into an import marginal, 17 of them real defects.
+
+  `urpx:net` and `urpx:bidirectional` still contribute. Neither appears in the corpus, so excluding them would be speculation; a netted quantity in an import marginal is genuinely ambiguous and that is the line to revisit if one appears.
+
+### Added
+
+- `:urpx.resolved/flow-direction` on resolved ledgers, when the filing declares one. An export ledger and an import ledger are not the same kind of thing, and a consumer summing per-kWh charges needs to tell them apart.
+
+### Changed
+
+- `has-energy-ledger?` now agrees with `marginal-unit-rate` about what counts, so the guard cannot answer yes where the aggregate would refuse. A plan whose only energy ledger is an export ledger reports `false` and refuses with `:no-energy-ledger`.
+
 ## [0.20.0] — 2026-09-21
 
 **`marginal-unit-rate` returns a different, larger number on most plans. Read the upgrade note.**
@@ -240,6 +258,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.21.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.21.0
 [0.20.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.20.0
 [0.19.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.19.0
 [0.18.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.18.0
