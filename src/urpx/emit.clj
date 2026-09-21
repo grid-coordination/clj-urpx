@@ -47,7 +47,7 @@
             [urpx.schema :as schema]))
 
 ;; ---------------------------------------------------------------------------
-;; Default JSON-LD @context (URPX-awl)
+;; Default JSON-LD @context
 ;; ---------------------------------------------------------------------------
 
 (def default-context

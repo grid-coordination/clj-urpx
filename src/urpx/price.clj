@@ -111,7 +111,7 @@
    Walks every tier's periods (the tier hierarchy is for classification —
    what matters for resolution is the bracket match).
 
-   BillingModel.hasTOUSchedule is a vector (URPX-qb5): one schedule per
+   BillingModel.hasTOUSchedule is a vector: one schedule per
    MetricInput when the rate plan TOU-zones multiple metrics. The first
    bracket-matching period across all schedules wins."
   [tou-schedules season-id ^LocalDate date ^LocalTime t ^DayOfWeek dow holiday?]
@@ -212,7 +212,7 @@
    `prices` whose effective start-date is <= `query-date`. Walks the flat
    :urpx/hasPrice list, PriceSet-nested prices, and PriceSetAlternatives-
    nested prices when the caller supplies an explicit
-   `:profile-alternatives` selection in opts (URPX-vlf).
+   `:profile-alternatives` selection in opts.
 
    Per URPX SHACL, PriceSet.startDate is optional (sh:minCount 0). When the
    PriceSet carries one it acts as the date floor for any contained Price that
@@ -429,7 +429,7 @@
   "Index ServiceTier entities (across every ServiceTiers container at
    BillingModel.hasServiceTiers, walking each container's :urpx/hasServiceTier
    list) by :urpx/serviceTierNumber. Empty map when the plan is not
-   block-tiered. URPX-qb5/URPX-6hf: hasServiceTiers is a vector — single
+   block-tiered. hasServiceTiers is a vector: single
    ServiceTiers fixtures (CPAU E-1, PG&E E-1) coexist with
    matrix-of-ServiceTiers patterns (PG&E E-TOU-C baseline-tier modifier:
    one ServiceTiers per (territory, code) cell)."
@@ -727,7 +727,7 @@
    query date's month-of-year. Each rule that carries a non-empty
    urpx:month list contributes a conjunctive constraint; a rule without
    urpx:month is permissive at this layer (any urpx:hasConditionExpression
-   gating is deferred — see URPX-axn). PDs without applicability rules
+   gating is deferred). PDs without applicability rules
    are always month-active.
 
    A rule may be stated inline OR as a bare {@id} reference to one defined
@@ -757,10 +757,10 @@
    admitting season is enough). PDs without urpx:appliesInSeason are always
    season-active.
 
-   This complements `pd-active-in-month?` to support non-TOU seasonal pricing
-   (URPX-2nk) — where the seasonal partition isn't carried by a TOUPeriod
-   indirection (no TOU schedule), so the only month-gating signal is the
-   PD → Season pointer plus Season.month."
+   This complements `pd-active-in-month?` to support non-TOU seasonal pricing,
+   where the seasonal partition isn't carried by a TOUPeriod indirection (no
+   TOU schedule), so the only month-gating signal is the PD → Season pointer
+   plus Season.month."
   [pd seasons-by-id ^java.time.LocalDate date]
   (let [refs (:urpx/appliesInSeason pd)]
     (or (empty? refs)
@@ -1411,7 +1411,7 @@
           :at         (.toLocalDateTime zdt)}})))))
 
 ;; ---------------------------------------------------------------------------
-;; Modifier resolution (URPX-yos)
+;; Modifier resolution
 ;; ---------------------------------------------------------------------------
 
 (defn- modifier-applies-to?

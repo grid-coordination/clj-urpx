@@ -148,7 +148,7 @@
 
    Same merge-adjacent / step / zone-resolution semantics as
    `price-schedule`. Same `opts` (`:step`, `:holiday?`, plus any other keys
-   that `resolve-prices-with-modifiers` consumes — e.g. URPX-vlf's
+   that `resolve-prices-with-modifiers` consumes, such as
    `:profile-alternatives`)."
   ([rate-plan modifiers start end]
    (price-schedule-with-modifiers rate-plan modifiers start end nil nil))

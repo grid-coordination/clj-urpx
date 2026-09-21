@@ -50,7 +50,7 @@
    - Namespaced keywords → `\"ns:local\"` (CURIE form, e.g. :urpx/name → \"urpx:name\").
    - Bare keywords → `\"name\"`.
 
-   Used by the write-side path (urpx.emit, URPX-biu) to project a typed
+   Used by the write-side path (urpx.emit) to project a typed
    entity back into the JSON-shaped data that `clojure.data.json/write-str`
    serializes."
   [k]

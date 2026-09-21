@@ -63,7 +63,7 @@
             [urpx.schema :as schema]))
 
 ;; ---------------------------------------------------------------------------
-;; Local-symbol refs (URPX-8fo) — dsl-scope + registry
+;; Local-symbol refs: dsl-scope + registry
 ;; ---------------------------------------------------------------------------
 
 (def ^:dynamic ^:private *local-refs*
@@ -210,7 +210,7 @@
      - Accepts kwargs (or a trailing map per Clojure 1.11+ unification) of
        canonical :urpx/* keys; the entity's :jsonld/type is set automatically
        from the schema.
-     - Inside a `dsl-scope` (URPX-8fo), accepts an optional leading
+     - Inside a `dsl-scope`, accepts an optional leading
        qualified-keyword as the entity's local @id (registered in the scope's
        registry); qualified-keyword values in kwarg positions resolve to
        Ref maps via the same registry.
@@ -250,7 +250,7 @@
         coerced))))
 
 ;; ---------------------------------------------------------------------------
-;; Named builders for every entity in urpx.schema (URPX-upf)
+;; Named builders for every entity in urpx.schema
 ;; ---------------------------------------------------------------------------
 
 ;; Each def binds a builder for one entity-type schema. Every builder

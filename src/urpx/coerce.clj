@@ -26,7 +26,7 @@
 (defn encode
   "Encode a typed value against `schema` using the URPX JSON-LD transformer.
    Inverse of `coerce` — turns BigDecimal/LocalDate/etc. back into the JSON-LD
-   string forms (URPX-nvo write-side). Schemas without an :encode/urpx-jsonld
+   string forms for the write side. Schemas without an :encode/urpx-jsonld
    property pass values through unchanged (`:default-encoder identity`)."
   [schema typed]
   (m/encode schema typed jsonld-transformer))

@@ -35,7 +35,7 @@
    - string: parse as xsd:decimal
    - anything else: pass-through (let validation surface the type mismatch)
 
-   The number form (URPX-4w3) lets DSL callers write `:urpx/unitPrice 0.15075`
+   The number form lets DSL callers write `:urpx/unitPrice 0.15075`
    instead of `(BigDecimal. \"0.15075\")`."
   [v]
   (cond
@@ -48,7 +48,7 @@
 ;; Encoder helpers (consumed by `:encode/urpx-jsonld` properties below)
 ;; ---------------------------------------------------------------------------
 ;; Symmetric to the ->X decoders above. Used by the write-side path
-;; (URPX-nvo / urpx.emit) to turn typed values back into JSON-LD strings.
+;; (urpx.emit) to turn typed values back into JSON-LD strings.
 ;; Each helper passes through already-string values unchanged, mirroring
 ;; the way decoders pass through already-typed values.
 
@@ -509,12 +509,11 @@
    single-container fixtures compatible without touching their JSON-LD:
 
      - hasTOUSchedule is a vector for filings that TOU-zone multiple
-       metric inputs (CPAU E-4 TOU: separate energy + demand schedules,
-       URPX-qb5).
+       metric inputs (CPAU E-4 TOU: separate energy + demand schedules).
      - hasServiceTiers is a vector for filings with a baseline-allowance
        matrix — one ServiceTiers per (territory, code) cell — driven by
-       ProfileAlternatives selection (PG&E E-TOU-C baseline-tier modifier;
-       URPX-6hf, per upstream Una guidance on matrix handling)."
+       ProfileAlternatives selection (PG&E E-TOU-C baseline-tier modifier,
+       per upstream Una guidance on matrix handling)."
   [:map
    [:jsonld/type [:= "urpx:BillingModel"]]
    [:urpx/prorationMethod {:optional true} :string]
@@ -1315,7 +1314,7 @@
     [:vector Ref]]
    ;; URPX Decisions #084 + #090: RPV-side pointers to optional Modifier(s)
    ;; and ModifierVersion(s). Both 0..None in SHACL — surfaced here so
-   ;; coerce yields them as vectors of Ref maps (URPX-1nq).
+   ;; coerce yields them as vectors of Ref maps.
    [:urpx/hasModifierOptions
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
@@ -1373,8 +1372,8 @@
    ;; forRatePlan on a sibling snapshot is legal too. NOT widened to 0..N yet:
    ;; SHACL sets no sh:maxCount, but price.clj:493, holidays.clj:182 and
    ;; tz_inference.clj:46 all read this as a single map, so a vector here would
-   ;; validate documents the resolver then silently misreads. URPX-6aw.4 owns
-   ;; the reader rewrite and the arity widening lands with it.
+   ;; validate documents the resolver then silently misreads. Widening it means
+   ;; rewriting those three readers first.
    ;; v0.5.1 typed identity. hasIdentifier and hasLocationDataSet are 0..N
    ;; upstream; timezoneIdentifier is maxCount 1.
    [:urpx/hasIdentifier
@@ -1438,7 +1437,7 @@
    ;; Single Ref (one base plan) or a vector of Refs (NSE/HRA-style modifiers).
    ;; Optional per SHACL (sh:minCount 0): standalone urpx:RatePlanModifier
    ;; documents whose target linkage isn't yet expressed in-document (CPAU
-   ;; E-2-G shape, URPX-g7z) carry no applicableToRatePlan and rely on
+   ;; E-2-G shape) carry no applicableToRatePlan and rely on
    ;; consumer-side composition.
    [:urpx/applicableToRatePlan
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
