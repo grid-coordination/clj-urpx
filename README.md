@@ -259,7 +259,7 @@ Modifier `PriceDefinition`s carrying `urpx:touPeriodNumber` are gated symmetrica
 
 Matrix-style modifiers (e.g. PG&E vintage-PCIA, one ledger with a price per departure-vintage year) surface every active price under one ledger entry; the caller picks the active value via `:urpx.resolved/price-id`. The selection dimension is carried by `urpx:PriceSetAlternatives`: each `PriceSetAlternative` names its `urpx:referencesProfileAlternative`, and the set names the `urpx:ProfileAlternatives` it discriminates on.
 
-These prices are **alternatives, not tiers**: exactly one applies to any customer. Pass `:profile-alternatives` to choose one, exactly as on the base plan path, and only the chosen alternative surfaces. Without a selection all of them surface and the ledger carries `:urpx.resolved/unselected-alternatives`; `marginal-unit-rate` then **refuses**, because an aggregate that took one of eighteen mutually-exclusive prices would be reporting an arbitrary number as the marginal rate.
+These prices are **alternatives, not tiers**: exactly one applies to any customer. Pass `:profile-alternatives` to choose one, exactly as on the base plan path, and only the chosen alternative surfaces. Without a selection all of them surface and the ledger carries `:urpx.resolved/unselected-alternatives`; `marginal-unit-rate` then **refuses**, because an aggregate that took one of eighteen mutually-exclusive prices would be reporting an arbitrary number as the marginal rate. It refuses when the withheld prices would have entered the sum, which these do; see [What withholding costs](#what-withholding-costs-and-when-it-costs-an-answer).
 
 Prices carrying `urpx:hasDynamicPricing` (CPP Event Charges, RTP overlays, other event-driven components, applicable to base PDs and modifier PDs alike per the SHACL Price shape) are surfaced with the DynamicPricing payload attached to the resolved tier under `:urpx.resolved/dynamic-pricing`. Consumers evaluating event state at billing time read the nested `:urpx/dynamicPricingType`, `:urpx/priceSource`, `:urpx/updateFrequency`, and `:urpx/hasPriceUpdateRule`.
 
@@ -305,6 +305,7 @@ The reasons are:
 | `:summary-no-active-members` | no member of the summary is in effect at this instant, so its subtotal is undefined here |
 | `:basis-not-valuable` | the basis resolved but has no unit price |
 | `:no-unit-price` | the Price states neither a unit price nor a multiplier and basis to derive one from |
+| `:summary-member-unselected` | a summary member's PriceDefinition is scoped to a `urpx:ProfileAlternative` in a dimension the caller chose nothing for, so excluding it would understate the subtotal and including it would overstate it |
 
 A nil unit price with no explanation would read to a consumer as free, which for a discount is the worst available answer; `marginal-unit-rate` therefore throws rather than return one.
 
@@ -412,18 +413,27 @@ Ask first when sweeping a corpus, so the refusal is not a tax on every caller:
 ;;                                     caller can route rather than skip
 ```
 
-Every refusal `marginal-unit-rate` makes carries a `:reason` in its `ex-data`, so a sweeping consumer can classify instead of catching everything: `:no-energy-ledger`, `:unvaluable-marginal-tier`, `:unselected-alternatives`, and `:all-energy-tiers-excluded`.
+Every refusal `marginal-unit-rate` makes carries a `:reason` in its `ex-data`, so a sweeping consumer can classify instead of catching everything: `:no-energy-ledger`, `:unvaluable-marginal-tier`, `:unselected-alternatives`, `:all-energy-tiers-excluded`, and `:outside-version-window`.
+
+`resolve-prices` itself carries a `:reason` on six further refusals, all of them a refusal to guess rather than a failure to parse. (It can also propagate a throw from indexing or from holiday-rule derivation; those are malformed-document errors and carry no `:reason`, so classify on the key's presence rather than assuming it.) Three concern versions: `:no-version-in-effect`, `:ambiguous-version` and `:version-without-effective-instant`, when several snapshots cannot be ordered or none covers the instant. Three concern alternatives, and all three are cases where reading on would return a confident wrong number rather than fail:
+
+| reason | when |
+|---|---|
+| `:multiple-profile-alternatives` | a `PriceDefinition` names more than one alternative |
+| `:ambiguous-profile-alternative` | the alternative a definition names is listed by two `ProfileAlternatives`, so there is no one dimension to read the caller's choice from |
+| `:unknown-profile-alternative` | `:profile-alternatives` chooses a value the container it is keyed under does not list, usually a typo or a stale id. Compared for equality it would read as a deliberate choice of a sibling cell and silently drop every definition in that dimension |
 
 ### What the resolver needs that SHACL does not require
 
-Two properties are optional in the shapes but load-bearing here, so a document can be perfectly conformant and still lose content on the way to a resolved price. Both were found by authoring real filings, not by validation.
+One property is optional in the shapes but load-bearing here, so a document can be perfectly conformant and still resolve to less than it says.
 
 | Property | If omitted |
 |---|---|
-| `urpx:startDate` on a `urpx:Price` | The Price is **dropped silently** when nothing encloses it that carries a date. A Price inside a `urpx:PriceSet` inherits the set's `urpx:startDate`, so the omission is invisible there; a Price on the flat `urpx:hasPrice` list has nothing to inherit from and simply disappears. |
 | `urpx:referencesMetricInput` on a `urpx:Ledger` | The ledger and its tiers still resolve and still appear in `:urpx.resolved/ledgers`, so reading tiers shows no loss. But `marginal-unit-rate` decides which ledgers are energy from the referenced `MetricInput`'s `urpx:measurementKind`, so an unreferenced ledger contributes nothing and the aggregate comes back **quietly short**. If no ledger qualifies at all it refuses with `:no-energy-ledger` rather than returning a number. |
 
-The second is the more dangerous of the two, because `0M` is a legal price rather than an error. If a per-kWh ledger is missing from a marginal rate, check that its `MetricInput` exists and that its `urpx:measurementKind` is `urpx:energy`.
+It is dangerous precisely because a short sum is a legal-looking price. If a per-kWh ledger is missing from a marginal rate, check that its `MetricInput` exists and that its `urpx:measurementKind` is `urpx:energy`.
+
+**Dates are no longer in this category.** An absent `urpx:startDate` used to discard the Price at four scoping sites; it now means *no start constraint*, which is what `sh:minCount 0` says. A Price that has not started yet is still excluded. `urpx:startDateTime` is read too, in preference to `urpx:startDate`, so a filing stating its date that way is no longer priced as though it had none.
 
 ### Customer-profile alternatives
 
@@ -439,11 +449,42 @@ This is the **selection layer**, and URPX is explicit that it is distinct from t
    {"pge:bsc-income-tier" "pge:bsc-care"}})
 ```
 
-Without a selection an alternative's prices are **withheld**, and the ledger they would have populated survives carrying `:urpx.resolved/unselected-alternatives`, naming the PriceDefinitions whose prices were held back. It is not silently omitted: a consumer can tell an unchosen dimension from a plan that has none.
+Without a selection an alternative's prices are **withheld**, and the ledger they would have populated survives carrying `:urpx.resolved/unselected-alternatives`. It is not silently omitted: a consumer can tell an unchosen dimension from a plan that has none. The vector carries `@id`s of whatever was held back, which is PriceDefinitions on the base-plan path, and on the modifier path either Prices (surfaced from an unselected `PriceSetAlternatives` and marked in place) or PriceDefinitions (scoped to an unchosen alternative), mixed in one vector when both apply. Read it as opaque provenance, and use `:urpx.resolved/withheld-prices` when you need the entries themselves.
 
-`marginal-unit-rate` refuses only when a withheld ledger is **energy**-measured, since withholding a per-day base charge cannot change a per-kWh figure. PG&E E-TOU-C exercises both on one plan: its income-tier alternatives feed a Base Services Charge ledger and do not refuse; its vintage-PCIA alternatives feed an energy ledger and do.
+`marginal-unit-rate` refuses only when a withheld ledger is **energy**-measured, since withholding a per-day base charge cannot change a per-kWh figure. PG&E E-TOU-C exercises both on one plan: its income-tier alternatives feed a Base Services Charge ledger and do not refuse; its vintage-PCIA alternatives feed an energy ledger and do. Being energy-measured is necessary and not sufficient: see [What withholding costs](#what-withholding-costs-and-when-it-costs-an-answer).
 
 Programmatic evaluation of each alternative's `urpx:ConditionExpression` against a customer profile is a future enhancement.
+
+### Scoping a PriceDefinition to an alternative
+
+`urpx:referencesProfileAlternative` is read on a `urpx:PriceDefinition` as well as on a `PriceSetAlternative`, on the base plan and on modifiers alike. Five shapes carry the property upstream (those two plus `TOUSchedule`, `ServiceTiers` and `ServiceBracket`); these are the two this library reads, and the definition-level one is where a multi-dimensional choice lands: one `ProfileAlternatives` container, whose single `AlternativeDimensions` wraps several `AlternativeDimension`, whose alternatives enumerate the **cells** of the cross product, with one PriceDefinition scoped to each cell.
+
+Four outcomes, given the caller's `:profile-alternatives`. That map is keyed by *container*, while a definition references an *alternative*; `urpx:hasProfileAlternative` bridges the two, so no new vocabulary is needed.
+
+| the definition | outcome |
+|---|---|
+| references no alternative | applies, as every filing does today |
+| references the chosen one | applies |
+| references a **different** one in that dimension | filtered out silently: it genuinely does not apply, exactly as an out-of-season definition does not |
+| references one in a dimension nothing was chosen for | prices **withheld**, and the ledger says so |
+
+Naming **several** alternatives on one definition refuses with `:multiple-profile-alternatives`. The shapes permit it (`sh:minCount 0`, no `sh:maxCount`) and no filing uses it; a matrix does not need it, because the conjunction already lives inside the cell. Defining a rule for a shape nothing has is how an arbitrary pick gets built in.
+
+A definition that names an alternative no `ProfileAlternatives` in the document declares is treated as the fourth row, not as an error: which one applies is unknown for the same reason, and a composition whose container lives in the other document should withhold rather than hard-fail.
+
+This does not evaluate the cells' condition expressions: a consumer names the cell by `@id`. That is the selection layer working as URPX intends. The gain is that exclusivity becomes *readable and refusable*, not that selection becomes automatic.
+
+### What withholding costs, and when it costs an answer
+
+A withheld ledger carries two keys. `:urpx.resolved/unselected-alternatives` says that something was withheld; `:urpx.resolved/withheld-prices` says what, under the same keys a resolved tier uses.
+
+`marginal-unit-rate` refuses with `:unselected-alternatives` when withholding would make its sum **short**, which it decides with the same predicate that excludes a tier from the sum. An event-driven price (`urpx:hasDynamicPricing`) or a recurring charge is already outside a non-event per-unit marginal, so withholding it changes no number and is not worth an answer. Ask for the during-event upper bound with `:include-dynamic-pricing? true` and the event price is wanted again, so the same document refuses.
+
+It also refuses when a ledger is marked but `:urpx.resolved/withheld-prices` is **empty**. Not knowing what was withheld is not evidence that it did not matter, and a guard that passes on missing evidence is not a guard.
+
+A price that is both present in `:urpx.resolved/tiers` and named by the mark contributes its own tier entry as the evidence, rather than a reconstruction of it. The two views have to be the same map: the refusal asks one and the sum takes the other, so any field that excludes one but not the other defeats the guard.
+
+The distinction is the difference between a question the caller can answer and one they cannot. A vintage-PCIA cell is an attribute of the customer: the caller knows their departure vintage, and naming it is a reasonable ask, so that refusal stands. CPAU's E-HRA cells are the utility's own reserve level and generation band, reset by council vote, which no consumer has a source for; a refusal there would be permanent, and it would be trading a correct rate for an unanswerable question.
 
 ### Sub-hour granularity
 
@@ -469,7 +510,8 @@ The library also supports the inverse direction: emit URPX JSON-LD from a coerce
 ;; Standalone modifier documents
 (emit/write-rate-plan-modifier modifier)
 
-;; URPXDocument-wrapped documents (v0.2.0 wrapper class)
+;; URPXDocument-wrapped documents. urpx:URPXDocument is the v0.2.0 wrapper
+;; class, renamed in v0.3.0, so a document using it declares a v0.2.x ontology.
 (emit/write-urpx-document
   {:jsonld/type "urpx:URPXDocument"
    :urpx/targetURPXVersion "https://github.com/urpx-org/urpx/raw/v0.2.0/ontology/urpx-ontology.ttl"
@@ -627,15 +669,15 @@ Currently covered:
 - Timezone inference reads `urpx:offeredBy` on a snapshot, the v0.5.1 successor to `urpx:publishedBy`, which was removed from the version shapes
 - `Price.hasApplicabilityRule` and `PriceSetAlternative.hasApplicabilityRule` take either an inline `urpx:ApplicabilityRule` or a bare `@id` reference to one defined elsewhere in the document, since RDF merges a reference with its definition
 - Modifier filings in all three packaging shapes — bundled with a base RatePlan in `@graph`, carried by a wrapper, or standalone (no in-document target linkage; consumer-side composition expected) — load via `core/load-rate-plan-modifier`
-- v0.2.0 `urpx:ConditionExpression` tree (Comparison/Boolean nodes with Object/Datatype/Custom operand leaves) parses and coerces; recursive operands are validated through a local Malli registry
-- v0.2.0 `BillingModel.hasPriceDefinition` traversal (PD now lives at the BillingModel level with `referencesLedger` pointing back) for price resolution
+- `urpx:ConditionExpression` tree (Comparison/Boolean nodes with Object/Datatype/Custom operand leaves) parses and coerces; recursive operands are validated through a local Malli registry
+- `BillingModel.hasPriceDefinition` traversal (the PriceDefinition lives at the BillingModel level with `referencesLedger` pointing back) for price resolution
 - TOU period resolution: seasons, ontology day-types (`urpx:allDays`, `urpx:weekdayDays`, `urpx:weekendDays`, `urpx:customDays`), `urpx:includeHolidays` / `urpx:includeNonHolidays` bracket gates, time-bracket containment with midnight wrap. Multiple `urpx:TOUSchedule`s per BillingModel are supported (one per MetricInput, e.g. separate energy + demand schedules)
 - Non-TOU seasonal gating via `PriceDefinition.appliesInSeason → Season.month`, alongside the existing `hasApplicabilityRule.month` path — handles filings whose seasonal partition isn't carried by a TOUPeriod indirection (CPAU E-2 shape)
 - `RatePlanVersion` surfaces `urpx:hasModifierOptions` and `urpx:hasModifierVersionOptions` pointers (Decisions #084 + #090) for cross-version modifier wiring
-- Block-tier surfacing via the v0.2.0 `urpx:ServiceTiers` container — every tier surfaces with its bounds and bound operators
-- Active-price selection by latest `startDate ≤ query-date`, drawing from flat top-level prices, `PriceSet`-scoped prices, and PriceSets that omit `startDate` and fall through to per-Price dates (CPAU E-2 shape, per `urpx:PriceSetShape` `sh:minCount 0`)
+- Block-tier surfacing via the `urpx:ServiceTiers` container — every tier surfaces with its bounds and bound operators
+- Active-price selection by latest `startDate ≤ query-date`, reading `urpx:startDateTime` in preference to `urpx:startDate`, drawing from flat top-level prices, `PriceSet`-scoped prices and alternatives. A Price with no derivable date carries no start constraint rather than being discarded
 - Modifier resolution alongside the base plan (vintage-PCIA pattern: many Prices share one PD, discriminated by `urpx:PriceSetAlternatives` / `urpx:referencesProfileAlternative`, and selected with `:profile-alternatives`)
-- `urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives`, the selection layer for declarative customer-or-configuration choices (income tier CARE/FERA/Standard, voltage configuration, vintage-PCIA departure year). Coerce + validate full schemas; resolve-prices selects the active alternative via an explicit `:profile-alternatives` opt; emit round-trips cleanly. `urpx:referencesProfileAlternative` is read on `PriceSetAlternative` only, not yet on the `PriceDefinition`-level slot the shapes also allow. Programmatic `ConditionExpression` evaluation against a customer profile is a future enhancement
+- `urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives`, the selection layer for declarative customer-or-configuration choices (income tier CARE/FERA/Standard, voltage configuration, vintage-PCIA departure year). Coerce + validate full schemas; resolve-prices selects the active alternative via an explicit `:profile-alternatives` opt; emit round-trips cleanly. `urpx:referencesProfileAlternative` is read on `PriceSetAlternative` and on `PriceDefinition`; the shapes also carry it on `TOUSchedule`, `ServiceTiers` and `ServiceBracket`, which are not read. Programmatic `ConditionExpression` evaluation against a customer profile is a future enhancement
 - Configurable schedule step (hourly default; sub-hour available via `:step`)
 - Symmetric write-side: `urpx.emit` emits JSON-LD from any coerced `RatePlan` / `RatePlanModifier` / `URPXDocument`; the vendored-fixture round-trip suite verifies `parse → coerce → emit → re-parse → re-coerce` is a fixed point for every PG&E filing × {RatePlan, Modifier} plus a URPXDocument-wrapped E-ELEC test case
 - Authoring DSL (`urpx.dsl`): named builders for every entity-type schema, kebab-case kwarg aliases, auto-coercion of raw inputs (numbers → BigDecimal, ISO strings → java.time, `--MM` → int month), validation-on-construct, and local-symbol refs scoped via `dsl-scope`
@@ -643,7 +685,7 @@ Currently covered:
 Known gaps:
 
 - Programmatic interpretation of `urpx:ConditionExpression` for active-tier selection in matrix-style modifiers — currently the caller picks the active value by `price-id` after walking the condition tree itself
-- A handful of v0.2.0 SHACL classes that appear as references but aren't deeply modeled — `urpx:TariffPublication`, `urpx:ProgramEnrollment`, `urpx:ServicePointProfile`, plus the non-RatePlan URPXDocument subclasses (`urpx:TariffStatementDocument`, `urpx:DERExportsDocument`, `urpx:HighlyDynamicPricesDocument`, `urpx:SupplyChargesDocument`). They round-trip correctly as opaque maps via `:map`-typed payload pointers; deeper modeling (named builders, validation) lands as consumers need it.
+- A handful of SHACL classes that appear as references but aren't deeply modeled — `urpx:TariffPublication`, `urpx:ProgramEnrollment`, `urpx:ServicePointProfile`, plus the non-RatePlan URPXDocument subclasses (`urpx:TariffStatementDocument`, `urpx:DERExportsDocument`, `urpx:HighlyDynamicPricesDocument`, `urpx:SupplyChargesDocument`). They round-trip correctly as opaque maps via `:map`-typed payload pointers; deeper modeling (named builders, validation) lands as consumers need it.
 
 ## Checking for drift against the standard
 
@@ -670,7 +712,7 @@ Wrappers are descended, so a `urpx:URPXDocument` or `urpx:URPXPackage` is checke
 
 ## Contributing
 
-Issues, Discussions, and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow (and the dev commands: tests, lint, nREPL). In short:
+Issues, Discussions, and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow (and the dev commands: tests, lint, nREPL), and [doc/RELEASING.md](doc/RELEASING.md) for cutting a release. In short:
 
 - **Questions, API/design discussion, vocabulary gaps** → [Discussions](https://github.com/grid-coordination/clj-urpx/discussions)
 - **Confirmed bugs, schema/resolver fixes, doc errors** → [Issues](https://github.com/grid-coordination/clj-urpx/issues)

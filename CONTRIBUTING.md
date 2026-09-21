@@ -21,7 +21,7 @@ Discussions are open-ended — a good place to think out loud or scope something
 Use [Issues](https://github.com/grid-coordination/clj-urpx/issues) for actionable changes:
 
 - Bugs in parsing, coercion, schema validation, or price resolution against real URPX fixtures
-- v0.2.0 SHACL classes that aren't yet modeled and that a real consumer needs (`urpx:TariffPublication`, `urpx:ProgramEnrollment`, the non-RatePlan URPXDocument subclasses, etc. — see [README §Status](README.md#status) for the running list)
+- SHACL classes that aren't yet modeled and that a real consumer needs (`urpx:TariffPublication`, `urpx:ProgramEnrollment`, the non-RatePlan URPXDocument subclasses, etc. — see [README §Status](README.md#status) for the running list)
 - Test failures or unexpected behavior with concrete repro steps
 - Schema gaps surfaced by the urpx-rate-plans corpus (a filing that should validate but doesn't, or coerces into a shape the resolver can't handle)
 - Documentation errors, unclear explanations, or stale prose in `README.md`, `doc/dsl-tutorial.md`, or namespace docstrings
@@ -77,4 +77,4 @@ Be respectful and constructive. We're a small project and appreciate everyone wh
 
 ## Important notice
 
-This library is provided on an "as-is" basis. Updates and maintenance, including responses to issues filed on GitHub, will take place on an "as time and resources permit" basis. Library output (parsed maps, resolved prices, emitted JSON-LD) is best-effort against the URPX v0.2.0 spec and is not authoritative for billing — independent verification against the source URPX specification and tariff filings is recommended for any consumer using these results for billing-correctness purposes.
+This library is provided on an "as-is" basis. Updates and maintenance, including responses to issues filed on GitHub, will take place on an "as time and resources permit" basis. Library output (parsed maps, resolved prices, emitted JSON-LD) is best-effort against the URPX ontology snapshot the fixtures pin via `urpx:targetURPXVersion`, currently v0.5.1 and is not authoritative for billing — independent verification against the source URPX specification and tariff filings is recommended for any consumer using these results for billing-correctness purposes.

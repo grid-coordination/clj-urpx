@@ -9,6 +9,60 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [0.25.0] — 2026-09-21
+
+`urpx:referencesProfileAlternative` on a `urpx:PriceDefinition`, and a narrower rule for when withholding costs the caller an answer.
+
+### Added
+
+- **`urpx:referencesProfileAlternative` is now read on `urpx:PriceDefinition`.** URPX names PriceDefinition explicitly as a place to scope applicability to a `ProfileAlternative`; clj-urpx read it only on `PriceSetAlternative`, so the slot existed in the vocabulary, passed the shapes at `sh:minCount 0`, and did nothing. Given the caller's `:profile-alternatives`, a definition that references no alternative applies as before, one that references the chosen alternative applies, one that references a different alternative in that dimension is filtered out silently, and one in a dimension nothing was chosen for has its prices withheld with the ledger saying so. The selection map is keyed by the `ProfileAlternatives` container while a definition names an alternative; `urpx:hasProfileAlternative` bridges them, so no new vocabulary is needed.
+
+  Read on the base plan and on modifiers alike. A matrix of mutually-exclusive cells is a modifier shape, so a version that read the property only on the base plan would have been a no-op exactly where it is needed.
+
+  This is where a multi-dimensional choice lands. `ProfileAlternativesShape` is `sh:maxCount 1` on `hasAlternativeDimensions`, so the dimensions live in one container and its alternatives enumerate the cells of the cross product: PG&E's own baseline territory and code set is 2 dimensions and 20 cells. Naming **several** alternatives on one definition refuses with `:multiple-profile-alternatives` rather than defining a combining rule for a shape no filing has.
+
+  The corpus has zero uses today. The slot has to work before a filing can be authored against it.
+
+- **`:urpx.resolved/withheld-prices`** on a withheld ledger, alongside the existing `:urpx.resolved/unselected-alternatives`. The latter says that something was withheld; the former says what, under the same keys a resolved tier uses.
+
+- **Two further refusals from `resolve-prices`**, both where reading on would return a confident wrong number. `:ambiguous-profile-alternative` when the alternative a definition names is listed by two `ProfileAlternatives`, so there is no one dimension to read the caller's choice from. `:unknown-profile-alternative` when `:profile-alternatives` chooses a value the container it is keyed under does not list.
+
+  The second is a **behavior change on a path every filing already uses**, not just on the new slot. A stale or mistyped alternative id used to be skipped silently, which dropped the whole dimension: on PG&E E-TOU-C composed with its vintage-PCIA modifier it returned 0.46886 where the correct id returns 0.49859, and the PCIA ledger was simply absent from the result. The check runs once per document, against the containers that document declares, so a key meant for a modifier is still ignored by the base plan and vice versa. A test that had pinned the silent skip as the specification was rewritten.
+
+- **`:summary-member-unselected`**, a new `:urpx.resolved/unvaluable` reason on a derived price whose `urpx:PriceSummary` names a member in a dimension the caller chose nothing for. Excluding such a member understates the subtotal and including it overstates it, so the summary declines to be valued.
+
+### Changed
+
+- **Withholding refuses the marginal rate only when it would make the sum short.** `marginal-unit-rate` refused whenever a withheld energy ledger was present, whatever had been withheld. An event-driven price (`urpx:hasDynamicPricing`) or a recurring charge is already outside a non-event per-unit marginal, so hiding it changes no number; the refusal is now decided by the same predicate that excludes a tier from the sum. Asking for the during-event upper bound with `:include-dynamic-pricing? true` wants that price again, and the same document refuses again.
+
+  Without this, moving a set of event-driven prices onto the selection layer would convert a correct rate into a refusal no caller could clear. CPAU's E-HRA cells are the utility's own reserve level and generation band, reset by council vote; a consumer has no source for either, so the selection the refusal demands could never be supplied. Vintage-PCIA is the case that keeps the refusal, being an ordinary per-kWh price and an attribute of the customer the caller does know. Raised by the urpx-tariffs session before authoring against the new slot.
+
+- **A recurring modifier price is now excluded from the per-kWh marginal.** `urpx:intervalDuration` is read from the `PriceDefinition` on the modifier path as it always was on the base plan. It was unreachable there, because the modifier path never called the function that stamps it, so the exclusion `marginal-unit-rate` documents for recurring charges could not fire for any modifier tier. No vendored fixture changes: the modifier definitions that carry an interval today all sit on non-energy ledgers.
+
+### Fixed
+
+- **A `urpx:PriceSummary` counted members whose PriceDefinition does not apply.** Member gating read TOU period, month and season but not `urpx:referencesProfileAlternative`, so a definition scoped to an alternative the caller chose against was correctly dropped from `:urpx.resolved/tiers` and still summed into every subtotal naming it. A derived price then multiplied a total containing a charge the customer does not pay. On SCE Schedule D composed with its CARE modifier the marginal rate came back **0.08043875 against a correct 0.11866200**, a third low, with no mark and no refusal. Gating two of the three places applicability is consulted is worse than gating none, and this release is what made the three disagree.
+
+- **A composition indexed its alternatives once per document, so three paths could disagree about one PriceDefinition.** A composed resolution reads ONE `:profile-alternatives` map, but the base plan, each modifier, and the `urpx:PriceSummary` member gate each built their own index from their own `urpx:hasProfileAlternatives`. Two consequences, both introduced by this release: a definition scoped to a container the *other* document declares was `:unselected` for every possible selection, so the withhold could not be cleared from a composed call at all; and where one `ProfileAlternative` @id was listed by a different container in each document, the modifier's tier path answered `:selected` while the summary answered `:not-selected`, in one result, silently dropping a member the tiers kept. There is now one index over every document in the composition, merged on container @id so a shared dimension declared in both does not read as two. An alternative genuinely listed by two different containers still refuses with `:ambiguous-profile-alternative`, across a composition for the same reason it already did within one document.
+
+- **A modifier ledger marked from two sources reported only one.** A ledger can be marked both by prices surfaced from an unselected `PriceSetAlternatives` and by a definition scoped to an unchosen alternative; `:urpx.resolved/unselected-alternatives` dropped the second whenever the first was present, so a caller who supplied the selection the error named got a second refusal about something the first never mentioned.
+
+- **`:all-energy-tiers-excluded` blamed exclusion for prices that were withheld.** Its message told the caller to inspect fields on `:urpx.resolved/tiers`, which is empty in that case; it now names `:urpx.resolved/withheld-prices` and says a selection would give the ledger some tiers.
+
+- **`urpx:referencesProfileAlternative` was not declared on the PriceDefinition schema.** It validated by accident, as an unknown key on a non-closed shape, and passed through coerce and emit untouched. What it did not get was the single-or-vector normalization every other reference property has, so the coerced document carried a shape the schema does not describe and `urpx.emit` round-tripped it unnormalized. The resolver itself tolerates both forms, so this is a modeling hole rather than a wrong number: authoring against a slot that validates by accident is how the next filing finds one.
+
+### Build
+
+- **A valid selection could be refused where a container and its price sets disagree.** `validate-selection!` checked the caller's value against the container's `urpx:hasProfileAlternative` list only, while the price path matches it against each `PriceSetAlternative`'s own `urpx:referencesProfileAlternative`. Nothing in the shapes forces those two sets to agree; all eight pairs in this corpus do, so nothing changes today, but the index now covers both, because refusing a document the library resolves correctly is the expensive direction. The fold happens where the composition index is **built**, covering every document at once: folded per path instead, the base plan's check could not see a cell only a modifier's price sets name, and the summary member gate, reading the index before any fold, saw none of them at all.
+
+- **A container listing the same alternative twice read as two dimensions** and refused an unambiguous selection with `:ambiguous-profile-alternative`. A duplicate entry is a redundancy in the document, not a second dimension.
+
+- **Modifiers that do not apply to the plan are no longer indexed.** The composition index was built from every modifier handed in, so one naming a different plan could contribute its containers to a resolution it takes no part in, and reading its version to get them surfaced its version errors there too. `urpx:applicableToRatePlan` now gates the index as it already gated the prices.
+
+- **`deploy` refuses unless the artifact is the one this commit built.** It publishes whatever is in `target/`, so it was trusting that a human ran `ci` first, on this commit, from a clean tree; trusting that shipped a pom from an eight-version-old build once. The embedded build-provenance is now the witness: `deploy` checks the jar's recorded commit and version against `HEAD`, and refuses on a snapshot version, a dirty tree, a missing or misplaced `v<version>` tag, a stale or unbuilt `target/`, or an unset `CLOJARS_PASSWORD`. It also refuses when `src/` or `resources/` holds a file git IGNORES that would actually be packed, because `ci` packs those directories whole while neither `git status --porcelain` nor build-provenance's own dirty check reports ignored files, so such a file rides into the jar with every gate quiet. Files `tools.build` excludes on its own (`.DS_Store`, `*~`, `#...#`, `.#...`) do not trip it, since refusing a release over something the artifact provably never packs is a guard that fires on legitimate work. A corrupt or unreadable jar reads as "no provenance" and refuses by name rather than escaping as a `ZipException` that would preempt the refusals naming the real fix. Added `clojure -T:build tag` and `clojure -T:build release`, and `doc/RELEASING.md`.
+
+**Upgrading:** two changes can turn a call that returned a number into a refusal, and both were returning a wrong number before. A `:profile-alternatives` value that names something its container does not list is now `:unknown-profile-alternative` rather than a silent skip; check your selection ids against `urpx:hasProfileAlternative` if you see it. And a plan whose `urpx:PriceSummary` names a member in an unchosen dimension now reports `:summary-member-unselected` rather than summing it. Neither fires on any filing that does not use `urpx:ProfileAlternatives`.
+
 ## [0.24.0] — 2026-09-21
 
 The last two findings from the silent-drop sweep, which share one cause: the unselected-alternatives mark was computed from surviving tier entries, and a ledger with none is elided before anything can mark it.
@@ -301,6 +355,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.25.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.25.0
 [0.24.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.24.0
 [0.23.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.23.0
 [0.22.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.22.0

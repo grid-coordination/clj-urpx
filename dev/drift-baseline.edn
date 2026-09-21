@@ -20,11 +20,18 @@
   ["SourcePublication" "urpx:publicationType" "enum-drift"]
 
   ;; forRatePlan and hasCoverageClaim are sh:minCount 1 on the version shapes at
-  ;; v0.5.1, and are held optional here on purpose: v0.2.1 has zero occurrences
-  ;; of either term and all 73 corpus filings still declare targetURPXVersion
-  ;; v0.2.0, so requiring them today would reject the entire corpus and all four
-  ;; vendored fixtures. Flip to required, and drop these four entries, after the
-  ;; sixth and final wave.
+  ;; v0.5.1 and are held optional here.
+  ;;
+  ;; The original reason no longer holds and is recorded as having been checked
+  ;; rather than assumed: all 23 vendored fixtures now declare
+  ;; targetURPXVersion v0.5.1, every fixture carrying a RatePlanVersion declares
+  ;; forRatePlan (13 of 13) and hasCoverageClaim (23 of 23), and every fixture
+  ;; carrying a RatePlanModifierVersion declares forRatePlanModifier (14 of 14).
+  ;; Requiring them would reject nothing here.
+  ;;
+  ;; What is NOT verifiable from this repo is the production corpus, which is
+  ;; not vendored. Flip to required and drop these four entries once that corpus
+  ;; is confirmed migrated.
   ["RatePlanVersion" "urpx:forRatePlan" "under-validates"]
   ["RatePlanVersion" "urpx:hasCoverageClaim" "under-validates"]
   ["RatePlanModifierVersion" "urpx:forRatePlanModifier" "under-validates"]

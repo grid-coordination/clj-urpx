@@ -362,9 +362,10 @@
               (keep :jsonld/id))
         (:urpx/hasPriceSetAlternatives prices)))
 
-(defn- withheld-alternative-pds
-  "The @ids of PriceDefinitions whose Prices exist only inside a
-   urpx:PriceSetAlternatives the caller supplied no selection for.
+(defn- withheld-prices-by-pd
+  "The Prices that exist only inside a urpx:PriceSetAlternatives the caller
+   supplied no selection for, grouped by the @id of the PriceDefinition each
+   references.
 
    A ledger fed only by such definitions resolves to no tiers and is then
    elided, taking with it both the prices AND any signal that they were
@@ -374,14 +375,55 @@
    defeats an existing guard, because the unselected mark is computed from
    surviving tier entries and there are none: dating PG&E's 18 vintage-PCIA
    prices into the future took marginal-unit-rate from refusing to answering
-   0.46886. Removing content should not remove a refusal."
+   0.46886. Removing content should not remove a refusal.
+
+   The Prices themselves are kept, not just their definition ids, because
+   whether a refusal is owed depends on what was withheld: see
+   `withheld-price-entry`."
   [prices selection]
-  (into #{}
-        (comp (remove #(get selection (get-in % [:urpx/referencesProfileAlternatives :jsonld/id])))
-              (mapcat :urpx/hasPriceSetAlternative)
-              (mapcat :urpx/hasPrice)
-              (keep #(get-in % [:urpx/referencesPriceDefinition :jsonld/id])))
-        (:urpx/hasPriceSetAlternatives prices)))
+  (->> (:urpx/hasPriceSetAlternatives prices)
+       (remove #(get selection (get-in % [:urpx/referencesProfileAlternatives :jsonld/id])))
+       (mapcat :urpx/hasPriceSetAlternative)
+       (mapcat :urpx/hasPrice)
+       (filter #(get-in % [:urpx/referencesPriceDefinition :jsonld/id]))
+       (group-by #(get-in % [:urpx/referencesPriceDefinition :jsonld/id]))))
+
+(defn- recurring-interval
+  "urpx:intervalDuration off `pd`'s calculation method: the field that makes a
+   charge per-interval rather than per-unit.
+
+   One reader, called from every site that builds a view of a price for
+   marginal-unit-rate, because the present view and the withheld view of the
+   same price must never disagree about it. They did: the modifier path built
+   tiers without it while the withheld record carried it, so the marginal
+   judged eighteen vintage-PCIA prices harmless-as-withheld and then summed all
+   eighteen as present, returning 1.08811 where 0.24.0 refused."
+  [pd]
+  (get-in pd [:urpx/hasCalculationMethod :urpx/intervalDuration]))
+
+(defn- withheld-price-entry
+  "What marginal-unit-rate needs to know about a price it did not get.
+
+   Carries the two fields the marginal sum excludes on, under the same keys a
+   resolved tier uses, so one predicate answers \"would this have contributed\"
+   for a withheld price and for a present tier alike.
+
+   Withholding only earns a refusal when it makes the sum short. An event-driven
+   or recurring price is already excluded from a per-unit marginal, so hiding it
+   changes no number, and refusing would trade an answer for a question the
+   caller cannot answer: CPAU's E-HRA cells are the utility's own Hydro
+   Stabilization Reserve level and generation band, reset by City Council vote,
+   which no consumer has a source for. Vintage-PCIA is the opposite case, an
+   ordinary per-kWh price and an attribute of the customer the caller does know,
+   and it still refuses."
+  [pd price]
+  (let [interval (recurring-interval pd)]
+    (cond-> {:urpx.resolved/price-definition-id (:jsonld/id pd)
+             :urpx.resolved/price-id            (:jsonld/id price)}
+      (:urpx/hasDynamicPricing price)
+      (assoc :urpx.resolved/dynamic-pricing (:urpx/hasDynamicPricing price))
+      interval
+      (assoc :urpx.resolved/interval-duration interval))))
 
 (defn- service-tiers-by-number
   "Index ServiceTier entities (across every ServiceTiers container at
@@ -418,7 +460,7 @@
         ;; or unit. Surfacing the number without the interval would hand a
         ;; consumer a figure nothing in the result explains, which is how a
         ;; $10-per-month charge becomes a wrong per-day rate.
-        interval     (get-in pd [:urpx/hasCalculationMethod :urpx/intervalDuration])]
+        interval     (recurring-interval pd)]
     (cond-> {}
       interval
       (assoc :urpx.resolved/interval-duration interval)
@@ -443,6 +485,190 @@
 ;; ---------------------------------------------------------------------------
 ;; Per-instant applicability of a PriceDefinition
 ;; ---------------------------------------------------------------------------
+
+(defn- profile-alternative-index
+  "Two indexes over the document's urpx:ProfileAlternatives, built in one pass
+   so they cannot disagree:
+
+     :dim-of  urpx:ProfileAlternative @id -> the container @ids listing it
+     :cells   container @id -> the set of urpx:ProfileAlternative @ids in it
+
+   The `:profile-alternatives` selection is keyed by CONTAINER, since a
+   container is one dimension of choice, while a PriceDefinition references the
+   ALTERNATIVE it applies to. `:dim-of` bridges the two, and it needs no new
+   vocabulary: urpx:hasProfileAlternative already links them. `:cells` is what
+   lets a selection be checked against the dimension it was filed under instead
+   of being compared for equality and silently read as a choice of some sibling.
+
+   Multi-dimensional choices live in ONE container. URPX is explicit that each
+   ProfileAlternatives holds exactly one urpx:AlternativeDimensions, which is
+   the wrapper for several urpx:AlternativeDimension, and the ProfileAlternative
+   instances enumerate the CELLS of the cross product. PG&E's baseline
+   territory/code set is 2 dimensions and 20 alternatives.
+
+   :dim-of maps to a VECTOR of containers rather than one, because nothing in
+   the shapes stops an alternative @id being listed by two. Collapsing that
+   last-wins would answer a selection the caller made correctly with a refusal
+   they cannot clear, or drop the definition silently; `pd-alternative-status`
+   refuses instead, and only if such an alternative is actually referenced."
+  [plan-elements]
+  (reduce (fn [acc pas]
+            (let [cid  (:jsonld/id pas)
+                  aids (keep :jsonld/id (:urpx/hasProfileAlternative pas))]
+              (-> acc
+                  (assoc-in [:cells cid] (set aids))
+                  (update :dim-of
+                          #(reduce (fn [m a]
+                                     (update m a (fn [v] (vec (distinct (conj (or v []) cid))))))
+                                   % aids)))))
+          {:cells {} :dim-of {}}
+          (:urpx/hasProfileAlternatives plan-elements)))
+
+(defn- pd-alternative-status
+  "How `pd`'s urpx:referencesProfileAlternative stands against the caller's
+   selection. One of:
+
+     :unconstrained  the definition references no alternative
+     :selected       the caller chose exactly the alternative it references
+     :not-selected   the caller chose a DIFFERENT alternative in that dimension,
+                     so this definition does not apply. A filter, not a refusal.
+     :unselected     the caller chose nothing in that dimension, so which
+                     definition applies is unknown. Also the answer when the
+                     referenced alternative is declared by no container in this
+                     document: which definition applies is then unknown for the
+                     same reason, and a composition whose container lives in the
+                     other document should withhold rather than hard-fail.
+
+   Refuses on several references rather than inventing a conjunctive reading.
+   PriceDefinitionShape permits them (sh:minCount 0, no sh:maxCount) but no
+   filing uses them, and a matrix does not need them: the conjunction lives
+   inside the cell's own condition expression, because the cells ARE the cross
+   product. Defining semantics for a shape nothing has is how an arbitrary pick
+   gets built in.
+
+   Refuses twice more, both on the same principle. An alternative listed by two
+   containers has no single dimension to consult. And a selection naming a value
+   that is not a cell of the dimension it was filed under is a caller error, not
+   a choice of some sibling cell: read as a sibling it drops every definition in
+   that dimension and returns a confident short number, which on PG&E E-TOU-C is
+   0.26104 against 0.46886 with nothing in the result to say so."
+  [pd selection idx]
+  (let [{:keys [dim-of]} idx
+        refs (:urpx/referencesProfileAlternative pd)
+        refs (if (sequential? refs) refs (when refs [refs]))]
+    (cond
+      (empty? refs) :unconstrained
+
+      (< 1 (count refs))
+      (throw (ex-info (str "urpx:referencesProfileAlternative names " (count refs)
+                           " alternatives on " (pr-str (:jsonld/id pd))
+                           ". A PriceDefinition scopes to ONE alternative, the cell; a "
+                           "multi-dimensional choice is expressed as one ProfileAlternatives "
+                           "whose AlternativeDimensions holds several dimensions and whose "
+                           "alternatives enumerate the cells. There is no rule here for "
+                           "combining several, and picking one would be arbitrary.")
+                      {:reason :multiple-profile-alternatives
+                       :price-definition-id (:jsonld/id pd)
+                       :ids (mapv :jsonld/id refs)}))
+
+      :else
+      (let [aid  (:jsonld/id (first refs))
+            dims (get dim-of aid)]
+        (when (< 1 (count dims))
+          (throw (ex-info (str "urpx:ProfileAlternative " (pr-str aid) ", referenced by "
+                               (pr-str (:jsonld/id pd)) ", is listed by " (count dims)
+                               " urpx:ProfileAlternatives containers: " (pr-str (vec dims))
+                               ". The selection is keyed by container, so there is no one "
+                               "dimension to read the caller's choice from.")
+                          {:reason :ambiguous-profile-alternative
+                           :price-definition-id (:jsonld/id pd)
+                           :alternative-id aid
+                           :containers (vec dims)})))
+        (let [dim    (first dims)
+              chosen (get selection dim)]
+          (cond
+            (nil? chosen)  :unselected
+            (= chosen aid) :selected
+            :else          :not-selected))))))
+
+(defn- merge-alternative-indexes
+  "One alternatives index over several documents.
+
+   A composition is resolved against ONE `:profile-alternatives` map, so it has
+   to be read against ONE set of containers. Indexing each document separately
+   made the same PriceDefinition :selected on the modifier's own tier path and
+   :not-selected in a summary judged against the base plan's index, in a single
+   result, which is a silently short number rather than a refusal. It also made
+   a container declared by only one of the documents invisible to the other,
+   so a definition scoped across the pair could never be selected at all.
+
+   Merging on container @id, so a container declared identically by both
+   documents collapses rather than reading as two dimensions. A ProfileAlternative
+   genuinely listed by two DIFFERENT containers still refuses, in a composition
+   for the same reason it refuses within one document."
+  [indexes]
+  (let [cells (reduce (fn [m i] (merge-with into m (:cells i))) {} indexes)]
+    {:cells  cells
+     :dim-of (reduce-kv (fn [m cid aids]
+                          (reduce (fn [m a] (update m a (fnil conj []) cid)) m aids))
+                        {} cells)}))
+
+(defn- index-with-price-set-alternatives
+  "Fold the alternatives that urpx:PriceSetAlternative entities actually
+   reference into the index's cells.
+
+   The container's urpx:hasProfileAlternative list and the alternatives its
+   PriceSetAlternatives name are two different sets, and nothing in the shapes
+   forces them to agree. Every one of the eight pairs in this corpus agrees, so
+   this changes nothing today; it exists because validating only against the
+   container would REFUSE a selection the price path resolves correctly, and
+   rejecting a valid document is the expensive direction."
+  [alt-index prices]
+  (reduce (fn [idx psas]
+            (let [cid  (get-in psas [:urpx/referencesProfileAlternatives :jsonld/id])
+                  aids (keep #(get-in % [:urpx/referencesProfileAlternative :jsonld/id])
+                             (:urpx/hasPriceSetAlternative psas))]
+              (if (and cid (seq aids))
+                (-> idx
+                    (update-in [:cells cid] (fnil into #{}) aids)
+                    (update :dim-of
+                            #(reduce (fn [m a]
+                                       (update m a (fn [v] (vec (distinct (conj (or v []) cid))))))
+                                     % aids)))
+                idx)))
+          alt-index
+          (:urpx/hasPriceSetAlternatives prices)))
+
+(defn- validate-selection!
+  "Refuse a `:profile-alternatives` entry whose value is not a cell of the
+   container it is keyed under.
+
+   Checked once per document rather than per PriceDefinition, because the
+   damage is not confined to the definition-level slot: the SAME typo on the
+   urpx:PriceSetAlternatives path, which every filing in the corpus uses, drops
+   the whole ledger and answers short with no mark anywhere. On PG&E E-TOU-C
+   composed with its vintage-PCIA modifier, a stale departure-vintage id
+   returned 0.46886 where the correct id returns 0.49859, and the PCIA ledger
+   was simply absent from the result.
+
+   A key naming a container this document does not declare is left alone, not
+   refused: one selection map is passed to the base plan and to every modifier,
+   and a key meant for one of them is meaningless to the others by design."
+  [selection alt-index]
+  (doseq [[dim chosen] selection
+          :let [known (get (:cells alt-index) dim)]
+          :when known]
+    (when-not (contains? known chosen)
+      (throw (ex-info (str ":profile-alternatives chooses " (pr-str chosen)
+                           " for " (pr-str dim) ", which does not list it. Name one of "
+                           (pr-str (vec (sort known)))
+                           ", or drop the key. Compared for equality a stale or mistyped id "
+                           "reads as a deliberate choice of some other cell, which silently "
+                           "drops every price in that dimension.")
+                      {:reason :unknown-profile-alternative
+                       :dimension dim
+                       :chosen chosen
+                       :alternatives (vec (sort known))})))))
 
 (defn- pd-active-at-tou?
   "True if `pd` should be considered active at the resolved TOU period.
@@ -566,7 +792,7 @@
     (cond-> (vec bare)
       (seq tiered) (conj (first (sort-by tier-of tiered))))))
 
-(defn- make-member-active?
+(defn- make-member-status
   "Return a predicate deciding whether a urpx:PriceSummary member is in effect
    at the instant being resolved.
 
@@ -587,8 +813,24 @@
    would understate the subtotal silently.
 
    `period-num` is the TOU period resolved for the document the MEMBERS live
-   in, which for a cross-document discount is the base plan, not the modifier."
-  [by-id period-num ^LocalDate date rules-by-id seasons-by-id]
+   in, which for a cross-document discount is the base plan, not the modifier.
+
+   Returns :active, :inactive or :unknown rather than a boolean, because
+   urpx:referencesProfileAlternative gives a member a third state. A definition
+   scoped to an alternative the caller did not choose is :inactive, exactly as
+   an out-of-season one is. A definition in a dimension the caller chose
+   NOTHING in is :unknown: excluding it silently understates the subtotal and
+   including it overstates it, so the summary is reported unvaluable and the
+   caller gets a named refusal instead of a number.
+
+   Gating tiers on the alternative while leaving summaries ungated is the
+   failure this guards against, and it is a wrong number rather than a missing
+   one: on SCE Schedule D composed with its CARE modifier, scoping the
+   generation definition to an alternative and choosing a different one left
+   the CARE discount at -0.10070125 against a correct -0.06247800, and the
+   marginal rate came back 0.08043875 against 0.11866200, a third low with
+   nothing in the result to say so."
+  [by-id period-num ^LocalDate date rules-by-id seasons-by-id alt-status]
   (fn [member]
     (let [pd (get by-id (get-in member [:urpx/referencesPriceDefinition :jsonld/id]))]
       ;; The member's OWN urpx:touPeriodNumber gates first, and independently of
@@ -597,11 +839,21 @@
       ;; one charge, sharing an undifferentiated PD, all counted toward the
       ;; subtotal at every instant. SDG&E EV-TOU's CARE discount came out
       ;; -0.9255435 against a correct -0.2999885, overstated 3.09x.
-      (and (price-active-at-tou? member period-num)
-           (or (nil? pd)
-               (and (pd-active-at-tou? pd period-num)
-                    (pd-active-in-month? pd date rules-by-id)
-                    (pd-active-in-season? pd seasons-by-id date)))))))
+      (cond
+        (not (and (price-active-at-tou? member period-num)
+                  (or (nil? pd)
+                      (and (pd-active-at-tou? pd period-num)
+                           (pd-active-in-month? pd date rules-by-id)
+                           (pd-active-in-season? pd seasons-by-id date)))))
+        :inactive
+
+        (nil? pd) :active
+
+        :else
+        (case (alt-status pd)
+          :not-selected :inactive
+          :unselected   :unknown
+          :active)))))
 
 (defn- price-value
   "The unit price for `price`, and when it cannot be determined, why.
@@ -628,7 +880,7 @@
    library resolves one document at a time, and a summary whose members live in
    another file cannot be summed here. Valuing it wrong would be worse than
    declining to."
-  [price by-id member-active?]
+  [price by-id member-status]
   (letfn [(unvaluable [reason detail]
             {:value nil :unvaluable (cond-> {:reason reason :price-id (:jsonld/id price)}
                                       detail (assoc :detail detail))})
@@ -708,10 +960,28 @@
                                       (:urpx/serviceTierNumber
                                        (get by-id (get-in m [:urpx/referencesPriceDefinition
                                                              :jsonld/id])))))
-                        active (-> (filterv member-active? nodes)
+                        unknown (filterv #(= :unknown (member-status %)) nodes)
+                        active (-> (filterv #(= :active (member-status %)) nodes)
                                    (additive-plus-lowest-rung tier-of))
                         values (mapv :urpx/unitPrice active)]
                     (cond
+                      ;; A member whose applicability is UNKNOWN cannot be
+                      ;; excluded (the subtotal would be short) or included (it
+                      ;; would be wrong). Refuse, and name it.
+                      (seq unknown)
+                      (unvaluable :summary-member-unselected
+                                  (str "urpx:PriceSummary " (pr-str (:jsonld/id target))
+                                       " names " (count unknown) " member(s) whose "
+                                       "PriceDefinition is scoped to a urpx:ProfileAlternative "
+                                       "the caller chose nothing for, so the subtotal is not "
+                                       "defined here. The definitions are "
+                                       (pr-str (vec (distinct (keep #(get-in % [:urpx/referencesPriceDefinition
+                                                                                :jsonld/id])
+                                                                    unknown))))
+                                       "; read urpx:referencesProfileAlternative on each, and pass "
+                                       ":profile-alternatives keyed by the urpx:ProfileAlternatives "
+                                       "that lists the alternative it names."))
+
                       (empty? active)
                       (unvaluable :summary-no-active-members
                                   (str "urpx:PriceSummary " (pr-str (:jsonld/id target))
@@ -751,8 +1021,8 @@
 
    One `price-value` call per price, deliberately: valuing a derived price sums
    a summary's members, and a filing carries thousands of prices."
-  [price by-id member-active?]
-  (let [{:keys [value unvaluable]} (price-value price by-id member-active?)]
+  [price by-id member-status]
+  (let [{:keys [value unvaluable]} (price-value price by-id member-status)]
     (cond-> {:urpx.resolved/unit-price value}
       unvaluable (assoc :urpx.resolved/unvaluable unvaluable))))
 
@@ -914,14 +1184,22 @@
                 overrides) will never match.
 
      :profile-alternatives  a {<ProfileAlternatives @id> <ProfileAlternative @id>}
-                map driving customer-profile-driven price selection. When the
-                rate plan declares Prices.hasPriceSetAlternatives (URPX v0.2.0
-                ProfileAlternatives idiom — income-tier CARE/FERA/Standard,
-                vintage-PCIA default tier, voltage configuration, …) each
-                PriceSetAlternatives surfaces the prices of the explicitly-
-                chosen alternative. Unmapped alternatives are silently skipped
-                — programmatic ConditionExpression evaluation against a
-                customer profile is a future enhancement.
+                map driving customer-profile-driven price selection, keyed by
+                the ProfileAlternatives CONTAINER. It scopes both
+                Prices.hasPriceSetAlternatives (income-tier CARE/FERA/Standard,
+                vintage-PCIA departure year, voltage configuration) and
+                PriceDefinition.referencesProfileAlternative.
+
+                A dimension the caller says nothing about is NOT skipped: its
+                prices are withheld, the ledger carries
+                :urpx.resolved/unselected-alternatives, and marginal-unit-rate
+                refuses if withholding them would make its sum short. A value
+                the keyed container does not list is refused outright, since
+                compared for equality a stale id is indistinguishable from a
+                deliberate choice of some other cell.
+
+                Programmatic ConditionExpression evaluation against a customer
+                profile is a future enhancement; a consumer names the cell.
 
    Examples of `:holiday?`:
 
@@ -961,7 +1239,16 @@
                                                   the MetricInput carries one;
                                                   marginal-unit-rate filters on this)
       :urpx.resolved/unit-of-measure     Ref     (e.g. urpx:kWh)
-      :urpx.resolved/tiers               [TierResult]}
+      :urpx.resolved/tiers               [TierResult]
+      :urpx.resolved/unselected-alternatives [String]
+                                               (present iff prices on this
+                                                ledger belong to alternatives
+                                                the caller chose none of)
+      :urpx.resolved/withheld-prices     [WithheldPrice]
+                                               (what those alternatives would
+                                                have priced, enough of it to
+                                                say whether a marginal sum is
+                                                actually short)}
 
    and each TierResult is:
      {:urpx.resolved/price-definition-id String
@@ -1027,17 +1314,41 @@
          ;; resolve-prices-with-modifiers when composing, because a discount in a
          ;; modifier names a summary whose members live in the BASE plan and must
          ;; be judged in the base plan's TOU period, not the modifier's.
-         member-active? (or (:member-active? opts)
-                            (make-member-active? by-id period-num date
-                                                 rules-by-id seasons-by-id))
+         ;; Supplied by resolve-prices-with-modifiers, which spans the base
+         ;; plan and every modifier; built here when resolving a plan alone.
+         alt-index     (or (:alt-index opts)
+                           (-> (profile-alternative-index plan-elements)
+                               (index-with-price-set-alternatives prices)))
+         _             (validate-selection! (:profile-alternatives opts) alt-index)
+         alt-status    #(pd-alternative-status % (:profile-alternatives opts) alt-index)
+         ;; Ledger-independent, so it is built once rather than per ledger, and
+         ;; it is the ONLY view that sees Prices nested under an alternatives
+         ;; set the caller did not select: the base path's price lookup skips
+         ;; those by design. Enumerating a withheld definition from that lookup
+         ;; alone left it named in the mark and absent from the evidence, and
+         ;; one unrelated excluded price on the same ledger was then enough to
+         ;; drop the refusal and answer short.
+         psa-prices    (withheld-prices-by-pd prices (:profile-alternatives opts))
+         member-status (or (:member-status opts)
+                           (make-member-status by-id period-num date
+                                               rules-by-id seasons-by-id alt-status))
 
          ledger-results
          (vec
           (for [ledger ledgers
-                :let [ledger-pds (->> (pds-by-ledger (:jsonld/id ledger))
+                :let [scoped-pds (->> (pds-by-ledger (:jsonld/id ledger))
                                       (filter #(and (pd-active-at-tou? % period-num)
                                                     (pd-active-in-month? % date rules-by-id)
                                                     (pd-active-in-season? % seasons-by-id date))))
+                      ;; A definition scoped to a urpx:ProfileAlternative applies
+                      ;; only when the caller chose that alternative. Choosing a
+                      ;; different one in the same dimension filters it out
+                      ;; silently and correctly; choosing NOTHING leaves which
+                      ;; one applies unknown, so its prices are withheld and the
+                      ;; ledger says so rather than quietly resolving all of them.
+                      by-alt      (group-by alt-status scoped-pds)
+                      ledger-pds  (concat (:unconstrained by-alt) (:selected by-alt))
+                      alt-withheld (map :jsonld/id (:unselected by-alt))
                       tier-entries
                       (->> ledger-pds
                            (mapcat (fn [pd]
@@ -1046,24 +1357,41 @@
                                                 {:urpx.resolved/price-definition-id (:jsonld/id pd)
                                                  :urpx.resolved/price-id            (:jsonld/id price)
                                                  :urpx.resolved/price-name          (:urpx/name price)}
-                                                (price-fields price by-id member-active?)
+                                                (price-fields price by-id member-status)
                                                 (tier-info pd price tiers-by-num))
                                          (:urpx/hasDynamicPricing price)
                                          (assoc :urpx.resolved/dynamic-pricing
                                                 (:urpx/hasDynamicPricing price))))))
                            (sort-by #(or (:urpx.resolved/tier-number %) 0))
                            vec)
-                      withheld (when (empty? tier-entries)
-                                 (seq (filter (withheld-alternative-pds
-                                               prices (:profile-alternatives opts))
-                                              (map :jsonld/id ledger-pds))))]
+                      ;; The MARK keeps its existing condition: an alternatives
+                      ;; set marks a ledger only when nothing else populated it.
+                      psa-marked (when (empty? tier-entries) psa-prices)
+                      withheld (seq (concat
+                                      alt-withheld
+                                      (filter (or psa-marked {})
+                                              (map :jsonld/id ledger-pds))))
+                      ;; The EVIDENCE is unconditional and covers both routes a
+                      ;; withheld definition's prices can reach it.
+                      withheld-prices
+                      (into []
+                            (distinct)
+                            (concat
+                             (for [pd (:unselected by-alt)
+                                   price (concat (map first (pd->prices (:jsonld/id pd)))
+                                                 (get psa-prices (:jsonld/id pd)))]
+                               (withheld-price-entry pd price))
+                             (for [pd ledger-pds
+                                   price (get (or psa-marked {}) (:jsonld/id pd))]
+                               (withheld-price-entry pd price))))]
                 :when (or (seq tier-entries) withheld)]
             (merge {:urpx.resolved/ledger-id   (:jsonld/id ledger)
                     :urpx.resolved/ledger-name (:urpx/name ledger)
                     :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
                     :urpx.resolved/tiers       (vec tier-entries)}
                    (when withheld
-                     {:urpx.resolved/unselected-alternatives (vec withheld)})
+                     {:urpx.resolved/unselected-alternatives (vec withheld)
+                      :urpx.resolved/withheld-prices         withheld-prices})
                    (ledger-metric-info ledger mi-index))))]
 
      (merge
@@ -1124,15 +1452,21 @@
         ;; a modifier alone falls back to the modifier's own document, and a
         ;; reference out of it is reported unvaluable rather than valued wrong.
         by-id         (or (:by-id opts) (index/build-index version))
-        member-active? (or (:member-active? opts)
-                           ;; resolved on its own, a modifier has only its own
-                           ;; context to judge by; composing supplies the base
-                           ;; plan's, which is the one that matters.
-                           (make-member-active? by-id base-period-num (.toLocalDate zdt) {} {}))
         plan-elts     (:urpx/hasPlanElements version)
         billing       (:urpx/hasBillingModel plan-elts)
         ledgers       (:urpx/hasLedger billing)
         prices        (:urpx/hasPrices version)
+        alt-index     (or (:alt-index opts)
+                          (-> (profile-alternative-index plan-elts)
+                              (index-with-price-set-alternatives prices)))
+        _             (validate-selection! (:profile-alternatives opts) alt-index)
+        alt-status    #(pd-alternative-status % (:profile-alternatives opts) alt-index)
+        member-status (or (:member-status opts)
+                          ;; resolved on its own, a modifier has only its own
+                          ;; context to judge by; composing supplies the base
+                          ;; plan's, which is the one that matters.
+                          (make-member-status by-id base-period-num (.toLocalDate zdt)
+                                              {} {} alt-status))
         own-schedules (:urpx/hasTOUSchedule billing)
         own-seasons   (:urpx/hasSeasons plan-elts)
         query-date    (.toLocalDate zdt)
@@ -1156,23 +1490,42 @@
         unselected  (unselected-alternative-ids prices (:profile-alternatives opts))
         pds         (:urpx/hasPriceDefinition billing)
         pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
+        ;; A modifier's PriceDefinitions are scoped by urpx:referencesProfileAlternative
+        ;; exactly as the base plan's are (alt-status, above). This path ignored
+        ;; the property, which made the whole feature a no-op where it is most
+        ;; needed: a matrix of mutually-exclusive cells is a modifier shape, so
+        ;; a definition scoped to a cell the caller did not choose was summed
+        ;; anyway, unmarked.
+        psa-prices  (withheld-prices-by-pd prices (:profile-alternatives opts))
         mi-index    (mi-by-id plan-elts)]
     (vec
      (for [ledger ledgers
-           :let [ledger-pds (cond->> (pds-by-ledger (:jsonld/id ledger))
+           :let [scoped-pds (cond->> (pds-by-ledger (:jsonld/id ledger))
                               gate? (filter #(pd-active-at-tou? % gate-period)))
+                 by-alt     (group-by alt-status scoped-pds)
+                 ledger-pds (concat (:unconstrained by-alt) (:selected by-alt))
+                 alt-withheld (map :jsonld/id (:unselected by-alt))
                  tier-entries
                  (->> ledger-pds
                       (mapcat (fn [pd]
-                                (for [[price _] (pd->prices (:jsonld/id pd))]
-                                  (cond-> (merge
-                                           {:urpx.resolved/price-definition-id (:jsonld/id pd)
-                                            :urpx.resolved/price-id            (:jsonld/id price)
-                                            :urpx.resolved/price-name          (:urpx/name price)}
-                                           (price-fields price by-id member-active?))
-                                    (:urpx/hasDynamicPricing price)
-                                    (assoc :urpx.resolved/dynamic-pricing
-                                           (:urpx/hasDynamicPricing price))))))
+                                ;; The interval is read here as well as on the
+                                ;; base path. Without it a recurring modifier
+                                ;; price could never be excluded from a per-unit
+                                ;; sum, and the withheld view of that same price
+                                ;; disagreed with the present view about whether
+                                ;; it counts.
+                                (let [interval (recurring-interval pd)]
+                                  (for [[price _] (pd->prices (:jsonld/id pd))]
+                                    (cond-> (merge
+                                             {:urpx.resolved/price-definition-id (:jsonld/id pd)
+                                              :urpx.resolved/price-id            (:jsonld/id price)
+                                              :urpx.resolved/price-name          (:urpx/name price)}
+                                             (price-fields price by-id member-status))
+                                      interval
+                                      (assoc :urpx.resolved/interval-duration interval)
+                                      (:urpx/hasDynamicPricing price)
+                                      (assoc :urpx.resolved/dynamic-pricing
+                                             (:urpx/hasDynamicPricing price)))))))
                       ;; Sorted like the base path. marginal-unit-rate documents
                       ;; itself as taking the LOWEST tier and implements that as
                       ;; `first`, which only holds if the vector is ordered by
@@ -1180,18 +1533,39 @@
                       ;; whatever came first in the document.
                       (sort-by #(or (:urpx.resolved/tier-number %) 0))
                       vec)
-                 withheld (when (empty? tier-entries)
-                            (seq (filter (withheld-alternative-pds
-                                          prices (:profile-alternatives opts))
-                                         (map :jsonld/id ledger-pds))))]
+                 psa-marked (when (empty? tier-entries) psa-prices)
+                 withheld (seq (concat
+                                 alt-withheld
+                                 (filter (or psa-marked {}) (map :jsonld/id ledger-pds))))
+                 unselected-ids (seq (filter unselected
+                                             (map :urpx.resolved/price-id tier-entries)))
+                 withheld-prices
+                 (into []
+                       (distinct)
+                       (concat
+                        ;; A price that is BOTH present in :tiers and named by
+                        ;; the mark contributes its own TIER ENTRY, not a
+                        ;; reconstruction of it. marginal-unit-rate asks
+                        ;; "would this have contributed" of the withheld view
+                        ;; and then sums the present view, so the two must be
+                        ;; the same map or the guard judges one and the sum
+                        ;; takes the other.
+                        (filter #(unselected (:urpx.resolved/price-id %)) tier-entries)
+                        (for [pd (:unselected by-alt)
+                              price (concat (map first (pd->prices (:jsonld/id pd)))
+                                            (get psa-prices (:jsonld/id pd)))]
+                          (withheld-price-entry pd price))
+                        (for [pd ledger-pds
+                              price (get (or psa-marked {}) (:jsonld/id pd))]
+                          (withheld-price-entry pd price))))]
            :when (or (seq tier-entries) withheld)]
        (merge {:urpx.resolved/ledger-id   (:jsonld/id ledger)
                :urpx.resolved/ledger-name (:urpx/name ledger)
                :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
                :urpx.resolved/tiers       (vec tier-entries)}
-              (when-let [ids (or (seq (filter unselected (map :urpx.resolved/price-id tier-entries)))
-                                 withheld)]
-                {:urpx.resolved/unselected-alternatives (vec ids)})
+              (when-let [ids (seq (concat unselected-ids withheld))]
+                {:urpx.resolved/unselected-alternatives (vec ids)
+                 :urpx.resolved/withheld-prices         withheld-prices})
               (ledger-metric-info ledger mi-index)))))))
 
 (defn resolve-modifier-prices
@@ -1233,24 +1607,58 @@
                                  #(or % (reduce (fn [acc doc]
                                                   (merge acc (index/build-index doc)))
                                                 {} (cons rate-plan modifiers))))
-         base            (resolve-prices rate-plan zdt opts)
          plan-id         (:jsonld/id rate-plan)
+         base-version    (plan-version rate-plan opts :urpx/hasRatePlanVersion zdt)
+         ;; ONE index over every document in the composition, because there is
+         ;; one selection map. Threaded through opts so the base path, each
+         ;; modifier's tier path and the summary member gate all read the same
+         ;; containers; three indexes disagreeing about one PriceDefinition is
+         ;; how a subtotal silently loses a member that the tiers kept.
+         ;;
+         ;; Fully folded HERE, PriceSetAlternatives included, rather than left
+         ;; for each path to fold its own document's in afterwards. Folding
+         ;; downstream reinstated the same disagreement for the half of the
+         ;; index that PriceSetAlternatives declare: the base plan's check could
+         ;; not see a cell only a modifier's price sets name, and the member
+         ;; gate, reading the unfolded index, saw none of them at all.
+         ;;
+         ;; Only modifiers that actually apply are indexed: one that names a
+         ;; different plan contributes nothing to this resolution, and reading
+         ;; its version to index it would surface its version errors here.
+         opts            (assoc opts :alt-index
+                                (or (:alt-index opts)
+                                    (let [versions
+                                          (cons base-version
+                                                (keep #(when (modifier-applies-to? % plan-id opts zdt)
+                                                         (plan-version
+                                                          % opts :urpx/hasRatePlanModifierVersion zdt))
+                                                      modifiers))]
+                                      (reduce (fn [idx v]
+                                                (index-with-price-set-alternatives
+                                                 idx (:urpx/hasPrices v)))
+                                              (merge-alternative-indexes
+                                               (map #(profile-alternative-index
+                                                      (:urpx/hasPlanElements %))
+                                                    versions))
+                                              versions))))
+         base            (resolve-prices rate-plan zdt opts)
          base-period-num (:urpx.resolved/tou-period-number base)
          ;; A discount Price in a modifier names a summary whose members live in
          ;; the BASE plan, so their season, month and TOU gates are the base
          ;; plan's. Built here and passed down, because modifier-ledger-results
          ;; can only see the modifier's own seasons and rules.
-         base-version    (plan-version rate-plan opts :urpx/hasRatePlanVersion zdt)
-         opts            (assoc opts :member-active?
-                                (or (:member-active? opts)
-                                    (make-member-active?
+         opts            (assoc opts :member-status
+                                (or (:member-status opts)
+                                    (make-member-status
                                      (:by-id opts)
                                      base-period-num
                                      (.toLocalDate zdt)
                                      (or (:rules-by-id opts)
                                          (index/entities-of-type base-version "urpx:ApplicabilityRule"))
                                      (into {} (map (juxt :jsonld/id identity))
-                                           (get-in base-version [:urpx/hasPlanElements :urpx/hasSeasons])))))
+                                           (get-in base-version [:urpx/hasPlanElements :urpx/hasSeasons]))
+                                     #(pd-alternative-status
+                                       % (:profile-alternatives opts) (:alt-index opts)))))
          holiday?        (or (:holiday? opts) (holidays/derive-predicate rate-plan))
          ;; opts, not the 2-arity: without it plan-version can only follow the
          ;; nested down-pointer, so a v0.5.1 modifier that states the link only
@@ -1330,19 +1738,33 @@
    Useful for price signaling: when you don't know a customer's usage but want
    a single $/kWh number, this is the marginal rate at zero baseline usage.
 
-   REFUSES, rather than returning a number, in two cases:
+   REFUSES, rather than returning a number, in five cases, each carrying a
+   named `:reason` in its ex-data so a sweeping consumer can classify:
 
-     a marginal tier could not be valued       a nil unit price reads to a
-                                               consumer as free, and for a
-                                               discount that is the worst
-                                               available answer
-     an energy ledger carries mutually-        these are alternatives, not
-     exclusive price alternatives with no      tiers: exactly one applies to a
-     caller selection                          customer, and which one is the
-                                               caller's to say
+     :no-energy-ledger            this plan prices nothing per kWh, so the
+                                  question does not apply to it. 0M would be
+                                  indistinguishable from a plan whose energy
+                                  ledgers genuinely sum to zero
+     :unvaluable-marginal-tier    a marginal tier could not be valued. A nil
+                                  unit price reads to a consumer as free, and
+                                  for a discount that is the worst available
+                                  answer
+     :unselected-alternatives     an energy ledger carries mutually-exclusive
+                                  price alternatives with no caller selection,
+                                  AND either at least one of the withheld prices
+                                  would have entered this sum, or nothing is
+                                  recorded about what was withheld. Withholding
+                                  a price the sum would not have taken costs the
+                                  caller nothing and does not refuse; not
+                                  KNOWING what was withheld is not evidence that
+                                  it did not matter, so that refuses
+     :all-energy-tiers-excluded   every energy tier was event-driven, recurring,
+                                  or both. Free is not the answer either
+     :outside-version-window      the version used does not describe this
+                                  instant
 
-   The second is why composing a PG&E plan with its vintage-PCIA modifier
-   needs `:profile-alternatives`. Taking the first of eighteen mutually
+   The alternatives case is why composing a PG&E plan with its vintage-PCIA
+   modifier needs `:profile-alternatives`. Taking the first of eighteen mutually
    exclusive prices added an arbitrary 0.02973 to the rate; the eighteen span
    0.06391/kWh, so there is no default worth inventing.
 
@@ -1384,7 +1806,20 @@
         ;; marginal rate: 0.41784 became 0.44757, and the 18 span 0.06391/kWh.
         ;; Pass :profile-alternatives to choose; there is no default worth
         ;; inventing here.
-        unselected (filter :urpx.resolved/unselected-alternatives energy)
+        ;; Withholding earns a refusal only when it makes the sum short. If
+        ;; every withheld price would have been excluded anyway, the number is
+        ;; the same one the caller would have got, and refusing would trade it
+        ;; for a question nobody can answer: CPAU's E-HRA cells are the
+        ;; utility's own reserve level and generation band, not an attribute of
+        ;; the customer. An empty record is treated as contributory rather than
+        ;; harmless, because not knowing what was withheld is not evidence that
+        ;; it did not matter.
+        unselected (filter (fn [l]
+                             (when (:urpx.resolved/unselected-alternatives l)
+                               (let [w (:urpx.resolved/withheld-prices l)]
+                                 (or (empty? w)
+                                     (boolean (some (complement exclude-tier?) w))))))
+                           energy)
         ;; Excluded BEFORE taking the first tier, not after. A ledger mixing an
         ;; event charge with an ordinary price should contribute the ordinary
         ;; one, where filtering afterwards would drop the whole ledger.
@@ -1482,7 +1917,14 @@
                                   "recurring charges, or both. Pass :include-dynamic-pricing? true "
                                   "for the during-event upper bound."))
                            " Inspect :urpx.resolved/dynamic-pricing and "
-                           ":urpx.resolved/interval-duration on the tiers.")
+                           ":urpx.resolved/interval-duration on the tiers"
+                           (when (some :urpx.resolved/unselected-alternatives energy)
+                             (str ", and :urpx.resolved/withheld-prices on the "
+                                  (count (filter :urpx.resolved/unselected-alternatives energy))
+                                  " ledger(s) carrying prices that were WITHHELD rather than "
+                                  "excluded: those are named there and nowhere in :tiers, and a "
+                                  ":profile-alternatives selection would resolve them"))
+                           ".")
                       {:reason :all-energy-tiers-excluded
                        :include-dynamic-pricing? include-dyn?
                        :energy-ledgers (mapv :urpx.resolved/ledger-id energy)})))

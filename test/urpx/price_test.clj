@@ -1120,14 +1120,47 @@
       (is (seq (:urpx.resolved/unselected-alternatives l))
           "and naming the definitions whose prices were withheld"))))
 
-(deftest bsc-unknown-selection-skips-alternative
-  (testing "URPX-vlf: a selection pointing at an unknown ProfileAlternative @id
-            results in no match — the alternative is skipped silently"
-    (let [plan (bsc-fixture)
-          r (price/resolve-prices
-             plan (zdt 2026 7 15 17)
-             {:profile-alternatives {"test:bsc-income-tier" "test:bsc-nonexistent"}})]
-      (is (nil? (ledger-by-name r "Basic Service Charge"))))))
+(deftest bsc-unknown-selection-is-refused
+  (testing "a selection naming an @id the keyed container does not list is a
+            caller error, and it is refused.
+
+            This test previously asserted that the alternative was skipped
+            silently, and described that as the specification, which is the
+            same mistake the test above documents one case over. Compared for
+            equality, a stale or mistyped id is indistinguishable from a
+            deliberate choice of a sibling cell, so the whole dimension
+            disappeared: here the Basic Service Charge ledger vanished
+            entirely, and on PG&E E-TOU-C composed with its vintage-PCIA
+            modifier the same typo returned 0.46886 where the correct id
+            returns 0.49859, with nothing in the result to say so.
+
+            The membership index that catches it is the one that already maps
+            an alternative to its dimension, so the check costs nothing."
+    (let [plan (bsc-fixture)]
+      (is (= :unknown-profile-alternative
+             (try (price/resolve-prices
+                   plan (zdt 2026 7 15 17)
+                   {:profile-alternatives {"test:bsc-income-tier" "test:bsc-nonexistent"}})
+                  nil
+                  (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))))
+      (is (some? (ledger-by-name
+                  (price/resolve-prices
+                   plan (zdt 2026 7 15 17)
+                   {:profile-alternatives {"test:bsc-income-tier" "test:bsc-care"}})
+                  "Basic Service Charge"))
+          "while a real cell still selects, unchanged")
+      (let [l (ledger-by-name
+               (price/resolve-prices
+                plan (zdt 2026 7 15 17)
+                {:profile-alternatives {"test:other-dimension" "test:whatever"}})
+               "Basic Service Charge")]
+        (is (some? l)
+            "a key for a container this document does not declare is left alone,
+             because one selection map is passed to a plan and to every modifier
+             composed with it")
+        (is (seq (:urpx.resolved/unselected-alternatives l))
+            "so this dimension is simply unselected: withheld and marked, which
+             is what a caller can act on, rather than refused or elided")))))
 
 (deftest bsc-fixture-round-trips-through-emit
   (testing "URPX-vlf: ProfileAlternatives + PriceSetAlternatives round-trip

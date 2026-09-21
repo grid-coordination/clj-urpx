@@ -1,5 +1,9 @@
 (ns urpx.schema
-  "Malli schemas for URPX v0.2.0 entities, describing the coerced shape.
+  "Malli schemas for URPX entities, describing the coerced shape.
+
+  Tracks the ontology snapshot the fixtures pin via urpx:targetURPXVersion,
+  currently v0.5.1. scripts/shacl-drift.sh reports where these have fallen
+  behind the upstream shapes.
 
   Two-layer model (mirroring the clj-oa3 pattern):
     - urpx.core      — raw parse: JSON-LD with namespaced keys, all string values.
@@ -385,6 +389,17 @@
    [:urpx/primaryChargeType {:optional true} Ref]
    ;; v0.2.0: required, single. PD points to its parent Ledger.
    [:urpx/referencesLedger Ref]
+   ;; 0..N upstream (sh:minCount 0, no sh:maxCount), and the skos:note names
+   ;; PriceDefinition explicitly: "Use on PriceSetAlternative, PriceDefinition,
+   ;; TOUSchedule, ServiceTiers, or ServiceBracket to scope applicability to a
+   ;; specific ProfileAlternative." This is the SELECTION layer reaching a
+   ;; definition, which is how a multi-dimensional matrix declares exclusivity
+   ;; readably rather than burying it in ApplicabilityRule predicates nothing
+   ;; evaluates. `urpx.price` reads ONE; several refuse rather than inventing a
+   ;; conjunctive reading for a shape no filing has.
+   [:urpx/referencesProfileAlternative
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
    [:urpx/referencesMetricInput
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
