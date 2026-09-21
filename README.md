@@ -308,6 +308,33 @@ The conjunctive reading (sum the bases) is already covered by `urpx:PriceSummary
 
 Note that this is a second, independent way to express CARE and FERA. The `urpx:ProfileAlternatives` mechanism below files the already-discounted prices directly as an alternative price set; this one files the discount as arithmetic over the undiscounted prices. Which a plan uses is the filer's choice, and a reader should expect either.
 
+### Which version applies
+
+A filing holds one `urpx:RatePlanVersion`, and a plan accumulates several over time. Resolving one document needs no choice and makes none: a single candidate is used as-is, at any instant.
+
+Covering a **window** is different. A forecast client loads several versions of a plan and indexes them together, and then which one applies depends on the instant:
+
+```clojure
+(def by-plan (index/versions-by-plan [nov-filing mar-filing]))
+
+(price/resolve-prices plan zdt {:versions-by-plan by-plan})
+;; => resolved against the version in effect at zdt
+```
+
+The rule is the latest `urpx:effectiveDateTime` at or before the instant, which is inclusive, skipping any version whose `urpx:expirationDate` has passed. No version in the corpus carries an expiration, so a version's span is in practice inferable only from the next version's start; that is why the rule needs a plan's whole candidate set rather than one snapshot.
+
+`urpx:expectedEndDate` is deliberately **not** read. An expected end anticipates a successor rather than terminating anything, so a version past its expected end with no successor is still the one in force.
+
+Three situations have no defensible answer and are refused rather than guessed, each carrying a `:reason`:
+
+| reason | meaning |
+|---|---|
+| `:no-version-in-effect` | nothing had taken effect by that instant; the caller asked about a window the plan does not cover |
+| `:ambiguous-version` | two candidates share the latest effective instant |
+| `:version-without-effective-instant` | a candidate states no effective instant, so it cannot be ordered against the others |
+
+Pass `:version` with a resolved snapshot to choose explicitly and bypass all of it. Candidates are deduplicated by value, so a nested snapshot and its own entry in the back-pointer index collapse to one; two genuinely different descriptions sharing an `@id` do not, and are refused rather than picked between.
+
 ### Recurring charges
 
 A `urpx:PriceDefinition` carrying its own `urpx:CalculationMethod` prices a **recurring** charge: one billed per interval rather than per unit consumed. Minimum charges, service charges, base services charges, and the per-lamp-per-month charges of a street lighting schedule.

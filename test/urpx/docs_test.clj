@@ -29,6 +29,7 @@
                          the first thing a new reader ran would have thrown.
                          A symbol check cannot catch that; only running it can."
   (:require [clojure.java.io :as io]
+            [clojure.set :as set]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]))
 
@@ -158,3 +159,34 @@
                        (catch Throwable t
                          (str (.getSimpleName (class t)) ": " (.getMessage t)))))))))
           (finally (remove-ns ns-sym)))))))
+
+(deftest fixtures-md-lists-every-vendored-fixture
+  (testing "FIXTURES.md is the audit trail for what is vendored and at which
+            upstream commit, so a fixture missing from its table is a
+            provenance gap rather than a formatting one. It drifted twice while
+            fixtures were being added by hand, which is why this is a test."
+    (let [md      (doc "test/resources/urpx-fixtures/FIXTURES.md")
+          on-disk (->> (.listFiles (io/file "test/resources/urpx-fixtures"))
+                       (map #(.getName %))
+                       (filter #(str/ends-with? % ".jsonld"))
+                       set)
+          listed  (->> (re-seq #"\| `([^`]+\.jsonld)`" (or md ""))
+                       (map second)
+                       set)]
+      (is (some? md))
+      (is (seq on-disk) "sanity: there are vendored fixtures to check")
+      (is (empty? (set/difference on-disk listed))
+          (str "vendored but absent from the FIXTURES.md table: "
+               (pr-str (sort (set/difference on-disk listed)))))
+      (is (empty? (set/difference listed on-disk))
+          (str "listed in FIXTURES.md but not vendored: "
+               (pr-str (sort (set/difference listed on-disk)))))
+      (testing "and every fixture has its SPDX sidecar"
+        (let [sidecars (->> (.listFiles (io/file "test/resources/urpx-fixtures"))
+                            (map #(.getName %))
+                            (filter #(str/ends-with? % ".jsonld.license"))
+                            (map #(subs % 0 (- (count %) 8)))
+                            set)]
+          (is (empty? (set/difference on-disk sidecars))
+              (str "missing .license sidecar: "
+                   (pr-str (sort (set/difference on-disk sidecars))))))))))

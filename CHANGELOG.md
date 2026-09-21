@@ -9,6 +9,27 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [0.17.0] — 2026-09-21
+
+Version selection is time-aware.
+
+### Fixed
+
+- **The version snapshot was chosen arbitrarily when a plan had more than one.** `plan-version` fell back to `(first ...)` over the back-pointer index, taking whatever the index happened to hold rather than what was in force. Same class as the vintage-PCIA arbitrary pick: a defensible-looking number with no rule behind it. It stayed invisible because every filing carries exactly one version, so loading one file gives one answer; six SCE plans in the corpus already carry two, and a forecast client loading several versions to cover a window is the case it was silently wrong for.
+
+  The rule is now the latest `urpx:effectiveDateTime` at or before the instant, inclusive, skipping any version whose `urpx:expirationDate` has passed. All 84 version snapshots in the corpus carry an effective instant and **none** carries an expiration, so a version's span is inferable only from its successor's start; the rule therefore needs a plan's whole candidate set rather than one snapshot.
+
+### Changed
+
+- Resolving a **single** version needs no time reasoning and does none: one candidate is used as-is at any instant. Every filing in the corpus takes this path, so nothing there changes.
+- Three situations are refused rather than guessed, each with a `:reason` in `ex-data`: `:no-version-in-effect` (nothing had taken effect yet), `:ambiguous-version` (two candidates share the latest effective instant), and `:version-without-effective-instant` (a candidate cannot be ordered, since `urpx:effectiveDateTime` is `sh:minCount 0`).
+- `urpx:expectedEndDate` and `urpx:expectedEndDateTime` are deliberately not read. An expected end anticipates a successor rather than terminating anything, so a version past its expected end with no successor is still in force; treating it as an expiration would silently drop a plan that outlived its own forecast.
+- Candidates are deduplicated **by value**, not by `@id`. Two CPAU E-1 filings publish the same version `@id` at the same effective instant while differing in `urpx:hasModifierOptions`; collapsing on `@id` would pick one silently, which is the defect being removed. As two candidates they tie and are refused.
+
+### Added
+
+- **An `sce-d-2025-11-15` fixture**, the prior version of a plan already vendored, so the suite holds two real versions of one plan that price differently. Every other fixture is a single version, which is the condition that hid this.
+
 ## [0.16.0] — 2026-09-21
 
 One fix, and it changes what `resolve-prices` returns for **every** base plan in the corpus.
@@ -147,6 +168,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.17.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.17.0
 [0.16.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.16.0
 [0.15.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.15.0
 [0.14.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.14.0

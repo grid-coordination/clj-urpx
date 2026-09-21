@@ -30,7 +30,7 @@
   opt out of non-holidays (urpx:includeNonHolidays = false) will never match."
   (:require [urpx.holidays :as holidays]
             [urpx.index :as index])
-  (:import [java.time DayOfWeek LocalDate LocalTime ZonedDateTime]))
+  (:import [java.time DayOfWeek LocalDate LocalDateTime LocalTime ZonedDateTime]))
 
 ;; ---------------------------------------------------------------------------
 ;; Day-type matching
@@ -623,8 +623,84 @@
     (cond-> {:urpx.resolved/unit-price value}
       unvaluable (assoc :urpx.resolved/unvaluable unvaluable))))
 
+(defn- version-effective-at
+  "The instant `version` takes effect, as a LocalDateTime, or nil if it does not
+   say. urpx:effectiveDateTime is preferred; urpx:effectiveDate is read as the
+   start of that day. Both are sh:minCount 0, so a conformant version may state
+   neither, and this returns nil rather than inventing an epoch for it."
+  [version]
+  (or (:urpx/effectiveDateTime version)
+      (some-> (:urpx/effectiveDate version) (.atStartOfDay))))
+
+(defn- version-expired-by?
+  "True if `version` states a hard expiration at or before `t`.
+
+   urpx:expirationDate / urpx:expirationDateTime only. The version shapes also
+   carry urpx:expectedEndDate and urpx:expectedEndDateTime, which are
+   deliberately NOT read here: an expected end anticipates a successor rather
+   than terminating anything, so a version past its expected end is still the
+   one in force until a later version exists. Treating the two alike would
+   silently drop a plan that outlived its own forecast."
+  [version ^LocalDateTime t]
+  (let [exp (or (:urpx/expirationDateTime version)
+                (some-> (:urpx/expirationDate version) (.atStartOfDay)))]
+    (boolean (and exp (not (.isAfter ^LocalDateTime exp t))))))
+
+(defn- select-version-at
+  "Choose among several candidate snapshots for one plan: the latest whose
+   urpx:effectiveDateTime is at or before `t` and which has not expired by `t`.
+
+   Refuses rather than guesses in three cases, for the same reason every other
+   refusal here exists. A candidate with no effective instant cannot be ordered
+   against the others; a tie on the latest effective instant is not a choice
+   this library can make; and if nothing has taken effect by `t` the honest
+   answer is that the caller asked about an instant this plan does not cover,
+   not the earliest version it happens to have.
+
+   No version in the corpus carries an expiration, so a version's span is
+   inferable only from the next version's start. That is exactly why the rule
+   needs the full candidate set rather than one snapshot."
+  [candidates ^LocalDateTime t plan-id]
+  (let [undated (remove version-effective-at candidates)]
+    (when (seq undated)
+      (throw (ex-info (str "Cannot choose a version for " (pr-str plan-id) ": "
+                           (count undated) " of " (count candidates) " candidate snapshot(s) "
+                           "state no urpx:effectiveDateTime, so they cannot be ordered "
+                           "against the others. Pass :version to choose explicitly.")
+                      {:reason :version-without-effective-instant
+                       :plan-id plan-id
+                       :ids (mapv :jsonld/id candidates)})))
+    (let [live (remove #(version-expired-by? % t) candidates)
+          eligible (filter #(not (.isAfter ^LocalDateTime (version-effective-at %) t)) live)]
+      (cond
+        (empty? eligible)
+        (throw (ex-info (str "Cannot choose a version for " (pr-str plan-id) ": none of the "
+                             (count candidates) " candidate snapshot(s) is in effect at " t
+                             ". The earliest takes effect at "
+                             (->> candidates (keep version-effective-at) sort first)
+                             ". Resolving an instant before a plan existed is a question "
+                             "about the caller's window, not about the plan.")
+                        {:reason :no-version-in-effect
+                         :plan-id plan-id
+                         :at t
+                         :effective (mapv version-effective-at candidates)}))
+
+        :else
+        (let [latest (->> eligible (map version-effective-at) (sort) (last))
+              winners (filter #(= latest (version-effective-at %)) eligible)]
+          (if (= 1 (count winners))
+            (first winners)
+            (throw (ex-info (str "Cannot choose a version for " (pr-str plan-id) ": "
+                                 (count winners) " snapshots share the latest effective "
+                                 "instant " latest ", so there is no rule here that "
+                                 "picks among them. Pass :version to choose explicitly.")
+                            {:reason :ambiguous-version
+                             :plan-id plan-id
+                             :at t
+                             :ids (mapv :jsonld/id winners)}))))))))
+
 (defn- plan-version
-  "Resolve the version snapshot to read plan content from.
+  "Resolve the version snapshot to read plan content from, at `zdt`.
 
    URPX v0.5.1 un-nests the version: a document may state the plan-to-version
    link downward (`nested-key`, a nested map), upward (urpx:forRatePlan /
@@ -632,19 +708,36 @@
    are declared owl:inverseOf and the down-pointer is sh:minCount 0, so neither
    can be assumed present.
 
-   Precedence, widest to narrowest:
      1. `:version` in `opts`   an explicitly resolved snapshot always wins
-     2. the nested down-pointer  the v0.2.x shape, still legal at v0.5.1
-     3. `:versions-by-plan` in `opts`, as produced by
-        `urpx.index/versions-by-plan`, looked up by the plan's own @id
+     2. one candidate          used as-is, whether nested or back-pointed
+     3. several candidates     the one in effect at `zdt`, or a refusal
 
-   Nothing here removes a nested read: the corpus is mixed-vocabulary for the
-   duration of its migration and every filing in it today is nested."
-  [plan opts nested-key]
+   Candidates are the nested snapshot together with everything
+   `urpx.index/versions-by-plan` has filed under this plan's @id, deduplicated.
+
+   Selection used to be `(first ...)` over the back-pointer index, which took
+   whatever the index happened to hold first rather than what was in force.
+   That was invisible while every filing carried exactly one version, and six
+   SCE plans in the corpus already carry two. A forecast client loading several
+   versions to cover a window is the case it was silently wrong for."
+  [plan opts nested-key ^ZonedDateTime zdt]
   (or (:version opts)
-      (index/nested-version plan nested-key)
-      (when-let [by-plan (:versions-by-plan opts)]
-        (first (get by-plan (:jsonld/id plan))))))
+      (let [nested (index/nested-version plan nested-key)
+            plan-id (:jsonld/id plan)
+            indexed (when-let [by-plan (:versions-by-plan opts)] (get by-plan plan-id))
+            ;; Deduplicated BY VALUE, not by @id. The nested snapshot and its
+            ;; entry in the back-pointer index are the same node and collapse.
+            ;; Two nodes sharing an @id but differing in content do NOT: the
+            ;; corpus has exactly that, where two CPAU e-1 filings both publish
+            ;; cpau:e-1-2025-07-01 at the same effective instant while differing
+            ;; in urpx:hasModifierOptions. Collapsing on @id would pick one of
+            ;; those silently, which is the failure this whole function exists
+            ;; to remove; as two candidates they tie and are refused instead.
+            candidates (distinct (remove nil? (cons nested indexed)))]
+        (case (count candidates)
+          0 nil
+          1 (first candidates)
+          (select-version-at candidates (.toLocalDateTime zdt) plan-id)))))
 
 
 ;; ---------------------------------------------------------------------------
@@ -741,7 +834,7 @@
    by tier-number — the caller chooses based on cumulative billing-period usage."
   ([rate-plan zdt] (resolve-prices rate-plan zdt nil))
   ([rate-plan ^ZonedDateTime zdt opts]
-   (let [version       (plan-version rate-plan opts :urpx/hasRatePlanVersion)
+   (let [version       (plan-version rate-plan opts :urpx/hasRatePlanVersion zdt)
          plan-elements (:urpx/hasPlanElements version)
          seasons       (:urpx/hasSeasons plan-elements)
          seasons-by-id (into {} (map (juxt :jsonld/id identity)) seasons)
@@ -827,10 +920,10 @@
    :urpx/applicableToRatePlan list. Returns true when `plan-id` is nil so
    callers that don't have a plan id (e.g. resolving a modifier in isolation)
    are not blocked."
-  ([modifier plan-id] (modifier-applies-to? modifier plan-id nil))
-  ([modifier plan-id opts]
+  ([modifier plan-id ^ZonedDateTime zdt] (modifier-applies-to? modifier plan-id nil zdt))
+  ([modifier plan-id opts ^ZonedDateTime zdt]
   (or (nil? plan-id)
-      (let [version (plan-version modifier opts :urpx/hasRatePlanModifierVersion)
+      (let [version (plan-version modifier opts :urpx/hasRatePlanModifierVersion zdt)
             refs    (:urpx/applicableToRatePlan version)]
         (boolean (some #(= plan-id (:jsonld/id %)) refs))))))
 
@@ -852,7 +945,7 @@
   ([modifier zdt base-period-num holiday?]
    (modifier-ledger-results modifier zdt base-period-num holiday? nil))
   ([modifier ^ZonedDateTime zdt base-period-num holiday? opts]
-  (let [version       (plan-version modifier opts :urpx/hasRatePlanModifierVersion)
+  (let [version       (plan-version modifier opts :urpx/hasRatePlanModifierVersion zdt)
         ;; @id index for urpx:basedOnPrice. Supplied by
         ;; resolve-prices-with-modifiers spanning the base plan AND every
         ;; modifier, which is what makes a discount Price in a modifier able to
@@ -971,7 +1064,7 @@
          ;; the BASE plan, so their season, month and TOU gates are the base
          ;; plan's. Built here and passed down, because modifier-ledger-results
          ;; can only see the modifier's own seasons and rules.
-         base-version    (plan-version rate-plan opts :urpx/hasRatePlanVersion)
+         base-version    (plan-version rate-plan opts :urpx/hasRatePlanVersion zdt)
          opts            (assoc opts :member-active?
                                 (or (:member-active? opts)
                                     (make-member-active?
@@ -988,7 +1081,7 @@
          ;; through its urpx:forRatePlanModifier back-pointer resolved to a nil
          ;; version, matched no applicableToRatePlan, and was dropped from the
          ;; composition without a word.
-         extra           (mapcat #(when (modifier-applies-to? % plan-id opts)
+         extra           (mapcat #(when (modifier-applies-to? % plan-id opts zdt)
                                     (modifier-ledger-results % zdt base-period-num holiday? opts))
                                  modifiers)]
      (update base :urpx.resolved/ledgers (fnil into []) extra))))

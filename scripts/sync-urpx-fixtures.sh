@@ -71,6 +71,14 @@ fixtures=(
   # missing; the reported value did not change, because the metric inputs are
   # fixture counts with no measurement kind.
   "cpau-e-14-2025-07-01           28390dc  us/ca/cpau/electricity/e-14/versions/2025-07-01/rate-plan_cpau_e-14_2025-07-01.jsonld"
+
+  # The PRIOR version of SCE D, vendored so the suite holds two real versions of
+  # one plan. Six plans in the corpus carry two; every other fixture here is a
+  # single version, which is exactly the condition that hid time-unaware version
+  # selection. sce:d-2025-11-15 and sce:d-2026-03-20 price differently, so a
+  # rule that picked the wrong one produces a visibly wrong rate rather than a
+  # subtly wrong one.
+  "sce-d-2025-11-15               28390dc  us/ca/sce/electricity/d/versions/2025-11-15/rate-plan_sce_d_2025-11-15.jsonld"
 )
 
 for entry in "${fixtures[@]}"; do
