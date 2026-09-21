@@ -1,5 +1,6 @@
 (ns urpx.dsl-test
   (:require [clojure.test :refer [deftest is testing]]
+            [malli.core :as m]
             [urpx.coerce :as coerce]
             [urpx.core :as core]
             [urpx.dsl :as dsl]
@@ -544,3 +545,38 @@
                          core/parse-rate-plan
                          coerce/coerce-rate-plan)]
       (is (= plan re-coerced)))))
+
+;; ---------------------------------------------------------------------------
+;; Builder coverage is a claim the ns docstring makes; pin it
+;; ---------------------------------------------------------------------------
+
+(deftest every-entity-schema-has-a-builder
+  (testing "urpx.dsl claims a named builder for every entity-type schema. That
+            claim was false for eleven schemas before this test existed, four of
+            them added the same day, so it is pinned rather than left in prose.
+
+            The check follows the naming convention the ns documents: a schema
+            named X gets a builder named (camel->kebab X). There are no
+            exceptions: an earlier comment claimed SourcePublication could not
+            have one because its @type is an :enum, and that was asserted
+            without testing. entity-type returns the first enum member, which is
+            the right default for a builder, so it builds the v0.5.1 spelling
+            while the schema still validates the v0.2.x one on parse."
+    (let [kebab    (var-get #'urpx.dsl/camel->kebab)
+          entities (into (sorted-set)
+                         (keep (fn [[sym v]]
+                                 (let [val (deref v)]
+                                   (when (or (vector? val) (m/schema? val))
+                                     (when (try (dsl/entity-type val)
+                                                (catch Exception _ nil))
+                                       (str sym))))))
+                         (ns-publics 'urpx.schema))
+          missing  (remove #(ns-resolve 'urpx.dsl (symbol (kebab %))) entities)]
+      (is (< 50 (count entities)) "sanity: urpx.schema should define many entities")
+      (is (empty? missing)
+          (str "entity schemas with no DSL builder: " (pr-str (vec missing))))
+      (testing "the dual-accepting schema builds its v0.5.1 spelling, and the
+                schema still validates the v0.2.x one"
+        (is (= "urpx:SourcePublication" (:jsonld/type (dsl/source-publication :urpx/name "X"))))
+        (is (m/validate schema/SourcePublication
+                        {:jsonld/type "urpx:TariffPublication" :urpx/name "X"}))))))

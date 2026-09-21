@@ -20,9 +20,13 @@
     - `dsl-scope`             macro establishing a local-symbol-ref scope
     - `make-builder`          generator: schema → constructor function
     - `entity-type`           introspect a schema for its @type literal
-    - 37 named builders       one per entity-type schema in `urpx.schema`
+    - a named builder for every entity-type schema in `urpx.schema`
                               (`season`, `metric-input`, `price-definition`,
-                              `rate-plan`, `urpx-document`, …)
+                              `rate-plan`, `urpx-package`, `coverage-claim`, …),
+                              with no exceptions. Where a schema dual-accepts
+                              two @type spellings (`source-publication`), the
+                              builder sets the v0.5.1 one; the schema still
+                              validates the v0.2.x spelling on parse.
 
   ## Builder semantics
 
@@ -298,14 +302,26 @@
 (def tariff-book-reference     (make-builder schema/TariffBookReference))
 (def data-source-reference     (make-builder schema/DataSourceReference))
 (def rate-case                 (make-builder schema/RateCase))
+
+;; Alternatives (declarative customer-or-configuration choices)
+(def alternative-dimension     (make-builder schema/AlternativeDimension))
+(def alternative-dimensions    (make-builder schema/AlternativeDimensions))
+(def profile-alternative       (make-builder schema/ProfileAlternative))
+(def profile-alternatives      (make-builder schema/ProfileAlternatives))
+(def price-set-alternative     (make-builder schema/PriceSetAlternative))
+(def price-set-alternatives    (make-builder schema/PriceSetAlternatives))
+(def service-bracket           (make-builder schema/ServiceBracket))
+
+;; Coverage machinery (v0.5.1)
+(def coverage-claim            (make-builder schema/CoverageClaim))
+(def evaluation                (make-builder schema/Evaluation))
+(def model-exclusion           (make-builder schema/ModelExclusion))
+(def price-definition-reference (make-builder schema/PriceDefinitionReference))
 (def tariff-filing             (make-builder schema/TariffFiling))
 (def rate-plan-identifier      (make-builder schema/RatePlanIdentifier))
 (def rate-plan-modifier-identifier (make-builder schema/RatePlanModifierIdentifier))
 (def organization-identifier   (make-builder schema/OrganizationIdentifier))
-;; No builder for schema/SourcePublication: its :jsonld/type is an :enum so
-;; both the v0.5.1 and v0.2.x literals validate, and make-builder requires a
-;; [:= "..."] entry (see entity-type) and throws otherwise. Build one by hand
-;; if you need it, choosing the @type explicitly.
+(def source-publication        (make-builder schema/SourcePublication))
 
 ;; Rate plan + modifier + document
 (def rate-plan-version              (make-builder schema/RatePlanVersion))

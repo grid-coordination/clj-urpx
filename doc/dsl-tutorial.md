@@ -169,6 +169,11 @@ Pulling it together: a non-TOU two-season plan modeled on the published CPAU E-2
      :initial-effective-date "2025-07-01"          ; ← string auto-coerces to LocalDate
      :has-rate-plan-version
      (dsl/rate-plan-version
+      ;; changeReason and serviceRole are sh:minCount 1 on the version shape and
+      ;; have been since URPX v0.2.1, so the builder requires them; it validates
+      ;; on construct, so omitting either throws here rather than downstream.
+      :change-reason {:jsonld/id "urpx:rateCase"}
+      :service-role {:jsonld/id "urpx:bundledServiceRole"}
       :effective-date-time "2025-07-01T00:00:00"   ; ← string auto-coerces to LocalDateTime
       :price-currency "USD"
       :has-plan-elements
@@ -192,6 +197,8 @@ Pulling it together: a non-TOU two-season plan modeled on the published CPAU E-2
 ```
 
 The result is a fully-coerced `urpx:RatePlan` ready for `urpx.price/resolve-prices` or `urpx.emit/write-rate-plan`. The test suite verifies that the round-trip — `dsl → emit → re-parse → re-coerce` — produces a structurally equal plan.
+
+This example authors the **v0.2.x** nested shape, which URPX v0.5.1 still permits. To author the v0.5.1 shape instead, put the snapshot at the top level and state the link upward with `:for-rate-plan`, add `:has-coverage-claim`, and wrap in `dsl/urpx-package` rather than `dsl/urpx-document`. Both load through `urpx.core/load-rate-plan` without the consumer caring which was used.
 
 ## Where to look next
 
