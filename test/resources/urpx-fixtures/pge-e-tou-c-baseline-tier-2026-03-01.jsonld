@@ -1,0 +1,3430 @@
+{
+  "@context": {
+    "urpx": "https://urpx.org/ns/ontology/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "org": "https://rate-plans.grid-coordination.energy/organizations/",
+    "pge": "https://rate-plans.grid-coordination.energy/pge/",
+    "urpx:unitPrice": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:effectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:effectiveDateTime": {
+      "@type": "xsd:dateTime"
+    },
+    "urpx:initialEffectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:startDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:url": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:intervalDuration": {
+      "@type": "xsd:duration"
+    },
+    "urpx:lowerBound": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:upperBound": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:accessURL": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:dateRetrieved": {
+      "@type": "xsd:date"
+    },
+    "urpx:targetURPXVersion": {
+      "@type": "xsd:anyURI"
+    },
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "urpx:evaluatedOn": {
+      "@type": "xsd:dateTime"
+    }
+  },
+  "@type": "urpx:URPXPackage",
+  "@id": "pge:doc-e-tou-c-baseline-tier-2026-03-01",
+  "urpx:targetURPXVersion": "https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl",
+  "urpx:hasRatePlanModifier": {
+    "@type": "urpx:RatePlanModifier",
+    "@id": "pge:e-tou-c-baseline-tier",
+    "urpx:name": "E-TOU-C Baseline Credit + Conservation Incentive Adjustment",
+    "urpx:modifierUniqueIdentifier": "E-TOU-C-BASELINE-TIER",
+    "urpx:initialEffectiveDate": "2026-03-01",
+    "urpx:timezoneIdentifier": "America/Los_Angeles",
+    "urpx:hasRatePlanModifierVersion": {
+      "@type": "urpx:RatePlanModifierVersion",
+      "@id": "pge:e-tou-c-baseline-tier-2026-03-01",
+      "urpx:version": "2026-03-01",
+      "urpx:modifierVersionNumber": "2026-03-01",
+      "urpx:changeReason": {
+        "@id": "urpx:rateCase"
+      },
+      "urpx:description": "Baseline Credit and Conservation Incentive Adjustment for PG&E Schedule E-TOU-C, modeled per the territory × code × season baseline allowance matrix (10 territories × 2 codes × 2 seasons = 40 cells). The Baseline Credit (-$0.08140/kWh) applies to Tier 1 (within baseline) usage only; the CIA applies to all usage with two values: -$0.02786/kWh on Tier 1 and +$0.05354/kWh on Tier 2 + Tier 2 Continued (over baseline). Tier boundaries are baseline-allowance-keyed and vary per cell; the Tier 2 cap is 4× the Tier 1 baseline per Special Condition 1. Cell selection is structural via urpx:ProfileAlternatives (territory + code dimensions); each urpx:ServiceTiers container references the matching urpx:ProfileAlternative. Code M / Code S medical baseline allowances are NOT modeled here — they require Rule 19 + Preliminary Statement Part A extraction.",
+      "urpx:effectiveDateTime": "2026-03-01T00:00:00",
+      "urpx:priceCurrency": "USD",
+      "urpx:commodity": {
+        "@id": "urpx:electricity"
+      },
+      "urpx:serviceRole": {
+        "@id": "urpx:bundledServiceRole"
+      },
+      "urpx:applicableToRatePlan": [
+        {
+          "@id": "pge:e-tou-c"
+        }
+      ],
+      "urpx:hasDataSourceReference": {
+        "@type": "urpx:DataSourceReference",
+        "urpx:fileName": "ELEC_SCHEDS_E-TOU-C.pdf",
+        "urpx:mediaType": {
+          "@id": "urpx:applicationPdf"
+        },
+        "urpx:accessURL": "https://www.pge.com/tariffs/assets/pdf/tariffbook/ELEC_SCHEDS_E-TOU-C.pdf",
+        "urpx:dateRetrieved": "2026-04-28",
+        "urpx:dataSourceType": {
+          "@id": "urpx:utilityWebsiteSource"
+        }
+      },
+      "urpx:hasPlanElements": {
+        "@type": "urpx:PlanElements",
+        "@id": "pge:e-tou-c-baseline-tier-2026-03-01-plan-elements",
+        "urpx:hasMetricInput": [
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "pge:mi-energy-baseline",
+            "urpx:name": "Energy consumption (kWh) — baseline-tier reference metric",
+            "urpx:metricInputType": {
+              "@id": "urpx:measuredMetricInput"
+            },
+            "urpx:hasMetricSpecification": {
+              "@type": "urpx:MetricSpecification",
+              "@id": "pge:ms-energy-baseline",
+              "urpx:commodity": {
+                "@id": "urpx:electricity"
+              },
+              "urpx:measurementKind": {
+                "@id": "urpx:energy"
+              },
+              "urpx:unitOfMeasure": {
+                "@id": "urpx:kWh"
+              }
+            }
+          }
+        ],
+        "urpx:hasBillingModel": {
+          "@type": "urpx:BillingModel",
+          "@id": "pge:e-tou-c-baseline-tier-2026-03-01-plan-elements-billing-model",
+          "urpx:hasLedger": [
+            {
+              "@type": "urpx:Ledger",
+              "@id": "pge:ledger-baseline-credit",
+              "urpx:name": "Baseline Credit",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "pge:mi-energy-baseline"
+              }
+            },
+            {
+              "@type": "urpx:Ledger",
+              "@id": "pge:e-tou-c-baseline-tier-2026-03-01-ledger-cia",
+              "urpx:name": "Conservation Incentive Adjustment",
+              "urpx:ledgerType": {
+                "@id": "urpx:bundledLedger"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "pge:mi-energy-baseline"
+              }
+            }
+          ],
+          "urpx:hasPriceDefinition": [
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "pge:pd-baseline-credit",
+              "urpx:name": "Baseline Credit",
+              "urpx:chargeType": {
+                "@id": "urpx:creditEnergy"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "pge:ledger-baseline-credit"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "pge:e-tou-c-baseline-tier-2026-03-01-pd-cia",
+              "urpx:name": "Conservation Incentive Adjustment",
+              "urpx:chargeType": {
+                "@id": "urpx:conservationCharge"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:referencesLedger": {
+                "@id": "pge:e-tou-c-baseline-tier-2026-03-01-ledger-cia"
+              }
+            }
+          ],
+          "urpx:hasServiceTiers": [
+            {
+              "@type": "urpx:ServiceTiers",
+              "@id": "pge:tiers-baseline",
+              "urpx:referencesMetricInput": {
+                "@id": "pge:mi-energy-baseline"
+              },
+              "urpx:hasServiceTier": [
+                {
+                  "@type": "urpx:ServiceTier",
+                  "@id": "pge:tier-baseline-t1",
+                  "urpx:name": "Tier 1 — within baseline",
+                  "urpx:serviceTierNumber": 1,
+                  "urpx:hasServiceBracket": [
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-p-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-p-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "13.5",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-p-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-p-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "11.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-p-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-p-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "15.2",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-p-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-p-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "26.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-q-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-q-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "9.8",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-q-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-q-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "11.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-q-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-q-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "8.5",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-q-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-q-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "26.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-r-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-r-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "17.7",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-r-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-r-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "10.4",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-r-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-r-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "19.9",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-r-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-r-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "26.7",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-s-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-s-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "15.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-s-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-s-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "10.2",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-s-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-s-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "17.8",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-s-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-s-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "23.7",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-t-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-t-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "6.5",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-t-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-t-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "7.5",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-t-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-t-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "7.1",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-t-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-t-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "12.9",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-v-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-v-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "7.1",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-v-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-v-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "8.1",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-v-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-v-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "10.4",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-v-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-v-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "19.1",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-w-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-w-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "19.2",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-w-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-w-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "9.8",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-w-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-w-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "22.4",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-w-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-w-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "19.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-x-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-x-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "9.8",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-x-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-x-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "9.7",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-x-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-x-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "8.5",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-x-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-x-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "14.6",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-y-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-y-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "10.5",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-y-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-y-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "11.1",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-y-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-y-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "12.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-y-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-y-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "24.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-z-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-z-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "5.9",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-z-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-z-b"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "7.8",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-z-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-z-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "6.7",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t1-z-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-z-h"
+                      },
+                      "urpx:lowerBound": "0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOrEqualOperator"
+                      },
+                      "urpx:upperBound": "15.7",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "@type": "urpx:ServiceTier",
+                  "@id": "pge:tier-baseline-t2",
+                  "urpx:name": "Tier 2 — 101–400% of baseline",
+                  "urpx:serviceTierNumber": 2,
+                  "urpx:hasServiceBracket": [
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-p-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-p-b"
+                      },
+                      "urpx:lowerBound": "13.5",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "54.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-p-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-p-b"
+                      },
+                      "urpx:lowerBound": "11.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "44.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-p-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-p-h"
+                      },
+                      "urpx:lowerBound": "15.2",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "60.8",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-p-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-p-h"
+                      },
+                      "urpx:lowerBound": "26.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "104.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-q-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-q-b"
+                      },
+                      "urpx:lowerBound": "9.8",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "39.2",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-q-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-q-b"
+                      },
+                      "urpx:lowerBound": "11.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "44.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-q-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-q-h"
+                      },
+                      "urpx:lowerBound": "8.5",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "34.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-q-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-q-h"
+                      },
+                      "urpx:lowerBound": "26.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "104.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-r-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-r-b"
+                      },
+                      "urpx:lowerBound": "17.7",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "70.8",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-r-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-r-b"
+                      },
+                      "urpx:lowerBound": "10.4",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "41.6",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-r-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-r-h"
+                      },
+                      "urpx:lowerBound": "19.9",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "79.6",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-r-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-r-h"
+                      },
+                      "urpx:lowerBound": "26.7",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "106.8",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-s-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-s-b"
+                      },
+                      "urpx:lowerBound": "15.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "60.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-s-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-s-b"
+                      },
+                      "urpx:lowerBound": "10.2",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "40.8",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-s-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-s-h"
+                      },
+                      "urpx:lowerBound": "17.8",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "71.2",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-s-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-s-h"
+                      },
+                      "urpx:lowerBound": "23.7",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "94.8",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-t-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-t-b"
+                      },
+                      "urpx:lowerBound": "6.5",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "26.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-t-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-t-b"
+                      },
+                      "urpx:lowerBound": "7.5",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "30.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-t-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-t-h"
+                      },
+                      "urpx:lowerBound": "7.1",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "28.4",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-t-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-t-h"
+                      },
+                      "urpx:lowerBound": "12.9",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "51.6",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-v-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-v-b"
+                      },
+                      "urpx:lowerBound": "7.1",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "28.4",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-v-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-v-b"
+                      },
+                      "urpx:lowerBound": "8.1",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "32.4",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-v-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-v-h"
+                      },
+                      "urpx:lowerBound": "10.4",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "41.6",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-v-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-v-h"
+                      },
+                      "urpx:lowerBound": "19.1",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "76.4",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-w-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-w-b"
+                      },
+                      "urpx:lowerBound": "19.2",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "76.8",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-w-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-w-b"
+                      },
+                      "urpx:lowerBound": "9.8",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "39.2",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-w-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-w-h"
+                      },
+                      "urpx:lowerBound": "22.4",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "89.6",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-w-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-w-h"
+                      },
+                      "urpx:lowerBound": "19.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "76.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-x-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-x-b"
+                      },
+                      "urpx:lowerBound": "9.8",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "39.2",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-x-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-x-b"
+                      },
+                      "urpx:lowerBound": "9.7",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "38.8",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-x-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-x-h"
+                      },
+                      "urpx:lowerBound": "8.5",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "34.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-x-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-x-h"
+                      },
+                      "urpx:lowerBound": "14.6",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "58.4",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-y-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-y-b"
+                      },
+                      "urpx:lowerBound": "10.5",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "42.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-y-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-y-b"
+                      },
+                      "urpx:lowerBound": "11.1",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "44.4",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-y-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-y-h"
+                      },
+                      "urpx:lowerBound": "12.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "48.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-y-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-y-h"
+                      },
+                      "urpx:lowerBound": "24.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "96.0",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-z-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-z-b"
+                      },
+                      "urpx:lowerBound": "5.9",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "23.6",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-z-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-z-b"
+                      },
+                      "urpx:lowerBound": "7.8",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "31.2",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-z-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-z-h"
+                      },
+                      "urpx:lowerBound": "6.7",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "26.8",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2-z-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-z-h"
+                      },
+                      "urpx:lowerBound": "15.7",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      },
+                      "urpx:upperBound": "62.8",
+                      "urpx:upperBoundOperator": {
+                        "@id": "urpx:lessThanOrEqualOperator"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "@type": "urpx:ServiceTier",
+                  "@id": "pge:tier-baseline-t2c",
+                  "urpx:name": "Tier 2 Continued — over 400% of baseline",
+                  "urpx:serviceTierNumber": 3,
+                  "urpx:hasServiceBracket": [
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-p-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-p-b"
+                      },
+                      "urpx:lowerBound": "54.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-p-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-p-b"
+                      },
+                      "urpx:lowerBound": "44.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-p-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-p-h"
+                      },
+                      "urpx:lowerBound": "60.8",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-p-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-p-h"
+                      },
+                      "urpx:lowerBound": "104.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-q-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-q-b"
+                      },
+                      "urpx:lowerBound": "39.2",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-q-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-q-b"
+                      },
+                      "urpx:lowerBound": "44.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-q-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-q-h"
+                      },
+                      "urpx:lowerBound": "34.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-q-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-q-h"
+                      },
+                      "urpx:lowerBound": "104.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-r-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-r-b"
+                      },
+                      "urpx:lowerBound": "70.8",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-r-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-r-b"
+                      },
+                      "urpx:lowerBound": "41.6",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-r-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-r-h"
+                      },
+                      "urpx:lowerBound": "79.6",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-r-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-r-h"
+                      },
+                      "urpx:lowerBound": "106.8",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-s-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-s-b"
+                      },
+                      "urpx:lowerBound": "60.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-s-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-s-b"
+                      },
+                      "urpx:lowerBound": "40.8",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-s-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-s-h"
+                      },
+                      "urpx:lowerBound": "71.2",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-s-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-s-h"
+                      },
+                      "urpx:lowerBound": "94.8",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-t-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-t-b"
+                      },
+                      "urpx:lowerBound": "26.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-t-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-t-b"
+                      },
+                      "urpx:lowerBound": "30.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-t-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-t-h"
+                      },
+                      "urpx:lowerBound": "28.4",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-t-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-t-h"
+                      },
+                      "urpx:lowerBound": "51.6",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-v-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-v-b"
+                      },
+                      "urpx:lowerBound": "28.4",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-v-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-v-b"
+                      },
+                      "urpx:lowerBound": "32.4",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-v-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-v-h"
+                      },
+                      "urpx:lowerBound": "41.6",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-v-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-v-h"
+                      },
+                      "urpx:lowerBound": "76.4",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-w-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-w-b"
+                      },
+                      "urpx:lowerBound": "76.8",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-w-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-w-b"
+                      },
+                      "urpx:lowerBound": "39.2",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-w-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-w-h"
+                      },
+                      "urpx:lowerBound": "89.6",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-w-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-w-h"
+                      },
+                      "urpx:lowerBound": "76.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-x-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-x-b"
+                      },
+                      "urpx:lowerBound": "39.2",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-x-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-x-b"
+                      },
+                      "urpx:lowerBound": "38.8",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-x-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-x-h"
+                      },
+                      "urpx:lowerBound": "34.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-x-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-x-h"
+                      },
+                      "urpx:lowerBound": "58.4",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-y-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-y-b"
+                      },
+                      "urpx:lowerBound": "42.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-y-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-y-b"
+                      },
+                      "urpx:lowerBound": "44.4",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-y-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-y-h"
+                      },
+                      "urpx:lowerBound": "48.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-y-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-y-h"
+                      },
+                      "urpx:lowerBound": "96.0",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-z-b-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-z-b"
+                      },
+                      "urpx:lowerBound": "23.6",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-z-b-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-z-b"
+                      },
+                      "urpx:lowerBound": "31.2",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-z-h-summer",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-summer"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-z-h"
+                      },
+                      "urpx:lowerBound": "26.8",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ServiceBracket",
+                      "@id": "pge:bracket-t2c-z-h-winter",
+                      "urpx:appliesInSeason": {
+                        "@id": "pge:e-tou-c-2026-03-01-season-winter"
+                      },
+                      "urpx:referencesProfileAlternative": {
+                        "@id": "pge:pa-baseline-z-h"
+                      },
+                      "urpx:lowerBound": "62.8",
+                      "urpx:lowerBoundOperator": {
+                        "@id": "urpx:greaterThanOperator"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "urpx:hasProfileAlternatives": {
+          "@type": "urpx:ProfileAlternatives",
+          "@id": "pge:pa-baseline-territory-code",
+          "urpx:name": "Baseline territory × code (PG&E residential baseline allowance dimensions)",
+          "urpx:hasAlternativeDimensions": {
+            "@type": "urpx:AlternativeDimensions",
+            "@id": "pge:pa-baseline-territory-code-alternative-dimensions",
+            "urpx:hasAlternativeDimension": [
+              {
+                "@type": "urpx:AlternativeDimension",
+                "urpx:dimensionDisplayName": "Baseline Territory",
+                "urpx:customDimensionProperty": "baselineTerritory",
+                "urpx:hasPossibleValues": {
+                  "@list": [
+                    {
+                      "@value": "P",
+                      "@type": "xsd:string"
+                    },
+                    {
+                      "@value": "Q",
+                      "@type": "xsd:string"
+                    },
+                    {
+                      "@value": "R",
+                      "@type": "xsd:string"
+                    },
+                    {
+                      "@value": "S",
+                      "@type": "xsd:string"
+                    },
+                    {
+                      "@value": "T",
+                      "@type": "xsd:string"
+                    },
+                    {
+                      "@value": "V",
+                      "@type": "xsd:string"
+                    },
+                    {
+                      "@value": "W",
+                      "@type": "xsd:string"
+                    },
+                    {
+                      "@value": "X",
+                      "@type": "xsd:string"
+                    },
+                    {
+                      "@value": "Y",
+                      "@type": "xsd:string"
+                    },
+                    {
+                      "@value": "Z",
+                      "@type": "xsd:string"
+                    }
+                  ]
+                }
+              },
+              {
+                "@type": "urpx:AlternativeDimension",
+                "urpx:dimensionDisplayName": "Baseline Code",
+                "urpx:customDimensionProperty": "baselineCode",
+                "urpx:hasPossibleValues": {
+                  "@list": [
+                    {
+                      "@value": "B",
+                      "@type": "xsd:string"
+                    },
+                    {
+                      "@value": "H",
+                      "@type": "xsd:string"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "urpx:hasProfileAlternative": [
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-p-b",
+              "urpx:name": "Baseline territory P, Code B",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-p-b",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-p-b",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-p-b-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-p-b-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-p-b-territory-right-operand",
+                        "urpx:stringValue": "P"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-p-b-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-p-b-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-p-b-code-right-operand",
+                        "urpx:stringValue": "B"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-p-h",
+              "urpx:name": "Baseline territory P, Code H",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-p-h",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-p-h",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-p-h-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-p-h-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-p-h-territory-right-operand",
+                        "urpx:stringValue": "P"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-p-h-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-p-h-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-p-h-code-right-operand",
+                        "urpx:stringValue": "H"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-q-b",
+              "urpx:name": "Baseline territory Q, Code B",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-q-b",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-q-b",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-q-b-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-q-b-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-q-b-territory-right-operand",
+                        "urpx:stringValue": "Q"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-q-b-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-q-b-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-q-b-code-right-operand",
+                        "urpx:stringValue": "B"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-q-h",
+              "urpx:name": "Baseline territory Q, Code H",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-q-h",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-q-h",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-q-h-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-q-h-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-q-h-territory-right-operand",
+                        "urpx:stringValue": "Q"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-q-h-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-q-h-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-q-h-code-right-operand",
+                        "urpx:stringValue": "H"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-r-b",
+              "urpx:name": "Baseline territory R, Code B",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-r-b",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-r-b",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-r-b-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-r-b-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-r-b-territory-right-operand",
+                        "urpx:stringValue": "R"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-r-b-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-r-b-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-r-b-code-right-operand",
+                        "urpx:stringValue": "B"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-r-h",
+              "urpx:name": "Baseline territory R, Code H",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-r-h",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-r-h",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-r-h-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-r-h-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-r-h-territory-right-operand",
+                        "urpx:stringValue": "R"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-r-h-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-r-h-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-r-h-code-right-operand",
+                        "urpx:stringValue": "H"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-s-b",
+              "urpx:name": "Baseline territory S, Code B",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-s-b",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-s-b",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-s-b-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-s-b-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-s-b-territory-right-operand",
+                        "urpx:stringValue": "S"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-s-b-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-s-b-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-s-b-code-right-operand",
+                        "urpx:stringValue": "B"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-s-h",
+              "urpx:name": "Baseline territory S, Code H",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-s-h",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-s-h",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-s-h-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-s-h-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-s-h-territory-right-operand",
+                        "urpx:stringValue": "S"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-s-h-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-s-h-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-s-h-code-right-operand",
+                        "urpx:stringValue": "H"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-t-b",
+              "urpx:name": "Baseline territory T, Code B",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-t-b",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-t-b",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-t-b-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-t-b-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-t-b-territory-right-operand",
+                        "urpx:stringValue": "T"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-t-b-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-t-b-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-t-b-code-right-operand",
+                        "urpx:stringValue": "B"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-t-h",
+              "urpx:name": "Baseline territory T, Code H",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-t-h",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-t-h",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-t-h-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-t-h-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-t-h-territory-right-operand",
+                        "urpx:stringValue": "T"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-t-h-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-t-h-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-t-h-code-right-operand",
+                        "urpx:stringValue": "H"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-v-b",
+              "urpx:name": "Baseline territory V, Code B",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-v-b",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-v-b",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-v-b-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-v-b-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-v-b-territory-right-operand",
+                        "urpx:stringValue": "V"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-v-b-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-v-b-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-v-b-code-right-operand",
+                        "urpx:stringValue": "B"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-v-h",
+              "urpx:name": "Baseline territory V, Code H",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-v-h",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-v-h",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-v-h-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-v-h-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-v-h-territory-right-operand",
+                        "urpx:stringValue": "V"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-v-h-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-v-h-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-v-h-code-right-operand",
+                        "urpx:stringValue": "H"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-w-b",
+              "urpx:name": "Baseline territory W, Code B",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-w-b",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-w-b",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-w-b-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-w-b-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-w-b-territory-right-operand",
+                        "urpx:stringValue": "W"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-w-b-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-w-b-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-w-b-code-right-operand",
+                        "urpx:stringValue": "B"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-w-h",
+              "urpx:name": "Baseline territory W, Code H",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-w-h",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-w-h",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-w-h-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-w-h-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-w-h-territory-right-operand",
+                        "urpx:stringValue": "W"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-w-h-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-w-h-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-w-h-code-right-operand",
+                        "urpx:stringValue": "H"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-x-b",
+              "urpx:name": "Baseline territory X, Code B",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-x-b",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-x-b",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-x-b-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-x-b-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-x-b-territory-right-operand",
+                        "urpx:stringValue": "X"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-x-b-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-x-b-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-x-b-code-right-operand",
+                        "urpx:stringValue": "B"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-x-h",
+              "urpx:name": "Baseline territory X, Code H",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-x-h",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-x-h",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-x-h-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-x-h-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-x-h-territory-right-operand",
+                        "urpx:stringValue": "X"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-x-h-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-x-h-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-x-h-code-right-operand",
+                        "urpx:stringValue": "H"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-y-b",
+              "urpx:name": "Baseline territory Y, Code B",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-y-b",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-y-b",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-y-b-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-y-b-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-y-b-territory-right-operand",
+                        "urpx:stringValue": "Y"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-y-b-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-y-b-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-y-b-code-right-operand",
+                        "urpx:stringValue": "B"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-y-h",
+              "urpx:name": "Baseline territory Y, Code H",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-y-h",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-y-h",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-y-h-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-y-h-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-y-h-territory-right-operand",
+                        "urpx:stringValue": "Y"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-y-h-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-y-h-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-y-h-code-right-operand",
+                        "urpx:stringValue": "H"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-z-b",
+              "urpx:name": "Baseline territory Z, Code B",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-z-b",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-z-b",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-z-b-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-z-b-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-z-b-territory-right-operand",
+                        "urpx:stringValue": "Z"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-z-b-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-z-b-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-z-b-code-right-operand",
+                        "urpx:stringValue": "B"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "@type": "urpx:ProfileAlternative",
+              "@id": "pge:pa-baseline-z-h",
+              "urpx:name": "Baseline territory Z, Code H",
+              "urpx:hasConditionExpression": {
+                "@type": "urpx:ConditionExpression",
+                "@id": "pge:cx-pa-baseline-z-h",
+                "urpx:rootNode": {
+                  "@type": "urpx:BooleanOperationNode",
+                  "@id": "pge:bn-pa-baseline-z-h",
+                  "urpx:operator": {
+                    "@id": "urpx:andOperator"
+                  },
+                  "urpx:operandNodes": [
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-z-h-territory",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-z-h-territory-left-operand",
+                        "urpx:customConditionProperty": "baselineTerritory"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-z-h-territory-right-operand",
+                        "urpx:stringValue": "Z"
+                      }
+                    },
+                    {
+                      "@type": "urpx:ComparisonNode",
+                      "@id": "pge:cn-pa-baseline-z-h-code",
+                      "urpx:operator": {
+                        "@id": "urpx:equalsOperator"
+                      },
+                      "urpx:leftOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-z-h-code-left-operand",
+                        "urpx:customConditionProperty": "baselineCode"
+                      },
+                      "urpx:rightOperand": {
+                        "@type": "urpx:CustomOperandNode",
+                        "@id": "pge:cn-pa-baseline-z-h-code-right-operand",
+                        "urpx:stringValue": "H"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "urpx:hasPrices": {
+        "@type": "urpx:Prices",
+        "@id": "pge:prices-baseline-tier",
+        "urpx:hasPrice": [
+          {
+            "@type": "urpx:Price",
+            "@id": "pge:price-baseline-credit",
+            "urpx:referencesPriceDefinition": {
+              "@id": "pge:pd-baseline-credit"
+            },
+            "urpx:name": "Baseline Credit — Tier 1 (within baseline)",
+            "urpx:unitPrice": "-0.08140",
+            "urpx:serviceTierNumber": 1
+          },
+          {
+            "@type": "urpx:Price",
+            "@id": "pge:price-cia-t1",
+            "urpx:referencesPriceDefinition": {
+              "@id": "pge:e-tou-c-baseline-tier-2026-03-01-pd-cia"
+            },
+            "urpx:name": "CIA — Tier 1 — within baseline",
+            "urpx:unitPrice": "-0.02786",
+            "urpx:serviceTierNumber": 1
+          },
+          {
+            "@type": "urpx:Price",
+            "@id": "pge:price-cia-t2",
+            "urpx:referencesPriceDefinition": {
+              "@id": "pge:e-tou-c-baseline-tier-2026-03-01-pd-cia"
+            },
+            "urpx:name": "CIA — Tier 2 — 101–400% of baseline",
+            "urpx:unitPrice": "0.05354",
+            "urpx:serviceTierNumber": 2
+          },
+          {
+            "@type": "urpx:Price",
+            "@id": "pge:price-cia-t2c",
+            "urpx:referencesPriceDefinition": {
+              "@id": "pge:e-tou-c-baseline-tier-2026-03-01-pd-cia"
+            },
+            "urpx:name": "CIA — Tier 2 Continued — over 400% of baseline",
+            "urpx:unitPrice": "0.05354",
+            "urpx:serviceTierNumber": 3
+          }
+        ]
+      },
+      "urpx:offeredBy": {
+        "@type": "urpx:Organization",
+        "@id": "org:utility-pge",
+        "urpx:legalName": "Pacific Gas & Electric Company",
+        "urpx:organizationType": {
+          "@id": "urpx:utilityOrganization"
+        },
+        "urpx:hasIdentity": {
+          "@id": "org:utility-pge-identity",
+          "@type": "urpx:OrganizationIdentity",
+          "urpx:hasName": {
+            "@id": "org:utility-pge-name",
+            "@type": "urpx:OrganizationName",
+            "urpx:name": "Pacific Gas & Electric Company"
+          },
+          "urpx:hasIdentifier": {
+            "@id": "org:utility-pge-eia",
+            "@type": "urpx:OrganizationIdentifier",
+            "urpx:scheme": {
+              "@id": "urpx:eiaScheme"
+            },
+            "skos:notation": "14328"
+          }
+        }
+      },
+      "urpx:forRatePlanModifier": {
+        "@id": "pge:e-tou-c-baseline-tier"
+      },
+      "urpx:hasCoverageClaim": {
+        "@id": "pge:cc-e-tou-c-baseline-tier-2026-03-01",
+        "@type": "urpx:CoverageClaim",
+        "urpx:completenessResult": {
+          "@id": "urpx:partial"
+        },
+        "urpx:selfContained": true,
+        "urpx:explainedBy": {
+          "@type": "urpx:Evaluation",
+          "@id": "pge:cc-e-tou-c-baseline-tier-2026-03-01-evaluation",
+          "urpx:evaluationKind": {
+            "@id": "urpx:coverageEvaluation"
+          },
+          "urpx:description": "This modifier carries the Special Condition 1 baseline quantities for all ten baseline territories in both Code B (basic) and Code H (all-electric) form across both seasons, with the Baseline Credit of $0.08140 per kWh on within-baseline usage and the Conservation Incentive Adjustment at a $0.02786 credit within baseline and a $0.05354 charge above it. Three provisions bearing on those quantities are not represented. Special Condition 5's standard medical quantities, Code M (basic plus medical) and Code S (all-electric plus medical), which are added to the Special Condition 1 quantity to raise the ceiling on usage billed at baseline rates, with further quantities available under Rule 19 for both the primary and additional meters. URPX v0.5.1 states a service bracket's bounds as absolute numbers and offers no way to carry an allowance that shifts an existing bound, so representing Code M and Code S means recomputing every one of the forty territory, code and season cells rather than stating the addition once; they are therefore absent rather than approximated. Special Condition 4's seasonal proration, under which a bill spanning the June 1 or October 1 changeover multiplies each season's daily baseline quantity by the number of days of that season in the billing period: the published quantities are kWh per day, and the brackets here carry those figures as plain kWh bounds with no daily basis, so a consumer must scale them to the billing period itself. Special Conditions 3 and 6 on dwellings served by more than one meter, under which the all-electric quantities are allocated only to the meter the customer designates as primary and an additional meter receives only the basic, or basic plus medical, quantity; the matrix here prices a single meter.",
+          "urpx:evaluatedOn": "2026-09-21T00:00:00"
+        }
+      }
+    }
+  }
+}

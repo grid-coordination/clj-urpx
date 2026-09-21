@@ -100,6 +100,13 @@ fixtures=(
   # exercises that path at all. It carries six TOU variants of one transmission
   # charge and six of one distribution charge, sharing two PriceDefinitions.
   "sdge-ev-tou-2026-04-01         28390dc  us/ca/sdge/electricity/ev-tou/versions/2026-04-01/rate-plan_sdge_ev-tou_2026-04-01.jsonld"
+
+  # PG&E E-TOU-C baseline-tier modifier: all FOUR of its Prices carry no
+  # urpx:startDate, and nothing encloses them that carries one. Before the
+  # start-date fix this shipped filing resolved to zero ledgers and zero tiers,
+  # and composing it with its base plan changed nothing and reported nothing.
+  # Vendored so that a regression there fails here rather than in the corpus.
+  "pge-e-tou-c-baseline-tier-2026-03-01  28390dc  us/ca/pge/electricity/e-tou-c/versions/2026-03-01/rate-plan-modifier_pge_e-tou-c-baseline-tier_2026-03-01.jsonld"
 )
 
 for entry in "${fixtures[@]}"; do

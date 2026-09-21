@@ -149,6 +149,39 @@
               psa))
           (:urpx/hasPriceSetAlternative psas))))
 
+(def ^:private undated
+  "Stand-in start date for a Price that states none.
+
+   LocalDate/MIN rather than nil so an undated Price sorts BEHIND any dated
+   one in the latest-wins dedupe: an explicitly dated Price supersedes an
+   undated sibling on the same PriceDefinition, which is the only ordering
+   that reads as intentional."
+  LocalDate/MIN)
+
+(defn- price-start
+  "The date from which `price` is in effect, falling back to `container-date`
+   (a PriceSet's) and then to `undated`.
+
+   urpx:startDateTime is preferred over urpx:startDate when both are stated,
+   mirroring how version-effective-at prefers effectiveDateTime. The schema
+   accepts startDateTime, urpx.emit writes it, and nothing here read it: a
+   filing stating its date that way priced as though it had no date at all.
+
+   ABSENT MEANS NO START CONSTRAINT, not `drop this price`. The four scoping
+   sites used when-let on urpx:startDate and silently discarded anything
+   without one, while the PriceSet gate immediately above them treats a nil
+   date as permissive. Two readings of the same absence, three lines apart,
+   and the discarding one deleted content: a shipped PG&E baseline-tier
+   modifier carries four Prices and no dates at all, resolved to zero ledgers,
+   and composing it with its base plan changed nothing and said nothing.
+   sh:minCount 0 on both PriceShape and PriceSetShape is the vocabulary
+   agreeing that absence is legal rather than defective."
+  ^LocalDate [price ^LocalDate container-date]
+  (or (some-> (:urpx/startDateTime price) (.toLocalDate))
+      (:urpx/startDate price)
+      container-date
+      undated))
+
 (defn- prices-from-alternatives
   "Walk `Prices.hasPriceSetAlternatives`. For each PriceSetAlternatives,
    look up the caller's chosen ProfileAlternative for the referenced
@@ -169,7 +202,7 @@
                   picked  (price-set-alternative-for psas chosen)]
               (when picked
                 (keep (fn [p]
-                        (when-let [sd (:urpx/startDate p)]
+                        (let [sd (price-start p nil)]
                           (when (not-after? sd query-date) [p sd])))
                       (:urpx/hasPrice picked)))))
           (:urpx/hasPriceSetAlternatives prices)))
@@ -182,23 +215,21 @@
    `:profile-alternatives` selection in opts (URPX-vlf).
 
    Per URPX SHACL, PriceSet.startDate is optional (sh:minCount 0). When the
-   PriceSet carries one, it acts as the date floor for any contained Price
-   that does not declare its own; when the PriceSet omits it, each contained
-   Price must carry its own urpx:startDate (CPAU E-2 shape). A PriceSet
-   whose startDate is in the future drops the whole set; otherwise contained
-   Prices are walked individually and admitted by their own effective dates."
+   PriceSet carries one it acts as the date floor for any contained Price that
+   does not declare its own; when neither states one the Price carries no start
+   constraint and is in effect, which is what `price-start` settles."
   [prices ^LocalDate query-date opts]
   (let [selection (:profile-alternatives opts {})]
     (concat
      (keep (fn [p]
-             (when-let [sd (:urpx/startDate p)]
+             (let [sd (price-start p nil)]
                (when (not-after? sd query-date) [p sd])))
            (:urpx/hasPrice prices))
      (mapcat (fn [ps]
-               (let [ps-sd (:urpx/startDate ps)]
-                 (when (or (nil? ps-sd) (not-after? ps-sd query-date))
+               (let [ps-sd (price-start ps nil)]
+                 (when (not-after? ps-sd query-date)
                    (keep (fn [p]
-                           (when-let [sd (or (:urpx/startDate p) ps-sd)]
+                           (let [sd (price-start p (when-not (= undated ps-sd) ps-sd))]
                              (when (not-after? sd query-date) [p sd])))
                          (:urpx/hasPrice ps)))))
              (:urpx/hasPriceSet prices))
@@ -244,7 +275,7 @@
   (mapcat (fn [psas]
             (mapcat (fn [psa]
                       (keep (fn [p]
-                              (when-let [sd (:urpx/startDate p)]
+                              (let [sd (price-start p nil)]
                                 (when (not-after? sd query-date) [p sd])))
                             (:urpx/hasPrice psa)))
                     (:urpx/hasPriceSetAlternative psas)))
