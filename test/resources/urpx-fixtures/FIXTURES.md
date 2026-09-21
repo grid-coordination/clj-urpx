@@ -10,7 +10,7 @@ JSON-LD rate-plan documents so that the clj-urpx test suite is hermetic —
 `clojure -M:test` works on a fresh clone with no sibling checkouts, no
 environment setup, no submodule dance.
 
-All twenty-one fixtures are **URPX v0.5.1**. They were mixed until migration wave 6 finished and took the whole corpus to v0.5.1; the PG&E four were re-vendored at `1e4ad46` when wave 4 brought them over. Because no vendored fixture carries the v0.2.x shape any more, the dual-acceptance claim is now covered by a synthetic v0.2.x document in `urpx.v051-fixtures-test` rather than by a fixture. That is a deliberate trade: the corpus is the better source of truth, and it has moved on. Between them the fixtures exercise `urpx:URPXPackage` wrappers, `forRatePlan` back-links alongside the nested pointer, `hasCoverageClaim`, `offeredBy` in place of `publishedBy`, the flattened `DataSourceReference`, and the Organization identity chain that replaced `urpx:eiaId`.
+All twenty-two fixtures are **URPX v0.5.1**. They were mixed until migration wave 6 finished and took the whole corpus to v0.5.1; the PG&E four were re-vendored at `1e4ad46` when wave 4 brought them over. Because no vendored fixture carries the v0.2.x shape any more, the dual-acceptance claim is now covered by a synthetic v0.2.x document in `urpx.v051-fixtures-test` rather than by a fixture. That is a deliberate trade: the corpus is the better source of truth, and it has moved on. Between them the fixtures exercise `urpx:URPXPackage` wrappers, `forRatePlan` back-links alongside the nested pointer, `hasCoverageClaim`, `offeredBy` in place of `publishedBy`, the flattened `DataSourceReference`, and the Organization identity chain that replaced `urpx:eiaId`.
 
 Three of the five LADWP filings are `urpx:RatePlanModifier`s, and `nem` is export-direction rather than a discount, so it is not redundant with `ez-save` and `lifeline`. Note their `@context` is the inline object form, not the array: upstream uses an array whose first element is a remote IRI that does not yet resolve, so the corpus deliberately inlines until `urpx.org/ns/context` serves.
 
@@ -58,6 +58,7 @@ Fixtures are snapshots, pinned to a specific upstream commit on the
 | `smud-cpp-2026-01-01.jsonld`         | `main`               | `28390dc`     |
 | `sce-tou-d-prime-2026-03-20.jsonld`  | `main`               | `28390dc`     |
 | `sce-tou-d-prime-cpp-2026-03-20.jsonld` | `main`            | `28390dc`     |
+| `sdge-ev-tou-2026-04-01.jsonld`      | `main`               | `28390dc`     |
 
 Each fixture is a JSON-LD `@graph` document bundling a `urpx:RatePlan` with
 its sibling `urpx:RatePlanModifier`(s) plus surrounding metadata

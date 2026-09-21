@@ -91,6 +91,15 @@ fixtures=(
   "smud-cpp-2026-01-01            28390dc  us/ca/smud/electricity/cpp/versions/2026-01-01/rate-plan-modifier_smud_cpp_2026-01-01.jsonld"
   "sce-tou-d-prime-2026-03-20     28390dc  us/ca/sce/electricity/tou-d-prime/versions/2026-03-20/rate-plan_sce_tou-d-prime_2026-03-20.jsonld"
   "sce-tou-d-prime-cpp-2026-03-20 28390dc  us/ca/sce/electricity/tou-d-prime-cpp/versions/2026-03-20/rate-plan-modifier_sce_tou-d-prime-cpp_2026-03-20.jsonld"
+
+  # SDG&E EV-TOU, the filing that exercises urpx:touPeriodNumber carried on the
+  # PRICE rather than on its PriceDefinition. URPX permits both (rdfs:domain is
+  # the union of Price, PriceDefinition, PriceSet and TOUPeriod) and 43 Prices
+  # in the corpus use the Price-level form, but every other vendored fixture
+  # puts the link on the PriceDefinition, so without this one nothing here
+  # exercises that path at all. It carries six TOU variants of one transmission
+  # charge and six of one distribution charge, sharing two PriceDefinitions.
+  "sdge-ev-tou-2026-04-01         28390dc  us/ca/sdge/electricity/ev-tou/versions/2026-04-01/rate-plan_sdge_ev-tou_2026-04-01.jsonld"
 )
 
 for entry in "${fixtures[@]}"; do
