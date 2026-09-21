@@ -1,0 +1,31 @@
+;; SPDX-FileCopyrightText: 2026 Clark Communications Corporation
+;; SPDX-License-Identifier: MIT
+;;
+;; Drift that scripts/shacl-drift.sh should NOT fail on, because it is a
+;; deliberate decision rather than something left behind.
+;;
+;; This is for ACCEPTED drift only. A known bug does not belong here: silencing
+;; it here is how it stops being known. File it and leave the detector failing
+;; until it is fixed.
+;;
+;; Each entry is [schema-var property finding-kind]. Say why, every time: an
+;; unexplained entry is indistinguishable from one added to make the gate green.
+
+{:accepted
+ [;; The corpus's only publicationType value is urpx:regulatoryFiling, a member
+  ;; of the retired 10-member urpx:PublicationTypeValue with no successor among
+  ;; the 8 v0.5.1 members. Enforcing the upstream list alone would reject 6
+  ;; filings. Drop this entry, and the legacy member, when the last migration
+  ;; wave lands or when the migration picks a successor.
+  ["SourcePublication" "urpx:publicationType" "enum-drift"]
+
+  ;; forRatePlan and hasCoverageClaim are sh:minCount 1 on the version shapes at
+  ;; v0.5.1, and are held optional here on purpose: v0.2.1 has zero occurrences
+  ;; of either term and all 73 corpus filings still declare targetURPXVersion
+  ;; v0.2.0, so requiring them today would reject the entire corpus and all four
+  ;; vendored fixtures. Flip to required, and drop these four entries, after the
+  ;; sixth and final wave.
+  ["RatePlanVersion" "urpx:forRatePlan" "under-validates"]
+  ["RatePlanVersion" "urpx:hasCoverageClaim" "under-validates"]
+  ["RatePlanModifierVersion" "urpx:forRatePlanModifier" "under-validates"]
+  ["RatePlanModifierVersion" "urpx:hasCoverageClaim" "under-validates"]]}

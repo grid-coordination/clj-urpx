@@ -47,6 +47,16 @@ clojure -M:nrepl                # nREPL on the port written to .nrepl-port
 clj-kondo --lint src test       # lint
 ```
 
+### Checking for drift against the URPX standard
+
+`scripts/shacl-drift.sh <path-to-urpx-checkout> [rev]` reports where the hand-written Malli schemas have fallen behind the shipped SHACL shapes. It reads the shapes out of the checkout you point it at rather than vendoring them, the same convention the fixture sync uses, and needs `rdflib` on the `python3` that runs it.
+
+It is an auditor, not a generator: it emits no schemas and nothing it produces is compiled or shipped. That division is deliberate. A generator's central mapping rule can be silently vacuous, and neither compilation nor a passing test suite catches that; a diff a person reads cannot fail the same way.
+
+Findings are ranked by what they cost. `rejects-valid` and `arity` mean clj-urpx refuses documents the standard allows, which is the expensive direction; `under-validates` and `missing-required` mean the reverse. `enum-unenforced`, `missing`, `unmodeled-datatype` and `closed-upstream` are informational and never fail a run. Exit codes are tri-state: `0` no new drift, `1` new drift, `2` refused, so a run that compared nothing cannot read as clean.
+
+Deliberate divergence goes in [`dev/drift-baseline.edn`](dev/drift-baseline.edn) with a written reason. A known bug does not: silencing it there is how it stops being known.
+
 The vendored fixtures under `test/resources/urpx-fixtures/` are pinned snapshots of corpus filings from [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans). See [`test/resources/urpx-fixtures/FIXTURES.md`](test/resources/urpx-fixtures/FIXTURES.md) for the table of pinned commits and the re-sync workflow (`scripts/sync-urpx-fixtures.sh <path-to-urpx-rate-plans-checkout>`). When the upstream corpus exposes a new shape that clj-urpx should handle, add the fixture there with provenance and bump the pin.
 
 ## Code of conduct

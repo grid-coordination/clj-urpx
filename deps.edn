@@ -10,6 +10,14 @@
 
  :aliases {:validate {:main-opts ["-m" "urpx.validate"]}
 
+           ;; Dump what the Malli schemas model, for scripts/shacl-drift.sh.
+           :drift-facts {:extra-paths ["dev"]
+                         :main-opts ["-m" "schema-facts"]}
+
+           ;; SHACL drift report. Prefer scripts/shacl-drift.sh, which feeds it.
+           :drift {:extra-paths ["dev"]
+                   :main-opts ["-m" "drift"]}
+
            :dev {:extra-paths ["dev"]}
 
            :build {:deps {io.github.clojure/tools.build
