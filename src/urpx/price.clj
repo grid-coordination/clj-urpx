@@ -257,17 +257,44 @@
    prices that the caller selects from. Walks both the flat hasPrice list
    (CPAU E-HRA shape) and hasPriceSetAlternatives nesting (PG&E Vintage-PCIA
    shape — per-departure-vintage-year prices in PriceSetAlternative)."
-  [prices ^LocalDate query-date]
-  (reduce (fn [acc [price :as pair]]
-            (let [pd-id (get-in price [:urpx/referencesPriceDefinition :jsonld/id])]
-              (update acc pd-id (fnil conj []) pair)))
-          {}
-          (concat (scoped-prices prices query-date nil)
-                  (all-prices-from-alternatives prices query-date))))
+  ([prices ^LocalDate query-date] (all-active-prices-by-pd prices query-date nil))
+  ([prices ^LocalDate query-date opts]
+   (let [selection (:profile-alternatives opts)]
+     (reduce (fn [acc [price :as pair]]
+               (let [pd-id (get-in price [:urpx/referencesPriceDefinition :jsonld/id])]
+                 (update acc pd-id (fnil conj []) pair)))
+             {}
+             (concat (scoped-prices prices query-date nil)
+                     ;; With a selection, surface only the chosen alternative,
+                     ;; exactly as the base plan path does. Without one, keep the
+                     ;; surface-all contract so a caller reading tiers directly
+                     ;; still sees every vintage; `unselected-alternative-ids`
+                     ;; then marks the ledger so an AGGREGATE cannot silently
+                     ;; pick one of them.
+                     (if (seq selection)
+                       (prices-from-alternatives prices query-date selection)
+                       (all-prices-from-alternatives prices query-date)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Service-tier lookup (block tiers, e.g. CPAU E-1 baseline / over-baseline)
 ;; ---------------------------------------------------------------------------
+
+(defn- unselected-alternative-ids
+  "The @ids of the Prices surfaced from a urpx:PriceSetAlternatives for which
+   the caller supplied no selection.
+
+   These are ALTERNATIVES, not tiers: exactly one applies to any customer, and
+   which one is the caller's to say. PG&E's vintage-PCIA ledger carries 18 of
+   them spanning 0.06391/kWh. Surfacing them all is the documented contract for
+   reading tiers; silently adding one of them to an aggregate is not, so the
+   ledger is marked and `marginal-unit-rate` refuses rather than pick."
+  [prices selection]
+  (into #{}
+        (comp (remove #(get selection (get-in % [:urpx/referencesProfileAlternatives :jsonld/id])))
+              (mapcat :urpx/hasPriceSetAlternative)
+              (mapcat :urpx/hasPrice)
+              (keep :jsonld/id))
+        (:urpx/hasPriceSetAlternatives prices)))
 
 (defn- service-tiers-by-number
   "Index ServiceTier entities (across every ServiceTiers container at
@@ -410,6 +437,36 @@
                      (some #{m} (:urpx/month season))))
                  refs))))))
 
+(defn- make-member-active?
+  "Return a predicate deciding whether a urpx:PriceSummary member is in effect
+   at the instant being resolved.
+
+   A summary is a subtotal, and `price-value` turns it into a unit price AT AN
+   INSTANT. Every other price path in this library gates on that instant, so
+   summing a winter line item into a July resolution is simply the wrong
+   number: a summary naming a summer price and a winter price used to return
+   the sum of both. Members are therefore gated by exactly the predicates that
+   gate a tier, applied to the member's own PriceDefinition.
+
+   Gating rather than refusing is what lets ONE summary per base plan name all
+   of the discountable line items and still be correct in every TOU period. The
+   alternative would force one summary per (plan, period, season), which is the
+   same information stated many times and many more chances to state it wrong.
+
+   A member carrying no urpx:referencesPriceDefinition, or naming one absent
+   from these documents, is kept: there is nothing to gate on, and dropping it
+   would understate the subtotal silently.
+
+   `period-num` is the TOU period resolved for the document the MEMBERS live
+   in, which for a cross-document discount is the base plan, not the modifier."
+  [by-id period-num ^LocalDate date rules-by-id seasons-by-id]
+  (fn [member]
+    (let [pd (get by-id (get-in member [:urpx/referencesPriceDefinition :jsonld/id]))]
+      (or (nil? pd)
+          (and (pd-active-at-tou? pd period-num)
+               (pd-active-in-month? pd date rules-by-id)
+               (pd-active-in-season? pd seasons-by-id date))))))
+
 (defn- price-value
   "The unit price for `price`, and when it cannot be determined, why.
 
@@ -435,55 +492,105 @@
    library resolves one document at a time, and a summary whose members live in
    another file cannot be summed here. Valuing it wrong would be worse than
    declining to."
-  [price by-id]
+  [price by-id member-active?]
   (letfn [(unvaluable [reason detail]
             {:value nil :unvaluable (cond-> {:reason reason :price-id (:jsonld/id price)}
                                       detail (assoc :detail detail))})
-          (member-value [m]
-            ;; a member may be inline or a bare reference into this document
-            (let [node (if (:urpx/unitPrice m) m (get by-id (:jsonld/id m)))]
-              (:urpx/unitPrice node)))]
+          (member-node [m]
+            ;; a member may be inline or a bare reference into these documents
+            (if (:urpx/unitPrice m) m (get by-id (:jsonld/id m))))]
     (cond
       (:urpx/unitPrice price)
       {:value (:urpx/unitPrice price) :unvaluable nil}
 
       (and (:urpx/multiplier price) (:urpx/basedOnPrice price))
-      ;; 0..N upstream. index/single throws on more than one rather than
-      ;; picking, for the same reason this fn reports instead of returning nil:
-      ;; an arbitrary basis yields a confident wrong price.
-      (let [basis     (index/single (:urpx/basedOnPrice price) "urpx:basedOnPrice values")
-            basis-id  (:jsonld/id basis)
-            target    (get by-id basis-id)]
+      ;; 0..N upstream, read DISJUNCTIVELY: the values are candidate bases, of
+      ;; which exactly one is expected to be present in the documents handed to
+      ;; this call. That is what lets one discount Price serve a modifier
+      ;; applying to many base plans: it names every base's subtotal, and the
+      ;; composition selects by which base was actually passed in.
+      ;;
+      ;; The alternative reading is conjunctive (sum the bases), which
+      ;; urpx:PriceSummary already covers through urpx:includesPrice. URPX
+      ;; fixes the cardinality and says nothing about multiplicity; the
+      ;; disjunctive reading is this library's, recorded in doc/ and raised
+      ;; upstream rather than left implicit.
+      ;;
+      ;; Safety is unchanged in the case that matters: ZERO resolvable
+      ;; candidates is still an error. Only a bare @id can be absent, because
+      ;; index-walk indexes nodes carrying both @id and @type, so a mistyped
+      ;; IRI cannot masquerade as a candidate belonging to another plan.
+      (let [candidates (let [b (:urpx/basedOnPrice price)]
+                         (if (sequential? b) (vec b) [b]))
+            ids        (mapv :jsonld/id candidates)
+            present    (filterv #(contains? by-id %) ids)]
         (cond
-          (nil? target)
+          (empty? present)
           (unvaluable :unresolved-reference
-                      (str "urpx:basedOnPrice names " (pr-str basis-id)
-                           ", which is not in this document. clj-urpx resolves one "
-                           "document at a time and does not dereference across files."))
+                      (str "urpx:basedOnPrice names "
+                           (if (= 1 (count ids))
+                             (pr-str (first ids))
+                             (str (count ids) " candidate bases " (pr-str ids)))
+                           ", none of which is in the documents passed to this call. "
+                           "clj-urpx resolves the documents it is given and does not "
+                           "dereference across files."))
 
-          (= "urpx:PriceSummary" (:jsonld/type target))
-          (let [members (:urpx/includesPrice target)
-                values  (mapv member-value members)]
-            (if (some nil? values)
-              (unvaluable :summary-member-unresolved
-                          (str "urpx:PriceSummary " (pr-str (:jsonld/id target))
-                               " names " (count members) " member(s), "
-                               (count (filter nil? values)) " of which carry no "
-                               "resolvable urpx:unitPrice in this document."))
-              {:value (.multiply ^java.math.BigDecimal (:urpx/multiplier price)
-                                 ^java.math.BigDecimal (reduce #(.add ^java.math.BigDecimal %1 %2)
-                                                               0M values))
-               :unvaluable nil}))
-
-          (:urpx/unitPrice target)
-          {:value (.multiply ^java.math.BigDecimal (:urpx/multiplier price)
-                             ^java.math.BigDecimal (:urpx/unitPrice target))
-           :unvaluable nil}
+          (< 1 (count present))
+          (unvaluable :ambiguous-basis
+                      (str "urpx:basedOnPrice names " (count present)
+                           " candidate bases that are ALL present here " (pr-str present)
+                           ". Candidates are read as alternatives, exactly one of which "
+                           "should be in scope; two or more is not a choice this library makes."))
 
           :else
-          (unvaluable :basis-not-valuable
-                      (str "urpx:basedOnPrice resolves to " (pr-str (:jsonld/type target))
-                           " which carries no urpx:unitPrice."))))
+          (let [target (get by-id (first present))]
+            (cond
+
+              (= "urpx:PriceSummary" (:jsonld/type target))
+              (let [members (:urpx/includesPrice target)
+                    nodes   (mapv member-node members)]
+                (cond
+                  (some nil? nodes)
+                  (unvaluable :summary-member-unresolved
+                              (str "urpx:PriceSummary " (pr-str (:jsonld/id target))
+                                   " names " (count members) " member(s), "
+                                   (count (filter nil? nodes)) " of which are not in "
+                                   "the documents passed to this call."))
+
+                  :else
+                  ;; only the members in effect at this instant: a subtotal that
+                  ;; summed inactive line items would be a confident wrong number
+                  (let [active (filterv member-active? nodes)
+                        values (mapv :urpx/unitPrice active)]
+                    (cond
+                      (empty? active)
+                      (unvaluable :summary-no-active-members
+                                  (str "urpx:PriceSummary " (pr-str (:jsonld/id target))
+                                       " names " (count members) " member(s), none of "
+                                       "which is in effect at this instant, so the "
+                                       "subtotal it aggregates is not defined here."))
+
+                      (some nil? values)
+                      (unvaluable :summary-member-unresolved
+                                  (str "urpx:PriceSummary " (pr-str (:jsonld/id target))
+                                       " has " (count (filter nil? values)) " member(s) in "
+                                       "effect here that carry no urpx:unitPrice."))
+
+                      :else
+                      {:value (.multiply ^java.math.BigDecimal (:urpx/multiplier price)
+                                         ^java.math.BigDecimal (reduce #(.add ^java.math.BigDecimal %1 %2)
+                                                                       0M values))
+                       :unvaluable nil}))))
+
+              (:urpx/unitPrice target)
+              {:value (.multiply ^java.math.BigDecimal (:urpx/multiplier price)
+                                 ^java.math.BigDecimal (:urpx/unitPrice target))
+               :unvaluable nil}
+
+              :else
+              (unvaluable :basis-not-valuable
+                          (str "urpx:basedOnPrice resolves to " (pr-str (:jsonld/type target))
+                               " which carries no urpx:unitPrice."))))))
 
       :else
       (unvaluable :no-unit-price
@@ -495,8 +602,8 @@
 
    One `price-value` call per price, deliberately: valuing a derived price sums
    a summary's members, and a filing carries thousands of prices."
-  [price by-id]
-  (let [{:keys [value unvaluable]} (price-value price by-id)]
+  [price by-id member-active?]
+  (let [{:keys [value unvaluable]} (price-value price by-id member-active?)]
     (cond-> {:urpx.resolved/unit-price value}
       unvaluable (assoc :urpx.resolved/unvaluable unvaluable))))
 
@@ -653,6 +760,13 @@
          ;; Price or a PriceSummary, and both are looked up here. Scoped to the
          ;; document being resolved, which is the limit of what this library sees.
          by-id         (or (:by-id opts) (index/build-index version))
+         ;; Summary members are gated at the instant being resolved. Supplied by
+         ;; resolve-prices-with-modifiers when composing, because a discount in a
+         ;; modifier names a summary whose members live in the BASE plan and must
+         ;; be judged in the base plan's TOU period, not the modifier's.
+         member-active? (or (:member-active? opts)
+                            (make-member-active? by-id period-num date
+                                                 rules-by-id seasons-by-id))
 
          ledger-results
          (vec
@@ -669,7 +783,7 @@
                                                 {:urpx.resolved/price-definition-id (:jsonld/id pd)
                                                  :urpx.resolved/price-id            (:jsonld/id price)
                                                  :urpx.resolved/price-name          (:urpx/name price)}
-                                                (price-fields price by-id)
+                                                (price-fields price by-id member-active?)
                                                 (tier-info pd price tiers-by-num))
                                          (:urpx/hasDynamicPricing price)
                                          (assoc :urpx.resolved/dynamic-pricing
@@ -730,6 +844,11 @@
         ;; a modifier alone falls back to the modifier's own document, and a
         ;; reference out of it is reported unvaluable rather than valued wrong.
         by-id         (or (:by-id opts) (index/build-index version))
+        member-active? (or (:member-active? opts)
+                           ;; resolved on its own, a modifier has only its own
+                           ;; context to judge by; composing supplies the base
+                           ;; plan's, which is the one that matters.
+                           (make-member-active? by-id base-period-num (.toLocalDate zdt) {} {}))
         plan-elts     (:urpx/hasPlanElements version)
         billing       (:urpx/hasBillingModel plan-elts)
         ledgers       (:urpx/hasLedger billing)
@@ -753,7 +872,8 @@
              (find-tou-period own-schedules season-id query-date local-time dow hol?))))
         gate-period (if (seq own-schedules) own-period-num base-period-num)
         gate?       (or (seq own-schedules) (some? base-period-num))
-        pd->prices  (all-active-prices-by-pd prices query-date)
+        pd->prices  (all-active-prices-by-pd prices query-date opts)
+        unselected  (unselected-alternative-ids prices (:profile-alternatives opts))
         pds         (:urpx/hasPriceDefinition billing)
         pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
         mi-index    (mi-by-id plan-elts)]
@@ -769,7 +889,7 @@
                                            {:urpx.resolved/price-definition-id (:jsonld/id pd)
                                             :urpx.resolved/price-id            (:jsonld/id price)
                                             :urpx.resolved/price-name          (:urpx/name price)}
-                                           (price-fields price by-id))
+                                           (price-fields price by-id member-active?))
                                     (:urpx/hasDynamicPricing price)
                                     (assoc :urpx.resolved/dynamic-pricing
                                            (:urpx/hasDynamicPricing price))))))
@@ -785,6 +905,8 @@
                :urpx.resolved/ledger-name (:urpx/name ledger)
                :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
                :urpx.resolved/tiers       tier-entries}
+              (when-let [ids (seq (filter unselected (map :urpx.resolved/price-id tier-entries)))]
+                {:urpx.resolved/unselected-alternatives (vec ids)})
               (ledger-metric-info ledger mi-index)))))))
 
 (defn resolve-modifier-prices
@@ -829,6 +951,21 @@
          base            (resolve-prices rate-plan zdt opts)
          plan-id         (:jsonld/id rate-plan)
          base-period-num (:urpx.resolved/tou-period-number base)
+         ;; A discount Price in a modifier names a summary whose members live in
+         ;; the BASE plan, so their season, month and TOU gates are the base
+         ;; plan's. Built here and passed down, because modifier-ledger-results
+         ;; can only see the modifier's own seasons and rules.
+         base-version    (plan-version rate-plan opts :urpx/hasRatePlanVersion)
+         opts            (assoc opts :member-active?
+                                (or (:member-active? opts)
+                                    (make-member-active?
+                                     (:by-id opts)
+                                     base-period-num
+                                     (.toLocalDate zdt)
+                                     (or (:rules-by-id opts)
+                                         (index/entities-of-type base-version "urpx:ApplicabilityRule"))
+                                     (into {} (map (juxt :jsonld/id identity))
+                                           (get-in base-version [:urpx/hasPlanElements :urpx/hasSeasons])))))
          holiday?        (or (:holiday? opts) (holidays/derive-predicate rate-plan))
          ;; opts, not the 2-arity: without it plan-version can only follow the
          ;; nested down-pointer, so a v0.5.1 modifier that states the link only
@@ -854,12 +991,27 @@
    Useful for price signaling: when you don't know a customer's usage but want
    a single $/kWh number, this is the marginal rate at zero baseline usage."
   [resolved]
-  (let [marginal (->> (:urpx.resolved/ledgers resolved)
-                      (filter #(and (= "urpx:energy"
-                                       (get-in % [:urpx.resolved/measurement-kind :jsonld/id]))
-                                    (seq (:urpx.resolved/tiers %))))
-                      (map #(first (:urpx.resolved/tiers %))))
+  (let [energy     (->> (:urpx.resolved/ledgers resolved)
+                        (filter #(and (= "urpx:energy"
+                                         (get-in % [:urpx.resolved/measurement-kind :jsonld/id]))
+                                      (seq (:urpx.resolved/tiers %)))))
+        ;; A ledger of mutually-exclusive alternatives has no marginal tier
+        ;; until the caller says which alternative applies. Taking the first
+        ;; added an arbitrary one of PG&E's 18 vintage-PCIA prices to every
+        ;; marginal rate: 0.41784 became 0.44757, and the 18 span 0.06391/kWh.
+        ;; Pass :profile-alternatives to choose; there is no default worth
+        ;; inventing here.
+        unselected (filter :urpx.resolved/unselected-alternatives energy)
+        marginal   (map #(first (:urpx.resolved/tiers %)) energy)
         unvaluable (filter :urpx.resolved/unvaluable marginal)]
+    (when (seq unselected)
+      (throw (ex-info (str "Cannot compute a marginal rate: "
+                           (count unselected) " energy ledger(s) carry mutually-exclusive "
+                           "price alternatives with no selection. Pass :profile-alternatives "
+                           "naming the applicable urpx:ProfileAlternative for each.")
+                      {:ledgers (mapv #(select-keys % [:urpx.resolved/ledger-id
+                                                       :urpx.resolved/unselected-alternatives])
+                                      unselected)})))
     ;; Refuse rather than sum around a price this library could not value.
     ;; Skipping would silently under-report the rate, which for a discount
     ;; means reporting the undiscounted price as though it were the real one.

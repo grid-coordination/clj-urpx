@@ -830,8 +830,11 @@
    ;; 0 with no sh:maxCount. Ref rather than one of those two schemas because
    ;; either may be named instead of inlined, and a bare reference says nothing
    ;; about which; ExclusiveRef would reject the inline form upstream permits.
-   ;; `urpx.price/price-value` reads one basis and refuses, rather than picks,
-   ;; when a document states several.
+   ;; Several values are read DISJUNCTIVELY by `urpx.price/price-value`:
+   ;; candidate bases, exactly one expected to be in the documents passed to a
+   ;; call. That lets one discount Price serve a modifier applying to many base
+   ;; plans. URPX fixes the cardinality and says nothing about multiplicity;
+   ;; the conjunctive reading is what urpx:PriceSummary already provides.
    [:urpx/basedOnPrice
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]

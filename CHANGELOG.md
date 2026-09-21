@@ -9,6 +9,24 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [0.14.0] — 2026-09-21
+
+Composition. Six defects in how a modifier resolves against a base plan, three of them wrong answers rather than errors, plus three semantics that URPX leaves open and that this library now states rather than implies. Found by auditing the compose path to answer a question from the filings repo, not by a failing test: all six are reachable by SHACL-conformant documents and none was caught by the 73-filing corpus.
+
+### Fixed
+
+- **`marginal-unit-rate` silently added an arbitrary price from a matrix modifier.** PG&E's vintage-PCIA ledger carries 18 prices selected by departure vintage: mutually-exclusive alternatives, exactly one of which applies to a customer. They were treated as a block-tier ladder and the first was taken, so composing the modifier turned a 0.41784 marginal rate into 0.44757. The 18 span 0.06391/kWh and the pick was document order. Resolution still surfaces all of them (the caller-picks contract is unchanged); the aggregate now refuses. Pass `:profile-alternatives` to choose, and only the chosen alternative surfaces.
+- **A modifier carrying its own TOU schedule and its own seasons threw `ClassCastException` on a holiday.** The holiday predicate's *result* was passed where the predicate was expected.
+- **A v0.5.1 modifier stating its version link only through `urpx:forRatePlanModifier` was dropped from composition without a word**, giving a result indistinguishable from passing no modifier at all. Un-nesting is the shape v0.5.1 introduced.
+- **Modifier tiers were never sorted**, while base tiers were, so `marginal-unit-rate` (which documents itself as taking the lowest tier) got whatever came first in the document.
+- **`urpx:PriceSummary` members were summed with no season, month or TOU gating.** A summary naming a summer price and a winter price returned the sum of both in July. Members are now gated by the same predicates that gate a tier, applied to each member's own `PriceDefinition`, so one summary per base plan can name every discountable line item and stay correct in every TOU period. When no member is in effect the result is `:summary-no-active-members` rather than a confident zero.
+
+### Changed
+
+- **Multiple `urpx:basedOnPrice` values are read disjunctively** as candidate bases, exactly one expected to be present in the documents passed to the call; 0.13.0 threw. This lets one discount Price serve a modifier applying to many base plans. Zero resolvable candidates is still an error and two present at once reports `:ambiguous-basis`. URPX fixes the cardinality and says nothing about multiplicity; the conjunctive reading is what `urpx:PriceSummary` already provides, so the disjunctive one is taken here and recorded rather than left implicit.
+- `:profile-alternatives` is now honored on the modifier path. It was read on the base plan path and discarded on the modifier path, which is why matrix modifiers had no way to be selected.
+- The README's description of how matrix modifiers carry their selection dimension was wrong: it is `urpx:PriceSetAlternatives` / `urpx:referencesProfileAlternative`, not `urpx:hasApplicabilityGroup` with a `urpx:ConditionExpression`.
+
 ## [0.13.0] — 2026-09-21
 
 One feature. A `urpx:Price` may state `urpx:multiplier` with `urpx:basedOnPrice` instead of a `urpx:unitPrice`, naming the price it is derived from. That is how a percentage discount such as CARE or FERA is filed. 0.12.0 returned `nil` for every such Price, and a nil unit price reads to a consumer as free, so a 32.5% discount arrived as a 100% one.
@@ -86,6 +104,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.14.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.14.0
 [0.13.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.13.0
 [0.12.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.12.0
 [0.11.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.11.0

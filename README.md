@@ -246,7 +246,9 @@ Pull the modifier with `core/load-rate-plan-modifier`, parallel to `load-rate-pl
 
 Modifier `PriceDefinition`s carrying `urpx:touPeriodNumber` are gated symmetrically with base PDs: if the modifier defines its own `urpx:hasTOUSchedule` the resolver walks it at the probe instant and gates against the modifier's resolved period; otherwise the gate uses the base RatePlan's resolved period (so e.g. a modifier whose discounts ride the base's Mid-Peak / Off-Peak periods only surfaces in those windows). Modifier PDs without `touPeriodNumber` are unaffected.
 
-Matrix-style modifiers (e.g. PG&E vintage-PCIA — one ledger with a price per departure-vintage year) surface every active price under one ledger entry; the caller picks the active value via `:urpx.resolved/price-id` (each Price's `urpx:hasApplicabilityGroup` carries the v0.2.0 `urpx:ConditionExpression` that names the dimension being matched).
+Matrix-style modifiers (e.g. PG&E vintage-PCIA, one ledger with a price per departure-vintage year) surface every active price under one ledger entry; the caller picks the active value via `:urpx.resolved/price-id`. The selection dimension is carried by `urpx:PriceSetAlternatives`: each `PriceSetAlternative` names its `urpx:referencesProfileAlternative`, and the set names the `urpx:ProfileAlternatives` it discriminates on.
+
+These prices are **alternatives, not tiers**: exactly one applies to any customer. Pass `:profile-alternatives` to choose one, exactly as on the base plan path, and only the chosen alternative surfaces. Without a selection all of them surface and the ledger carries `:urpx.resolved/unselected-alternatives`; `marginal-unit-rate` then **refuses**, because an aggregate that took one of eighteen mutually-exclusive prices would be reporting an arbitrary number as the marginal rate.
 
 Prices carrying `urpx:hasDynamicPricing` (CPP Event Charges, RTP overlays, other event-driven components — applicable to base PDs and modifier PDs alike per the SHACL Price shape) are surfaced with the DynamicPricing payload attached to the resolved tier under `:urpx.resolved/dynamic-pricing`. Consumers wanting a non-event marginal rate filter on the absence of that key; consumers evaluating event state at billing time read the nested `:urpx/dynamicPricingType`, `:urpx/priceSource`, `:urpx/updateFrequency`, and `:urpx/hasPriceUpdateRule`. The resolver itself does not (yet) gate on event state — that's a caller-side responsibility until URPX standardizes a consumer-facing event-state API.
 
@@ -254,7 +256,9 @@ Prices carrying `urpx:hasDynamicPricing` (CPP Event Charges, RTP overlays, other
 
 A `urpx:Price` need not state a `urpx:unitPrice`. It may instead carry `urpx:multiplier` together with `urpx:basedOnPrice`, naming the price it is computed from. That is how a percentage discount such as CARE or FERA is filed: the discount is a multiplier over a `urpx:PriceSummary`, which aggregates the line items the discount applies to via `urpx:includesPrice` (`sh:minCount 2` upstream). A summary hangs off a `urpx:PriceSet` or `urpx:PriceSetAlternative` through `urpx:hasPriceSummary`, beside the prices it names.
 
-`resolve-prices` values these automatically: the multiplier times the referenced Price's unit price, or times the sum of the summary's members. Which members a summary names is the author's business, and the resolver reads the list as filed rather than inferring one.
+`resolve-prices` values these automatically: the multiplier times the referenced Price's unit price, or times the sum of the summary's members **that are in effect at the instant being resolved**. Members are gated by the same season, month and TOU predicates that gate a tier, applied to each member's own `PriceDefinition`. A subtotal is turned into a unit price at an instant, so summing a winter line item into a July resolution would simply be the wrong number. This means one summary per base plan can name every discountable line item and still be correct in every TOU period; if no member is in effect, the result is `:summary-no-active-members` rather than a confident zero.
+
+Which members a summary names is the author's business, and the resolver reads the list as filed rather than inferring one.
 
 The discount and the summary often live in different filings, because the discount belongs to a program modifier while the line items belong to the base plan. `resolve-prices-with-modifiers` resolves that case, since the caller has already supplied both documents and the `@id` index spans exactly what was passed in:
 
@@ -276,7 +280,9 @@ Nothing is fetched behind your back. A reference this library cannot resolve fro
 
 The reasons are `:unresolved-reference` (the basis is not in these documents), `:summary-member-unresolved` (a member of the summary carries no resolvable unit price here), `:basis-not-valuable` (the basis resolved but has no unit price), and `:no-unit-price` (the Price states neither a unit price nor a multiplier and basis to derive one from). A nil unit price with no explanation would read to a consumer as free, which for a discount is the worst available answer; `marginal-unit-rate` therefore throws rather than return one.
 
-`urpx:basedOnPrice` has no `sh:maxCount` upstream, so a document may name several bases. There is no rule here for choosing among them, so the resolver throws instead of picking.
+`urpx:basedOnPrice` has no `sh:maxCount` upstream, so a document may name several bases. Several values are read **disjunctively**: candidate bases, of which exactly one is expected to be present in the documents passed to the call. That is what lets a single discount Price serve a modifier applying to many base plans, naming each base's subtotal and letting the composition select by which base was actually supplied. Zero resolvable candidates remains an error, and two or more present at once reports `:ambiguous-basis`.
+
+The conjunctive reading (sum the bases) is already covered by `urpx:PriceSummary`, whose `urpx:includesPrice` is the aggregation construct. URPX fixes the cardinality of `urpx:basedOnPrice` and says nothing about what multiple values mean, so the disjunctive reading is this library's, stated here rather than left implicit.
 
 Note that this is a second, independent way to express CARE and FERA. The `urpx:ProfileAlternatives` mechanism below files the already-discounted prices directly as an alternative price set; this one files the discount as arithmetic over the undiscounted prices. Which a plan uses is the filer's choice, and a reader should expect either.
 

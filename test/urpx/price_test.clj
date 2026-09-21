@@ -1308,3 +1308,49 @@
         (let [ns- (map #(or (:urpx.resolved/tier-number %) 0) (:urpx.resolved/tiers ledger))]
           (is (= ns- (sort ns-))
               (str "tiers out of order in " (:urpx.resolved/ledger-id ledger))))))))
+
+(deftest matrix-modifier-alternatives-are-not-tiers
+  (testing "PG&E's vintage-PCIA ledger carries 18 prices selected by departure
+            vintage: mutually-exclusive ALTERNATIVES, exactly one of which
+            applies to any customer. marginal-unit-rate treated them as a block
+            tier ladder and took the first, so composing the modifier silently
+            added the 2009 vintage to every marginal rate (0.41784 became
+            0.44757). The 18 span 0.06391/kWh, so the arbitrary pick was wrong
+            by up to that much, and the pick was document order.
+
+            Resolution still surfaces all 18, which is the documented
+            caller-picks contract for reading tiers. It is the AGGREGATE that
+            has no defensible answer without a selection, so the aggregate is
+            what refuses."
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          modi (fixtures/load-modifier "pge-e-tou-c-2026-03-01")
+          when- (zdt 2026 7 15 17)
+          composed (price/resolve-prices-with-modifiers plan [modi] when-)]
+
+      (testing "all 18 still surface, and the ledger says why it cannot be summed"
+        (let [l (some #(when (:urpx.resolved/unselected-alternatives %) %)
+                      (:urpx.resolved/ledgers composed))]
+          (is (some? l) "the alternatives-bearing ledger is marked")
+          (is (= 18 (count (:urpx.resolved/tiers l))))
+          (is (= 18 (count (:urpx.resolved/unselected-alternatives l))))))
+
+      (testing "the aggregate refuses rather than picking one"
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"mutually-exclusive price alternatives with no selection"
+                              (price/marginal-unit-rate composed))))
+
+      (testing "with a selection it resolves, and only the chosen vintage counts"
+        (let [sel  {:profile-alternatives {"pge:pa-departure-vintage" "pge:pa-vintage-2020"}}
+              r    (price/resolve-prices-with-modifiers plan [modi] when- sel)
+              l    (some #(when (= "pge:ledger-vintage-pcia" (:urpx.resolved/ledger-id %)) %)
+                         (:urpx.resolved/ledgers r))
+              base (price/marginal-unit-rate (price/resolve-prices plan when-))]
+          (is (nil? (:urpx.resolved/unselected-alternatives l))
+              "a chosen alternatives set is no longer marked")
+          (is (= 1 (count (:urpx.resolved/tiers l))) "only the chosen vintage surfaces")
+          (is (= (+ base (:urpx.resolved/unit-price (first (:urpx.resolved/tiers l))))
+                 (price/marginal-unit-rate r))
+              "the marginal rate is the base plus exactly the chosen vintage")))
+
+      (testing "the base plan alone is unaffected by any of this"
+        (is (= 0.41784M (price/marginal-unit-rate (price/resolve-prices plan when-))))))))
