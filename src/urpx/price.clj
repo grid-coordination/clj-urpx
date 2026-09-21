@@ -524,6 +524,27 @@
                      (some #{m} (:urpx/month season))))
                  refs))))))
 
+(defn- additive-plus-lowest-rung
+  "The members of `xs` that contribute together: every untiered one, plus the
+   lowest-numbered rung of the ladder if there is one.
+
+   urpx:serviceTierNumber marks a block-tier ladder, which is mutually
+   exclusive, so only the marginal rung applies; a bare entry is an additive
+   component and all of them apply. marginal-unit-rate has resolved a ledger
+   this way since 0.20.0. A urpx:PriceSummary has exactly the same problem one
+   level down and was summing the whole ladder: SCE Schedule D's discountable
+   subtotal names both Conservation Incentive Adjustment rungs, -0.03740
+   baseline and +0.06368 over-baseline, which are alternatives per kWh and
+   never additive. Summing both gave 0.37353, a subtotal matching no bill any
+   customer can receive, and understated the CARE discount by 10.4%.
+
+   `tier-of` reads the tier number, since a resolved tier and a raw Price spell
+   it differently."
+  [xs tier-of]
+  (let [{tiered true bare false} (group-by #(some? (tier-of %)) xs)]
+    (cond-> (vec bare)
+      (seq tiered) (conj (first (sort-by tier-of tiered))))))
+
 (defn- make-member-active?
   "Return a predicate deciding whether a urpx:PriceSummary member is in effect
    at the instant being resolved.
@@ -654,7 +675,8 @@
                   :else
                   ;; only the members in effect at this instant: a subtotal that
                   ;; summed inactive line items would be a confident wrong number
-                  (let [active (filterv member-active? nodes)
+                  (let [active (-> (filterv member-active? nodes)
+                                   (additive-plus-lowest-rung :urpx/serviceTierNumber))
                         values (mapv :urpx/unitPrice active)]
                     (cond
                       (empty? active)
@@ -1341,13 +1363,8 @@
         ;; agree exactly. Refusing would decline a question that has an answer,
         ;; and plain summing would re-create the original bug the moment a
         ;; genuine ladder appeared beside additive components.
-        marginal   (mapcat (fn [ledger]
-                             (let [ts (remove exclude-tier? (:urpx.resolved/tiers ledger))
-                                   {numbered true bare false}
-                                   (group-by #(some? (:urpx.resolved/tier-number %)) ts)]
-                               (cond-> (vec bare)
-                                 (seq numbered)
-                                 (conj (first (sort-by :urpx.resolved/tier-number numbered))))))
+        marginal   (mapcat #(-> (remove exclude-tier? (:urpx.resolved/tiers %))
+                                (additive-plus-lowest-rung :urpx.resolved/tier-number))
                            energy)
         unvaluable (filter :urpx.resolved/unvaluable marginal)]
     ;; A price from a version that does not describe this instant is the

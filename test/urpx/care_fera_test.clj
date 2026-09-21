@@ -41,11 +41,22 @@
 
 (defn- subtotal
   "Sum the summary's members straight out of the document, independent of the
-   resolver, so the expected value is the filing's own arithmetic."
+   resolver, so the expected value is the filing's own arithmetic.
+
+   Untiered members all contribute; a urpx:serviceTierNumber marks a block-tier
+   ladder whose rungs are alternatives per kWh, so only the lowest contributes.
+   SCE Schedule D names both Conservation Incentive Adjustment rungs, -0.03740
+   baseline and +0.06368 over-baseline; summing both gives 0.37353, a subtotal
+   matching no bill any customer can receive."
   [plan summary-id]
-  (let [idx (index/build-index plan)]
-    (->> (get-in (summaries plan) [summary-id :urpx/includesPrice])
-         (map #(:urpx/unitPrice (get idx (:jsonld/id %))))
+  (let [idx (index/build-index plan)
+        nodes (->> (get-in (summaries plan) [summary-id :urpx/includesPrice])
+                   (map #(get idx (:jsonld/id %)))
+                   (remove nil?))
+        {tiered true bare false} (group-by #(some? (:urpx/serviceTierNumber %)) nodes)]
+    (->> (cond-> (vec bare)
+           (seq tiered) (conj (first (sort-by :urpx/serviceTierNumber tiered))))
+         (map :urpx/unitPrice)
          (remove nil?)
          (reduce + 0M))))
 
@@ -132,18 +143,27 @@
           base (subtotal plan sce-shared)]
       (is (= 1 (count ss)) "one subtotal, shared")
       (is (= 13 (count (get-in ss [sce-shared :urpx/includesPrice]))))
+      (testing "two of the thirteen are the CIA ladder's rungs, which are
+                alternatives per kWh rather than components, so only the lowest
+                enters the subtotal: 0.37353 summing both, 0.30985 correctly"
+        (let [idx (index/build-index plan)
+              tiered (->> (get-in ss [sce-shared :urpx/includesPrice])
+                          (map #(get idx (:jsonld/id %)))
+                          (filter :urpx/serviceTierNumber))]
+          (is (= 2 (count tiered)))
+          (is (= 0.30985M base))))
 
       (testing "CARE 32.5 percent"
         (let [t (tier-by-price-id r "sce:care-price-bill-discount-2026-03-20")]
           (is (nil? (:urpx.resolved/unvaluable t)))
           (is (= (* -0.325M base) (:urpx.resolved/unit-price t)))
-          (is (= -0.12139725M (:urpx.resolved/unit-price t)))))
+          (is (= -0.10070125M (:urpx.resolved/unit-price t)))))
 
       (testing "FERA 18 percent of the SAME subtotal"
         (let [t (tier-by-price-id r "sce:fera-price-bill-discount-2026-03-20")]
           (is (nil? (:urpx.resolved/unvaluable t)))
           (is (= (* -0.18M base) (:urpx.resolved/unit-price t)))
-          (is (= -0.0672354M (:urpx.resolved/unit-price t)))))
+          (is (= -0.0557730M (:urpx.resolved/unit-price t)))))
 
       (testing "both discounts derive from one subtotal, which is what
                 distinguishes this filing shape from SDG&E's"
