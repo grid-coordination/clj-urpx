@@ -6,7 +6,7 @@
             [deps-deploy.deps-deploy :as dd]))
 
 (def lib 'energy.grid-coordination/clj-urpx)
-(def version "0.13.0-SNAPSHOT")
+(def version "0.13.0")
 (def class-dir "target/classes")
 
 (defn test "Run all the tests." [opts]
