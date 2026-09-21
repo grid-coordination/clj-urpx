@@ -12,12 +12,22 @@
                          namespace, exactly as a reader working through the page
                          would. Its blocks are complete programs.
 
-    README.md            its blocks are illustrative snippets that reference
+    README.md            most blocks are illustrative snippets that reference
                          bindings they never define (`plan`, `zdt`), so running
                          them is not meaningful. What IS meaningful, and what
                          actually goes wrong, is a symbol that was renamed or
                          removed. Every urpx.*/name and dsl/name a block
-                         mentions must still resolve."
+                         mentions must still resolve.
+
+    README Getting started
+                         the exception: that section advertises itself as
+                         running from a cold clone, and it is self-contained,
+                         so it is EVALUATED like the tutorial. It broke once,
+                         silently, when marginal-unit-rate began refusing to
+                         pick among mutually-exclusive alternatives: the
+                         walkthrough composes PG&E's vintage-PCIA modifier, so
+                         the first thing a new reader ran would have thrown.
+                         A symbol check cannot catch that; only running it can."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]))
@@ -108,3 +118,43 @@
       (is (empty? bad)
           (str "tutorial names functions that do not resolve: "
                (pr-str (mapv (fn [[a nm]] (str a "/" nm)) bad)))))))
+
+(defn- section
+  "The body of the `## <title>` section of `md`, up to the next `## ` heading."
+  [md title]
+  (when-let [start (str/index-of md (str "## " title))]
+    (let [rest- (subs md (+ start (count title) 3))
+          end   (str/index-of rest- "\n## ")]
+      (if end (subs rest- 0 end) rest-))))
+
+(deftest readme-getting-started-actually-runs
+  (testing "the Getting started walkthrough is self-contained and advertises
+            itself as running from a cold clone, so it is evaluated rather than
+            merely symbol-checked. It silently broke once: marginal-unit-rate
+            began refusing to pick among mutually-exclusive price alternatives,
+            and because the walkthrough composes PG&E's vintage-PCIA modifier,
+            the first thing a new reader would run threw an exception. Nothing
+            noticed, because README blocks were only checked for symbol
+            resolution."
+    (let [md (doc "README.md")]
+      (is (some? md) "README.md must exist")
+      (let [body   (section md "Getting started")
+            blocks (fenced-blocks (or body "") "clojure")
+            ns-sym (gensym "urpx-readme-")
+            tmp    (create-ns ns-sym)]
+        (is (some? body) "the Getting started section must exist")
+        (is (<= 1 (count blocks)) "it must carry at least one Clojure block")
+        (try
+          (binding [*ns* tmp]
+            (refer-clojure)
+            (doseq [[i block] (map-indexed vector blocks)]
+              (testing (str "block " i ": " (first (str/split-lines (str/trim block))))
+                (is (nil?
+                     (try
+                       (load-string (str "(in-ns '" ns-sym ")"
+                                         "(clojure.core/refer-clojure)"
+                                         block))
+                       nil
+                       (catch Throwable t
+                         (str (.getSimpleName (class t)) ": " (.getMessage t)))))))))
+          (finally (remove-ns ns-sym)))))))

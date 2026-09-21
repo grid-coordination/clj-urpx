@@ -95,10 +95,21 @@ In the REPL:
 ;;     "Conservation Incentive Adjustment"
 ;;     "Vintaged Power Charge Indifference Adjustment"]
 
-;; 3. Marginal $/kWh — sum of the lowest-tier unit-prices across energy ledgers
-(price/marginal-unit-rate resolved)
+;; 3. Marginal $/kWh — sum of the lowest-tier unit-prices across energy ledgers.
+;;    The vintage-PCIA modifier prices one ledger per departure vintage. Those
+;;    are mutually-exclusive ALTERNATIVES, exactly one of which applies to a
+;;    customer, so say which one: without a selection `marginal-unit-rate`
+;;    refuses rather than pick arbitrarily.
+(def with-vintage
+  (price/resolve-prices-with-modifiers
+   plan [modifier] july-4-evening
+   {:profile-alternatives {"pge:pa-departure-vintage" "pge:pa-vintage-2020"}}))
+
+(price/marginal-unit-rate with-vintage)
 ;; => some BigDecimal in the [0, 1] range
 ```
+
+Calling `marginal-unit-rate` on `resolved` instead, with no selection, throws `ExceptionInfo` naming the ledger: an aggregate that silently took one of eighteen mutually-exclusive prices would be reporting an arbitrary number as the marginal rate. Reading `:urpx.resolved/tiers` directly needs no selection, and still surfaces all eighteen.
 
 That covers the consume side end-to-end. For emit and authoring, jump to [Writing URPX JSON-LD](#writing-urpx-json-ld) and [Authoring URPX entities](#authoring-urpx-entities) — both compose with the coerced entity above.
 
@@ -278,7 +289,18 @@ Nothing is fetched behind your back. A reference this library cannot resolve fro
                              :detail "urpx:basedOnPrice names ..."}}
 ```
 
-The reasons are `:unresolved-reference` (the basis is not in these documents), `:summary-member-unresolved` (a member of the summary carries no resolvable unit price here), `:basis-not-valuable` (the basis resolved but has no unit price), and `:no-unit-price` (the Price states neither a unit price nor a multiplier and basis to derive one from). A nil unit price with no explanation would read to a consumer as free, which for a discount is the worst available answer; `marginal-unit-rate` therefore throws rather than return one.
+The reasons are:
+
+| reason | meaning |
+|---|---|
+| `:unresolved-reference` | no named basis is in the documents passed to the call |
+| `:ambiguous-basis` | two or more named bases are present at once, which is not a choice this library makes |
+| `:summary-member-unresolved` | a summary member is absent from these documents, or is in effect here but carries no unit price |
+| `:summary-no-active-members` | no member of the summary is in effect at this instant, so its subtotal is undefined here |
+| `:basis-not-valuable` | the basis resolved but has no unit price |
+| `:no-unit-price` | the Price states neither a unit price nor a multiplier and basis to derive one from |
+
+A nil unit price with no explanation would read to a consumer as free, which for a discount is the worst available answer; `marginal-unit-rate` therefore throws rather than return one.
 
 `urpx:basedOnPrice` has no `sh:maxCount` upstream, so a document may name several bases. Several values are read **disjunctively**: candidate bases, of which exactly one is expected to be present in the documents passed to the call. That is what lets a single discount Price serve a modifier applying to many base plans, naming each base's subtotal and letting the composition select by which base was actually supplied. Zero resolvable candidates remains an error, and two or more present at once reports `:ambiguous-basis`.
 
@@ -290,7 +312,7 @@ Note that this is a second, independent way to express CARE and FERA. The `urpx:
 
 URPX v0.2.0 introduced `urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives` for declarative customer-or-configuration choices — income-tier CARE / FERA / Standard, voltage configurations, vintage-PCIA default tier, and similar. The plan declares a `urpx:ProfileAlternatives` at `PlanElements.hasProfileAlternatives` (each named alternative carries its own `hasConditionExpression`), and a sibling `urpx:PriceSetAlternatives` at `Prices.hasPriceSetAlternatives` exposes one Price-bearing `PriceSetAlternative` per alternative.
 
-`resolve-prices` selects the active alternative explicitly via the `:profile-alternatives` opt — a `{<ProfileAlternatives @id> <chosen ProfileAlternative @id>}` map:
+`resolve-prices` selects the active alternative explicitly via the `:profile-alternatives` opt — a `{<ProfileAlternatives @id> <chosen ProfileAlternative @id>}` map. `resolve-prices-with-modifiers` honors the same opt on the modifier path, which is how a matrix modifier's alternatives are chosen:
 
 ```clojure
 (price/resolve-prices plan zdt
@@ -489,7 +511,7 @@ Currently covered:
 - `RatePlanVersion` surfaces `urpx:hasModifierOptions` and `urpx:hasModifierVersionOptions` pointers (Decisions #084 + #090) for cross-version modifier wiring
 - Block-tier surfacing via the v0.2.0 `urpx:ServiceTiers` container — every tier surfaces with its bounds and bound operators
 - Active-price selection by latest `startDate ≤ query-date`, drawing from flat top-level prices, `PriceSet`-scoped prices, and PriceSets that omit `startDate` and fall through to per-Price dates (CPAU E-2 shape, per `urpx:PriceSetShape` `sh:minCount 0`)
-- Modifier resolution alongside the base plan (vintage-PCIA pattern: many Prices share one PD, each carrying its own `urpx:hasApplicabilityGroup`)
+- Modifier resolution alongside the base plan (vintage-PCIA pattern: many Prices share one PD, discriminated by `urpx:PriceSetAlternatives` / `urpx:referencesProfileAlternative`, and selected with `:profile-alternatives`)
 - `urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives` — the v0.2.0 idiom for declarative customer-or-configuration choices (income tier CARE/FERA/Standard, voltage configuration, vintage-PCIA default tier). Coerce + validate full schemas; resolve-prices selects the active alternative via an explicit `:profile-alternatives` opt; emit round-trips cleanly. Programmatic `ConditionExpression` evaluation against a customer profile is a future enhancement
 - Configurable schedule step (hourly default; sub-hour available via `:step`)
 - Symmetric write-side: `urpx.emit` emits JSON-LD from any coerced `RatePlan` / `RatePlanModifier` / `URPXDocument`; the vendored-fixture round-trip suite verifies `parse → coerce → emit → re-parse → re-coerce` is a fixed point for every PG&E filing × {RatePlan, Modifier} plus a URPXDocument-wrapped E-ELEC test case

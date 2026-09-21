@@ -880,8 +880,15 @@
 
    urpx:includesPrice is sh:minCount 2 upstream: a summary of one price is not
    a summary. urpx:summaryAmount is the author's own stated total, optional and
-   NOT what the resolver uses; the resolver sums the members it can resolve, so
-   an author-stated total that disagrees is visible rather than authoritative.
+   NOT what the resolver uses; the resolver sums the members IN EFFECT at the
+   instant being resolved, so an author-stated total that disagrees is visible
+   rather than authoritative.
+
+   Members are gated by the same season, month and TOU predicates that gate a
+   tier, because a summary becomes a unit price at an instant and summing a
+   line item that is not in effect would be the wrong number. One summary may
+   therefore name every discountable line item on a plan and stay correct in
+   every TOU period.
 
    Which Prices a summary names is entirely the author's business, and
    deliberately so: on one base plan a CARE summary and a FERA summary name

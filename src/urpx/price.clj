@@ -989,7 +989,23 @@
    belong in a $/kWh sum.
 
    Useful for price signaling: when you don't know a customer's usage but want
-   a single $/kWh number, this is the marginal rate at zero baseline usage."
+   a single $/kWh number, this is the marginal rate at zero baseline usage.
+
+   REFUSES, rather than returning a number, in two cases:
+
+     a marginal tier could not be valued       a nil unit price reads to a
+                                               consumer as free, and for a
+                                               discount that is the worst
+                                               available answer
+     an energy ledger carries mutually-        these are alternatives, not
+     exclusive price alternatives with no      tiers: exactly one applies to a
+     caller selection                          customer, and which one is the
+                                               caller's to say
+
+   The second is why composing a PG&E plan with its vintage-PCIA modifier
+   needs `:profile-alternatives`. Taking the first of eighteen mutually
+   exclusive prices added an arbitrary 0.02973 to the rate; the eighteen span
+   0.06391/kWh, so there is no default worth inventing."
   [resolved]
   (let [energy     (->> (:urpx.resolved/ledgers resolved)
                         (filter #(and (= "urpx:energy"

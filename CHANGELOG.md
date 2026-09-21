@@ -11,7 +11,9 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 ## [0.14.0] — 2026-09-21
 
-Composition. Six defects in how a modifier resolves against a base plan, three of them wrong answers rather than errors, plus three semantics that URPX leaves open and that this library now states rather than implies. Found by auditing the compose path to answer a question from the filings repo, not by a failing test: all six are reachable by SHACL-conformant documents and none was caught by the 73-filing corpus.
+Composition. Five defects in how a modifier resolves against a base plan, four of them wrong answers rather than errors and one a crash, plus three semantics that URPX leaves open and that this library now states rather than implies. Found by auditing the compose path to answer a question from the filings repo, not by a failing test: every one is reachable by a SHACL-conformant document, and the 73-filing corpus gate caught none of them, because it validates documents and these are resolution defects.
+
+**Upgrading:** `marginal-unit-rate` now throws on a composed plan whose modifier carries mutually-exclusive price alternatives, where it previously returned a number. PG&E filings are the case in practice. Pass `:profile-alternatives` to select, or read `:urpx.resolved/tiers` directly, which needs no selection.
 
 ### Fixed
 
@@ -25,7 +27,14 @@ Composition. Six defects in how a modifier resolves against a base plan, three o
 
 - **Multiple `urpx:basedOnPrice` values are read disjunctively** as candidate bases, exactly one expected to be present in the documents passed to the call; 0.13.0 threw. This lets one discount Price serve a modifier applying to many base plans. Zero resolvable candidates is still an error and two present at once reports `:ambiguous-basis`. URPX fixes the cardinality and says nothing about multiplicity; the conjunctive reading is what `urpx:PriceSummary` already provides, so the disjunctive one is taken here and recorded rather than left implicit.
 - `:profile-alternatives` is now honored on the modifier path. It was read on the base plan path and discarded on the modifier path, which is why matrix modifiers had no way to be selected.
-- The README's description of how matrix modifiers carry their selection dimension was wrong: it is `urpx:PriceSetAlternatives` / `urpx:referencesProfileAlternative`, not `urpx:hasApplicabilityGroup` with a `urpx:ConditionExpression`.
+- The README's description of how matrix modifiers carry their selection dimension was wrong, in two places: it is `urpx:PriceSetAlternatives` / `urpx:referencesProfileAlternative`, not `urpx:hasApplicabilityGroup` with a `urpx:ConditionExpression`.
+
+### Documentation
+
+- **The README's Getting started walkthrough is now executed as a test.** It advertises itself as running from a cold clone, and it silently stopped doing so the moment `marginal-unit-rate` began refusing: the walkthrough composes PG&E's vintage-PCIA modifier, so the first thing a new reader ran would have thrown. README blocks were only checked for symbol resolution, which cannot catch that. The Getting started section is self-contained, so it is now evaluated like the DSL tutorial.
+- The walkthrough passes `:profile-alternatives` and explains why; the refusal is described in prose rather than shown as a throwing call.
+- The reasons a Price can be unvaluable are now a table, and it was missing two: `:ambiguous-basis` and `:summary-no-active-members`.
+- `marginal-unit-rate` and the `PriceSummary` schema docstrings stated the old behavior; both now say what they do.
 
 ## [0.13.0] — 2026-09-21
 
