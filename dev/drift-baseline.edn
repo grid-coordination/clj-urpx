@@ -30,18 +30,6 @@
   ["RatePlanModifierVersion" "urpx:forRatePlanModifier" "under-validates"]
   ["RatePlanModifierVersion" "urpx:hasCoverageClaim" "under-validates"]
 
-  ;; DEFERRED, not accepted forever. These three are 0..N upstream and modeled
-  ;; as single values here, and each HAS a reader that assumes one value:
-  ;; MetricInput/hasMetricSpecification at price.clj:352,
-  ;; PlanElements/hasHolidayCalendar at holidays.clj:193-197,
-  ;; TimeBracket/appliesInSeason at price.clj:123. Widening the schema without
-  ;; widening the reader turns a loud rejection into a silent wrong answer,
-  ;; which is the lesson URPX-6aw.16 was filed for. They need the same
-  ;; accept-both-shapes-and-refuse-to-guess treatment, as one deliberate change
-  ;; per reader. Tracked separately; remove these three when that lands.
-  ["MetricInput" "urpx:hasMetricSpecification" "arity"]
-  ["PlanElements" "urpx:hasHolidayCalendar" "arity"]
-  ["TimeBracket" "urpx:appliesInSeason" "arity"]
 
   ;; DEFERRED. urpx:changeReason and urpx:serviceRole are sh:minCount 1 on both
   ;; version shapes, and have been since v0.2.1, so this is long-standing rather

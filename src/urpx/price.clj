@@ -120,7 +120,8 @@
      (fn [period]
        (when (some
               (fn [bracket]
-                (and (= season-id (get-in bracket [:urpx/appliesInSeason :jsonld/id]))
+                (and (= season-id (:jsonld/id (index/single (:urpx/appliesInSeason bracket)
+                                                            "appliesInSeason refs on one TimeBracket")))
                      (bracket-matches-day? bracket date dow holiday?)
                      (time-in-bracket? t bracket)))
               (:urpx/hasTimeBracket period))
@@ -349,7 +350,8 @@
   [ledger mi-index]
   (let [mi-id (some-> ledger :urpx/referencesMetricInput first :jsonld/id)
         mi    (when mi-id (mi-index mi-id))
-        spec  (:urpx/hasMetricSpecification mi)]
+        spec  (index/single (:urpx/hasMetricSpecification mi)
+                            "hasMetricSpecification nodes on one MetricInput")]
     (cond-> {}
       mi-id (assoc :urpx.resolved/metric-input-id mi-id)
       (:urpx/metricInputType mi)

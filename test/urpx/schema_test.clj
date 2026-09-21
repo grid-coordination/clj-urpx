@@ -8,6 +8,7 @@
             [clojure.test :refer [deftest is testing]]
             [malli.core :as m]
             [urpx.coerce :as coerce]
+            [urpx.index :as index]
             [urpx.schema :as s])
   (:import [java.math BigDecimal]
            [java.time Duration LocalDate LocalDateTime LocalTime]))
@@ -855,3 +856,48 @@
                                       :skos/notation "USCA-PGE-E-1"
                                       :urpx/scheme {:jsonld/id "urpx:caMidasRinScheme"}}]}]
       (is (m/validate s/RatePlan plan)))))
+
+;; ---------------------------------------------------------------------------
+;; 0..N properties whose readers expect one value
+;; ---------------------------------------------------------------------------
+
+(deftest zero-to-n-properties-with-single-value-readers
+  (testing "three properties are 0..N upstream but have exactly one reader here
+            that expects a single value. The schema accepts both shapes, so a
+            conformant document validates; the reader refuses to guess."
+    (let [cal {:jsonld/type "urpx:HolidayCalendar" :urpx/hasHoliday []}
+          pe  {:jsonld/type "urpx:PlanElements"
+               :urpx/hasMetricInput [{:jsonld/type "urpx:MetricInput"
+                                      :urpx/name "kWh"
+                                      :urpx/metricInputType {:jsonld/id "urpx:measuredMetricInput"}}]
+               :urpx/hasBillingModel {:jsonld/type "urpx:BillingModel"
+                                      :urpx/hasPriceDefinition []}}]
+      (testing "PlanElements.hasHolidayCalendar takes one, a 1-vector, or several"
+        (is (m/validate s/PlanElements (assoc pe :urpx/hasHolidayCalendar cal)))
+        (is (m/validate s/PlanElements (assoc pe :urpx/hasHolidayCalendar [cal])))
+        (is (m/validate s/PlanElements (assoc pe :urpx/hasHolidayCalendar [cal cal])))))
+    (testing "TimeBracket.appliesInSeason likewise"
+      (let [tb {:jsonld/type "urpx:TimeBracket"
+                :urpx/startTime (LocalTime/of 16 0)
+                :urpx/endTime   (LocalTime/of 21 0)
+                :urpx/dayType   {:jsonld/id "urpx:allDays"}}]
+        (is (m/validate s/TimeBracket (assoc tb :urpx/appliesInSeason {:jsonld/id "x:s1"})))
+        (is (m/validate s/TimeBracket (assoc tb :urpx/appliesInSeason [{:jsonld/id "x:s1"}
+                                                                       {:jsonld/id "x:s2"}])))))))
+
+(deftest index-single-normalizes-or-refuses
+  (testing "one accessor backs all of them: nil, a map, and a 1-vector each
+            resolve to one value"
+    (is (nil? (index/single nil "things")))
+    (is (nil? (index/single [] "things")))
+    (is (= {:a 1} (index/single {:a 1} "things")))
+    (is (= {:a 1} (index/single [{:a 1}] "things"))))
+  (testing "and more than one throws rather than picking, naming what it found"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Multiple things; this library reads one"
+                          (index/single [{:jsonld/id "a"} {:jsonld/id "b"}] "things")))
+    (testing "the thrown data names the ids, so the caller can choose"
+      (try (index/single [{:jsonld/id "a"} {:jsonld/id "b"}] "things")
+           (catch clojure.lang.ExceptionInfo e
+             (is (= ["a" "b"] (:ids (ex-data e))))
+             (is (= 2 (:count (ex-data e)))))))))

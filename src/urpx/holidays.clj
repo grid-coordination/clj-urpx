@@ -186,15 +186,17 @@
    version is identical in both shapes."
   ([plan] (plan-calendar plan nil))
   ([plan version]
-   (if version
-     ;; An explicitly supplied snapshot is the authority, not merely the first
-     ;; preference: falling through to the nested path when it has no calendar
-     ;; would consult a different snapshot than the one prices resolve against.
-     (get-in version [:urpx/hasPlanElements :urpx/hasHolidayCalendar])
-     (or (get-in (index/nested-version plan :urpx/hasRatePlanVersion)
-                 [:urpx/hasPlanElements :urpx/hasHolidayCalendar])
-         (get-in (index/nested-version plan :urpx/hasRatePlanModifierVersion)
-                 [:urpx/hasPlanElements :urpx/hasHolidayCalendar])))))
+   (let [calendar-of (fn [snapshot]
+                       (index/single
+                        (get-in snapshot [:urpx/hasPlanElements :urpx/hasHolidayCalendar])
+                        "holiday calendars on one PlanElements"))]
+     (if version
+       ;; An explicitly supplied snapshot is the authority, not merely the first
+       ;; preference: falling through to the nested path when it has no calendar
+       ;; would consult a different snapshot than the one prices resolve against.
+       (calendar-of version)
+       (or (calendar-of (index/nested-version plan :urpx/hasRatePlanVersion))
+           (calendar-of (index/nested-version plan :urpx/hasRatePlanModifierVersion)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Public API

@@ -284,7 +284,10 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/name :string]
    [:urpx/metricInputType Ref]
-   [:urpx/hasMetricSpecification {:optional true} MetricSpecification]
+   ;; 0..N upstream (no sh:maxCount). Accepted as one or many; price.clj reads
+   ;; one through urpx.index/single, which refuses rather than guessing.
+   [:urpx/hasMetricSpecification {:optional true}
+    [:or MetricSpecification [:vector MetricSpecification]]]
    ;; In v0.2.0 profileMetricProperty is a Ref to a vocabulary IRI
    ;; (e.g. urpx:meterCount, urpx:departureVintage).
    [:urpx/profileMetricProperty  {:optional true} Ref]])
@@ -296,7 +299,8 @@
    [:urpx/endTime Time]
    ;; v0.2.0 SHACL: dayType is required (was optional in v0.1.x).
    [:urpx/dayType Ref]
-   [:urpx/appliesInSeason     {:optional true} Ref]
+   ;; 0..N upstream. TOU matching in price.clj reads one via index/single.
+   [:urpx/appliesInSeason     {:optional true} [:or Ref [:vector Ref]]]
    [:urpx/includeHolidays     {:optional true} :boolean]
    [:urpx/includeNonHolidays  {:optional true} :boolean]])
 
@@ -717,7 +721,11 @@
    [:jsonld/type [:= "urpx:PlanElements"]]
    [:urpx/hasSeasons         {:optional true} [:vector Season]]
    [:urpx/hasMetricInput     [:vector MetricInput]]
-   [:urpx/hasHolidayCalendar {:optional true} HolidayCalendar]
+   ;; 0..N upstream. holidays.clj reads one via index/single. Merging several
+   ;; calendars into one holiday set looks obvious but is a semantic decision
+   ;; the vocabulary does not state, so it refuses instead.
+   [:urpx/hasHolidayCalendar {:optional true}
+    [:or HolidayCalendar [:vector HolidayCalendar]]]
    [:urpx/hasProfileAlternatives
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector ProfileAlternatives]]
@@ -1127,7 +1135,10 @@
    [:urpx/hasDataSourceReference
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector DataSourceReference]]
-   [:urpx/hasMetricSpecification {:optional true} MetricSpecification]
+   ;; 0..N upstream (no sh:maxCount). Accepted as one or many; price.clj reads
+   ;; one through urpx.index/single, which refuses rather than guessing.
+   [:urpx/hasMetricSpecification {:optional true}
+    [:or MetricSpecification [:vector MetricSpecification]]]
    [:urpx/hasPrice
     {:decode/urpx-jsonld single-or-vec->vec}
     [:vector Price]]])  ; required (sh:minCount 1)

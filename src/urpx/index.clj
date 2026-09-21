@@ -107,6 +107,37 @@
   [doc]
   (back-pointer-walk {} doc))
 
+(defn single
+  "Normalize a property that URPX declares 0..N but that this library reads as
+   one value, or nil when there is none.
+
+     nil or absent   -> nil
+     a single map    -> that map
+     a 1-vector      -> its element
+     a longer vector -> throws, naming `what`
+
+   Throwing rather than taking `first` is the point. A reader that silently
+   picked one would resolve against an unpredictable node and report a
+   confident wrong answer; refusing says plainly that the document is beyond
+   what this library decides. Where the choice is genuinely the caller's, the
+   caller supplies it explicitly instead.
+
+   Used wherever the shipped SHACL sets no sh:maxCount but exactly one reader
+   here expects a single value. scripts/shacl-drift.sh lists those sites."
+  [v what]
+  (cond
+    (map? v) v
+    (sequential? v)
+    (case (count v)
+      0 nil
+      1 (first v)
+      (throw (ex-info (str "Multiple " what "; this library reads one. "
+                           "Pass the intended node explicitly.")
+                      {:what what
+                       :count (count v)
+                       :ids (mapv :jsonld/id v)})))
+    :else nil))
+
 (defn nested-version
   "Return the single version snapshot nested under `nested-key` on `plan`, or
    nil when there is none.
@@ -129,15 +160,4 @@
    given instant is a selection question the vocabulary does not yet settle:
    urpx:hasTemporalScope carries no sh:path constraints at 95eb8e22."
   [plan nested-key]
-  (let [v (get plan nested-key)]
-    (cond
-      (map? v) v
-      (sequential? v)
-      (case (count v)
-        0 nil
-        1 (first v)
-        (throw (ex-info "Multiple nested version snapshots; pass one explicitly"
-                        {:key nested-key
-                         :count (count v)
-                         :version-ids (mapv :jsonld/id v)})))
-      :else nil)))
+  (single (get plan nested-key) "nested version snapshots"))
