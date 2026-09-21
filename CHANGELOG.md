@@ -9,7 +9,7 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
-## [Unreleased]
+## [0.15.0] — 2026-09-21
 
 ### Changed
 
@@ -22,6 +22,13 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 - **A CPAU E-14 fixture**, pinned at `28390dc`: the only filing in the corpus with no energy ledger at all, which isolates that case with no other variable. Its ledgers carry `urpx:referencesMetricInput` naming fixture-count MetricInputs with no measurement kind, so it exercises "ledgers wired, no energy kind among them" rather than "ledgers unwired".
 - **Six SCE and SDG&E fixtures**, the corpus's first percentage discounts, pinned at urpx-rate-plans `384ffb1`. Both utilities are vendored because neither alone shows the variation, and a fixture set carrying only one would silently sanction whichever shape it held. SCE shares **one** subtotal between CARE and FERA, which differ only in rate; SDG&E carries **two** subtotals on one base plan with different member lists, because Schedule E-CARE excludes any applicable exemptions and FERA grants none. Unlike the PG&E `@graph` bundles each base plan is a separate filing from its modifiers, so the cross-document dereference is exercised the way the corpus files it. `urpx.care-fera-test` pins the filed values: SDG&E CARE `-0.1450505` and FERA `-0.0756612`, SCE CARE `-0.12139725` and FERA `-0.0672354`, each checked against the summary's own member arithmetic as well as against the resolver.
 - A note in the README on **two properties that are optional in the shapes but load-bearing here**, so a conformant document can still lose content: `urpx:startDate` on a `urpx:Price` with nothing enclosing it to inherit a date from (dropped silently), and `urpx:referencesMetricInput` on a `urpx:Ledger` (tiers survive, but `marginal-unit-rate` comes back quietly short, or `0M`). Both were found by authoring real filings, not by validation.
+
+### Documentation
+
+- **The README's Getting started walkthrough is now executed as a test.** It advertises itself as running from a cold clone, and it silently stopped doing so the moment `marginal-unit-rate` began refusing: the walkthrough composes PG&E's vintage-PCIA modifier, so the first thing a new reader ran would have thrown. README blocks were only checked for symbol resolution, which cannot catch that. The Getting started section is self-contained, so it is now evaluated like the DSL tutorial.
+- The walkthrough passes `:profile-alternatives` and explains why; the refusal is described in prose rather than shown as a throwing call.
+- The reasons a Price can be unvaluable are now a table, and it was missing two: `:ambiguous-basis` and `:summary-no-active-members`.
+- `marginal-unit-rate` and the `PriceSummary` schema docstrings stated the old behavior; both now say what they do.
 
 ## [0.14.0] — 2026-09-21
 
@@ -43,12 +50,7 @@ Composition. Five defects in how a modifier resolves against a base plan, four o
 - `:profile-alternatives` is now honored on the modifier path. It was read on the base plan path and discarded on the modifier path, which is why matrix modifiers had no way to be selected.
 - The README's description of how matrix modifiers carry their selection dimension was wrong, in two places: it is `urpx:PriceSetAlternatives` / `urpx:referencesProfileAlternative`, not `urpx:hasApplicabilityGroup` with a `urpx:ConditionExpression`.
 
-### Documentation
-
-- **The README's Getting started walkthrough is now executed as a test.** It advertises itself as running from a cold clone, and it silently stopped doing so the moment `marginal-unit-rate` began refusing: the walkthrough composes PG&E's vintage-PCIA modifier, so the first thing a new reader ran would have thrown. README blocks were only checked for symbol resolution, which cannot catch that. The Getting started section is self-contained, so it is now evaluated like the DSL tutorial.
-- The walkthrough passes `:profile-alternatives` and explains why; the refusal is described in prose rather than shown as a throwing call.
-- The reasons a Price can be unvaluable are now a table, and it was missing two: `:ambiguous-basis` and `:summary-no-active-members`.
-- `marginal-unit-rate` and the `PriceSummary` schema docstrings stated the old behavior; both now say what they do.
+  Only one of the two was corrected in the 0.14.0 artifact; the second, and the rest of the documentation catch-up, landed after the tag and ships in 0.15.0.
 
 ## [0.13.0] — 2026-09-21
 
@@ -127,6 +129,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.15.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.15.0
 [0.14.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.14.0
 [0.13.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.13.0
 [0.12.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.12.0
