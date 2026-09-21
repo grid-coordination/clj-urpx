@@ -1027,7 +1027,11 @@
    [:urpx/changeReason  {:optional true} Ref]
    [:urpx/changeDescription {:optional true} :string]
    [:urpx/description   {:optional true} :string]
-   [:urpx/effectiveDateTime DateTime]
+   ;; sh:minCount 0 sh:maxCount 1 on both version shapes, and it was NEVER
+   ;; required upstream: optional at v0.2.1, v0.3.0, v0.4.0, v0.5.0 and at
+   ;; 95eb8e22. clj-urpx required it by its own choice, so a conformant
+   ;; snapshot omitting it was rejected.
+   [:urpx/effectiveDateTime {:optional true} DateTime]
    [:urpx/effectiveDate     {:optional true} Date]
    [:urpx/expirationDate    {:optional true} Date]
    [:urpx/expirationDateTime {:optional true} DateTime]
@@ -1097,7 +1101,15 @@
    [:urpx/priceCurrency {:optional true} :string]
    [:urpx/url           {:optional true} :string]
    [:urpx/version       {:optional true} :string]
-   [:urpx/hasRatePlanVersion RatePlanVersion]])
+   ;; v0.5.1 sh:minCount 0 on urpx-shacl:RatePlanShape. The v0.3.0 draft removed
+   ;; this property outright; v0.5.1 re-admitted it as optional, so the nested
+   ;; shape stays legal and an un-nested filing that states the link only as
+   ;; forRatePlan on a sibling snapshot is legal too. NOT widened to 0..N yet:
+   ;; SHACL sets no sh:maxCount, but price.clj:493, holidays.clj:182 and
+   ;; tz_inference.clj:46 all read this as a single map, so a vector here would
+   ;; validate documents the resolver then silently misreads. URPX-6aw.4 owns
+   ;; the reader rewrite and the arity widening lands with it.
+   [:urpx/hasRatePlanVersion {:optional true} RatePlanVersion]])
 
 ;; ---------------------------------------------------------------------------
 ;; Modifier — augments / overrides parts of an existing RatePlan
@@ -1115,7 +1127,11 @@
    [:urpx/changeReason  {:optional true} Ref]
    [:urpx/changeDescription {:optional true} :string]
    [:urpx/description {:optional true} :string]
-   [:urpx/effectiveDateTime DateTime]
+   ;; sh:minCount 0 sh:maxCount 1 on both version shapes, and it was NEVER
+   ;; required upstream: optional at v0.2.1, v0.3.0, v0.4.0, v0.5.0 and at
+   ;; 95eb8e22. clj-urpx required it by its own choice, so a conformant
+   ;; snapshot omitting it was rejected.
+   [:urpx/effectiveDateTime {:optional true} DateTime]
    [:urpx/effectiveDate {:optional true} Date]
    [:urpx/expirationDate {:optional true} Date]
    [:urpx/expirationDateTime {:optional true} DateTime]
@@ -1175,7 +1191,10 @@
    [:urpx/priceCurrency      {:optional true} :string]
    [:urpx/url                {:optional true} :string]
    [:urpx/version            {:optional true} :string]
-   [:urpx/hasRatePlanModifierVersion RatePlanModifierVersion]])
+   ;; Optional for the same reason as RatePlan/hasRatePlanVersion above, and
+   ;; likewise not yet widened to 0..N: holidays.clj:183, tz_inference.clj:47
+   ;; and price.clj:564/584 read it as a single map.
+   [:urpx/hasRatePlanModifierVersion {:optional true} RatePlanModifierVersion]])
 
 ;; ---------------------------------------------------------------------------
 ;; Top-level wrappers carrying ontology-version metadata
