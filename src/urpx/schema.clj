@@ -363,7 +363,10 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/name :string]
    [:urpx/description {:optional true} :string]
-   [:urpx/chargeType    {:optional true} Ref]
+   ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
+   [:urpx/chargeType
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
    [:urpx/chargeCategory {:optional true} Ref]
    [:urpx/billPortion   {:optional true} Ref]
    [:urpx/commodity     {:optional true} Ref]
@@ -751,9 +754,18 @@
   [:map
    [:jsonld/type [:= "urpx:CustomerProfile"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/hasCustomerKind    {:optional true} Ref]
-   [:urpx/hasCustomerSubKind {:optional true} Ref]
-   [:urpx/entityType         {:optional true} Ref]])
+   ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
+   [:urpx/hasCustomerKind
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
+   [:urpx/hasCustomerSubKind
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
+   [:urpx/entityType
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]])
 
 (def Scenario
   "v0.2.0: NEW. EligibilityRule.hasCustomerProfile moved here. SHACL's sh:or
@@ -800,7 +812,11 @@
    [:urpx/multiplier {:optional true} Decimal]
    [:urpx/baseQuantity {:optional true} Decimal]
    [:urpx/priceCurrency {:optional true} :string]
-   [:urpx/referencesPriceDefinition Ref]
+   ;; sh:minCount 0 sh:maxCount 1 upstream: a conformant Price may omit it.
+   ;; Required here until now, which rejected such a Price; PriceSetAlternative
+   ;; already modeled it optional, so the two disagreed with each other too.
+   ;; Both readers (price.clj:224, :261) nil-thread through get-in.
+   [:urpx/referencesPriceDefinition {:optional true} Ref]
    [:urpx/referencesServiceTier    {:optional true} Ref]
    [:urpx/referencesServiceBracket {:optional true} Ref]
    [:urpx/referencesTouPeriod      {:optional true} Ref]
@@ -813,7 +829,10 @@
    [:urpx/appliesInSeason
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
-   [:urpx/hasApplicabilityGroup {:optional true} ApplicabilityGroup]
+   ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
+   [:urpx/hasApplicabilityGroup
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector ApplicabilityGroup]]
    [:urpx/hasApplicabilityRule
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     ;; Inline rule or a bare @id ref to one defined elsewhere in the document
@@ -840,7 +859,10 @@
    [:urpx/serviceTierNumber {:optional true} Int]
    [:urpx/referencesPriceDefinition {:optional true} Ref]
    [:urpx/referencesServiceBracket  {:optional true} Ref]
-   [:urpx/hasApplicabilityGroup {:optional true} ApplicabilityGroup]
+   ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
+   [:urpx/hasApplicabilityGroup
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector ApplicabilityGroup]]
    [:urpx/hasPrice [:vector Price]]])
 
 ;; Prices is defined further down — its hasPriceSetAlternatives entry
@@ -907,7 +929,10 @@
    ;; Ref, not a typed schema: oa:Selector is an external Web Annotation class
    ;; the ontology deliberately does not import, and the shape constrains only
    ;; sh:class oa:Selector.
-   [:urpx/hasSelector {:optional true} Ref]
+   ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
+   [:urpx/hasSelector
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
    [:urpx/sourcePublication {:optional true} Ref]
    ;; Enum membership deliberately unenforced here; see the enum issue.
    [:urpx/tariffStatementType {:optional true} Ref]
@@ -1087,7 +1112,10 @@
    [:urpx/referencesServiceBracket    {:optional true} Ref]
    [:urpx/referencesTouPeriod         {:optional true} Ref]
    ;; Sub-entities
-   [:urpx/hasApplicabilityGroup {:optional true} ApplicabilityGroup]
+   ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
+   [:urpx/hasApplicabilityGroup
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector ApplicabilityGroup]]
    [:urpx/hasApplicabilityRule
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     ;; Inline rule or a bare @id ref to one defined elsewhere in the document
@@ -1174,7 +1202,10 @@
    [:urpx/dateApproved      {:optional true} Date]
    [:urpx/dateTimeApproved  {:optional true} DateTime]
    [:urpx/priceCurrency     {:optional true} :string]
-   [:urpx/commodity         {:optional true} Ref]
+   ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
+   [:urpx/commodity
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
    [:urpx/serviceRole       {:optional true} Ref]
    [:urpx/customerChoice    {:optional true} Ref]
    [:urpx/isDefault         {:optional true} :boolean]
@@ -1294,7 +1325,10 @@
    [:urpx/expirationDate {:optional true} Date]
    [:urpx/expirationDateTime {:optional true} DateTime]
    [:urpx/priceCurrency {:optional true} :string]
-   [:urpx/commodity   {:optional true} Ref]
+   ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
+   [:urpx/commodity
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
    [:urpx/serviceRole {:optional true} Ref]
    [:urpx/modifierType     {:optional true} Ref]
    [:urpx/modifierCategory {:optional true} Ref]

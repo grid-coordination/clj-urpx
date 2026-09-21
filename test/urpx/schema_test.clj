@@ -158,8 +158,17 @@
     (is (m/validate s/Price price))
     (testing "string unitPrice rejected"
       (is (not (m/validate s/Price (assoc price :urpx/unitPrice "0.12855")))))
-    (testing "missing PriceDefinition reference rejected"
-      (is (not (m/validate s/Price (dissoc price :urpx/referencesPriceDefinition)))))))
+    (testing "v0.5.1: a Price with no PriceDefinition reference is LEGAL.
+              urpx-shacl:PriceShape declares sh:minCount 0 sh:maxCount 1 on
+              urpx:referencesPriceDefinition, so requiring it rejected a
+              conformant Price. PriceSetAlternative already modeled it optional,
+              so the two schemas disagreed with each other as well. This
+              assertion previously demanded the reference."
+      (is (m/validate s/Price (dissoc price :urpx/referencesPriceDefinition))))
+    (testing "both readers nil-thread, so an absent reference resolves to no
+              price definition rather than throwing"
+      (is (nil? (get-in (dissoc price :urpx/referencesPriceDefinition)
+                        [:urpx/referencesPriceDefinition :jsonld/id]))))))
 
 (deftest condition-expression-recursive-tree
   (testing "ConditionExpression accepts a flat ComparisonNode root"

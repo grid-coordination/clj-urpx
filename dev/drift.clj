@@ -154,11 +154,14 @@
               :when (seq fs)]
         (println (format "%s  [%s] %d"
                          (if (fails? k) "FAIL" "note") (name k) (count fs)))
-        (doseq [f (take 12 (sort-by (juxt :schema :property) fs))]
-          (println (format "        %-28s %-34s %s"
-                           (:schema f) (or (:property f) "") (:detail f))))
-        (when (> (count fs) 12)
-          (println (format "        ... and %d more" (- (count fs) 12))))
+        ;; Failing kinds print in full: they are the actionable list, and a
+        ;; truncated one silently hides work. Informational kinds stay capped.
+        (let [cap (if (fails? k) Long/MAX_VALUE 12)]
+          (doseq [f (take cap (sort-by (juxt :schema :property) fs))]
+            (println (format "        %-28s %-34s %s"
+                             (:schema f) (or (:property f) "") (:detail f))))
+          (when (> (count fs) cap)
+            (println (format "        ... and %d more" (- (count fs) cap)))))
         (println))
       (let [failing (filter #(fails? (:kind %)) new-findings)
             accepted (- (count findings) (count new-findings))]
