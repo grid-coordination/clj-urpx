@@ -308,6 +308,22 @@ The conjunctive reading (sum the bases) is already covered by `urpx:PriceSummary
 
 Note that this is a second, independent way to express CARE and FERA. The `urpx:ProfileAlternatives` mechanism below files the already-discounted prices directly as an alternative price set; this one files the discount as arithmetic over the undiscounted prices. Which a plan uses is the filer's choice, and a reader should expect either.
 
+### Recurring charges
+
+A `urpx:PriceDefinition` carrying its own `urpx:CalculationMethod` prices a **recurring** charge: one billed per interval rather than per unit consumed. Minimum charges, service charges, base services charges, and the per-lamp-per-month charges of a street lighting schedule.
+
+These resolve like any other price, and their tiers carry `:urpx.resolved/interval-duration`:
+
+```clojure
+#:urpx.resolved{:price-id "sce:d-2026-03-20-price-base-services-charge"
+                :unit-price 0.794M
+                :interval-duration #object[java.time.Period "P1D"]}
+```
+
+The interval travels with the number deliberately. A recurring charge's ledger is typically measured by a meter or fixture count carrying no `urpx:measurementKind` and no unit, so `0.794` alone is a figure nothing else in the result explains. Flattening a period-scoped quantity into a per-unit rate is how a $10 monthly charge becomes a wrong per-day one.
+
+They never enter `marginal-unit-rate`, which sums $/kWh: a per-interval figure is not a per-unit rate whatever its ledger is measured in.
+
 ### Plans that price nothing per kWh
 
 `marginal-unit-rate` answers "what does the next kWh cost". Plenty of real schedules have no answer: CPAU E-14 is street lighting, priced per lamp per month and per fixture per month, with no per-kWh charge anywhere. For those it **refuses** rather than returning `0M`, because zero is not a conservative default for a question that does not apply, and it was indistinguishable from a plan whose energy ledgers genuinely sum to zero.

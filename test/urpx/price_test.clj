@@ -1446,3 +1446,84 @@
                    (str (.getPath f) ":" (inc n) " " (str/trim line)))]
       (is (empty? hits)
           (str "ambient clock read under src/:\n  " (str/join "\n  " hits))))))
+
+(deftest recurring-charges-surface-on-both-paths
+  (testing "pd-active-at-tou? used to answer two unrelated questions, returning
+            false for any PriceDefinition carrying its own CalculationMethod.
+            Because the modifier path applies that predicate only when there is
+            a TOU period to gate against, the recurring exclusion was skipped
+            along with it: the same PD shape was dropped from a base plan and
+            kept in a modifier.
+
+            The asymmetry produced incoherent output on a filed document. SCE
+            CARE's discounts ON the Base Services Charge surfaced while the
+            Base Services Charge itself did not, so the result carried credits
+            against a charge that was not in it."
+    (let [plan (fixtures/load-rate-plan "sce-d-2026-03-20")
+          care (fixtures/load-modifier "sce-care-2026-03-20")
+          r    (price/resolve-prices-with-modifiers plan [care] (zdt 2026 7 15 17))
+          ids  (set (map :urpx.resolved/price-id
+                         (mapcat :urpx.resolved/tiers (:urpx.resolved/ledgers r))))]
+      (is (contains? ids "sce:d-2026-03-20-price-base-services-charge")
+          "the charge itself must be present")
+      (is (contains? ids "sce:care-price-bsc-discount-2026-03-20")
+          "and so must the discount on it, which always was")))
+
+  (testing "a base plan whose every PriceDefinition is recurring reported
+            nothing at all. CPAU E-14 is street lighting: 18 recurring PDs and,
+            before this, 0 ledgers and 0 tiers."
+    (let [r (price/resolve-prices (fixtures/load-rate-plan "cpau-e-14-2025-07-01")
+                                  (zdt 2026 7 15 17))]
+      (is (pos? (count (:urpx.resolved/ledgers r))))
+      (is (= 18 (count (mapcat :urpx.resolved/tiers (:urpx.resolved/ledgers r))))))))
+
+(deftest a-recurring-charge-says-what-it-is-charged-per
+  (testing "a recurring charge's unit price is per INTERVAL, not per unit
+            consumed. SCE's base services charge is 0.794 per P1D on a
+            meter-count metric input that carries no measurement kind and no
+            unit, so without the interval the result would hand a consumer a
+            number that nothing in it explains. That is how a monthly charge
+            becomes a wrong per-day rate."
+    (let [r    (price/resolve-prices (fixtures/load-rate-plan "sce-d-2026-03-20")
+                                     (zdt 2026 7 15 17))
+          tier (->> (:urpx.resolved/ledgers r)
+                    (mapcat :urpx.resolved/tiers)
+                    (filter #(= "sce:d-2026-03-20-price-base-services-charge"
+                                (:urpx.resolved/price-id %)))
+                    first)]
+      (is (some? tier))
+      (is (= 0.794M (:urpx.resolved/unit-price tier)))
+      (is (= (java.time.Period/ofDays 1) (:urpx.resolved/interval-duration tier))
+          "the interval must travel with the number")))
+
+  (testing "a per-unit price carries no interval, so the key distinguishes them"
+    (let [r (price/resolve-prices (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+                                  (zdt 2026 7 15 17))]
+      (is (not-any? :urpx.resolved/interval-duration
+                    (mapcat :urpx.resolved/tiers
+                            (filter #(= "urpx:energy"
+                                        (get-in % [:urpx.resolved/measurement-kind :jsonld/id]))
+                                    (:urpx.resolved/ledgers r))))))))
+
+(deftest surfacing-recurring-charges-does-not-move-any-marginal-rate
+  (testing "the charges now surface, but a per-interval figure must never enter
+            a per-kWh sum. Pinned as exact values rather than as a comparison,
+            so that a future change which moved BOTH the rate and its
+            expectation could not pass."
+    (doseq [[plan expected] [["pge-e-tou-c-2026-03-01" 0.41784M]
+                             ["sce-d-2026-03-20"       0.26226M]
+                             ["sdge-dr-2026-04-01"     0.28341M]
+                             ["ladwp-r-1a-2026-04-01"  0.12832M]]]
+      (is (= expected (price/marginal-unit-rate
+                       (price/resolve-prices (fixtures/load-rate-plan plan)
+                                             (zdt 2026 7 15 17))))
+          plan)))
+
+  (testing "CPAU E-14 now resolves ledgers but still has no energy ledger, so it
+            still refuses, and the refusal says which of the two it is"
+    (let [r (price/resolve-prices (fixtures/load-rate-plan "cpau-e-14-2025-07-01")
+                                  (zdt 2026 7 15 17))]
+      (is (false? (price/has-energy-ledger? r)))
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"none of them measured in a urpx:measurementKind"
+                            (price/marginal-unit-rate r))))))

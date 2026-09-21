@@ -9,6 +9,24 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [0.16.0] — 2026-09-21
+
+One fix, and it changes what `resolve-prices` returns for **every** base plan in the corpus.
+
+### Fixed
+
+- **Recurring charges were dropped on the base-plan path and kept on the modifier path.** `pd-active-at-tou?` answered two unrelated questions, returning false for any `PriceDefinition` carrying its own `urpx:CalculationMethod`. Because the modifier path applies that predicate only when there is a TOU period to gate against, the recurring exclusion was skipped along with it, so the same shape was dropped from a base plan and kept in a modifier. The two questions are now separate and recurring charges surface on both paths.
+
+  The asymmetry produced incoherent output on filed documents. Composing SCE D with SCE CARE, the CARE discounts **on** the Base Services Charge surfaced while the Base Services Charge itself did not: the result carried credits against a charge that was not in it. Every vendored base plan lost at least one real charge this way (minimum charges, power access, service charges, base charges), and CPAU E-14, whose eighteen PriceDefinitions are all recurring, resolved to nothing at all.
+
+### Changed
+
+- **Resolved tiers for recurring charges carry `:urpx.resolved/interval-duration`.** A recurring charge is priced per interval, and its ledger is typically measured by a meter or fixture count with no `urpx:measurementKind` and no unit, so the number alone is uninterpretable. Flattening a period-scoped quantity into a per-unit rate is how a monthly charge becomes a wrong daily one.
+- `marginal-unit-rate` excludes any tier carrying an interval duration. No recurring ledger in the corpus is energy-kind, so this changes no current value; it is there so a filing that does pair the two cannot quietly add a per-month figure to a per-kWh rate. **Every marginal rate in the corpus is unchanged**, pinned as exact values.
+- The `:no-energy-ledger` refusal now distinguishes "nothing resolved at all" from "ledgers resolved, none of them measured in a kind this library can sum". CPAU E-14 moved from the first to the second.
+
+**Upgrading:** every base plan gains at least one ledger. Consumers that enumerate `:urpx.resolved/ledgers` will see charges they did not see before, some of them per-interval rather than per-unit; check `:urpx.resolved/interval-duration` before treating a unit price as per-unit. Marginal rates are unaffected.
+
 ## [0.15.0] — 2026-09-21
 
 ### Changed
@@ -129,6 +147,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.16.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.16.0
 [0.15.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.15.0
 [0.14.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.14.0
 [0.13.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.13.0

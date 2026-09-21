@@ -324,8 +324,17 @@
   [pd price tiers-by-num]
   (let [tier-num     (or (:urpx/serviceTierNumber price) (:urpx/serviceTierNumber pd))
         service-tier (when tier-num (tiers-by-num tier-num))
-        bracket      (first (:urpx/hasServiceBracket service-tier))]
+        bracket      (first (:urpx/hasServiceBracket service-tier))
+        ;; A recurring charge's unit price is per INTERVAL, not per unit of
+        ;; consumption: SCE's base services charge is 0.794 per P1D, and its
+        ;; ledger's metric input is a meter count carrying no measurement kind
+        ;; or unit. Surfacing the number without the interval would hand a
+        ;; consumer a figure nothing in the result explains, which is how a
+        ;; $10-per-month charge becomes a wrong per-day rate.
+        interval     (get-in pd [:urpx/hasCalculationMethod :urpx/intervalDuration])]
     (cond-> {}
+      interval
+      (assoc :urpx.resolved/interval-duration interval)
       tier-num
       (assoc :urpx.resolved/tier-number tier-num)
 
@@ -350,14 +359,21 @@
 
 (defn- pd-active-at-tou?
   "True if `pd` should be considered active at the resolved TOU period.
-   Skips recurring/subscription charges (PD has its own CalculationMethod).
    PDs without :urpx/touPeriodNumber are always TOU-active (flat).
-   PDs with :urpx/touPeriodNumber must match the resolved period number."
+   PDs with :urpx/touPeriodNumber must match the resolved period number.
+
+   This used to answer a second, unrelated question first: it returned false
+   for any PD carrying its own urpx:CalculationMethod, excluding recurring
+   charges. Whether a charge recurs has nothing to do with which TOU period is
+   active, and bundling the two meant the recurring exclusion inherited this
+   predicate's application. On the modifier path, where the TOU gate only runs
+   when there is a period to gate against, the recurring test was skipped along
+   with it, so the same PD shape was dropped from a base plan and kept in a
+   modifier. Recurring charges now surface on both paths, carrying
+   :urpx.resolved/interval-duration to say what they are charged per."
   [pd resolved-period-num]
-  (cond
-    (:urpx/hasCalculationMethod pd) false
-    (nil? (:urpx/touPeriodNumber pd)) true
-    :else (= (:urpx/touPeriodNumber pd) resolved-period-num)))
+  (or (nil? (:urpx/touPeriodNumber pd))
+      (= (:urpx/touPeriodNumber pd) resolved-period-num)))
 
 (defn- mi-by-id
   "Index PlanElements.hasMetricInput by :jsonld/id. Used to decorate each
@@ -1044,7 +1060,14 @@
         ;; Pass :profile-alternatives to choose; there is no default worth
         ;; inventing here.
         unselected (filter :urpx.resolved/unselected-alternatives energy)
-        marginal   (map #(first (:urpx.resolved/tiers %)) energy)
+        ;; A recurring charge is priced per interval, not per unit consumed, so
+        ;; it cannot go into a $/kWh sum whatever its ledger is measured in.
+        ;; Today no recurring ledger in the corpus is energy-kind, so this
+        ;; changes nothing; it is here so that a filing which does pair the two
+        ;; cannot quietly add a per-month figure to a per-kWh rate.
+        marginal   (->> energy
+                        (map #(first (:urpx.resolved/tiers %)))
+                        (remove :urpx.resolved/interval-duration))
         unvaluable (filter :urpx.resolved/unvaluable marginal)]
     ;; No energy ledger at all is not an answer of zero, it is a malformed
     ;; question. A street lighting schedule prices per lamp per month; its
@@ -1054,9 +1077,15 @@
       (throw (ex-info (str "Cannot compute a marginal rate: this plan has no energy "
                            "ledger, so it prices nothing per kWh and a marginal "
                            "per-kWh rate does not apply to it. "
-                           (if-let [ks (seq (measurement-kinds resolved))]
-                             (str "It prices in: " (pr-str (vec (sort ks))) ".")
-                             "Nothing resolved at this instant at all.")
+                           (cond
+                             (seq (measurement-kinds resolved))
+                             (str "It prices in: "
+                                  (pr-str (vec (sort (measurement-kinds resolved)))) ".")
+                             (seq (:urpx.resolved/ledgers resolved))
+                             (str (count (:urpx.resolved/ledgers resolved))
+                                  " ledger(s) resolved, none of them measured in a "
+                                  "urpx:measurementKind this library can sum.")
+                             :else "Nothing resolved at this instant at all.")
                            " Call has-energy-ledger? first when sweeping.")
                       {:reason :no-energy-ledger
                        :measurement-kinds (measurement-kinds resolved)
