@@ -1174,3 +1174,46 @@
         (testing "and an explicitly supplied snapshot resolves it"
           (is (= (price/resolve-prices plan when-zdt)
                  (price/resolve-prices two when-zdt {:version version}))))))))
+
+;; ---------------------------------------------------------------------------
+;; A month gate stated by reference, not inline
+;; ---------------------------------------------------------------------------
+
+(deftest bare-applicability-rule-ref-still-gates-by-month
+  (testing "a PriceDefinition may name its ApplicabilityRule by bare @id rather
+            than inlining it, since RDF merges a reference with its definition.
+            Before dereferencing, such a rule carried no urpx:month, read as
+            permissive, and the PD resolved in EVERY month instead of the ones
+            it names: a wrong answer rather than an error."
+    (let [plan     (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          version  (:urpx/hasRatePlanVersion plan)
+          pds      (get-in version [:urpx/hasPlanElements :urpx/hasBillingModel
+                                    :urpx/hasPriceDefinition])
+          ;; the climate-credit PD is the one already month-gated inline
+          gated    (some #(when (seq (:urpx/hasApplicabilityRule %)) %) pds)
+          rule     (first (:urpx/hasApplicabilityRule gated))
+          rule-id  "x:rule-april-only"
+          ;; restate the same gate BY REFERENCE, with the definition parked
+          ;; where an index can reach it
+          defn'    (assoc rule :jsonld/type "urpx:ApplicabilityRule"
+                          :jsonld/id rule-id
+                          :urpx/month [4])
+          by-ref   (assoc gated :urpx/hasApplicabilityRule [{:jsonld/id rule-id}])
+          swap     (fn [v pd] (assoc-in v [:urpx/hasPlanElements :urpx/hasBillingModel
+                                           :urpx/hasPriceDefinition]
+                                        (mapv #(if (= (:jsonld/id %) (:jsonld/id pd)) pd %) pds)))
+          april    (zdt 2026 4 15 17)
+          july     (zdt 2026 7 15 17)
+          names-of (fn [r] (set (map :urpx.resolved/ledger-name (:urpx.resolved/ledgers r))))]
+      (is (some? gated) "the fixture must have a month-gated PD to rewrite")
+      (let [plan'  (assoc plan :urpx/hasRatePlanVersion (swap version by-ref))
+            idx    {rule-id defn'}
+            in-apr (price/resolve-prices plan' april {:rules-by-id idx})
+            in-jul (price/resolve-prices plan' july  {:rules-by-id idx})]
+        (testing "the referenced rule gates April in and July out"
+          (is (contains? (names-of in-apr) (:urpx/name gated)))
+          (is (not (contains? (names-of in-jul) (:urpx/name gated)))))
+        (testing "and without the index the reference is unresolvable, so the
+                  gate is permissive: the regression this guards against"
+          (is (contains? (names-of (price/resolve-prices plan' july {:rules-by-id {}}))
+                         (:urpx/name gated))))))))

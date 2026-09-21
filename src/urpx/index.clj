@@ -161,3 +161,23 @@
    urpx:hasTemporalScope carries no sh:path constraints at 95eb8e22."
   [plan nested-key]
   (single (get plan nested-key) "nested version snapshots"))
+
+(defn entities-of-type
+  "Walk `doc` and return {id -> node} for every entity of `type-literal` that
+   carries an @id.
+
+   Narrower than `build-index` on purpose. A resolver that needs to dereference
+   one kind of reference should not pay to index the whole document, and on a
+   filing with thousands of Prices that difference is the difference between a
+   cheap lookup table and a walk of everything."
+  [doc type-literal]
+  (letfn [(walk [acc node]
+            (cond
+              (map? node)
+              (let [acc (if (and (= type-literal (:jsonld/type node)) (:jsonld/id node))
+                          (assoc acc (:jsonld/id node) node)
+                          acc)]
+                (reduce-kv (fn [a _ v] (walk a v)) acc node))
+              (sequential? node) (reduce walk acc node)
+              :else acc))]
+    (walk {} doc)))

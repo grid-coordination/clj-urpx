@@ -367,13 +367,24 @@
    urpx:month list contributes a conjunctive constraint; a rule without
    urpx:month is permissive at this layer (any urpx:hasConditionExpression
    gating is deferred — see URPX-axn). PDs without applicability rules
-   are always month-active."
-  [pd ^java.time.LocalDate date]
+   are always month-active.
+
+   A rule may be stated inline OR as a bare {@id} reference to one defined
+   elsewhere in the document, since RDF merges a reference with its definition.
+   `rules-by-id` dereferences the latter. Without that step a bare reference
+   carries no urpx:month, reads as permissive, and the month gate silently
+   stops applying: the PD resolves in every month rather than the ones it
+   names. That is a wrong answer rather than an error, which is why the
+   dereference happens here rather than being left to the caller."
+  [pd ^java.time.LocalDate date rules-by-id]
   (let [rules (:urpx/hasApplicabilityRule pd)]
     (or (empty? rules)
         (let [m (.getMonthValue date)]
           (every? (fn [rule]
-                    (let [months (:urpx/month rule)]
+                    (let [rule   (if (:urpx/month rule)
+                                   rule
+                                   (or (get rules-by-id (:jsonld/id rule)) rule))
+                          months (:urpx/month rule)]
                       (or (empty? months)
                           (some #{m} months))))
                   rules)))))
@@ -542,13 +553,19 @@
          pds           (:urpx/hasPriceDefinition billing)
          pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
          mi-index      (mi-by-id plan-elements)
+         ;; ApplicabilityRules may be referenced by bare @id from a PD; index
+         ;; the typed definitions so the month gate can dereference them.
+         ;; Overridable via opts for callers resolving many instants against
+         ;; one plan, which would otherwise rebuild it per call.
+         rules-by-id   (or (:rules-by-id opts)
+                           (index/entities-of-type version "urpx:ApplicabilityRule"))
 
          ledger-results
          (vec
           (for [ledger ledgers
                 :let [ledger-pds (->> (pds-by-ledger (:jsonld/id ledger))
                                       (filter #(and (pd-active-at-tou? % period-num)
-                                                    (pd-active-in-month? % date)
+                                                    (pd-active-in-month? % date rules-by-id)
                                                     (pd-active-in-season? % seasons-by-id date))))
                       tier-entries
                       (->> ledger-pds
