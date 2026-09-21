@@ -47,6 +47,16 @@ clojure -M:nrepl                # nREPL on the port written to .nrepl-port
 clj-kondo --lint src test       # lint
 ```
 
+### The documentation is executed
+
+`urpx.docs-test` runs the docs so their claims can fail like any other test, in two tiers.
+
+Every Clojure block in [`doc/dsl-tutorial.md`](doc/dsl-tutorial.md) is **evaluated**, in order, in one namespace, the way a reader working through the page would hit them. If you add a block there, it has to run.
+
+README blocks are illustrative snippets that reference bindings they never define, so running them is not meaningful. Instead, every `urpx.*` function they name must still **resolve** — which is what actually goes wrong: a rename that leaves the prose behind.
+
+Both tiers exist because prose about code rots silently. A missing DSL builder is not a failing test, and a tutorial that throws is not a failing test. Both happened here: the tutorial's `rate-plan-version` example became a throw the moment two properties were made required, and nothing noticed until someone re-read it.
+
 ### Checking for drift against the URPX standard
 
 `scripts/shacl-drift.sh <path-to-urpx-checkout> [rev]` reports where the hand-written Malli schemas have fallen behind the shipped SHACL shapes. It reads the shapes out of the checkout you point it at rather than vendoring them, the same convention the fixture sync uses, and needs `rdflib` on the `python3` that runs it.
