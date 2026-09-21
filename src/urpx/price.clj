@@ -235,6 +235,30 @@
              (:urpx/hasPriceSet prices))
      (prices-from-alternatives prices query-date selection))))
 
+(defn- price-active-at-tou?
+  "True if `price` may apply at the resolved TOU period.
+
+   urpx:touPeriodNumber is rdfs:domain the union of urpx:Price,
+   urpx:PriceDefinition, urpx:PriceSet and urpx:TOUPeriod, so a Price may carry
+   the TOU link itself. 43 Prices across the corpus do. Only the
+   PriceDefinition was ever read, so those Prices were never gated, with two
+   different wrong answers depending on the path:
+
+     in a urpx:PriceSummary   every TOU variant of one charge summed into the
+                              subtotal. SDG&E EV-TOU's CARE discount came out
+                              -0.9255435 against a correct -0.2999885, 3.09x.
+     in the tier path         the variants collided in the latest-wins dedupe,
+                              five of six were discarded and the survivor was
+                              reported at EVERY hour. The transmission charge
+                              read at its on-peak value around the clock.
+
+   A Price carrying no period is left to its PriceDefinition's gate, which is
+   how every other filing in the corpus states it. A nil resolved period means
+   there is nothing to match against, so nothing is gated out."
+  [price resolved-period-num]
+  (let [n (:urpx/touPeriodNumber price)]
+    (or (nil? n) (nil? resolved-period-num) (= n resolved-period-num))))
+
 (defn- active-prices-by-pd
   "Build a map from PriceDefinition id to a vector of currently-active
    [price start-date] pairs. Within each PD, prices are deduped by the
@@ -250,19 +274,27 @@
 
    For non-tiered ledgers (one PD, one Price, no serviceTierNumber) the
    returned vector has a single entry."
-  [prices ^LocalDate query-date opts]
+  ([prices ^LocalDate query-date opts] (active-prices-by-pd prices query-date opts nil))
+  ([prices ^LocalDate query-date opts resolved-period-num]
   (let [latest-per-key
         (reduce (fn [acc [price sd]]
+                  ;; Keyed on the TOU period too. Without it, six TOU variants
+                  ;; of one charge sharing a PriceDefinition collide and five
+                  ;; are discarded; the Price-level gate above removes the
+                  ;; non-matching ones first, and this keeps them separable if
+                  ;; there is no resolved period to gate against.
                   (let [k [(get-in price [:urpx/referencesPriceDefinition :jsonld/id])
-                           (:urpx/serviceTierNumber price)]
+                           (:urpx/serviceTierNumber price)
+                           (:urpx/touPeriodNumber price)]
                         [_ existing-sd] (acc k)]
                     (if (or (nil? existing-sd) (.isAfter sd existing-sd))
                       (assoc acc k [price sd])
                       acc)))
-                {} (scoped-prices prices query-date opts))]
-    (reduce-kv (fn [acc [pd-id _] pair]
+                {} (filter #(price-active-at-tou? (first %) resolved-period-num)
+                           (scoped-prices prices query-date opts)))]
+    (reduce-kv (fn [acc [pd-id _ _] pair]
                  (update acc pd-id (fnil conj []) pair))
-               {} latest-per-key)))
+               {} latest-per-key))))
 
 (defn- all-prices-from-alternatives
   "Walk Prices.hasPriceSetAlternatives and return [price start-date] pairs
@@ -288,23 +320,26 @@
    prices that the caller selects from. Walks both the flat hasPrice list
    (CPAU E-HRA shape) and hasPriceSetAlternatives nesting (PG&E Vintage-PCIA
    shape — per-departure-vintage-year prices in PriceSetAlternative)."
-  ([prices ^LocalDate query-date] (all-active-prices-by-pd prices query-date nil))
-  ([prices ^LocalDate query-date opts]
+  ([prices ^LocalDate query-date] (all-active-prices-by-pd prices query-date nil nil))
+  ([prices ^LocalDate query-date opts] (all-active-prices-by-pd prices query-date opts nil))
+  ([prices ^LocalDate query-date opts resolved-period-num]
    (let [selection (:profile-alternatives opts)]
      (reduce (fn [acc [price :as pair]]
                (let [pd-id (get-in price [:urpx/referencesPriceDefinition :jsonld/id])]
                  (update acc pd-id (fnil conj []) pair)))
              {}
-             (concat (scoped-prices prices query-date nil)
+             (filter
+              #(price-active-at-tou? (first %) resolved-period-num)
+              (concat (scoped-prices prices query-date nil)
                      ;; With a selection, surface only the chosen alternative,
                      ;; exactly as the base plan path does. Without one, keep the
                      ;; surface-all contract so a caller reading tiers directly
                      ;; still sees every vintage; `unselected-alternative-ids`
                      ;; then marks the ledger so an AGGREGATE cannot silently
                      ;; pick one of them.
-                     (if (seq selection)
-                       (prices-from-alternatives prices query-date selection)
-                       (all-prices-from-alternatives prices query-date)))))))
+                      (if (seq selection)
+                        (prices-from-alternatives prices query-date selection)
+                        (all-prices-from-alternatives prices query-date))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Service-tier lookup (block tiers, e.g. CPAU E-1 baseline / over-baseline)
@@ -514,10 +549,17 @@
   [by-id period-num ^LocalDate date rules-by-id seasons-by-id]
   (fn [member]
     (let [pd (get by-id (get-in member [:urpx/referencesPriceDefinition :jsonld/id]))]
-      (or (nil? pd)
-          (and (pd-active-at-tou? pd period-num)
-               (pd-active-in-month? pd date rules-by-id)
-               (pd-active-in-season? pd seasons-by-id date))))))
+      ;; The member's OWN urpx:touPeriodNumber gates first, and independently of
+      ;; whether it has a PriceDefinition. URPX puts that property on Price as
+      ;; well as PriceDefinition, and only the PD was read: six TOU variants of
+      ;; one charge, sharing an undifferentiated PD, all counted toward the
+      ;; subtotal at every instant. SDG&E EV-TOU's CARE discount came out
+      ;; -0.9255435 against a correct -0.2999885, overstated 3.09x.
+      (and (price-active-at-tou? member period-num)
+           (or (nil? pd)
+               (and (pd-active-at-tou? pd period-num)
+                    (pd-active-in-month? pd date rules-by-id)
+                    (pd-active-in-season? pd seasons-by-id date)))))))
 
 (defn- price-value
   "The unit price for `price`, and when it cannot be determined, why.
@@ -912,7 +954,7 @@
                                         date local-time dow holiday?)
          period-num    (:urpx/touPeriodNumber tou-period)
 
-         pd->prices    (active-prices-by-pd prices date opts)
+         pd->prices    (active-prices-by-pd prices date opts period-num)
          pds           (:urpx/hasPriceDefinition billing)
          pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
          mi-index      (mi-by-id plan-elements)
@@ -1049,7 +1091,7 @@
              (find-tou-period own-schedules season-id query-date local-time dow hol?))))
         gate-period (if (seq own-schedules) own-period-num base-period-num)
         gate?       (or (seq own-schedules) (some? base-period-num))
-        pd->prices  (all-active-prices-by-pd prices query-date opts)
+        pd->prices  (all-active-prices-by-pd prices query-date opts gate-period)
         unselected  (unselected-alternative-ids prices (:profile-alternatives opts))
         pds         (:urpx/hasPriceDefinition billing)
         pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)

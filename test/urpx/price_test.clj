@@ -1756,3 +1756,48 @@
                         {:urpx.resolved/ledgers
                          [(assoc import-ledger :urpx.resolved/flow-direction {:jsonld/id d})]}))
               d))))))
+
+(deftest a-price-carries-its-own-tou-period
+  (testing "urpx:touPeriodNumber is rdfs:domain the union of urpx:Price,
+            urpx:PriceDefinition, urpx:PriceSet and urpx:TOUPeriod, so a Price
+            may carry the TOU link itself. Only the PriceDefinition was read,
+            and the same blind spot produced two DIFFERENT wrong answers.
+
+            Reported by the urpx-tariffs session, which found the summary half;
+            the tier half turned up while confirming it. Their corpus fix has
+            since collapsed these variants, so the live corpus no longer
+            exercises this path at all. This fixture is pinned at the commit
+            that still does, which is the whole reason fixtures are pinned."
+    (let [plan (fixtures/load-rate-plan "sdge-ev-tou-2026-04-01")
+          care (fixtures/load-modifier "sdge-care-2025-10-01")]
+
+      (testing "the fixture really carries Price-level TOU links, or this test
+                proves nothing"
+        (let [ps (vals (index/entities-of-type plan "urpx:Price"))]
+          (is (<= 12 (count (filter :urpx/touPeriodNumber ps))))))
+
+      (testing "THE TIER HALF: six variants sharing one undifferentiated
+                PriceDefinition collided in the latest-wins dedupe, five were
+                discarded, and the survivor was reported at EVERY hour. The
+                transmission charge read at its on-peak value around the clock."
+        (doseq [[h period] [[17 1] [6 2] [2 3]]]
+          (let [r (price/resolve-prices plan (zdt 2026 7 15 h))
+                ts (->> (:urpx.resolved/ledgers r)
+                        (mapcat :urpx.resolved/tiers)
+                        (filter #(re-find #"udc-transmission"
+                                          (str (:urpx.resolved/price-id %)))))]
+            (is (= period (:urpx.resolved/tou-period-number r))
+                (str "sanity: hour " h " should resolve to period " period))
+            (is (= 1 (count ts)) "exactly one transmission price applies")
+            (is (every? #(or (nil? (:urpx.resolved/tier-number %)) true) ts)))))
+
+      (testing "THE SUMMARY HALF: every TOU variant of one charge summed into
+                the subtotal, so the CARE discount came out 3.09x"
+        (let [t (->> (price/resolve-prices-with-modifiers plan [care] (zdt 2026 7 15 17))
+                     :urpx.resolved/ledgers
+                     (mapcat :urpx.resolved/tiers)
+                     (filter #(= "sdge:care-price-bill-discount-2025-10-01"
+                                 (:urpx.resolved/price-id %)))
+                     first)]
+          (is (= -0.2999885M (:urpx.resolved/unit-price t))
+              "the instant-correct discount; -0.9255435M was the overstatement"))))))
