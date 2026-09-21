@@ -62,6 +62,15 @@ fixtures=(
   "sdge-dr-2026-04-01             384ffb1  us/ca/sdge/electricity/dr/versions/2026-04-01/rate-plan_sdge_dr_2026-04-01.jsonld"
   "sdge-care-2025-10-01           384ffb1  us/ca/sdge/electricity/care/versions/2025-10-01/rate-plan-modifier_sdge_care_2025-10-01.jsonld"
   "sdge-fera-2026-04-01           384ffb1  us/ca/sdge/electricity/fera/versions/2026-04-01/rate-plan-modifier_sdge_fera_2026-04-01.jsonld"
+
+  # CPAU E-14, street lighting: the only filing in the corpus with NO energy
+  # ledger at all. Flat per-lamp and per-fixture monthly charges, so there is
+  # genuinely no marginal per-kWh rate to report, which isolates the
+  # zero-energy-ledger case with no other variable. Pinned after 28390dc, where
+  # its three ledgers gained the urpx:referencesMetricInput they had been
+  # missing; the reported value did not change, because the metric inputs are
+  # fixture counts with no measurement kind.
+  "cpau-e-14-2025-07-01           28390dc  us/ca/cpau/electricity/e-14/versions/2025-07-01/rate-plan_cpau_e-14_2025-07-01.jsonld"
 )
 
 for entry in "${fixtures[@]}"; do

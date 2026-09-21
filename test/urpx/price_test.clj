@@ -1,5 +1,8 @@
 (ns urpx.price-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.java.io :as io]
+            [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
+            [clojure.walk]
             [urpx.coerce :as coerce]
             [urpx.core :as core]
             [urpx.emit :as emit]
@@ -1354,3 +1357,92 @@
 
       (testing "the base plan alone is unaffected by any of this"
         (is (= 0.41784M (price/marginal-unit-rate (price/resolve-prices plan when-))))))))
+
+(deftest no-energy-ledger-is-a-malformed-question-not-a-zero
+  (testing "CPAU E-14 is a street lighting schedule: flat per-lamp-per-month and
+            per-fixture-per-month charges, no per-kWh charge anywhere. Asking
+            what its next kWh costs has no answer, and marginal-unit-rate used
+            to say 0M, which reads to a consumer as free.
+
+            This is the same failure the last three releases removed at the tier
+            level, one level up: not a price that could not be valued, but an
+            aggregate with nothing to aggregate."
+    (let [plan (fixtures/load-rate-plan "cpau-e-14-2025-07-01")
+          r    (price/resolve-prices plan (zdt 2026 7 15 17))]
+      (is (false? (price/has-energy-ledger? r)))
+      (is (empty? (price/measurement-kinds r)))
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"prices nothing per kWh"
+                            (price/marginal-unit-rate r)))
+      (testing "the refusal carries a reason a sweeping caller can classify on,
+                rather than forcing a catch-all"
+        (is (= :no-energy-ledger
+               (try (price/marginal-unit-rate r) nil
+                    (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))))))))
+
+(deftest zero-energy-ledgers-is-distinguishable-from-a-genuine-zero
+  (testing "the distinction that motivated the change. A plan with no energy
+            ledger and a plan whose energy ledgers genuinely sum to zero both
+            returned 0M, and they are not the same statement: the first has no
+            answer, the second answers zero."
+    (let [flat     (fixtures/load-rate-plan "cpau-e-14-2025-07-01")
+          priced   (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          ;; same plan, every unit price zeroed: energy ledgers still exist
+          zeroed   (clojure.walk/postwalk
+                    (fn [n] (if (and (map? n) (= "urpx:Price" (:jsonld/type n))
+                                     (:urpx/unitPrice n))
+                              (assoc n :urpx/unitPrice 0M) n))
+                    priced)
+          when-    (zdt 2026 7 15 17)
+          r-flat   (price/resolve-prices flat when-)
+          r-zeroed (price/resolve-prices zeroed when-)]
+
+      (testing "no energy ledger: refuses"
+        (is (false? (price/has-energy-ledger? r-flat)))
+        (is (thrown? clojure.lang.ExceptionInfo (price/marginal-unit-rate r-flat))))
+
+      (testing "energy ledgers that sum to zero: answers zero, because that IS
+                the answer"
+        (is (true? (price/has-energy-ledger? r-zeroed)))
+        (is (contains? (price/measurement-kinds r-zeroed) "urpx:energy"))
+        (is (zero? (price/marginal-unit-rate r-zeroed)))))))
+
+(deftest has-energy-ledger-guards-the-aggregate
+  (testing "the predicate exists so the refusal is not a tax on every caller.
+            Sweeping a corpus, ask first; the throw is then the right answer for
+            a caller who did not."
+    (let [plans ["pge-e-tou-c-2026-03-01" "pge-e-1-2026-03-01"
+                 "sce-d-2026-03-20" "sdge-dr-2026-04-01" "cpau-e-14-2025-07-01"]
+          rs    (map #(price/resolve-prices (fixtures/load-rate-plan %) (zdt 2026 7 15 17)) plans)]
+      (doseq [[name r] (map vector plans rs)]
+        (if (price/has-energy-ledger? r)
+          (is (some? (price/marginal-unit-rate r))
+              (str name " claims an energy ledger, so the rate must compute"))
+          (is (thrown? clojure.lang.ExceptionInfo (price/marginal-unit-rate r))
+              (str name " claims no energy ledger, so the rate must refuse"))))
+      (testing "and the sweep is not vacuous: both branches are exercised"
+        (is (some price/has-energy-ledger? rs))
+        (is (some (complement price/has-energy-ledger?) rs))))))
+
+(deftest the-caller-supplies-the-instant
+  (testing "no code under src/ may read an ambient clock. Every resolution takes
+            the instant from its caller, which is what makes historic replay the
+            same code path as a forecast rather than a special case, and what
+            makes a pinned probe instant mean the same thing across runs.
+
+            This is a test rather than a convention because a single
+            (ZonedDateTime/now) added later would be invisible in review and
+            would quietly make results depend on when they were computed."
+    (let [;; Match the CLOCK CALL, not a particular spelling of the class: the
+          ;; first version of this test required an unqualified class name and
+          ;; sailed past an injected (java.time.ZonedDateTime/now), which is
+          ;; exactly the false assurance a test like this must not give.
+          clocks #"(?:ZonedDateTime|LocalDateTime|LocalDate|LocalTime|Instant|OffsetDateTime|Year|YearMonth|Clock)/(?:now|systemDefaultZone|systemUTC)|System/(?:currentTimeMillis|nanoTime)|java\.util\.Date\."
+          hits   (for [f (file-seq (io/file "src"))
+                       :when (and (.isFile f) (.endsWith (.getName f) ".clj"))
+                       :let [src (slurp f)]
+                       [n line] (map-indexed vector (str/split-lines src))
+                       :when (re-find clocks line)]
+                   (str (.getPath f) ":" (inc n) " " (str/trim line)))]
+      (is (empty? hits)
+          (str "ambient clock read under src/:\n  " (str/join "\n  " hits))))))

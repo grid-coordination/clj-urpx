@@ -308,6 +308,23 @@ The conjunctive reading (sum the bases) is already covered by `urpx:PriceSummary
 
 Note that this is a second, independent way to express CARE and FERA. The `urpx:ProfileAlternatives` mechanism below files the already-discounted prices directly as an alternative price set; this one files the discount as arithmetic over the undiscounted prices. Which a plan uses is the filer's choice, and a reader should expect either.
 
+### Plans that price nothing per kWh
+
+`marginal-unit-rate` answers "what does the next kWh cost". Plenty of real schedules have no answer: CPAU E-14 is street lighting, priced per lamp per month and per fixture per month, with no per-kWh charge anywhere. For those it **refuses** rather than returning `0M`, because zero is not a conservative default for a question that does not apply, and it was indistinguishable from a plan whose energy ledgers genuinely sum to zero.
+
+Ask first when sweeping a corpus, so the refusal is not a tax on every caller:
+
+```clojure
+(when (price/has-energy-ledger? resolved)
+  (price/marginal-unit-rate resolved))
+
+(price/measurement-kinds resolved)
+;; => #{"urpx:energy" "urpx:demand"}   what this plan DOES price in, so a
+;;                                     caller can route rather than skip
+```
+
+Every refusal `marginal-unit-rate` makes carries a `:reason` in its `ex-data`, so a sweeping consumer can classify instead of catching everything: `:no-energy-ledger`, `:unvaluable-marginal-tier`, and `:unselected-alternatives`.
+
 ### What the resolver needs that SHACL does not require
 
 Two properties are optional in the shapes but load-bearing here, so a document can be perfectly conformant and still lose content on the way to a resolved price. Both were found by authoring real filings, not by validation.

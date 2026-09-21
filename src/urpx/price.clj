@@ -977,6 +977,32 @@
                                  modifiers)]
      (update base :urpx.resolved/ledgers (fnil into []) extra))))
 
+(defn measurement-kinds
+  "The set of urpx:measurementKind @ids present across `resolved`'s ledgers.
+
+   What a caller usually wants to know, having found that a plan prices nothing
+   per kWh, is what it DOES price in, so this answers with the kinds rather than
+   a bare yes or no and lets a sweeping consumer route instead of merely skip.
+
+   May be empty. CPAU E-14 is the case: a street lighting schedule whose charges
+   are all per-lamp-per-month and per-fixture-per-month, filed as recurring
+   charges with their own CalculationMethod, which price resolution excludes.
+   Nothing resolves, so nothing is reported, and an empty set says exactly that."
+  [resolved]
+  (into #{} (keep #(get-in % [:urpx.resolved/measurement-kind :jsonld/id]))
+        (:urpx.resolved/ledgers resolved)))
+
+(defn has-energy-ledger?
+  "True if `resolved` carries any ledger measured in urpx:energy, which is the
+   precondition for `marginal-unit-rate` returning a number.
+
+   Ask this before calling it when sweeping a corpus. Plenty of real schedules
+   price nothing per kWh (street lighting, fixed service charges), and for those
+   a marginal per-kWh rate is not a small number, it is a question that does not
+   apply."
+  [resolved]
+  (contains? (measurement-kinds resolved) "urpx:energy"))
+
 (defn marginal-unit-rate
   "Sum the unit prices across all **energy** ledgers, picking the LOWEST tier
    in each block-tiered ledger as the marginal $/kWh at the start of a billing
@@ -1020,12 +1046,28 @@
         unselected (filter :urpx.resolved/unselected-alternatives energy)
         marginal   (map #(first (:urpx.resolved/tiers %)) energy)
         unvaluable (filter :urpx.resolved/unvaluable marginal)]
+    ;; No energy ledger at all is not an answer of zero, it is a malformed
+    ;; question. A street lighting schedule prices per lamp per month; its
+    ;; marginal unit is not a kWh. Returning 0M conflated that with a plan whose
+    ;; energy ledgers genuinely sum to zero, and read to a consumer as free.
+    (when (empty? energy)
+      (throw (ex-info (str "Cannot compute a marginal rate: this plan has no energy "
+                           "ledger, so it prices nothing per kWh and a marginal "
+                           "per-kWh rate does not apply to it. "
+                           (if-let [ks (seq (measurement-kinds resolved))]
+                             (str "It prices in: " (pr-str (vec (sort ks))) ".")
+                             "Nothing resolved at this instant at all.")
+                           " Call has-energy-ledger? first when sweeping.")
+                      {:reason :no-energy-ledger
+                       :measurement-kinds (measurement-kinds resolved)
+                       :ledger-count (count (:urpx.resolved/ledgers resolved))})))
     (when (seq unselected)
       (throw (ex-info (str "Cannot compute a marginal rate: "
                            (count unselected) " energy ledger(s) carry mutually-exclusive "
                            "price alternatives with no selection. Pass :profile-alternatives "
                            "naming the applicable urpx:ProfileAlternative for each.")
-                      {:ledgers (mapv #(select-keys % [:urpx.resolved/ledger-id
+                      {:reason :unselected-alternatives
+                       :ledgers (mapv #(select-keys % [:urpx.resolved/ledger-id
                                                        :urpx.resolved/unselected-alternatives])
                                       unselected)})))
     ;; Refuse rather than sum around a price this library could not value.
@@ -1035,7 +1077,8 @@
       (throw (ex-info (str "Cannot compute a marginal rate: "
                            (count unvaluable) " marginal energy price(s) could not be valued. "
                            "Inspect :urpx.resolved/unvaluable on the offending tiers.")
-                      {:unvaluable (mapv :urpx.resolved/unvaluable unvaluable)})))
+                      {:reason :unvaluable-marginal-tier
+                       :unvaluable (mapv :urpx.resolved/unvaluable unvaluable)})))
     (reduce (fn [^java.math.BigDecimal acc tier]
               (.add acc ^java.math.BigDecimal (:urpx.resolved/unit-price tier)))
             0M

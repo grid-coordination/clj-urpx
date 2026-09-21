@@ -11,8 +11,15 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 ## [Unreleased]
 
+### Changed
+
+- **`marginal-unit-rate` refuses when a plan has no energy ledger at all**, where it returned `0M`. A street lighting schedule prices per lamp per month; its marginal unit is not a kWh, so the question has no answer and `0M` was a confident wrong one, indistinguishable from a plan whose energy ledgers genuinely sum to zero. Both states are now distinguishable: the second still answers zero, because that is the answer.
+- Every refusal `marginal-unit-rate` makes now carries a `:reason` in its `ex-data` (`:no-energy-ledger`, `:unvaluable-marginal-tier`, `:unselected-alternatives`), so a consumer sweeping a corpus can classify rather than catch-all.
+
 ### Added
 
+- **`has-energy-ledger?` and `measurement-kinds`**, so the refusal above is not a tax on every caller: ask before computing. `measurement-kinds` returns the kinds a plan does price in rather than a bare boolean, so a sweeping consumer can route instead of merely skip.
+- **A CPAU E-14 fixture**, pinned at `28390dc`: the only filing in the corpus with no energy ledger at all, which isolates that case with no other variable. Its ledgers carry `urpx:referencesMetricInput` naming fixture-count MetricInputs with no measurement kind, so it exercises "ledgers wired, no energy kind among them" rather than "ledgers unwired".
 - **Six SCE and SDG&E fixtures**, the corpus's first percentage discounts, pinned at urpx-rate-plans `384ffb1`. Both utilities are vendored because neither alone shows the variation, and a fixture set carrying only one would silently sanction whichever shape it held. SCE shares **one** subtotal between CARE and FERA, which differ only in rate; SDG&E carries **two** subtotals on one base plan with different member lists, because Schedule E-CARE excludes any applicable exemptions and FERA grants none. Unlike the PG&E `@graph` bundles each base plan is a separate filing from its modifiers, so the cross-document dereference is exercised the way the corpus files it. `urpx.care-fera-test` pins the filed values: SDG&E CARE `-0.1450505` and FERA `-0.0756612`, SCE CARE `-0.12139725` and FERA `-0.0672354`, each checked against the summary's own member arithmetic as well as against the resolver.
 - A note in the README on **two properties that are optional in the shapes but load-bearing here**, so a conformant document can still lose content: `urpx:startDate` on a `urpx:Price` with nothing enclosing it to inherit a date from (dropped silently), and `urpx:referencesMetricInput` on a `urpx:Ledger` (tiers survive, but `marginal-unit-rate` comes back quietly short, or `0M`). Both were found by authoring real filings, not by validation.
 

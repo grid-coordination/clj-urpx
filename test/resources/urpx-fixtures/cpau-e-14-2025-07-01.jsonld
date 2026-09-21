@@ -1,0 +1,1112 @@
+{
+  "@context": {
+    "urpx": "https://urpx.org/ns/ontology/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "urpx:unitPrice": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:effectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:effectiveDateTime": {
+      "@type": "xsd:dateTime"
+    },
+    "urpx:baseQuantity": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:startDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:initialEffectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:url": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:intervalDuration": {
+      "@type": "xsd:duration"
+    },
+    "urpx:isDefault": {
+      "@type": "xsd:boolean"
+    },
+    "urpx:dateRetrieved": {
+      "@type": "xsd:date"
+    },
+    "cpau": "https://rate-plans.grid-coordination.energy/cpau/",
+    "org": "https://rate-plans.grid-coordination.energy/organizations/",
+    "urpx:targetURPXVersion": {
+      "@type": "xsd:anyURI"
+    },
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "urpx:evaluatedOn": {
+      "@type": "xsd:dateTime"
+    }
+  },
+  "@type": "urpx:URPXPackage",
+  "@id": "cpau:doc-e-14-2025-07-01",
+  "urpx:targetURPXVersion": "https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl",
+  "urpx:hasRatePlan": {
+    "@type": "urpx:RatePlan",
+    "@id": "cpau:e-14",
+    "urpx:name": "Street Lights",
+    "urpx:ratePlanUniqueIdentifier": "CPAU-E-14",
+    "urpx:initialEffectiveDate": "2025-07-01",
+    "urpx:timezoneIdentifier": "America/Los_Angeles",
+    "urpx:hasRatePlanVersion": {
+      "@type": "urpx:RatePlanVersion",
+      "@id": "cpau:e-14-2025-07-01",
+      "urpx:version": "1.0",
+      "urpx:effectiveDateTime": "2025-07-01T00:00:00",
+      "urpx:description": "CPAU Schedule E-14 (Street Lights), effective 2025-07-01. Flat per-fixture-per-month rates for street and highway lighting installations (and related traffic signals) owned by governmental agencies other than the City of Palo Alto. CPAU supplies electricity, performs switching, and maintains lamps and glassware. 16 lamp types (mercury-vapor, HPSV, LED) + 6 traffic-signal types + 1 switching surcharge = 23 PriceDefinitions; one MetricInput per fixture-type-count. Section D.5 interim-rate provision (for lamps not on the schedule) is documented in prose only — not modeled. Section D.3 annual burning schedule (4100 hours/year operational rule) is also prose-only.",
+      "urpx:customerChoice": {
+        "@id": "urpx:mandatoryChoice"
+      },
+      "urpx:isDefault": true,
+      "urpx:changeReason": {
+        "@id": "urpx:initial"
+      },
+      "urpx:serviceRole": {
+        "@id": "urpx:bundledServiceRole"
+      },
+      "urpx:hasDataSourceReference": {
+        "@type": "urpx:DataSourceReference",
+        "@id": "cpau:e14-dsr",
+        "urpx:name": "CPAU Schedule E-14 (effective 2025-07-01)",
+        "urpx:fileName": "e-14-effective-2025-07-01.pdf",
+        "urpx:url": "https://www.paloalto.gov/files/assets/public/v/4/utilities/rates-schedules-for-utilities/city-facility-utility-rates/e-14-effective-2025-07-01.pdf",
+        "urpx:mediaType": {
+          "@id": "urpx:applicationPdf"
+        },
+        "urpx:dataSourceType": {
+          "@id": "urpx:utilityWebsiteSource"
+        },
+        "urpx:dateRetrieved": "2026-04-30"
+      },
+      "urpx:hasEligibilityRule": [
+        {
+          "@type": "urpx:EligibilityRule",
+          "@id": "cpau:e14-er-eligibility",
+          "urpx:name": "Governmental agency street/highway lighting (other than City of Palo Alto)",
+          "urpx:description": "Applies to street and highway lighting installations owned by any governmental agency other than the City of Palo Alto, where CPAU elects to operate and maintain the installation (supplying electricity, performing switching, and maintaining lamps and glassware). Per Section A of the published Schedule E-14.",
+          "urpx:hasConditionExpression": {
+            "@type": "urpx:ConditionExpression",
+            "@id": "cpau:e14-cx-eligibility",
+            "urpx:rootNode": {
+              "@type": "urpx:BooleanOperationNode",
+              "@id": "cpau:e14-bn-eligibility-and",
+              "urpx:operator": {
+                "@id": "urpx:andOperator"
+              },
+              "urpx:operandNodes": [
+                {
+                  "@type": "urpx:ComparisonNode",
+                  "@id": "cpau:e14-cn-non-residential",
+                  "urpx:operator": {
+                    "@id": "urpx:equalsOperator"
+                  },
+                  "urpx:leftOperand": {
+                    "@type": "urpx:ObjectOperandNode",
+                    "@id": "cpau:e14-cn-non-residential-left-operand",
+                    "urpx:conditionProperty": {
+                      "@id": "urpx:hasCustomerKind"
+                    }
+                  },
+                  "urpx:rightOperand": {
+                    "@type": "urpx:ObjectOperandNode",
+                    "@id": "cpau:e14-cn-non-residential-right-operand",
+                    "urpx:referencesValue": {
+                      "@id": "urpx:nonResidentialKind"
+                    }
+                  }
+                },
+                {
+                  "@type": "urpx:ComparisonNode",
+                  "@id": "cpau:e14-cn-customer-class",
+                  "urpx:operator": {
+                    "@id": "urpx:equalsOperator"
+                  },
+                  "urpx:leftOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "@id": "cpau:e14-cn-customer-class-left-operand",
+                    "urpx:customConditionProperty": "customerClass"
+                  },
+                  "urpx:rightOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "@id": "cpau:e14-cn-customer-class-right-operand",
+                    "urpx:stringValue": "Governmental Agency"
+                  }
+                },
+                {
+                  "@type": "urpx:ComparisonNode",
+                  "@id": "cpau:e14-cn-installation-type",
+                  "urpx:operator": {
+                    "@id": "urpx:equalsOperator"
+                  },
+                  "urpx:leftOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "@id": "cpau:e14-cn-installation-type-left-operand",
+                    "urpx:customConditionProperty": "installationType"
+                  },
+                  "urpx:rightOperand": {
+                    "@type": "urpx:CustomOperandNode",
+                    "@id": "cpau:e14-cn-installation-type-right-operand",
+                    "urpx:stringValue": "Street/highway lighting"
+                  }
+                }
+              ],
+              "urpx:logicExpression": "hasCustomerKind = nonResidentialKind AND customerClass = 'Governmental Agency' AND installationType = 'Street/highway lighting'"
+            }
+          }
+        }
+      ],
+      "urpx:hasPlanElements": {
+        "@type": "urpx:PlanElements",
+        "@id": "cpau:e14-plan-elements",
+        "urpx:hasMetricInput": [
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-count-mv-400w",
+            "urpx:name": "Count of fixtures: Mercury-Vapor Lamp 400W",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-count-hpsv-70w",
+            "urpx:name": "Count of fixtures: HPSV Lamp 70W",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-count-hpsv-100w",
+            "urpx:name": "Count of fixtures: HPSV Lamp 100W",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-count-hpsv-150w",
+            "urpx:name": "Count of fixtures: HPSV Lamp 150W",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-count-hpsv-250w",
+            "urpx:name": "Count of fixtures: HPSV Lamp 250W",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-count-led-70w-eq",
+            "urpx:name": "Count of fixtures: LED Lamp 70W-equivalent",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-count-led-100w-eq",
+            "urpx:name": "Count of fixtures: LED Lamp 100W-equivalent",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-count-led-150w-eq",
+            "urpx:name": "Count of fixtures: LED Lamp 150W-equivalent",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-count-led-175w-eq",
+            "urpx:name": "Count of fixtures: LED Lamp 175W-equivalent",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-count-led-250w",
+            "urpx:name": "Count of fixtures: LED Lamp 250W",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-count-tsig-12head-ryg",
+            "urpx:name": "Count of fixtures: Traffic Signal 12\" Head (RYG)",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-count-tsig-8head-ryg",
+            "urpx:name": "Count of fixtures: Traffic Signal 8\" Head (RYG)",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-count-tsig-12arrow-ryg",
+            "urpx:name": "Count of fixtures: Traffic Signal 12\" Arrow (RYG)",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-count-tsig-12beacon",
+            "urpx:name": "Count of fixtures: Traffic Signal 12\" Beacon",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-count-tsig-pedestrian",
+            "urpx:name": "Count of fixtures: Traffic Signal Pedestrian Head",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-count-tsig-controller",
+            "urpx:name": "Count of fixtures: Traffic Signal Controller",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-count-tsig-speed-signs",
+            "urpx:name": "Count of fixtures: Speed Signs",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          },
+          {
+            "@type": "urpx:MetricInput",
+            "@id": "cpau:e14-mi-switching-circuit-count",
+            "urpx:name": "Count of separately-switched circuits below 10 kW lamp load",
+            "urpx:metricInputType": {
+              "@id": "urpx:profileMetricInput"
+            }
+          }
+        ],
+        "urpx:hasBillingModel": {
+          "@type": "urpx:BillingModel",
+          "@id": "cpau:e14-billing-model",
+          "urpx:hasLedger": [
+            {
+              "@type": "urpx:Ledger",
+              "@id": "cpau:e14-ledger-street-lights",
+              "urpx:name": "Street lights — flat per-lamp-per-month service",
+              "urpx:ledgerType": {
+                "@id": "urpx:profileMetricLedger"
+              },
+              "urpx:referencesMetricInput": [
+                {
+                  "@id": "cpau:e14-mi-count-mv-400w"
+                },
+                {
+                  "@id": "cpau:e14-mi-count-hpsv-70w"
+                },
+                {
+                  "@id": "cpau:e14-mi-count-hpsv-100w"
+                },
+                {
+                  "@id": "cpau:e14-mi-count-hpsv-150w"
+                },
+                {
+                  "@id": "cpau:e14-mi-count-hpsv-250w"
+                },
+                {
+                  "@id": "cpau:e14-mi-count-led-70w-eq"
+                },
+                {
+                  "@id": "cpau:e14-mi-count-led-100w-eq"
+                },
+                {
+                  "@id": "cpau:e14-mi-count-led-150w-eq"
+                },
+                {
+                  "@id": "cpau:e14-mi-count-led-175w-eq"
+                },
+                {
+                  "@id": "cpau:e14-mi-count-led-250w"
+                }
+              ]
+            },
+            {
+              "@type": "urpx:Ledger",
+              "@id": "cpau:e14-ledger-traffic-signals",
+              "urpx:name": "Traffic signals — flat per-fixture-per-month service",
+              "urpx:ledgerType": {
+                "@id": "urpx:profileMetricLedger"
+              },
+              "urpx:referencesMetricInput": [
+                {
+                  "@id": "cpau:e14-mi-count-tsig-12head-ryg"
+                },
+                {
+                  "@id": "cpau:e14-mi-count-tsig-8head-ryg"
+                },
+                {
+                  "@id": "cpau:e14-mi-count-tsig-12arrow-ryg"
+                },
+                {
+                  "@id": "cpau:e14-mi-count-tsig-12beacon"
+                },
+                {
+                  "@id": "cpau:e14-mi-count-tsig-pedestrian"
+                },
+                {
+                  "@id": "cpau:e14-mi-count-tsig-controller"
+                },
+                {
+                  "@id": "cpau:e14-mi-count-tsig-speed-signs"
+                }
+              ]
+            },
+            {
+              "@type": "urpx:Ledger",
+              "@id": "cpau:e14-ledger-switching-surcharge",
+              "urpx:name": "Switching surcharge",
+              "urpx:ledgerType": {
+                "@id": "urpx:profileMetricLedger"
+              },
+              "urpx:referencesMetricInput": [
+                {
+                  "@id": "cpau:e14-mi-switching-circuit-count"
+                }
+              ]
+            }
+          ],
+          "urpx:hasPriceDefinition": [
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-mv-400w",
+              "urpx:name": "Mercury-Vapor Lamp 400W",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-mv-400w-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-street-lights"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-count-mv-400w"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-hpsv-70w",
+              "urpx:name": "HPSV Lamp 70W",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-hpsv-70w-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-street-lights"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-count-hpsv-70w"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-hpsv-100w",
+              "urpx:name": "HPSV Lamp 100W",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-hpsv-100w-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-street-lights"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-count-hpsv-100w"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-hpsv-150w",
+              "urpx:name": "HPSV Lamp 150W",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-hpsv-150w-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-street-lights"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-count-hpsv-150w"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-hpsv-250w",
+              "urpx:name": "HPSV Lamp 250W",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-hpsv-250w-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-street-lights"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-count-hpsv-250w"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-led-70w-eq",
+              "urpx:name": "LED Lamp 70W-equivalent",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-led-70w-eq-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-street-lights"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-count-led-70w-eq"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-led-100w-eq",
+              "urpx:name": "LED Lamp 100W-equivalent",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-led-100w-eq-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-street-lights"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-count-led-100w-eq"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-led-150w-eq",
+              "urpx:name": "LED Lamp 150W-equivalent",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-led-150w-eq-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-street-lights"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-count-led-150w-eq"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-led-175w-eq",
+              "urpx:name": "LED Lamp 175W-equivalent",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-led-175w-eq-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-street-lights"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-count-led-175w-eq"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-led-250w",
+              "urpx:name": "LED Lamp 250W",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-led-250w-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-street-lights"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-count-led-250w"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-tsig-12head-ryg",
+              "urpx:name": "Traffic Signal 12\" Head (RYG)",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-tsig-12head-ryg-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-traffic-signals"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-count-tsig-12head-ryg"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-tsig-8head-ryg",
+              "urpx:name": "Traffic Signal 8\" Head (RYG)",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-tsig-8head-ryg-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-traffic-signals"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-count-tsig-8head-ryg"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-tsig-12arrow-ryg",
+              "urpx:name": "Traffic Signal 12\" Arrow (RYG)",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-tsig-12arrow-ryg-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-traffic-signals"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-count-tsig-12arrow-ryg"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-tsig-12beacon",
+              "urpx:name": "Traffic Signal 12\" Beacon",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-tsig-12beacon-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-traffic-signals"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-count-tsig-12beacon"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-tsig-pedestrian",
+              "urpx:name": "Traffic Signal Pedestrian Head",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-tsig-pedestrian-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-traffic-signals"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-count-tsig-pedestrian"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-tsig-controller",
+              "urpx:name": "Traffic Signal Controller",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-tsig-controller-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-traffic-signals"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-count-tsig-controller"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-tsig-speed-signs",
+              "urpx:name": "Speed Signs",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-tsig-speed-signs-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-traffic-signals"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-count-tsig-speed-signs"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "cpau:e14-pd-switching-surcharge",
+              "urpx:name": "Switching surcharge (per separately-switched circuit < 10 kW)",
+              "urpx:description": "Per Section D.2: CPAU performs switching at no charge provided there are at least 10 kW of lamp load on each separately-switched circuit. For circuits below that threshold (or where the switching is not made for CPAU's convenience), an extra $2.50/month is charged per circuit.",
+              "urpx:chargeType": {
+                "@id": "urpx:serviceNonMetered"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:serviceCharge"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:bundledPortion"
+              },
+              "urpx:baseQuantity": "1",
+              "urpx:hasCalculationMethod": {
+                "@type": "urpx:CalculationMethod",
+                "@id": "cpau:e14-pd-switching-surcharge-cm",
+                "urpx:intervalDuration": "P1M"
+              },
+              "urpx:referencesLedger": {
+                "@id": "cpau:e14-ledger-switching-surcharge"
+              },
+              "urpx:referencesMetricInput": {
+                "@id": "cpau:e14-mi-switching-circuit-count"
+              }
+            }
+          ]
+        }
+      },
+      "urpx:hasPrices": {
+        "@type": "urpx:Prices",
+        "@id": "cpau:e14-prices",
+        "urpx:hasPriceSet": [
+          {
+            "@type": "urpx:PriceSet",
+            "@id": "cpau:e14-price-set",
+            "urpx:hasPrice": [
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-mv-400w",
+                "urpx:name": "Mercury-Vapor Lamp 400W",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-mv-400w"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "53.53"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-hpsv-70w",
+                "urpx:name": "HPSV Lamp 70W",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-hpsv-70w"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "35.37"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-hpsv-100w",
+                "urpx:name": "HPSV Lamp 100W",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-hpsv-100w"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "45.35"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-hpsv-150w",
+                "urpx:name": "HPSV Lamp 150W",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-hpsv-150w"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "62.00"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-hpsv-250w",
+                "urpx:name": "HPSV Lamp 250W",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-hpsv-250w"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "95.30"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-led-70w-eq",
+                "urpx:name": "LED Lamp 70W-equivalent",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-led-70w-eq"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "13.27"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-led-100w-eq",
+                "urpx:name": "LED Lamp 100W-equivalent",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-led-100w-eq"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "20.83"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-led-150w-eq",
+                "urpx:name": "LED Lamp 150W-equivalent",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-led-150w-eq"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "27.80"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-led-175w-eq",
+                "urpx:name": "LED Lamp 175W-equivalent",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-led-175w-eq"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "31.43"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-led-250w",
+                "urpx:name": "LED Lamp 250W",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-led-250w"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "46.87"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-tsig-12head-ryg",
+                "urpx:name": "Traffic Signal 12\" Head (RYG)",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-tsig-12head-ryg"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "27.12"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-tsig-8head-ryg",
+                "urpx:name": "Traffic Signal 8\" Head (RYG)",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-tsig-8head-ryg"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "23.55"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-tsig-12arrow-ryg",
+                "urpx:name": "Traffic Signal 12\" Arrow (RYG)",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-tsig-12arrow-ryg"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "25.49"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-tsig-12beacon",
+                "urpx:name": "Traffic Signal 12\" Beacon",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-tsig-12beacon"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "10.19"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-tsig-pedestrian",
+                "urpx:name": "Traffic Signal Pedestrian Head",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-tsig-pedestrian"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "9.36"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-tsig-controller",
+                "urpx:name": "Traffic Signal Controller",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-tsig-controller"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "20.05"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-tsig-speed-signs",
+                "urpx:name": "Speed Signs",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-tsig-speed-signs"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "92.73"
+              },
+              {
+                "@type": "urpx:Price",
+                "@id": "cpau:e14-price-switching-surcharge",
+                "urpx:name": "Switching surcharge",
+                "urpx:referencesPriceDefinition": {
+                  "@id": "cpau:e14-pd-switching-surcharge"
+                },
+                "urpx:startDate": "2025-07-01",
+                "urpx:unitPrice": "2.50"
+              }
+            ]
+          }
+        ]
+      },
+      "urpx:offeredBy": {
+        "@type": "urpx:Organization",
+        "@id": "org:utility-cpau",
+        "urpx:legalName": "City of Palo Alto Utilities",
+        "urpx:organizationType": {
+          "@id": "urpx:municipalOrganization"
+        },
+        "urpx:hasIdentity": {
+          "@id": "org:utility-cpau-identity",
+          "@type": "urpx:OrganizationIdentity",
+          "urpx:hasName": {
+            "@id": "org:utility-cpau-name",
+            "@type": "urpx:OrganizationName",
+            "urpx:name": "City of Palo Alto Utilities"
+          },
+          "urpx:hasIdentifier": {
+            "@id": "org:utility-cpau-eia",
+            "@type": "urpx:OrganizationIdentifier",
+            "urpx:scheme": {
+              "@id": "urpx:eiaScheme"
+            },
+            "skos:notation": "3203"
+          }
+        }
+      },
+      "urpx:forRatePlan": {
+        "@id": "cpau:e-14"
+      },
+      "urpx:hasCoverageClaim": {
+        "@id": "cpau:cc-e-14-2025-07-01",
+        "@type": "urpx:CoverageClaim",
+        "urpx:completenessResult": {
+          "@id": "urpx:partial"
+        },
+        "urpx:selfContained": true,
+        "urpx:explainedBy": {
+          "@type": "urpx:Evaluation",
+          "@id": "cpau:cc-e-14-2025-07-01-evaluation",
+          "urpx:evaluationKind": {
+            "@id": "urpx:coverageEvaluation"
+          },
+          "urpx:description": "The Section C rate table of the published Schedule E-14 is fully represented: all seventeen fixture ratings (the 400 watt mercury-vapor lamp, four high pressure sodium vapor ratings, five LED ratings and seven traffic signal and speed sign types) are priced, as is the Section D.2 switching surcharge of $2.50 per month. What is not represented is the conditions the schedule attaches to those rates. Section A limits the schedule to street and highway lighting installations at service voltages from 120 to 480, and this filing's eligibility rule states no voltage condition. Section D.2 makes the switching surcharge conditional twice over, waiving it where each separately switched circuit carries at least 10 kilowatts of lamp load and waiving it again where the switching installation is made for CPAU's convenience; the 10 kilowatt threshold survives only in the name of the metric the charge counts and the convenience waiver only in prose, so a consumer computing a bill has to apply both by hand. Section D.3 conditions the whole rate table on the lamps running to a CPAU-approved burning schedule not exceeding 4,100 hours per year, which is likewise prose. Section D.5 is a hole in the price list rather than a missing condition: a customer who installs a lamp rating not on the schedule is billed at an interim rate CPAU prepares from its own estimated costs until that rating is added, and no such rate is published, so the eighteen prices here are not exhaustive of what an E-14 bill can carry. Two further Section D provisions are out of scope rather than missing: D.1's rule that the customer bears the cost of underground connections is a construction cost and not a rate, and D.4's maintenance terms describe what the per-lamp rate already includes.",
+          "urpx:evaluatedOn": "2026-09-21T00:00:00"
+        }
+      }
+    }
+  }
+}
