@@ -1356,7 +1356,7 @@
               "the marginal rate is the base plus exactly the chosen vintage")))
 
       (testing "the base plan alone is unaffected by any of this"
-        (is (= 0.41784M (price/marginal-unit-rate (price/resolve-prices plan when-))))))))
+        (is (= 0.46886M (price/marginal-unit-rate (price/resolve-prices plan when-))))))))
 
 (deftest no-energy-ledger-is-a-malformed-question-not-a-zero
   (testing "CPAU E-14 is a street lighting schedule: flat per-lamp-per-month and
@@ -1510,10 +1510,14 @@
             a per-kWh sum. Pinned as exact values rather than as a comparison,
             so that a future change which moved BOTH the rate and its
             expectation could not pass."
-    (doseq [[plan expected] [["pge-e-tou-c-2026-03-01" 0.41784M]
-                             ["sce-d-2026-03-20"       0.26226M]
-                             ["sdge-dr-2026-04-01"     0.28341M]
-                             ["ladwp-r-1a-2026-04-01"  0.12832M]]]
+    ;; These four moved in the additive-ledger fix, which is a different change
+    ;; from the one this test is about. They are pinned as exact values so that
+    ;; a rate moving for ANY reason has to be explained, which is what made the
+    ;; additive-ledger defect visible here rather than silently absorbed.
+    (doseq [[plan expected] [["pge-e-tou-c-2026-03-01" 0.46886M]
+                             ["sce-d-2026-03-20"       0.31085M]
+                             ["sdge-dr-2026-04-01"     0.42034M]
+                             ["ladwp-r-1a-2026-04-01"  0.24362M]]]
       (is (= expected (price/marginal-unit-rate
                        (price/resolve-prices (fixtures/load-rate-plan plan)
                                              (zdt 2026 7 15 17))))
@@ -1609,7 +1613,7 @@
           cpp  (fixtures/load-modifier "sce-tou-d-prime-cpp-2026-03-20")
           when- (zdt 2026 7 15 17)
           comp- (price/resolve-prices-with-modifiers plan [cpp] when-)]
-      (is (= 0.55208M (price/marginal-unit-rate (price/resolve-prices plan when-)))
+      (is (= 0.60067M (price/marginal-unit-rate (price/resolve-prices plan when-)))
           "the base plan alone is right")
       (is (neg? (price/marginal-unit-rate comp-))
           "and the composed rate is visibly wrong, because two credits fire ungated")
@@ -1627,3 +1631,64 @@
                            (mapcat :urpx.resolved/tiers)
                            (filter #(re-find #"tou-d-prime-cpp-price-.*credit"
                                              (str (:urpx.resolved/price-id %)))))))))))
+
+(deftest additive-rate-components-are-summed-not-sampled
+  (testing "a ledger is used for two different things in this corpus. A block
+            tier ladder is mutually exclusive, so only the marginal rung counts.
+            An additive rate stack, which is how delivery charges are modeled,
+            is cumulative and all of it counts.
+
+            marginal-unit-rate took the first tier of every energy ledger, which
+            is right for the ladder it was written for and wrong for the stack.
+            SDG&E EV-TOU's delivery ledger carries ten components; keeping the
+            first dropped nine and reported a third low. The error was not
+            one-sided either, so no bound would have caught it: dropping a
+            negative Baseline Credit made SCE TOU-D-4-9PM OVERSTATE."
+    (let [when- (zdt 2026 7 15 18)
+          rate  (fn [f] (price/marginal-unit-rate
+                         (price/resolve-prices (fixtures/load-rate-plan f) when-)))
+          tiers-sum (fn [f]
+                      (->> (price/resolve-prices (fixtures/load-rate-plan f) when-)
+                           :urpx.resolved/ledgers
+                           (filter #(= "urpx:energy"
+                                       (get-in % [:urpx.resolved/measurement-kind :jsonld/id])))
+                           (mapcat :urpx.resolved/tiers)
+                           (keep :urpx.resolved/unit-price)
+                           (reduce + 0M)))]
+
+      (testing "an all-additive ledger contributes every component"
+        (is (= 0.60067M (rate "sce-tou-d-prime-2026-03-20")))
+        (is (= (tiers-sum "sce-tou-d-prime-2026-03-20") (rate "sce-tou-d-prime-2026-03-20"))
+            "nothing is dropped when no tier carries a number"))
+
+      (testing "the MIXED ledger: ten bare UDC components plus one tier-numbered
+                Baseline Credit. Summed-plus-lowest and plain summing agree here
+                because there is exactly one numbered tier; they would diverge
+                the moment a real ladder appeared beside the components, and
+                only summed-plus-lowest stays right then."
+        (let [l (->> (price/resolve-prices (fixtures/load-rate-plan "sdge-dr-2026-04-01") when-)
+                     :urpx.resolved/ledgers
+                     (some #(when (= "sdge:dr-2026-04-01-ledger-energy-delivery"
+                                     (:urpx.resolved/ledger-id %)) %)))
+              ts (:urpx.resolved/tiers l)]
+          (is (= 1 (count (filter :urpx.resolved/tier-number ts))))
+          (is (= 10 (count (remove :urpx.resolved/tier-number ts))))
+          (is (= 0.42034M (rate "sdge-dr-2026-04-01")))))
+
+      (testing "a genuine block-tier ladder still contributes only its lowest
+                rung, which is the behavior this function was written for"
+        (let [r (price/resolve-prices (fixtures/load-rate-plan "pge-e-1-2026-03-01") when-)
+              ladders (->> (:urpx.resolved/ledgers r)
+                           (filter #(= "urpx:energy"
+                                       (get-in % [:urpx.resolved/measurement-kind :jsonld/id])))
+                           (filter #(every? :urpx.resolved/tier-number (:urpx.resolved/tiers %)))
+                           (filter #(< 1 (count (:urpx.resolved/tiers %)))))]
+          (is (seq ladders) "sanity: PG&E E-1 really is block-tiered")
+          (is (< (price/marginal-unit-rate r)
+                 (->> (:urpx.resolved/ledgers r)
+                      (filter #(= "urpx:energy"
+                                  (get-in % [:urpx.resolved/measurement-kind :jsonld/id])))
+                      (mapcat :urpx.resolved/tiers)
+                      (keep :urpx.resolved/unit-price)
+                      (reduce + 0M)))
+              "a ladder's upper rungs are still excluded"))))))

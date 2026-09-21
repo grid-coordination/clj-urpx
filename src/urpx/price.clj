@@ -1113,9 +1113,18 @@
   (contains? (measurement-kinds resolved) "urpx:energy"))
 
 (defn marginal-unit-rate
-  "Sum the unit prices across all **energy** ledgers, picking the LOWEST tier
-   in each block-tiered ledger as the marginal $/kWh at the start of a billing
-   period.
+  "The marginal $/kWh at the start of a billing period: summed across all
+   **energy** ledgers, and within each ledger the sum of its ADDITIVE rate
+   components plus the LOWEST rung of its block tier ladder, if it has one.
+
+   A ledger is used for two different things in practice. A block tier ladder
+   is mutually exclusive, so only the marginal rung counts; an additive rate
+   stack (a delivery ledger carrying transmission, distribution, public purpose
+   and the rest) is cumulative, so all of it counts. urpx:serviceTierNumber is
+   what separates them: a numbered tier belongs to a ladder, a bare one is a
+   component. URPX has no vocabulary saying which a ledger is, so this is the
+   signal available rather than the signal designed, and a ledger mixing both
+   contributes its components plus the lowest rung of that ladder.
 
    A ledger is treated as energy iff its referenced MetricInput's
    urpx:measurementKind is urpx:energy. Per-meter, per-customer, per-day, or
@@ -1178,7 +1187,38 @@
         ;; Excluded BEFORE taking the first tier, not after. A ledger mixing an
         ;; event charge with an ordinary price should contribute the ordinary
         ;; one, where filtering afterwards would drop the whole ledger.
-        marginal   (keep #(first (remove exclude-tier? (:urpx.resolved/tiers %))) energy)
+        ;; A ledger contributes the sum of its ADDITIVE components plus the
+        ;; marginal rung of its LADDER, if it has one.
+        ;;
+        ;; Taking only the first tier is right for a block-tier ladder, which is
+        ;; what this function was written for, and wrong for the additive rate
+        ;; stacks that most of this corpus uses ledgers for. SDG&E EV-TOU's
+        ;; delivery ledger carries ten components; keeping the first dropped
+        ;; nine of them and reported 0.57086 where the components sum to
+        ;; 0.86302, a third low. It is not a one-sided error either: SCE
+        ;; TOU-D-4-9PM OVERSTATED by 0.05249 at summer on-peak, because the
+        ;; dropped set included a negative Baseline Credit.
+        ;;
+        ;; urpx:serviceTierNumber separates the two, and cleanly: across 40 base
+        ;; plans at four instants, multi-tier energy ledgers were 183 additive,
+        ;; 31 ladder, and 3 mixed, all three being one ledger. URPX has no
+        ;; vocabulary distinguishing additive from exclusive tiers, so the tier
+        ;; number is the signal available rather than the signal designed.
+        ;;
+        ;; MIXED is summed-plus-lowest rather than refused. The one real case,
+        ;; sdge:dr-2026-04-01-ledger-energy-delivery, is ten UDC components plus
+        ;; a single tier-numbered Baseline Credit, where this and plain summing
+        ;; agree exactly. Refusing would decline a question that has an answer,
+        ;; and plain summing would re-create the original bug the moment a
+        ;; genuine ladder appeared beside additive components.
+        marginal   (mapcat (fn [ledger]
+                             (let [ts (remove exclude-tier? (:urpx.resolved/tiers ledger))
+                                   {numbered true bare false}
+                                   (group-by #(some? (:urpx.resolved/tier-number %)) ts)]
+                               (cond-> (vec bare)
+                                 (seq numbered)
+                                 (conj (first (sort-by :urpx.resolved/tier-number numbered))))))
+                           energy)
         unvaluable (filter :urpx.resolved/unvaluable marginal)]
     ;; No energy ledger at all is not an answer of zero, it is a malformed
     ;; question. A street lighting schedule prices per lamp per month; its

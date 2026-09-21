@@ -9,6 +9,33 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [0.20.0] — 2026-09-21
+
+**`marginal-unit-rate` returns a different, larger number on most plans. Read the upgrade note.**
+
+### Fixed
+
+- **Additive rate components were dropped from the marginal rate.** `marginal-unit-rate` kept only the first tier of each energy ledger. That is correct for a block-tier ladder, which is what the function was written for, and wrong for an additive rate stack, which is how delivery charges are modeled throughout the corpus. A delivery ledger carrying ten components contributed one.
+
+  Measured at 2026-07-15 18:00 PT:
+
+  | plan | reported | correct | |
+  |---|---|---|---|
+  | SDG&E EV-TOU 2026-04-01 | 0.57086 | 0.86302 | 33.9% low |
+  | SCE TOU-D-PRIME 2026-03-20 | 0.55208 | 0.60067 | 8.1% low |
+  | SCE TOU-D-4-9PM 2026-03-20 | 0.54513 | 0.49264 | **over**stated by 0.05249 |
+
+  The error was **not one-sided**, so no sanity bound would have caught it: SCE's overstatement comes from dropping a negative Baseline Credit. A sweep of 40 base plans at four instants found 74 resolutions dropping a nonzero remainder across 26 of the 40 plans.
+
+  `urpx:serviceTierNumber` separates the two uses: a numbered tier belongs to a ladder, a bare one is an additive component. Across that sweep, multi-tier energy ledgers were 183 additive, 31 ladder and 3 mixed, all three being the same ledger. A mixed ledger contributes its bare components plus the lowest numbered rung; on the one real case those two policies agree exactly, and only this one stays correct if a genuine ladder ever appears beside additive components.
+
+**Upgrading:** every consumer of `marginal-unit-rate` should expect a different number on most plans, usually larger. Reported rates moved on 26 of 40 base plans in the corpus. Anything publishing this value downstream — an OpenADR 3 interval price, for instance — was publishing an understated rate on most plans and an overstated one on some. There is no flag to keep the old behavior, because the old behavior was wrong.
+
+### Documentation
+
+- A README section stating what the marginal rate sums and why, and the `urpx:serviceTierNumber` signal it turns on.
+- Version archaeology cut from the customer-profile-alternatives section, which now leads with the selection-versus-filtering-layer distinction URPX states explicitly, and records that `urpx:referencesProfileAlternative` is read on `PriceSetAlternative` only and not yet on the `PriceDefinition`-level slot the shapes allow.
+
 ## [0.19.0] — 2026-09-21
 
 Event-driven prices, and a fix for a guard that shipped broken in 0.18.0.
@@ -213,6 +240,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.20.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.20.0
 [0.19.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.19.0
 [0.18.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.18.0
 [0.17.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.17.0

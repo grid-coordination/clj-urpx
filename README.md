@@ -387,6 +387,14 @@ The interval travels with the number deliberately. A recurring charge's ledger i
 
 They never enter `marginal-unit-rate`, which sums $/kWh: a per-interval figure is not a per-unit rate whatever its ledger is measured in.
 
+### What the marginal rate sums
+
+`marginal-unit-rate` sums across every energy ledger. **Within** a ledger it sums the additive rate components and adds the lowest rung of the block-tier ladder, if there is one.
+
+That distinction exists because a ledger is used for two different things. A block tier ladder is mutually exclusive, so only the marginal rung applies. An additive rate stack, which is how delivery charges are modeled throughout this corpus (transmission, distribution, public purpose, wildfire NBC, and the rest), is cumulative and all of it applies.
+
+`urpx:serviceTierNumber` is what separates them: a numbered tier belongs to a ladder, a bare one is a component. URPX has no vocabulary declaring which kind a ledger is, so this is the signal available rather than the signal designed. Across 40 base plans at four instants, multi-tier energy ledgers were 183 additive, 31 ladder, and 3 mixed — all three being the same ledger. A mixed ledger contributes its bare components plus the lowest numbered rung.
+
 ### Plans that price nothing per kWh
 
 `marginal-unit-rate` answers "what does the next kWh cost". Plenty of real schedules have no answer: CPAU E-14 is street lighting, priced per lamp per month and per fixture per month, with no per-kWh charge anywhere. For those it **refuses** rather than returning `0M`, because zero is not a conservative default for a question that does not apply, and it was indistinguishable from a plan whose energy ledgers genuinely sum to zero.
