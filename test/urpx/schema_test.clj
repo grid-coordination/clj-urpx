@@ -4,7 +4,8 @@
   These tests do NOT validate parsed-from-JSON-LD documents — coercion is what
   turns the parser's string values into the typed shapes these schemas
   describe. Here we exercise the schemas directly with hand-built typed values."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [malli.core :as m]
             [urpx.coerce :as coerce]
             [urpx.schema :as s])
@@ -726,3 +727,64 @@
         (is (vector? (:urpx/containsPricingModel coerced)))))
     (testing "TariffFiling is v0.5.1-only: there is no v0.2.x @type to accept"
       (is (not (m/validate s/TariffFiling (assoc filing :jsonld/type "urpx:TariffPublication")))))))
+
+;; ---------------------------------------------------------------------------
+;; Enum membership on the v0.5.1 reframe vocabularies
+;; ---------------------------------------------------------------------------
+
+(deftest reframe-enums-enforce-membership
+  (testing "every member of each enum is accepted, and a bogus id is not"
+    (doseq [[label schema members]
+            [["CompletenessResult" s/CompletenessResult
+              ["complete" "partial" "pending" "unsupported" "unknown" "noCoverage"]]
+             ["ReferenceInclusion" s/ReferenceInclusion
+              ["includedHere" "retrievedElsewhere"]]
+             ["Confidence" s/Confidence ["verified" "estimated" "projected"]]
+             ["EvaluationKind" s/EvaluationKind
+              ["consolidation" "coverageEvaluation" "validation" "comparison" "benchmark"]]
+             ["ExclusionReason" s/ExclusionReason
+              ["pruned" "fullySuperseded" "voided" "outOfScope"]]]]
+      (doseq [m members]
+        (is (m/validate schema {:jsonld/id (str "urpx:" m)})
+            (str label " must accept urpx:" m)))
+      (is (not (m/validate schema {:jsonld/id "urpx:bogus"}))
+          (str label " must reject a non-member"))
+      (is (not (m/validate schema {:jsonld/id (str/upper-case (str "urpx:" (first members)))}))
+          (str label " membership is exact, not case-insensitive")))))
+
+(deftest publication-type-accepts-the-legacy-corpus-value
+  (testing "the 8 v0.5.1 members are accepted"
+    (doseq [m ["tariffBook" "tariffStatement" "tariffSupplement" "tariffAddendum"
+               "supplyCharges" "derExports" "highlyDynamicPrices" "marketPriceFeed"]]
+      (is (m/validate s/SourcePublicationType {:jsonld/id (str "urpx:" m)}))))
+  (testing "urpx:regulatoryFiling is accepted as a documented legacy member: it
+            belonged to the retired 10-member urpx:PublicationTypeValue, has no
+            successor among the 8, and is the only publicationType value the
+            corpus uses (8 occurrences across 6 filings). Enforcing the v0.5.1
+            list alone would reject those filings."
+    (is (m/validate s/SourcePublicationType {:jsonld/id "urpx:regulatoryFiling"})))
+  (testing "the other retired members are NOT readmitted"
+    (doseq [m ["amendment" "notice" "order" "supplement" "tariffBookLeaves"
+               "ratePlanPublication" "ratePlanModifierPublication"]]
+      (is (not (m/validate s/SourcePublicationType {:jsonld/id (str "urpx:" m)}))
+          (str "urpx:" m " must not be accepted")))))
+
+(deftest enums-enforced-at-their-carriers
+  (testing "CoverageClaim rejects a non-member completenessResult"
+    (is (m/validate s/CoverageClaim {:jsonld/type "urpx:CoverageClaim"
+                                     :urpx/completenessResult {:jsonld/id "urpx:partial"}}))
+    (is (not (m/validate s/CoverageClaim {:jsonld/type "urpx:CoverageClaim"
+                                          :urpx/completenessResult {:jsonld/id "urpx:mostly"}}))))
+  (testing "PriceDefinitionReference rejects a non-member referenceInclusion"
+    (is (not (m/validate s/PriceDefinitionReference
+                         {:jsonld/type "urpx:PriceDefinitionReference"
+                          :urpx/referenceInclusion {:jsonld/id "urpx:somewhere"}}))))
+  (testing "ModelExclusion rejects a non-member exclusionReason"
+    (is (not (m/validate s/ModelExclusion
+                         {:jsonld/type "urpx:ModelExclusion"
+                          :urpx/excludedModel {:jsonld/id "urpx:pm-1"}
+                          :urpx/exclusionReason {:jsonld/id "urpx:because"}}))))
+  (testing "SourcePublication rejects a non-member publicationType"
+    (is (not (m/validate s/SourcePublication
+                         {:jsonld/type "urpx:SourcePublication"
+                          :urpx/publicationType {:jsonld/id "urpx:pressRelease"}})))))

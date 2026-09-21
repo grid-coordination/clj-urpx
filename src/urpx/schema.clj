@@ -200,6 +200,57 @@
    is reject valid input."
   [:or :map :string [:vector [:or :map :string]]])
 
+(defn enum-ref
+  "A JSON-LD @id reference restricted to a fixed vocabulary: like `Ref`, but the
+   id must be one of `locals`, each given bare and prefixed with \"urpx:\" here.
+
+   URPX encodes these as IRI references rather than strings, so a value arrives
+   as {:jsonld/id \"urpx:complete\"} and this checks membership of that id.
+   Upstream they are owl:oneOf classes enforced through sh:in at the property."
+  [& locals]
+  [:map [:jsonld/id (into [:enum] (map #(str "urpx:" %)) locals)]])
+
+;; Members transcribed from urpx-shacl sh:in lists at urpx-org/urpx 95eb8e22
+;; and counted against them, not re-derived.
+
+(def CompletenessResult
+  "urpx:CompletenessResultValue, 6 members. The coverage verdict on a
+   CoverageClaim. Freshness (urpx:stale) and resolution provenance
+   (urpx:fallbackSourced) are orthogonal booleans, not members here."
+  (enum-ref "complete" "partial" "pending" "unsupported" "unknown" "noCoverage"))
+
+(def ReferenceInclusion
+  "urpx:ReferenceInclusionValue, 2 members."
+  (enum-ref "includedHere" "retrievedElsewhere"))
+
+(def Confidence
+  "urpx:ConfidenceValue, 3 members."
+  (enum-ref "verified" "estimated" "projected"))
+
+(def EvaluationKind
+  "urpx:EvaluationKindValue, 5 members."
+  (enum-ref "consolidation" "coverageEvaluation" "validation" "comparison" "benchmark"))
+
+(def ExclusionReason
+  "urpx:ExclusionReasonValue, 4 members. New at v0.5.1."
+  (enum-ref "pruned" "fullySuperseded" "voided" "outOfScope"))
+
+(def SourcePublicationType
+  "urpx:SourcePublicationTypeValue, 8 members, plus one legacy value.
+
+   The class was urpx:SourcePublicationType at the epic baseline and is
+   Value-suffixed at 95eb8e22, same 8 members. Do NOT reuse the retired
+   10-member urpx:PublicationTypeValue, which has zero occurrences at v0.5.1.
+
+   urpx:regulatoryFiling is a member of that retired class and is the ONLY
+   publicationType value the corpus uses: 8 occurrences across 6 filings. It
+   has no successor among the 8, so enforcing the v0.5.1 list alone would
+   reject those filings outright. It is accepted here as a documented legacy
+   member and should be dropped once the last migration wave lands."
+  (enum-ref "tariffBook" "tariffStatement" "tariffSupplement" "tariffAddendum"
+            "supplyCharges" "derExports" "highlyDynamicPrices" "marketPriceFeed"
+            "regulatoryFiling"))
+
 (def NodeIdentity
   "Common JSON-LD identity fields present on most entities."
   [:map
@@ -880,7 +931,7 @@
    [:jsonld/type [:= "urpx:ModelExclusion"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/excludedModel Ref]
-   [:urpx/exclusionReason Ref]
+   [:urpx/exclusionReason ExclusionReason]
    [:urpx/description {:optional true} :string]])
 
 (def Evaluation
@@ -889,7 +940,7 @@
   [:map
    [:jsonld/type [:= "urpx:Evaluation"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/evaluationKind {:optional true} Ref]
+   [:urpx/evaluationKind {:optional true} EvaluationKind]
    [:urpx/description    {:optional true} :string]
    [:urpx/evaluatedBy    {:optional true} [:or Organization ExclusiveRef]]
    [:urpx/evaluatedOn    {:optional true} DateTime]
@@ -903,8 +954,8 @@
   [:map
    [:jsonld/type [:= "urpx:CoverageClaim"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/completenessResult Ref]
-   [:urpx/confidence       {:optional true} Ref]
+   [:urpx/completenessResult CompletenessResult]
+   [:urpx/confidence       {:optional true} Confidence]
    [:urpx/selfContained    {:optional true} :boolean]
    [:urpx/stale            {:optional true} :boolean]
    [:urpx/fallbackSourced  {:optional true} :boolean]
@@ -919,7 +970,7 @@
   [:map
    [:jsonld/type [:= "urpx:PriceDefinitionReference"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/referenceInclusion Ref]
+   [:urpx/referenceInclusion ReferenceInclusion]
    [:urpx/referencesPriceDefinition {:optional true} Ref]
    [:urpx/documentedBy
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
@@ -1360,7 +1411,7 @@
    [:urpx/filingNumber     {:optional true} :string]
    [:urpx/issuingAuthority {:optional true} :string]
    [:urpx/pageReference    {:optional true} :string]
-   [:urpx/publicationType  {:optional true} Ref]
+   [:urpx/publicationType  {:optional true} SourcePublicationType]
    [:urpx/publishedBy      {:optional true} [:or Organization ExclusiveRef]]
    [:urpx/dateApproved      {:optional true} Date]
    [:urpx/dateTimeApproved  {:optional true} DateTime]
