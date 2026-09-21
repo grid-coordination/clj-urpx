@@ -2,9 +2,6 @@
  :deps {org.clojure/clojure            {:mvn/version "1.12.3"}
         org.clojure/data.json          {:mvn/version "2.5.1"}
 
-        ;; JSON-LD parsing
-        com.apicatalog/titanium-json-ld {:mvn/version "1.6.0"}
-
         ;; Schema validation and coercion
         metosin/malli                  {:mvn/version "0.20.1"}
 
