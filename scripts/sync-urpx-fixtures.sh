@@ -32,10 +32,10 @@ dest=$repo_root/test/resources/urpx-fixtures
 
 # fixture-name                   upstream-commit  upstream-path
 fixtures=(
-  "pge-e-1-2026-03-01             177a761  us/ca/pge/electricity/e-1/versions/2026-03-01/rate-plan_pge_e-1_2026-03-01.jsonld"
-  "pge-e-tou-c-2026-03-01         177a761  us/ca/pge/electricity/e-tou-c/versions/2026-03-01/rate-plan_pge_e-tou-c_2026-03-01.jsonld"
-  "pge-e-tou-d-2026-03-27         177a761  us/ca/pge/electricity/e-tou-d/versions/2026-03-27/rate-plan_pge_e-tou-d_2026-03-27.jsonld"
-  "pge-ev2-2026-03-27             177a761  us/ca/pge/electricity/ev2/versions/2026-03-27/rate-plan_pge_ev2_2026-03-27.jsonld"
+  "pge-e-1-2026-03-01             1e4ad46  us/ca/pge/electricity/e-1/versions/2026-03-01/rate-plan_pge_e-1_2026-03-01.jsonld"
+  "pge-e-tou-c-2026-03-01         1e4ad46  us/ca/pge/electricity/e-tou-c/versions/2026-03-01/rate-plan_pge_e-tou-c_2026-03-01.jsonld"
+  "pge-e-tou-d-2026-03-27         1e4ad46  us/ca/pge/electricity/e-tou-d/versions/2026-03-27/rate-plan_pge_e-tou-d_2026-03-27.jsonld"
+  "pge-ev2-2026-03-27             1e4ad46  us/ca/pge/electricity/ev2/versions/2026-03-27/rate-plan_pge_ev2_2026-03-27.jsonld"
 
   # LADWP, migration wave 1, URPX v0.5.1. Vendored ALONGSIDE the v0.2.x PG&E
   # set rather than replacing it: the corpus is mixed-vocabulary for the whole

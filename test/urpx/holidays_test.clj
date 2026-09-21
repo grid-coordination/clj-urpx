@@ -68,6 +68,8 @@
    :urpx/hasRatePlanVersion
    {:jsonld/type "urpx:RatePlanVersion"
     :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/forRatePlan {:jsonld/id "ex:parent"}
+    :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
     :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/hasPlanElements
     {:jsonld/type "urpx:PlanElements"

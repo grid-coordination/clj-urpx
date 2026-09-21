@@ -365,7 +365,13 @@
       (is (= "urpx:Organization" (:jsonld/type org)))))
   (testing "rate plan + version + URPXDocument builders all produce the
             expected @types"
-    (let [rpv (dsl/rate-plan-version :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    (let [rpv (dsl/rate-plan-version :urpx/forRatePlan {:jsonld/id "ex:parent"}
+                                     :urpx/hasCoverageClaim
+                                     {:jsonld/type "urpx:CoverageClaim"
+                                      :urpx/completenessResult {:jsonld/id "urpx:complete"}}
+                                     :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/forRatePlan {:jsonld/id "ex:parent"}
+    :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
                                      :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
                                      :urpx/effectiveDateTime "2026-01-01T00:00:00"
                                      :urpx/hasPlanElements
@@ -478,6 +484,9 @@
       :initial-effective-date "2025-07-01"
       :has-rate-plan-version
       (dsl/rate-plan-version
+       :for-rate-plan {:jsonld/id "ex:parent"}
+       :has-coverage-claim {:jsonld/type "urpx:CoverageClaim"
+                            :urpx/completenessResult {:jsonld/id "urpx:complete"}}
        :change-reason {:jsonld/id "urpx:rateCase"}
        :service-role {:jsonld/id "urpx:bundledServiceRole"}
        :effective-date-time "2025-07-01T00:00:00"

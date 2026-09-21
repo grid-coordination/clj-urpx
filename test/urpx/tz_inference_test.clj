@@ -25,9 +25,11 @@
   (testing "A plan whose publisher is not in either table yields no inference"
     (let [base (fixtures/load-rate-plan "pge-e-1-2026-03-01")
           plan (update-in base
-                          [:urpx/hasRatePlanVersion :urpx/publishedBy]
-                          merge {:urpx/eiaId "99999"
-                                 :urpx/legalName "Mystery Cooperative"})]
+                          [:urpx/hasRatePlanVersion :urpx/offeredBy]
+                          #(-> %
+                               (dissoc :urpx/hasIdentity)
+                               (assoc :urpx/eiaId "99999"
+                                      :urpx/legalName "Mystery Cooperative")))]
       (is (nil? (tz/infer-zone plan))))))
 
 (deftest inference-also-works-for-modifiers
@@ -40,12 +42,16 @@
 
 (deftest opts-extend-eia-table
   (testing "Caller-supplied :eia-id->zone is merged with defaults; caller entries win.
-            v0.2.0 Organization doesn't carry urpx:eiaId by default, so the test
-            injects one to exercise the lookup path."
+            Injects the id through the LEGACY urpx:eiaId key, which v0.5.1
+            documents no longer carry, so this covers the back-compatible arm
+            of the reader; the identity-chain arm is covered below and by the
+            wave-1 fixtures."
     (let [base (fixtures/load-rate-plan "pge-e-1-2026-03-01")
-          plan (assoc-in base
-                         [:urpx/hasRatePlanVersion :urpx/publishedBy :urpx/eiaId]
-                         "12345")
+          plan (-> base
+                   (update-in [:urpx/hasRatePlanVersion :urpx/offeredBy]
+                              dissoc :urpx/hasIdentity)
+                   (assoc-in [:urpx/hasRatePlanVersion :urpx/offeredBy :urpx/eiaId]
+                             "12345"))
           opts {:eia-id->zone {"12345" "America/New_York"}}
           {:keys [zone inferred-from]} (tz/infer-zone plan opts)]
       (is (= ny zone))
@@ -57,29 +63,30 @@
             the caller's entry wins (built-ins are defaults, not overrides)"
     (let [base (fixtures/load-rate-plan "pge-e-1-2026-03-01")
           plan (assoc-in base
-                         [:urpx/hasRatePlanVersion :urpx/publishedBy :urpx/eiaId]
+                         [:urpx/hasRatePlanVersion :urpx/offeredBy :urpx/eiaId]
                          "14328")  ;; PG&E's actual EIA id
           opts {:eia-id->zone {"14328" "America/New_York"}}
           {:keys [zone]} (tz/infer-zone plan opts)]
       (is (= ny zone)))))
 
 (deftest plan-with-only-legal-name
-  (testing "Falls through to legalName when eiaId is absent. Vendored v0.2.0
-            fixtures now carry eiaId, so this test strips it to exercise
-            the fallback path."
+  (testing "Falls through to legalName when no EIA id is reachable. v0.5.1
+            carries it in the identity chain rather than as urpx:eiaId, so both
+            have to go to exercise the fallback."
     (let [base (fixtures/load-rate-plan "pge-e-1-2026-03-01")
           plan (update-in base
-                          [:urpx/hasRatePlanVersion :urpx/publishedBy]
-                          dissoc :urpx/eiaId)
+                          [:urpx/hasRatePlanVersion :urpx/offeredBy]
+                          dissoc :urpx/eiaId :urpx/hasIdentity)
           {:keys [inferred-from]} (tz/infer-zone plan)]
       (is (= :legal-name (:source inferred-from))))))
 
 (deftest no-publisher-returns-nil
-  (testing "Plan without publishedBy yields no inference"
+  (testing "Plan with no organization at all yields no inference. v0.5.1 states
+            it as urpx:offeredBy; urpx:publishedBy left the version shapes."
     (let [base (fixtures/load-rate-plan "pge-e-1-2026-03-01")
           plan (update-in base
                           [:urpx/hasRatePlanVersion]
-                          dissoc :urpx/publishedBy)]
+                          dissoc :urpx/offeredBy :urpx/publishedBy)]
       (is (nil? (tz/infer-zone plan))))))
 
 ;; ---------------------------------------------------------------------------
@@ -94,10 +101,7 @@
     (let [plan     (fixtures/load-rate-plan "pge-e-1-2026-03-01")
           version  (:urpx/hasRatePlanVersion plan)
           shell    (dissoc plan :urpx/hasRatePlanVersion)
-          snapshot (-> version
-                       (dissoc :urpx/publishedBy)
-                       (assoc :urpx/offeredBy (:urpx/publishedBy version)
-                              :urpx/forRatePlan {:jsonld/id (:jsonld/id plan)}))]
+          snapshot (assoc version :urpx/forRatePlan {:jsonld/id (:jsonld/id plan)})]
       (testing "the shell alone infers nothing, since the organization left with
                 the version"
         (is (nil? (tz/infer-zone shell))))
@@ -106,6 +110,9 @@
         (let [{:keys [zone inferred-from]} (tz/infer-zone shell {:version snapshot})]
           (is (= la zone))
           (is (= :eia-id (:source inferred-from)))))
-      (testing "publishedBy on a snapshot still works, for a document that
-                carries the v0.2.x key on an un-nested version"
-        (is (= la (:zone (tz/infer-zone shell {:version version}))))))))
+      (testing "the v0.2.x urpx:publishedBy key still resolves, for a document
+                that has not migrated"
+        (let [legacy (-> version
+                         (dissoc :urpx/offeredBy)
+                         (assoc :urpx/publishedBy (:urpx/offeredBy version)))]
+          (is (= la (:zone (tz/infer-zone shell {:version legacy})))))))))

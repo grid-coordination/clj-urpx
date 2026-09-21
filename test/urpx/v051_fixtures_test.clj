@@ -15,7 +15,7 @@
             [urpx.schema :as schema]
             [urpx.test-fixtures :as fixtures]
             [urpx.tz-inference :as tz])
-  (:import [java.time ZonedDateTime ZoneId]))
+  (:import [java.time LocalDate ZonedDateTime ZoneId]))
 
 (def ^:private la (ZoneId/of "America/Los_Angeles"))
 
@@ -94,16 +94,54 @@
         (is (seq (:urpx.resolved/ledgers r)) (str n " resolves at least one ledger"))))))
 
 (deftest both-vocabularies-load-through-one-library
-  (testing "the mixed-vocabulary claim, demonstrated rather than asserted: a
-            v0.2.x filing and a v0.5.1 filing both load and validate in the same
-            process, with no switch and no configuration"
-    (let [old (fixtures/load-rate-plan "pge-e-1-2026-03-01")
-          new (fixtures/load-rate-plan "ladwp-r-1a-2026-04-01")]
-      (is (nil? (coerce/explain schema/RatePlan old)))
-      (is (nil? (coerce/explain schema/RatePlan new)))
+  (testing "the mixed-vocabulary claim, which now needs a SYNTHETIC v0.2.x
+            document to state at all: as of migration wave 6 the corpus is
+            entirely v0.5.1, so no vendored fixture carries the old shape any
+            more. The dual acceptance is still real and still load-bearing for
+            anyone whose filings have not migrated, so it keeps a test; the
+            test just cannot borrow a fixture for it.
+
+            The v0.2.x side below uses every key v0.5.1 moved or renamed:
+            urpx:publishedBy rather than offeredBy, urpx:eiaId rather than the
+            identity chain, and a nested version with no forRatePlan."
+    (let [v021 {:jsonld/type "urpx:RatePlan"
+                :jsonld/id "ex:legacy-plan"
+                :urpx/ratePlanUniqueIdentifier "L-1"
+                :urpx/name "Legacy Residential"
+                :urpx/initialEffectiveDate (LocalDate/of 2020 1 1)
+                :urpx/hasRatePlanVersion
+                {:jsonld/type "urpx:RatePlanVersion"
+                 ;; deliberately NO forRatePlan and NO hasCoverageClaim: v0.2.1
+                 ;; has neither term, and a v0.2.x document not carrying them is
+                 ;; exactly what this test exists to prove still validates
+                 :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+                 :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
+                 :urpx/publishedBy {:jsonld/type "urpx:Organization"
+                                    :urpx/legalName "Pacific Gas & Electric Company"
+                                    :urpx/eiaId "14328"
+                                    :urpx/organizationType {:jsonld/id "urpx:investorOwnedUtility"}}
+                 :urpx/hasPlanElements
+                 {:jsonld/type "urpx:PlanElements"
+                  :urpx/hasMetricInput [{:jsonld/type "urpx:MetricInput"
+                                         :urpx/name "kWh"
+                                         :urpx/metricInputType {:jsonld/id "urpx:measuredMetricInput"}}]
+                  :urpx/hasBillingModel {:jsonld/type "urpx:BillingModel"
+                                         :urpx/hasPriceDefinition []}}
+                 :urpx/hasPrices {:jsonld/type "urpx:Prices"}}}
+          v051 (fixtures/load-rate-plan "ladwp-r-1a-2026-04-01")]
+      (testing "both validate against the same schema, with no switch and no
+                configuration"
+        (is (nil? (coerce/explain schema/RatePlan v021)))
+        (is (nil? (coerce/explain schema/RatePlan v051))))
       (testing "and they really are different vocabularies"
-        (is (some? (:urpx/publishedBy (version-of old))))
-        (is (some? (:urpx/offeredBy   (version-of new))))))))
+        (is (some? (:urpx/publishedBy (version-of v021))))
+        (is (some? (:urpx/offeredBy   (version-of v051))))
+        (is (nil?  (:urpx/forRatePlan (version-of v021))))
+        (is (some? (:urpx/forRatePlan (version-of v051)))))
+      (testing "timezone inference resolves both, through different paths: the
+                legacy urpx:eiaId key and the v0.5.1 identity chain"
+        (is (= la (:zone (tz/infer-zone v021))))
+        (is (= la (:zone (tz/infer-zone v051 {:version (version-of v051)}))))))))
 
 (deftest v051-wrapper-is-urpxpackage
   (testing "wave 1 wraps in urpx:URPXPackage, the v0.3.0 rename, where the

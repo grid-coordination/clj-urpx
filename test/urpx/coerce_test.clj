@@ -141,7 +141,10 @@
 
 (deftest coerce-doc-dispatches-on-type
   (testing "coerce-doc handles RatePlan, RatePlanModifier, and unknowns"
-    (let [entities (fixtures/load-graph "pge-e-1-2026-03-01")
+    ;; v0.5.1 embeds the plan in a urpx:URPXPackage that sits inside the
+    ;; @graph, so the wrapper has to be descended to reach either entity.
+    (let [entities (mapcat core/expand-document-entities
+                           (fixtures/load-graph "pge-e-1-2026-03-01"))
           plan (some #(when (= "urpx:RatePlan" (:jsonld/type %)) %) entities)
           mod  (some #(when (= "urpx:RatePlanModifier" (:jsonld/type %)) %) entities)]
       (is (nil? (coerce/explain schema/RatePlan (coerce/coerce-doc plan))))

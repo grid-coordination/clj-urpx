@@ -10,15 +10,27 @@
       "PG&E E-1 v0.2.0 fixture must be on the classpath"))
 
 (deftest load-graph-pge-e-1
-  (testing "PG&E E-1 fixture is a multi-entity @graph bundle"
-    (let [entities (fixtures/load-graph "pge-e-1-2026-03-01")
-          types (mapv :jsonld/type entities)]
-      (is (some #{"urpx:RatePlan"} types))
-      (is (some #{"urpx:RatePlanModifier"} types))
-      (is (some #{"urpx:TariffPublication"} types)
-          "PG&E filings carry a TariffPublication entity in the @graph")
-      (is (some #{"urpx:ProgramEnrollment"} types)
-          "PG&E E-1 references named programs (CARE, FERA, CCA, DA, TBS)"))))
+  (testing "PG&E E-1 is a multi-entity @graph bundle. At v0.5.1 the
+            urpx:URPXPackage sits INSIDE that @graph as a sibling rather than
+            wrapping it, because URPXPackageShape is sh:closed and admits
+            neither urpx:ProgramEnrollment nor urpx:RateCase, which these
+            filings carry. So load-graph, which returns top-level entities and
+            does not descend, sees the package and the siblings but not the
+            plan."
+    (let [types (set (map :jsonld/type (fixtures/load-graph "pge-e-1-2026-03-01")))]
+      (is (contains? types "urpx:URPXPackage"))
+      (is (contains? types "urpx:ProgramEnrollment")
+          "PG&E E-1 references named programs (CARE, FERA, CCA, DA, TBS)")
+      (is (contains? types "urpx:SourcePublication")
+          "v0.5.1 renamed urpx:TariffPublication to urpx:SourcePublication")
+      (is (not (contains? types "urpx:RatePlan"))
+          "the plan is embedded in the package, not a top-level sibling")))
+  (testing "descending the wrapper reaches the plan and its modifier"
+    (let [types (set (map :jsonld/type
+                          (mapcat core/expand-document-entities
+                                  (fixtures/load-graph "pge-e-1-2026-03-01"))))]
+      (is (contains? types "urpx:RatePlan"))
+      (is (contains? types "urpx:RatePlanModifier")))))
 
 (deftest load-rate-plan-pge-e-1
   (testing "raw load_rate_plan extracts the unique urpx:RatePlan"
@@ -55,7 +67,8 @@
           (is (= "pge:e-1" (:jsonld/id plan)))))
       (testing "load-graph accepts the URL too (the load-rate-plan-modifier
                 / load-rate-plan / load-graph chain shares this code path)"
-        (let [entities (core/load-graph resource-url)]
+        (let [entities (mapcat core/expand-document-entities
+                               (core/load-graph resource-url))]
           (is (some #(= "urpx:RatePlan" (:jsonld/type %)) entities))
           (is (some #(= "urpx:RatePlanModifier" (:jsonld/type %)) entities))))
       (testing "Reader is also accepted (io/reader IOFactory)"
@@ -373,6 +386,8 @@
                  :urpx/hasRatePlanVersion
                  {:jsonld/type "urpx:RatePlanVersion"
                   :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+                  :urpx/forRatePlan {:jsonld/id "ex:parent"}
+                  :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
                   :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
                   :urpx/effectiveDateTime "2026-01-01T00:00:00"
                   :urpx/hasPriceDefinition [{:jsonld/type "urpx:PriceDefinition"

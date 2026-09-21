@@ -236,19 +236,26 @@
   (enum-ref "pruned" "fullySuperseded" "voided" "outOfScope"))
 
 (def SourcePublicationType
-  "urpx:SourcePublicationTypeValue, 8 members, plus one legacy value.
+  "urpx:SourcePublicationTypeValue, the shipped 8 members plus one legacy.
 
    The class was urpx:SourcePublicationType at the epic baseline and is
    Value-suffixed at 95eb8e22, same 8 members. Do NOT reuse the retired
    10-member urpx:PublicationTypeValue, which has zero occurrences at v0.5.1.
 
-   urpx:regulatoryFiling is a member of that retired class and is the ONLY
-   publicationType value the corpus uses: 8 occurrences across 6 filings. It
-   has no successor among the 8, so enforcing the v0.5.1 list alone would
-   reject those filings outright. It is accepted here as a documented legacy
-   member and should be dropped once the last migration wave lands."
+   urpx:regulatoryFiling, a member of that retired class, was accepted here as
+   a documented legacy value while the corpus still emitted it. Migration wave
+   6 finished and it is gone: the corpus now models the same node as
+   urpx:tariffSupplement, following upstream's own v0.5.1 test case for the
+   identical Advice Letter rather than inventing a parallel convention. Zero
+   occurrences remain in the corpus. The allowance is RETAINED anyway, because
+   removing it would reject a v0.2.x urpx:TariffPublication that carries the old
+   member, and this library still advertises v0.2.x acceptance. Drop it when
+   that promise is withdrawn."
   (enum-ref "tariffBook" "tariffStatement" "tariffSupplement" "tariffAddendum"
             "supplyCharges" "derExports" "highlyDynamicPrices" "marketPriceFeed"
+            ;; RETAINED pending a decision: dropping it would reject a v0.2.x
+            ;; urpx:TariffPublication carrying it, and this library advertises
+            ;; v0.2.x acceptance. The corpus no longer emits it.
             "regulatoryFiling"))
 
 (def NodeIdentity
@@ -1245,12 +1252,13 @@
    [:urpx/observesHoliday
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
-   ;; v0.5.1 coverage machinery. urpx-shacl requires forRatePlan and
-   ;; hasCoverageClaim at 1..1 on this shape at 95eb8e22; both are held
-   ;; OPTIONAL here because v0.2.1 has zero occurrences of either term and all
-   ;; 73 corpus filings still declare targetURPXVersion v0.2.0, so requiring
-   ;; them today would reject the entire corpus and all four vendored
-   ;; fixtures. Flip to required once the last migration wave lands.
+   ;; v0.5.1 coverage machinery, both sh:minCount 1 sh:maxCount 1 upstream.
+   ;; STILL OPTIONAL, and no longer because of the corpus. Migration wave 6
+   ;; finished and all 84 snapshots now carry both (40 forRatePlan + 44
+   ;; forRatePlanModifier, 84 hasCoverageClaim), so tightening would reject
+   ;; nothing there. It would reject every v0.2.x document, which has neither
+   ;; term, and this library advertises v0.2.x acceptance. Requiring these ends
+   ;; that promise; it is a contract decision, not a conformance one.
    [:urpx/forRatePlan {:optional true} Ref]
    [:urpx/hasCoverageClaim {:optional true} [:or CoverageClaim ExclusiveRef]]
    [:urpx/selfContained {:optional true} :boolean]
@@ -1365,12 +1373,13 @@
    [:urpx/applicableToRatePlanVersion
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
-   ;; v0.5.1 coverage machinery. urpx-shacl requires forRatePlanModifier and
-   ;; hasCoverageClaim at 1..1 on this shape at 95eb8e22; both are held
-   ;; OPTIONAL here because v0.2.1 has zero occurrences of either term and all
-   ;; 73 corpus filings still declare targetURPXVersion v0.2.0, so requiring
-   ;; them today would reject the entire corpus and all four vendored
-   ;; fixtures. Flip to required once the last migration wave lands.
+   ;; v0.5.1 coverage machinery, both sh:minCount 1 sh:maxCount 1 upstream.
+   ;; STILL OPTIONAL, and no longer because of the corpus. Migration wave 6
+   ;; finished and all 84 snapshots now carry both (40 forRatePlan + 44
+   ;; forRatePlanModifier, 84 hasCoverageClaim), so tightening would reject
+   ;; nothing there. It would reject every v0.2.x document, which has neither
+   ;; term, and this library advertises v0.2.x acceptance. Requiring these ends
+   ;; that promise; it is a contract decision, not a conformance one.
    [:urpx/forRatePlanModifier {:optional true} Ref]
    [:urpx/hasCoverageClaim {:optional true} [:or CoverageClaim ExclusiveRef]]
    [:urpx/selfContained {:optional true} :boolean]

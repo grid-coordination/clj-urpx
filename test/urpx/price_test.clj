@@ -292,6 +292,8 @@
    :urpx/hasRatePlanModifierVersion
    {:jsonld/type "urpx:RatePlanModifierVersion"
     :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/forRatePlanModifier {:jsonld/id "ex:parent"}
+    :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
     :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
     :urpx/priceCurrency "USD"
@@ -381,6 +383,8 @@
    :urpx/hasRatePlanVersion
    {:jsonld/type "urpx:RatePlanVersion"
     :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/forRatePlan {:jsonld/id "ex:parent"}
+    :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
     :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
     :urpx/priceCurrency "USD"
@@ -435,6 +439,8 @@
    :urpx/hasRatePlanModifierVersion
    {:jsonld/type "urpx:RatePlanModifierVersion"
     :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/forRatePlanModifier {:jsonld/id "ex:parent"}
+    :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
     :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
     :urpx/priceCurrency "USD"
@@ -516,6 +522,8 @@
    :urpx/hasRatePlanModifierVersion
    {:jsonld/type "urpx:RatePlanModifierVersion"
     :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/forRatePlanModifier {:jsonld/id "ex:parent"}
+    :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
     :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
     :urpx/priceCurrency "USD"
@@ -610,6 +618,8 @@
    :urpx/hasRatePlanVersion
    {:jsonld/type "urpx:RatePlanVersion"
     :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/forRatePlan {:jsonld/id "ex:parent"}
+    :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
     :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
     :urpx/priceCurrency "USD"
@@ -771,6 +781,8 @@
    :urpx/hasRatePlanVersion
    {:jsonld/type "urpx:RatePlanVersion"
     :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/forRatePlan {:jsonld/id "ex:parent"}
+    :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
     :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/effectiveDateTime (java.time.LocalDateTime/of 2025 7 1 0 0)
     :urpx/priceCurrency "USD"
@@ -953,6 +965,8 @@
    :urpx/hasRatePlanVersion
    {:jsonld/type "urpx:RatePlanVersion"
     :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/forRatePlan {:jsonld/id "ex:parent"}
+    :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
     :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/effectiveDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
     :urpx/hasPlanElements

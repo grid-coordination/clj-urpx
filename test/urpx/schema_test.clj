@@ -208,6 +208,8 @@
   (testing "v0.2.0: ratePlanUniqueIdentifier is required"
     (let [version {:jsonld/type "urpx:RatePlanVersion"
                    :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+                   :urpx/forRatePlan {:jsonld/id "ex:parent"}
+                   :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
                    :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
                    :urpx/effectiveDateTime (LocalDateTime/of 2026 3 1 0 0)
                    :urpx/hasPlanElements
@@ -246,6 +248,8 @@
             of Refs (single-or-vec→vec normalizes the JSON-LD shape)."
     (let [version-base {:jsonld/type "urpx:RatePlanVersion"
                         :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+                        :urpx/forRatePlan {:jsonld/id "ex:parent"}
+                        :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
                         :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
                         :urpx/effectiveDateTime (LocalDateTime/of 2026 3 1 0 0)
                         :urpx/hasPlanElements
@@ -270,6 +274,8 @@
   (testing "single-or-vec decoder normalizes a single Ref to a one-element vector"
     (let [raw {:jsonld/type "urpx:RatePlanVersion"
                :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+               :urpx/forRatePlan {:jsonld/id "ex:parent"}
+               :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
                :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
                :urpx/effectiveDateTime "2026-03-01T00:00:00"
                :urpx/hasModifierOptions {:jsonld/id "pge:e-1-vintage-pcia"}
@@ -295,6 +301,8 @@
             modifierUniqueIdentifier (was per-version in v0.1.x)"
     (let [version {:jsonld/type "urpx:RatePlanModifierVersion"
                    :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+                   :urpx/forRatePlanModifier {:jsonld/id "ex:parent"}
+                   :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
                    :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
                    :urpx/modifierVersionNumber "2026-03-01"
                    :urpx/effectiveDateTime (LocalDateTime/of 2026 3 1 0 0)
@@ -556,6 +564,8 @@
 (def ^:private minimal-version
   {:jsonld/type "urpx:RatePlanVersion"
    :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+   :urpx/forRatePlan {:jsonld/id "ex:parent"}
+   :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
    :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
    :urpx/effectiveDateTime (LocalDateTime/of 2026 1 1 0 0)
    :urpx/hasPlanElements
@@ -593,6 +603,8 @@
               forRatePlanModifier in place of forRatePlan"
       (let [mv {:jsonld/type "urpx:RatePlanModifierVersion"
                 :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+                :urpx/forRatePlanModifier {:jsonld/id "ex:parent"}
+                :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
                 :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
                 :urpx/modifierVersionNumber "1"
                 :urpx/effectiveDateTime (LocalDateTime/of 2026 1 1 0 0)
@@ -921,6 +933,8 @@
             snapshots the standard rejects until now."
     (let [v {:jsonld/type "urpx:RatePlanVersion"
              :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+             :urpx/forRatePlan {:jsonld/id "ex:parent"}
+             :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
              :urpx/serviceRole  {:jsonld/id "urpx:bundledServiceRole"}
              :urpx/hasPlanElements (:urpx/hasPlanElements minimal-version)
              :urpx/hasPrices {:jsonld/type "urpx:Prices"}}]

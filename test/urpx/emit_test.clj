@@ -21,6 +21,8 @@
    :urpx/hasRatePlanVersion
    {:jsonld/type "urpx:RatePlanVersion"
     :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+    :urpx/forRatePlan {:jsonld/id "ex:parent"}
+    :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
     :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
     :urpx/effectiveDateTime (LocalDateTime/of 2026 1 1 0 0)
     :urpx/hasPlanElements
@@ -53,6 +55,8 @@
                   :urpx/hasRatePlanModifierVersion
                   {:jsonld/type "urpx:RatePlanModifierVersion"
                    :urpx/changeReason {:jsonld/id "urpx:rateCase"}
+                   :urpx/forRatePlanModifier {:jsonld/id "ex:parent"}
+                   :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim" :urpx/completenessResult {:jsonld/id "urpx:complete"}}
                    :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
                    :urpx/modifierVersionNumber "1.0"
                    :urpx/effectiveDateTime (LocalDateTime/of 2026 1 1 0 0)
