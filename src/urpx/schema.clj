@@ -825,6 +825,16 @@
    [:urpx/currentPrice {:optional true} Decimal]
    [:urpx/adder      {:optional true} Decimal]
    [:urpx/multiplier {:optional true} Decimal]
+   ;; CALCULATION INPUT semantics upstream, distinct from includesPrice's
+   ;; AGGREGATION. sh:or (urpx:Price, urpx:PriceSummary), and 0..N: sh:minCount
+   ;; 0 with no sh:maxCount. Ref rather than one of those two schemas because
+   ;; either may be named instead of inlined, and a bare reference says nothing
+   ;; about which; ExclusiveRef would reject the inline form upstream permits.
+   ;; `urpx.price/price-value` reads one basis and refuses, rather than picks,
+   ;; when a document states several.
+   [:urpx/basedOnPrice
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
    [:urpx/baseQuantity {:optional true} Decimal]
    [:urpx/priceCurrency {:optional true} :string]
    ;; sh:minCount 0 sh:maxCount 1 upstream: a conformant Price may omit it.
@@ -860,6 +870,32 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]])
 
+(def PriceSummary
+  "An aggregation of Prices into a subtotal, referenced by another Price's
+   urpx:basedOnPrice to express a value derived from them (a percentage
+   discount over selected line items, for instance).
+
+   urpx:includesPrice is sh:minCount 2 upstream: a summary of one price is not
+   a summary. urpx:summaryAmount is the author's own stated total, optional and
+   NOT what the resolver uses; the resolver sums the members it can resolve, so
+   an author-stated total that disagrees is visible rather than authoritative.
+
+   Which Prices a summary names is entirely the author's business, and
+   deliberately so: on one base plan a CARE summary and a FERA summary name
+   different members, some carve the base services charge out and some do not,
+   and member counts vary widely between utilities. None of that is knowable
+   here, and none of it should be."
+  [:map
+   [:jsonld/type [:= "urpx:PriceSummary"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/name {:optional true} :string]
+   [:urpx/summaryAmount {:optional true} Decimal]
+   [:urpx/includesPrice
+    {:decode/urpx-jsonld single-or-vec->vec}
+    [:and [:vector [:or Price ExclusiveRef]]
+     [:fn {:error/message "urpx:includesPrice is sh:minCount 2 upstream"}
+      #(<= 2 (count %))]]]])
+
 (def PriceSet
   [:map
    [:jsonld/type [:= "urpx:PriceSet"]]
@@ -878,6 +914,12 @@
    [:urpx/hasApplicabilityGroup
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector ApplicabilityGroup]]
+   ;; 0..N upstream. This is where a summary actually attaches: urpx:hasPriceSummary
+   ;; is rdfs:domain urpx:PriceSet, so a subtotal lives beside the line items it
+   ;; names rather than at the Prices container or the top of the graph.
+   [:urpx/hasPriceSummary
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or PriceSummary ExclusiveRef]]]
    [:urpx/hasPrice [:vector Price]]])
 
 ;; Prices is defined further down — its hasPriceSetAlternatives entry
@@ -1146,6 +1188,12 @@
    ;; one through urpx.index/single, which refuses rather than guessing.
    [:urpx/hasMetricSpecification {:optional true}
     [:or MetricSpecification [:vector MetricSpecification]]]
+   ;; 0..N upstream, same as on PriceSet: an alternative carries its own
+   ;; subtotals, since which line items a summary names depends on which
+   ;; alternative was selected.
+   [:urpx/hasPriceSummary
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or PriceSummary ExclusiveRef]]]
    [:urpx/hasPrice
     {:decode/urpx-jsonld single-or-vec->vec}
     [:vector Price]]])  ; required (sh:minCount 1)

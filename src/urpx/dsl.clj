@@ -295,6 +295,7 @@
 ;; Prices
 (def price                (make-builder schema/Price))
 (def price-set            (make-builder schema/PriceSet))
+(def price-summary        (make-builder schema/PriceSummary))
 (def prices               (make-builder schema/Prices))
 
 ;; Metadata

@@ -46,13 +46,18 @@
     (catch Exception _ nil)))
 
 (defn- vector-valued?
-  "True if the entry is 0..N: a :vector, or an :or with a :vector arm."
+  "True if the entry is 0..N: a :vector, or a combinator with a :vector arm.
+
+   Recurs through :or and :and rather than testing the arms one level deep.
+   A cardinality refinement is written [:and [:vector X] [:fn ...]] (see
+   PriceSummary/includesPrice, which is 0..N upstream but must hold at least
+   two members), and a check that stopped at the top level read that as a
+   single value and reported drift against a schema that has none."
   [child]
   (try
     (case (m/type child)
-      :vector true
-      :or     (boolean (some #(= :vector (try (m/type %) (catch Exception _ nil)))
-                             (m/children child)))
+      :vector   true
+      (:or :and) (boolean (some vector-valued? (m/children child)))
       false)
     (catch Exception _ false)))
 

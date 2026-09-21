@@ -250,6 +250,36 @@ Matrix-style modifiers (e.g. PG&E vintage-PCIA — one ledger with a price per d
 
 Prices carrying `urpx:hasDynamicPricing` (CPP Event Charges, RTP overlays, other event-driven components — applicable to base PDs and modifier PDs alike per the SHACL Price shape) are surfaced with the DynamicPricing payload attached to the resolved tier under `:urpx.resolved/dynamic-pricing`. Consumers wanting a non-event marginal rate filter on the absence of that key; consumers evaluating event state at billing time read the nested `:urpx/dynamicPricingType`, `:urpx/priceSource`, `:urpx/updateFrequency`, and `:urpx/hasPriceUpdateRule`. The resolver itself does not (yet) gate on event state — that's a caller-side responsibility until URPX standardizes a consumer-facing event-state API.
 
+### Derived prices and price summaries
+
+A `urpx:Price` need not state a `urpx:unitPrice`. It may instead carry `urpx:multiplier` together with `urpx:basedOnPrice`, naming the price it is computed from. That is how a percentage discount such as CARE or FERA is filed: the discount is a multiplier over a `urpx:PriceSummary`, which aggregates the line items the discount applies to via `urpx:includesPrice` (`sh:minCount 2` upstream). A summary hangs off a `urpx:PriceSet` or `urpx:PriceSetAlternative` through `urpx:hasPriceSummary`, beside the prices it names.
+
+`resolve-prices` values these automatically: the multiplier times the referenced Price's unit price, or times the sum of the summary's members. Which members a summary names is the author's business, and the resolver reads the list as filed rather than inferring one.
+
+The discount and the summary often live in different filings, because the discount belongs to a program modifier while the line items belong to the base plan. `resolve-prices-with-modifiers` resolves that case, since the caller has already supplied both documents and the `@id` index spans exactly what was passed in:
+
+```clojure
+(price/resolve-prices-with-modifiers plan [care-modifier] zdt)
+;; the modifier's discount Price resolves against the base plan's PriceSummary
+```
+
+Nothing is fetched behind your back. A reference this library cannot resolve from the documents it was given is reported, never silently valued:
+
+```clojure
+;; a tier whose Price could not be valued
+#:urpx.resolved{:price-id "sdge:price-care-discount"
+                :unit-price nil
+                :unvaluable {:reason :unresolved-reference
+                             :price-id "sdge:price-care-discount"
+                             :detail "urpx:basedOnPrice names ..."}}
+```
+
+The reasons are `:unresolved-reference` (the basis is not in these documents), `:summary-member-unresolved` (a member of the summary carries no resolvable unit price here), `:basis-not-valuable` (the basis resolved but has no unit price), and `:no-unit-price` (the Price states neither a unit price nor a multiplier and basis to derive one from). A nil unit price with no explanation would read to a consumer as free, which for a discount is the worst available answer; `marginal-unit-rate` therefore throws rather than return one.
+
+`urpx:basedOnPrice` has no `sh:maxCount` upstream, so a document may name several bases. There is no rule here for choosing among them, so the resolver throws instead of picking.
+
+Note that this is a second, independent way to express CARE and FERA. The `urpx:ProfileAlternatives` mechanism below files the already-discounted prices directly as an alternative price set; this one files the discount as arithmetic over the undiscounted prices. Which a plan uses is the filer's choice, and a reader should expect either.
+
 ### Customer-profile alternatives
 
 URPX v0.2.0 introduced `urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives` for declarative customer-or-configuration choices — income-tier CARE / FERA / Standard, voltage configurations, vintage-PCIA default tier, and similar. The plan declares a `urpx:ProfileAlternatives` at `PlanElements.hasProfileAlternatives` (each named alternative carries its own `hasConditionExpression`), and a sibling `urpx:PriceSetAlternatives` at `Prices.hasPriceSetAlternatives` exposes one Price-bearing `PriceSetAlternative` per alternative.
