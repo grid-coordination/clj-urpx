@@ -22,6 +22,7 @@
            none, so FERA pays the DWR Bond Charge and the Wildfire Fund NBC and
            CARE does not."
   (:require [clojure.set :as set]
+            [clojure.walk]
             [clojure.test :refer [deftest is testing]]
             [urpx.index :as index]
             [urpx.price :as price]
@@ -188,3 +189,69 @@
         (is (nil? (:urpx/unitPrice node)) "no stated unit price")
         (is (some? (:urpx/multiplier node)))
         (is (some? (:urpx/basedOnPrice node)))))))
+
+(deftest the-tier-discriminator-is-read-from-either-placement
+  (testing "URPX puts urpx:serviceTierNumber on both urpx:Price and
+            urpx:PriceDefinition, and filings use both. 69 of 73 corpus filings
+            carry it on the DEFINITION, one per tier, which is the house idiom;
+            this fixture is pinned before that idiom and carries it on the
+            PRICE.
+
+            The first version of the summary tier fix read only the Price, so
+            it computed the right answer on this fixture and no answer at all
+            on the corpus. tier-info has read both since long before, three
+            hundred lines up in the same file; not reusing it was the defect.
+
+            Pinned for BOTH placements, because a test covering one is exactly
+            what let the narrow version through."
+    (let [care     (fixtures/load-modifier "sce-care-2026-03-20")
+          on-price (fixtures/load-rate-plan "sce-d-2026-03-20")
+          tiered   (->> (index/entities-of-type on-price "urpx:Price")
+                        vals (filter :urpx/serviceTierNumber)
+                        (sort-by :urpx/serviceTierNumber))
+          shared   (get-in (first tiered) [:urpx/referencesPriceDefinition :jsonld/id])
+          split-id #(str shared "-tier-" %)
+          ;; Relocate the way the corpus does: SPLIT the shared definition into
+          ;; one per tier and repoint each Price at its own. Merely moving the
+          ;; number onto the single shared definition is not faithful and
+          ;; produces a right-looking answer by luck.
+          on-pd (-> (clojure.walk/postwalk
+                     (fn [n]
+                       (if (and (map? n) (= "urpx:Price" (:jsonld/type n))
+                                (:urpx/serviceTierNumber n))
+                         (-> n
+                             (assoc :urpx/referencesPriceDefinition
+                                    {:jsonld/id (split-id (:urpx/serviceTierNumber n))})
+                             (dissoc :urpx/serviceTierNumber))
+                         n))
+                     on-price)
+                    (update-in [:urpx/hasRatePlanVersion :urpx/hasPlanElements
+                                :urpx/hasBillingModel :urpx/hasPriceDefinition]
+                               (fn [pds]
+                                 (let [base (some #(when (= shared (:jsonld/id %)) %) pds)]
+                                   (into (vec (remove #(= shared (:jsonld/id %)) pds))
+                                         (for [t (map :urpx/serviceTierNumber tiered)]
+                                           (assoc base :jsonld/id (split-id t)
+                                                  :urpx/serviceTierNumber t)))))))
+          discount (fn [plan]
+                     (->> (price/resolve-prices-with-modifiers plan [care] (summer-peak))
+                          :urpx.resolved/ledgers
+                          (mapcat :urpx.resolved/tiers)
+                          (filter #(= "sce:care-price-bill-discount-2026-03-20"
+                                      (:urpx.resolved/price-id %)))
+                          first :urpx.resolved/unit-price))]
+
+      (testing "the relocation is faithful, or this proves nothing"
+        (is (= 2 (count tiered)) "two CIA rungs to relocate")
+        (is (some? shared) "which shared one definition before")
+        (is (not-any? :urpx/serviceTierNumber
+                      (vals (index/entities-of-type on-pd "urpx:Price")))
+            "no Price carries the number any more")
+        (is (= 2 (count (filter :urpx/serviceTierNumber
+                                (vals (index/entities-of-type on-pd "urpx:PriceDefinition")))))
+            "and two definitions carry it, one per rung"))
+
+      (is (= -0.10070125M (discount on-price)) "discriminator on the Price")
+      (is (= -0.10070125M (discount on-pd)) "discriminator on the PriceDefinition")
+      (is (= (discount on-price) (discount on-pd))
+          "the placement a filer chose must not change the answer"))))

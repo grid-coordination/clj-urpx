@@ -9,6 +9,16 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [0.23.0] — 2026-09-21
+
+### Fixed
+
+- **The 0.22.0 summary tier fix could not reach the corpus.** It read `urpx:serviceTierNumber` from the member Price only, with no fallback to the Price's `PriceDefinition`. URPX puts the property on both, and **69 of 73 corpus filings carry it on the definition**, one per tier, which is the house idiom; the fixture that validated the fix is pinned at a commit predating that idiom and carries it on the Price. So the fix computed the right answer on the fixture and no answer at all on real filings: SCE Schedule D's CARE discount stayed at −0.12139725 where −0.10070125 is correct.
+
+  `tier-info` has read both placements since long before, three hundred lines up in the same file. Writing a second, narrower rule instead of reusing it was the defect. Both placements now give −0.10070125, and a test pins both, because a test covering one placement is exactly what let the narrow version through.
+
+  Reported by the urpx-tariffs session, who declined to work around it on the data side: putting the discriminator back on the Price would have made SCE D the only filing in 73 doing so, which is the anomaly that caused the 3.09× SDG&E defect in the first place.
+
 ## [0.22.0] — 2026-09-21
 
 Silent losses. A sweep looked for every way a SHACL-conformant document can lose content or produce a wrong number with no diagnostic; it returned seven confirmed findings, rejected nineteen candidates as correct gating or existing loud refusals, and caught four overclaims among its own results. Two more came from the urpx-tariffs session. **Resolved prices change on filings that carry any of these shapes.**
@@ -276,6 +286,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.23.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.23.0
 [0.22.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.22.0
 [0.21.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.21.0
 [0.20.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.20.0

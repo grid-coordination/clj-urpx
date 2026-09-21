@@ -675,8 +675,20 @@
                   :else
                   ;; only the members in effect at this instant: a subtotal that
                   ;; summed inactive line items would be a confident wrong number
-                  (let [active (-> (filterv member-active? nodes)
-                                   (additive-plus-lowest-rung :urpx/serviceTierNumber))
+                  (let [;; Price first, then its PriceDefinition. URPX puts
+                        ;; urpx:serviceTierNumber on both, tier-info at the
+                        ;; resolved-tier site has read it that way all along,
+                        ;; and reading only the Price here made the fix
+                        ;; unreachable for the 69 of 73 filings that carry the
+                        ;; discriminator on the definition. The fixture that
+                        ;; passed is pinned before that idiom was adopted.
+                        tier-of (fn [m]
+                                  (or (:urpx/serviceTierNumber m)
+                                      (:urpx/serviceTierNumber
+                                       (get by-id (get-in m [:urpx/referencesPriceDefinition
+                                                             :jsonld/id])))))
+                        active (-> (filterv member-active? nodes)
+                                   (additive-plus-lowest-rung tier-of))
                         values (mapv :urpx/unitPrice active)]
                     (cond
                       (empty? active)
