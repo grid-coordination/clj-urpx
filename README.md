@@ -439,7 +439,11 @@ This is the **selection layer**, and URPX is explicit that it is distinct from t
    {"pge:bsc-income-tier" "pge:bsc-care"}})
 ```
 
-Unmapped alternatives are silently skipped — only the explicitly-chosen alternative's prices surface. Programmatic evaluation of each alternative's `urpx:ConditionExpression` against a customer profile is a future enhancement.
+Without a selection an alternative's prices are **withheld**, and the ledger they would have populated survives carrying `:urpx.resolved/unselected-alternatives`, naming the PriceDefinitions whose prices were held back. It is not silently omitted: a consumer can tell an unchosen dimension from a plan that has none.
+
+`marginal-unit-rate` refuses only when a withheld ledger is **energy**-measured, since withholding a per-day base charge cannot change a per-kWh figure. PG&E E-TOU-C exercises both on one plan: its income-tier alternatives feed a Base Services Charge ledger and do not refuse; its vintage-PCIA alternatives feed an energy ledger and do.
+
+Programmatic evaluation of each alternative's `urpx:ConditionExpression` against a customer profile is a future enhancement.
 
 ### Sub-hour granularity
 

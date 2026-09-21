@@ -9,6 +9,21 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [0.24.0] — 2026-09-21
+
+The last two findings from the silent-drop sweep, which share one cause: the unselected-alternatives mark was computed from surviving tier entries, and a ledger with none is elided before anything can mark it.
+
+### Fixed
+
+- **An unselected `urpx:PriceSetAlternatives` vanished without trace on the base plan path.** `prices-from-alternatives` contributes nothing for a set the caller made no selection for, so the prices, the ledger they would have populated, and any evidence they existed all disappeared together. **Six shipped base versions** carry such a set. The ledger now survives carrying `:urpx.resolved/unselected-alternatives`, so a consumer can tell an unchosen dimension from a plan that has none.
+- **Emptying an alternatives ledger deleted the refusal that guards it.** Because the mark came from surviving tiers, any route that emptied the ledger also removed the protection: dating PG&E's 18 vintage-PCIA prices into the future took `marginal-unit-rate` from refusing to answering 0.46886, silently short a component spanning 0.06391/kWh. Removing content can no longer remove a guard.
+
+  Its originally reported trigger — stripping `urpx:startDate` from those prices — was already neutralized by the 0.22.0 start-date fix and now refuses correctly. The defect survived that; only the route to it changed.
+
+### Changed
+
+- The refusal is **energy-aware**. A withheld ledger refuses the per-kWh rate only when it is energy-measured, because withholding a per-day base charge cannot change a per-kWh figure. PG&E E-TOU-C exercises both shapes on one plan.
+
 ## [0.23.0] — 2026-09-21
 
 ### Fixed
@@ -286,6 +301,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.24.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.24.0
 [0.23.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.23.0
 [0.22.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.22.0
 [0.21.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.21.0

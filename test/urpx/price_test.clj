@@ -137,13 +137,25 @@
         (is (some? (:urpx.resolved/tier-lower-bound-operator t1)))
         (is (some? (:urpx.resolved/tier-upper-bound-operator t1)))))))
 
-(deftest e-1-base-charge-skipped-from-instant-resolution
-  (testing "the daily base-charge PriceDefinition has hasCalculationMethod set,
-            so its Prices are excluded from per-instant resolution"
+(deftest e-1-base-charge-is-withheld-not-absent
+  (testing "PG&E E-1's Base Services Charge sits behind an income-tier
+            urpx:PriceSetAlternatives, so without a selection its prices are
+            withheld and the ledger is marked.
+
+            This test previously asserted the ledger was ABSENT, and attributed
+            that to the PriceDefinition's urpx:hasCalculationMethod. That
+            explanation stopped being true in 0.16.0, when recurring charges
+            began to surface; the assertion kept passing only because the
+            alternatives path was eliding the ledger for an unrelated reason.
+            A test passing for a reason its own docstring does not state is
+            worth as little as one that does not pass."
     (let [plan (fixtures/load-rate-plan "pge-e-1-2026-03-01")
           r (price/resolve-prices plan (zdt 2026 8 1 12))
-          names (set (map :urpx.resolved/ledger-name (:urpx.resolved/ledgers r)))]
-      (is (not (contains? names "Base Services Charge"))))))
+          l (some #(when (= "Base Services Charge" (:urpx.resolved/ledger-name %)) %)
+                  (:urpx.resolved/ledgers r))]
+      (is (some? l) "present, so the caller can see a dimension went unchosen")
+      (is (empty? (:urpx.resolved/tiers l)))
+      (is (seq (:urpx.resolved/unselected-alternatives l))))))
 
 (deftest e-1-marginal-rate-uses-lowest-tier
   (let [plan (fixtures/load-rate-plan "pge-e-1-2026-03-01")
@@ -1090,14 +1102,23 @@
       (is (= 1 (count tiers)))
       (is (= (BigDecimal. "0.20") (:urpx.resolved/unit-price (first tiers)))))))
 
-(deftest bsc-no-selection-skips-alternative
-  (testing "URPX-vlf: without :profile-alternatives, alternatives are silently
-            skipped (no BSC price surfaces). Future enhancement: programmatic
-            ConditionExpression evaluation against a customer profile."
+(deftest bsc-no-selection-marks-the-withheld-alternative
+  (testing "without :profile-alternatives the alternative's prices are withheld,
+            and the LEDGER now survives carrying
+            :urpx.resolved/unselected-alternatives rather than disappearing.
+
+            The earlier version of this test asserted the disappearance, in a
+            docstring that described it as prices being `silently skipped`. That
+            was the defect stated as the specification: the prices, the ledger
+            and any evidence they existed all vanished together, so a consumer
+            could not tell an unselected dimension from a plan that has none."
     (let [plan (bsc-fixture)
-          r (price/resolve-prices plan (zdt 2026 7 15 17))]
-      (is (nil? (ledger-by-name r "Basic Service Charge"))
-          "ledger has no tier entries → it's omitted from the resolved output"))))
+          r (price/resolve-prices plan (zdt 2026 7 15 17))
+          l (ledger-by-name r "Basic Service Charge")]
+      (is (some? l) "the ledger survives so the withholding is visible")
+      (is (empty? (:urpx.resolved/tiers l)) "carrying no prices")
+      (is (seq (:urpx.resolved/unselected-alternatives l))
+          "and naming the definitions whose prices were withheld"))))
 
 (deftest bsc-unknown-selection-skips-alternative
   (testing "URPX-vlf: a selection pointing at an unknown ProfileAlternative @id
@@ -1275,7 +1296,7 @@
                                :urpx/hasSeasons]
                               (:urpx/hasSeasons pe)))]
       (doseq [holiday? [(constantly true) (constantly false)]]
-        (is (= 4 (count (:urpx.resolved/ledgers
+        (is (= 5 (count (:urpx.resolved/ledgers
                          (price/resolve-prices-with-modifiers
                           plan [modi'] (zdt 2026 7 15 17) {:holiday? holiday?}))))
             "composition must not depend on whether the day is a holiday")))))
@@ -1338,7 +1359,9 @@
           composed (price/resolve-prices-with-modifiers plan [modi] when-)]
 
       (testing "all 18 still surface, and the ledger says why it cannot be summed"
-        (let [l (some #(when (:urpx.resolved/unselected-alternatives %) %)
+        ;; by id: the BASE plan now also carries a marked ledger, its
+        ;; income-tier BSC, so `some` on the mark alone would pick either
+        (let [l (some #(when (= "pge:ledger-vintage-pcia" (:urpx.resolved/ledger-id %)) %)
                       (:urpx.resolved/ledgers composed))]
           (is (some? l) "the alternatives-bearing ledger is marked")
           (is (= 18 (count (:urpx.resolved/tiers l))))
@@ -1801,3 +1824,53 @@
                      first)]
           (is (= -0.2999885M (:urpx.resolved/unit-price t))
               "the instant-correct discount; -0.9255435M was the overstatement"))))))
+
+(deftest an-emptied-alternatives-ledger-still-refuses
+  (testing "the guard used to be deletable by the very thing it guards against.
+            The unselected mark was computed from SURVIVING tier entries, and a
+            ledger with none is elided before anything can mark it, so any
+            route that emptied an alternatives ledger also removed the refusal
+            protecting it.
+
+            Dating PG&E's 18 vintage-PCIA prices into the future took
+            marginal-unit-rate from refusing to answering 0.46886, a rate
+            silently missing a component spanning 0.06391/kWh."
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          modi (fixtures/load-modifier "pge-e-tou-c-2026-03-01")
+          v18  (into #{} (map #(str "pge:price-vpcia-" %)) (range 2009 2027))
+          futured (clojure.walk/postwalk
+                   (fn [n] (if (and (map? n) (v18 (:jsonld/id n)))
+                             (assoc n :urpx/startDate (java.time.LocalDate/of 2030 1 1))
+                             n))
+                   modi)
+          rate (fn [m] (try (price/marginal-unit-rate
+                             (price/resolve-prices-with-modifiers plan [m] (zdt 2026 7 15 17)))
+                            (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))]
+      (is (= :unselected-alternatives (rate modi)) "intact: refuses, as it always did")
+      (is (= :unselected-alternatives (rate futured))
+          "emptied: must STILL refuse, or removing content removed the guard")
+
+      (testing "and a selection resolves it either way, so the refusal is not a
+                blanket one"
+        (let [sel {:profile-alternatives {"pge:pa-departure-vintage" "pge:pa-vintage-2020"}}]
+          (is (some? (price/marginal-unit-rate
+                      (price/resolve-prices-with-modifiers plan [modi] (zdt 2026 7 15 17) sel)))))))))
+
+(deftest a-withheld-non-energy-dimension-does-not-refuse-the-rate
+  (testing "the refusal is energy-aware, deliberately. PG&E E-TOU-C's
+            income-tier alternatives feed a Base Services Charge ledger whose
+            metric input is not energy-kind, so withholding it cannot change a
+            per-kWh figure and must not refuse one. The vintage-PCIA
+            alternatives DO feed an energy ledger, and do refuse.
+
+            Both shapes resolve on the same plan, which is why the distinction
+            is made at the ledger rather than at the document."
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          r    (price/resolve-prices plan (zdt 2026 7 15 17))
+          withheld (filter :urpx.resolved/unselected-alternatives (:urpx.resolved/ledgers r))]
+      (is (seq withheld) "the base plan does withhold a dimension")
+      (is (not-any? #(= "urpx:energy" (get-in % [:urpx.resolved/measurement-kind :jsonld/id]))
+                    withheld)
+          "and it is not an energy one")
+      (is (= 0.46886M (price/marginal-unit-rate r))
+          "so the per-kWh rate answers rather than refusing"))))

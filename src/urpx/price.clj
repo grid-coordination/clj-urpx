@@ -362,6 +362,27 @@
               (keep :jsonld/id))
         (:urpx/hasPriceSetAlternatives prices)))
 
+(defn- withheld-alternative-pds
+  "The @ids of PriceDefinitions whose Prices exist only inside a
+   urpx:PriceSetAlternatives the caller supplied no selection for.
+
+   A ledger fed only by such definitions resolves to no tiers and is then
+   elided, taking with it both the prices AND any signal that they were
+   withheld. On the base plan path that is the whole failure: an unselected set
+   contributes nothing, so the prices, the ledger and the evidence disappear
+   together, and six shipped base versions carry one. On the modifier path it
+   defeats an existing guard, because the unselected mark is computed from
+   surviving tier entries and there are none: dating PG&E's 18 vintage-PCIA
+   prices into the future took marginal-unit-rate from refusing to answering
+   0.46886. Removing content should not remove a refusal."
+  [prices selection]
+  (into #{}
+        (comp (remove #(get selection (get-in % [:urpx/referencesProfileAlternatives :jsonld/id])))
+              (mapcat :urpx/hasPriceSetAlternative)
+              (mapcat :urpx/hasPrice)
+              (keep #(get-in % [:urpx/referencesPriceDefinition :jsonld/id])))
+        (:urpx/hasPriceSetAlternatives prices)))
+
 (defn- service-tiers-by-number
   "Index ServiceTier entities (across every ServiceTiers container at
    BillingModel.hasServiceTiers, walking each container's :urpx/hasServiceTier
@@ -1031,12 +1052,18 @@
                                          (assoc :urpx.resolved/dynamic-pricing
                                                 (:urpx/hasDynamicPricing price))))))
                            (sort-by #(or (:urpx.resolved/tier-number %) 0))
-                           vec)]
-                :when (seq tier-entries)]
+                           vec)
+                      withheld (when (empty? tier-entries)
+                                 (seq (filter (withheld-alternative-pds
+                                               prices (:profile-alternatives opts))
+                                              (map :jsonld/id ledger-pds))))]
+                :when (or (seq tier-entries) withheld)]
             (merge {:urpx.resolved/ledger-id   (:jsonld/id ledger)
                     :urpx.resolved/ledger-name (:urpx/name ledger)
                     :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
-                    :urpx.resolved/tiers       tier-entries}
+                    :urpx.resolved/tiers       (vec tier-entries)}
+                   (when withheld
+                     {:urpx.resolved/unselected-alternatives (vec withheld)})
                    (ledger-metric-info ledger mi-index))))]
 
      (merge
@@ -1152,13 +1179,18 @@
                       ;; tier number. Unsorted, the modifier path handed it
                       ;; whatever came first in the document.
                       (sort-by #(or (:urpx.resolved/tier-number %) 0))
-                      vec)]
-           :when (seq tier-entries)]
+                      vec)
+                 withheld (when (empty? tier-entries)
+                            (seq (filter (withheld-alternative-pds
+                                          prices (:profile-alternatives opts))
+                                         (map :jsonld/id ledger-pds))))]
+           :when (or (seq tier-entries) withheld)]
        (merge {:urpx.resolved/ledger-id   (:jsonld/id ledger)
                :urpx.resolved/ledger-name (:urpx/name ledger)
                :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
-               :urpx.resolved/tiers       tier-entries}
-              (when-let [ids (seq (filter unselected (map :urpx.resolved/price-id tier-entries)))]
+               :urpx.resolved/tiers       (vec tier-entries)}
+              (when-let [ids (or (seq (filter unselected (map :urpx.resolved/price-id tier-entries)))
+                                 withheld)]
                 {:urpx.resolved/unselected-alternatives (vec ids)})
               (ledger-metric-info ledger mi-index)))))))
 
@@ -1340,7 +1372,12 @@
                         (filter #(and (= "urpx:energy"
                                          (get-in % [:urpx.resolved/measurement-kind :jsonld/id]))
                                       (import-energy-ledger? %)
-                                      (seq (:urpx.resolved/tiers %)))))
+                                      ;; A ledger whose prices were WITHHELD by an
+                                      ;; unselected alternatives set has no tiers and
+                                      ;; still counts, or the refusal below would be
+                                      ;; deleted by the very thing it guards against.
+                                      (or (seq (:urpx.resolved/tiers %))
+                                          (:urpx.resolved/unselected-alternatives %)))))
         ;; A ledger of mutually-exclusive alternatives has no marginal tier
         ;; until the caller says which alternative applies. Taking the first
         ;; added an arbitrary one of PG&E's 18 vintage-PCIA prices to every
