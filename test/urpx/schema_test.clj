@@ -649,3 +649,80 @@
     (testing "a number is not a context in any encoding"
       (is (not (m/validate s/Context 42)))
       (is (not (m/validate s/Context [42]))))))
+
+;; ---------------------------------------------------------------------------
+;; v0.5.1 DataSourceReference flattening, and the publication split
+;; ---------------------------------------------------------------------------
+
+(deftest data-source-reference-accepts-flattened-and-nested
+  (testing "v0.5.1 hoists leafStart/leafEnd/tariffStatementType inline and
+            deletes urpx:TariffBookReference; the flattened node validates with
+            no nested reference present"
+    (let [flat {:jsonld/type "urpx:DataSourceReference"
+                :urpx/fileName "x.pdf"
+                :urpx/pageStart 1
+                :urpx/pageEnd 6
+                :urpx/leafStart "61096-E"
+                :urpx/leafEnd "61101-E"
+                :urpx/anchorLink "#sheet-61096"
+                :urpx/tariffStatementType {:jsonld/id "urpx:distributionStatement"}
+                :urpx/sourcePublication {:jsonld/id "pge:pub-1"}
+                :urpx/hasSelector {:jsonld/id "pge:sel-1"}}]
+      (is (nil? (m/explain s/DataSourceReference (coerce/coerce s/DataSourceReference flat))))))
+  (testing "the v0.2.x nested form still validates: every filing in the corpus
+            carries it and nothing is removed until the last wave"
+    (let [nested {:jsonld/type "urpx:DataSourceReference"
+                  :urpx/fileName "x.pdf"
+                  :urpx/hasTariffBookReference
+                  {:jsonld/type "urpx:TariffBookReference"
+                   :urpx/pageStart 1 :urpx/pageEnd 6
+                   :urpx/leafStart "61096-E" :urpx/leafEnd "61101-E"}}]
+      (is (nil? (m/explain s/DataSourceReference (coerce/coerce s/DataSourceReference nested)))))))
+
+(deftest source-publication-dual-accepts-both-vocabularies
+  (let [base {:urpx/name "PG&E Electric Schedule E-1"
+              :urpx/filingNumber "ELEC-4321-E"
+              :urpx/issuingAuthority "CPUC"
+              :urpx/publicationType {:jsonld/id "urpx:tariffBook"}}]
+    (testing "both the v0.5.1 and the v0.2.x @type validate, because the corpus
+              carries both at once through the waves"
+      (is (m/validate s/SourcePublication (assoc base :jsonld/type "urpx:SourcePublication")))
+      (is (m/validate s/SourcePublication (assoc base :jsonld/type "urpx:TariffPublication"))))
+    (testing "an unrelated @type does not"
+      (is (not (m/validate s/SourcePublication (assoc base :jsonld/type "urpx:RatePlan")))))
+    (testing "the v0.2.1-only paths v0.5.1 drops are still accepted, since the
+              vendored fixtures carry them"
+      (is (m/validate s/SourcePublication
+                      (assoc base :jsonld/type "urpx:TariffPublication"
+                             :urpx/hasRatePlan [{:jsonld/id "pge:e-1"}]
+                             :urpx/hasRatePlanModifier [{:jsonld/id "pge:pcia"}]))))
+    (testing "publishedBy takes an inline Organization or a bare reference, and
+              a malformed organization is not waved through the reference arm"
+      (is (m/validate s/SourcePublication
+                      (assoc base :jsonld/type "urpx:SourcePublication"
+                             :urpx/publishedBy {:jsonld/id "org:pge"})))
+      (is (m/validate s/SourcePublication
+                      (assoc base :jsonld/type "urpx:SourcePublication"
+                             :urpx/publishedBy {:jsonld/type "urpx:Organization"
+                                                :urpx/legalName "PG&E"
+                                                :urpx/organizationType
+                                                {:jsonld/id "urpx:investorOwnedUtility"}})))
+      (is (not (m/validate s/SourcePublication
+                           (assoc base :jsonld/type "urpx:SourcePublication"
+                                  :urpx/publishedBy {:jsonld/id "org:pge"
+                                                     :urpx/legalName 42})))))))
+
+(deftest tariff-filing-requires-contains-pricing-model
+  (let [filing {:jsonld/type "urpx:TariffFiling"
+                :urpx/name "Advice 1234-E"
+                :urpx/containsPricingModel [{:jsonld/id "pge:pm-1"}]}]
+    (is (m/validate s/TariffFiling filing))
+    (testing "containsPricingModel is the shape's only sh:minCount 1"
+      (is (not (m/validate s/TariffFiling (dissoc filing :urpx/containsPricingModel)))))
+    (testing "a single map normalizes to a vector through the decoder"
+      (let [coerced (coerce/coerce s/TariffFiling
+                                   (assoc filing :urpx/containsPricingModel
+                                          {:jsonld/id "pge:pm-1"}))]
+        (is (vector? (:urpx/containsPricingModel coerced)))))
+    (testing "TariffFiling is v0.5.1-only: there is no v0.2.x @type to accept"
+      (is (not (m/validate s/TariffFiling (assoc filing :jsonld/type "urpx:TariffPublication")))))))

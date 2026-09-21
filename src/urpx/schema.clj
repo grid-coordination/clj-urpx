@@ -812,6 +812,11 @@
    [:urpx/organizationType Ref]])
 
 (def TariffBookReference
+  "v0.2.x only. urpx:TariffBookReference was DELETED upstream in bbaea780 and
+   has zero occurrences in the v0.5.1 ontology and SHACL; its fields moved
+   inline onto urpx:DataSourceReference, whose shape is now sh:closed. Retained
+   to validate v0.2.x filings, which is every filing in the corpus today.
+   Remove only once the last migration wave lands."
   [:map
    [:jsonld/type [:= "urpx:TariffBookReference"]]
    [:jsonld/id {:optional true} :string]
@@ -840,6 +845,23 @@
    [:urpx/expirationDate  {:optional true} Date]
    [:urpx/pageStart {:optional true} Int]
    [:urpx/pageEnd   {:optional true} Int]
+   ;; v0.5.1 flattening (upstream bbaea780): urpx:TariffBookReference and
+   ;; urpx:TariffStatementReference were deleted and their fields hoisted
+   ;; inline onto this node, which is now sh:closed with 31 paths and nothing
+   ;; required. hasSelector and sourcePublication are not new, merely never
+   ;; modeled here.
+   [:urpx/leafStart  {:optional true} :string]
+   [:urpx/leafEnd    {:optional true} :string]
+   [:urpx/anchorLink {:optional true} :string]
+   ;; Ref, not a typed schema: oa:Selector is an external Web Annotation class
+   ;; the ontology deliberately does not import, and the shape constrains only
+   ;; sh:class oa:Selector.
+   [:urpx/hasSelector {:optional true} Ref]
+   [:urpx/sourcePublication {:optional true} Ref]
+   ;; Enum membership deliberately unenforced here; see the enum issue.
+   [:urpx/tariffStatementType {:optional true} Ref]
+   ;; v0.2.x nesting, kept so every corpus filing still validates. The
+   ;; flattened form above is what a v0.5.1 filing carries instead.
    [:urpx/hasTariffBookReference {:optional true} TariffBookReference]])
 
 ;; ---------------------------------------------------------------------------
@@ -1301,5 +1323,109 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector :map]]
    [:urpx/packages
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector :map]]])
+
+;; ---------------------------------------------------------------------------
+;; Publications and filings
+;;
+;; v0.3.0 split the v0.2.x urpx:TariffPublication into urpx:SourcePublication,
+;; the external published source URPX cites, and urpx:TariffFiling, the URPX
+;; content unit. Both shapes are sh:closed upstream; clj-urpx does not enforce
+;; closedness, so unmodeled fields flow through.
+;; ---------------------------------------------------------------------------
+
+(def SourcePublication
+  "An external published source a URPX fact cites: a tariff book, a statement,
+   a market price feed. Neither a super- nor a subclass of urpx:URPXPackage;
+   they are siblings.
+
+   Dual-accept: the @type admits both the v0.5.1 urpx:SourcePublication and the
+   v0.2.x urpx:TariffPublication, because the corpus migrates utility by
+   utility and carries both at once. That is also why this schema has no DSL
+   builder: `urpx.dsl/make-builder` requires a `[:= \"...\"]` type entry and
+   throws on an `:enum`.
+
+   urpx-shacl:SourcePublicationShape has 23 paths and requires nothing. The
+   entries below it are v0.2.1 TariffPublicationShape paths that v0.5.1 drops;
+   the vendored PG&E fixtures carry hasRatePlan and hasRatePlanModifier, so
+   omitting them would break the suite."
+  [:map
+   [:jsonld/type [:enum "urpx:SourcePublication" "urpx:TariffPublication"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/name             {:optional true} :string]
+   [:urpx/description      {:optional true} :string]
+   [:urpx/version          {:optional true} :string]
+   [:urpx/url              {:optional true} :string]
+   [:urpx/filingNumber     {:optional true} :string]
+   [:urpx/issuingAuthority {:optional true} :string]
+   [:urpx/pageReference    {:optional true} :string]
+   [:urpx/publicationType  {:optional true} Ref]
+   [:urpx/publishedBy      {:optional true} [:or Organization ExclusiveRef]]
+   [:urpx/dateApproved      {:optional true} Date]
+   [:urpx/dateTimeApproved  {:optional true} DateTime]
+   [:urpx/dateCreated       {:optional true} Date]
+   [:urpx/dateTimeCreated   {:optional true} DateTime]
+   [:urpx/dateModified      {:optional true} Date]
+   [:urpx/dateTimeModified  {:optional true} DateTime]
+   [:urpx/datePublished     {:optional true} Date]
+   [:urpx/dateTimePublished {:optional true} DateTime]
+   [:urpx/dateReceived      {:optional true} Date]
+   [:urpx/dateTimeReceived  {:optional true} DateTime]
+   [:urpx/effectiveDate     {:optional true} Date]
+   [:urpx/effectiveDateTime {:optional true} DateTime]
+   [:urpx/expirationDate    {:optional true} Date]
+   [:urpx/expirationDateTime {:optional true} DateTime]
+   ;; v0.2.1 TariffPublicationShape paths that v0.5.1 drops. Accept-if-present.
+   [:urpx/priceCurrency        {:optional true} :string]
+   [:urpx/timezoneIdentifier   {:optional true} :string]
+   [:urpx/expectedEndDate      {:optional true} Date]
+   [:urpx/expectedEndDateTime  {:optional true} DateTime]
+   [:urpx/hasRatePlan
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector :map]]
+   [:urpx/hasRatePlanModifier
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector :map]]
+   [:urpx/hasDataSourceReference
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector :map]]])
+
+(def TariffFiling
+  "The URPX content unit of the v0.3.0 publication split, the half that carries
+   pricing rather than citing a source. v0.5.1 only; there is no v0.2.x
+   equivalent to dual-accept.
+
+   urpx:containsPricingModel is the shape's only required property and is
+   unbounded. urpx:PricingModel is not modeled in clj-urpx, so it and the other
+   entity-valued slots stay loose maps rather than typed schemas."
+  [:map
+   [:jsonld/type [:= "urpx:TariffFiling"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/containsPricingModel
+    {:decode/urpx-jsonld single-or-vec->vec}
+    [:vector :map]]
+   [:urpx/name        {:optional true} :string]
+   [:urpx/description {:optional true} :string]
+   [:urpx/publishedBy {:optional true} [:or Organization ExclusiveRef]]
+   [:urpx/effectiveDate      {:optional true} Date]
+   [:urpx/effectiveDateTime  {:optional true} DateTime]
+   [:urpx/expirationDate     {:optional true} Date]
+   [:urpx/expirationDateTime {:optional true} DateTime]
+   [:urpx/dateModified       {:optional true} Date]
+   [:urpx/dateTimeModified   {:optional true} DateTime]
+   [:urpx/cancelledOn         {:optional true} Date]
+   [:urpx/cancelledOnDateTime {:optional true} DateTime]
+   [:urpx/cancelledBy {:optional true} :map]
+   [:urpx/replacedBy  {:optional true} :map]
+   [:urpx/replaces    {:optional true} :map]
+   [:urpx/supersedes  {:optional true} :map]
+   [:urpx/cancelsPriceDefinition
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector :map]]
+   [:urpx/documentedBy
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector :map]]
+   [:urpx/hasGeneralRule
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector :map]]])
