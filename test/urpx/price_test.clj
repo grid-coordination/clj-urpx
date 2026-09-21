@@ -3,6 +3,7 @@
             [urpx.coerce :as coerce]
             [urpx.core :as core]
             [urpx.emit :as emit]
+            [urpx.index :as index]
             [urpx.price :as price]
             [urpx.test-fixtures :as fixtures])
   (:import [java.math BigDecimal]
@@ -1078,3 +1079,57 @@
                          coerce/coerce-rate-plan)]
       (is (= plan re-coerced)
           "structural equivalence under emit + re-parse"))))
+
+;; ---------------------------------------------------------------------------
+;; v0.5.1 un-nesting: the version reached through forRatePlan rather than
+;; nested under the plan
+;; ---------------------------------------------------------------------------
+
+(defn- un-nest
+  "Split a v0.2.x coerced plan into the v0.5.1 shape: an identity shell with no
+   nested version, plus a top-level snapshot pointing back via forRatePlan."
+  [plan nested-key back-key]
+  (let [version (nested-key plan)]
+    [(dissoc plan nested-key)
+      (assoc version back-key {:jsonld/id (:jsonld/id plan)})]))
+
+(deftest un-nested-version-resolves-identically-to-nested
+  (testing "a plan whose version is top-level and linked by forRatePlan
+            resolves to exactly the same prices as the nested form, whether the
+            snapshot arrives explicitly or through the back-pointer index"
+    (let [plan     (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          [shell snapshot] (un-nest plan :urpx/hasRatePlanVersion :urpx/forRatePlan)
+          when-zdt (zdt 2026 7 15 17)
+          nested   (price/resolve-prices plan when-zdt)
+          explicit (price/resolve-prices shell when-zdt {:version snapshot})
+          by-plan  (index/versions-by-plan [shell snapshot])
+          indexed  (price/resolve-prices shell when-zdt {:versions-by-plan by-plan})]
+      (is (seq (:urpx.resolved/ledgers nested)) "the nested baseline must be non-empty")
+      (is (= nested explicit) "explicit :version must match the nested result")
+      (is (= nested indexed)  "the back-pointer index must match the nested result")
+      (testing "and the index really is what resolved it: the bare shell alone
+                yields nothing, so the equality above is not accidental"
+        (is (empty? (:urpx.resolved/ledgers (price/resolve-prices shell when-zdt))))))))
+
+(deftest versions-by-plan-keys-on-the-back-pointer
+  (testing "index/versions-by-plan finds a snapshot by the @id it points back at,
+            for both the plan and the modifier back-pointers"
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          [shell snapshot] (un-nest plan :urpx/hasRatePlanVersion :urpx/forRatePlan)
+          by-plan (index/versions-by-plan [shell snapshot])]
+      (is (= [snapshot] (get by-plan (:jsonld/id plan))))
+      (is (= 1 (count by-plan))))
+    (let [modifier (fixtures/load-modifier "pge-e-tou-c-2026-03-01")
+          [shell snapshot] (un-nest modifier :urpx/hasRatePlanModifierVersion
+                                    :urpx/forRatePlanModifier)
+          by-plan (index/versions-by-plan [shell snapshot])]
+      (is (= [snapshot] (get by-plan (:jsonld/id modifier)))))))
+
+(deftest un-nested-holiday-calendar-still-found
+  (testing "holiday gating survives un-nesting: E-TOU-D peak is weekday-only and
+            a holiday must read as off-peak through the un-nested path too"
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-d-2026-03-27")
+          [shell snapshot] (un-nest plan :urpx/hasRatePlanVersion :urpx/forRatePlan)
+          july4 (zdt 2026 7 3 18)]
+      (is (= (price/resolve-prices plan july4)
+             (price/resolve-prices shell july4 {:version snapshot}))))))

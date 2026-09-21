@@ -45,6 +45,19 @@
   [raw]
   (coerce schema/RatePlanModifier raw))
 
+(defn coerce-rate-plan-version
+  "Coerce a raw top-level urpx:RatePlanVersion snapshot. v0.5.1 documents may
+   carry the version as a sibling of the identity RatePlan rather than nested
+   inside it; `urpx.index/versions-by-plan` finds it via urpx:forRatePlan."
+  [raw]
+  (coerce schema/RatePlanVersion raw))
+
+(defn coerce-rate-plan-modifier-version
+  "Coerce a raw top-level urpx:RatePlanModifierVersion snapshot. Parallel to
+   `coerce-rate-plan-version`; the back pointer is urpx:forRatePlanModifier."
+  [raw]
+  (coerce schema/RatePlanModifierVersion raw))
+
 (defn coerce-urpx-document
   "Coerce a raw parsed URPX document wrapper into the typed shape described
    by `urpx.schema/URPXDocument`. Validates the document-level metadata
@@ -65,14 +78,19 @@
 
 (defn coerce-doc
   "Dispatch on the document's :jsonld/type and coerce as a RatePlan,
-   RatePlanModifier, or wrapper (urpx:URPXDocument in v0.2.x, urpx:URPXPackage
-   from v0.3.0 on). Returns nil for unknown types."
+   RatePlanModifier, wrapper (urpx:URPXDocument in v0.2.x, urpx:URPXPackage
+   from v0.3.0 on), or a top-level version snapshot (urpx:RatePlanVersion /
+   urpx:RatePlanModifierVersion, which v0.5.1 documents may carry as siblings
+   of the identity entity rather than nested inside it). Returns nil for
+   unknown types."
   [raw]
   (case (:jsonld/type raw)
     "urpx:RatePlan"         (coerce-rate-plan raw)
     "urpx:RatePlanModifier" (coerce-rate-plan-modifier raw)
     "urpx:URPXDocument"     (coerce-urpx-document raw)
     "urpx:URPXPackage"      (coerce-urpx-package raw)
+    "urpx:RatePlanVersion"         (coerce-rate-plan-version raw)
+    "urpx:RatePlanModifierVersion" (coerce-rate-plan-modifier-version raw)
     nil))
 
 (defn validate

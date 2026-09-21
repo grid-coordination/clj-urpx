@@ -396,6 +396,30 @@
                      (some #{m} (:urpx/month season))))
                  refs))))))
 
+(defn- plan-version
+  "Resolve the version snapshot to read plan content from.
+
+   URPX v0.5.1 un-nests the version: a document may state the plan-to-version
+   link downward (`nested-key`, a nested map), upward (urpx:forRatePlan /
+   urpx:forRatePlanModifier on a top-level snapshot), or both. Both directions
+   are declared owl:inverseOf and the down-pointer is sh:minCount 0, so neither
+   can be assumed present.
+
+   Precedence, widest to narrowest:
+     1. `:version` in `opts`   an explicitly resolved snapshot always wins
+     2. the nested down-pointer  the v0.2.x shape, still legal at v0.5.1
+     3. `:versions-by-plan` in `opts`, as produced by
+        `urpx.index/versions-by-plan`, looked up by the plan's own @id
+
+   Nothing here removes a nested read: the corpus is mixed-vocabulary for the
+   duration of its migration and every filing in it today is nested."
+  [plan opts nested-key]
+  (or (:version opts)
+      (nested-key plan)
+      (when-let [by-plan (:versions-by-plan opts)]
+        (first (get by-plan (:jsonld/id plan))))))
+
+
 ;; ---------------------------------------------------------------------------
 ;; Public API
 ;; ---------------------------------------------------------------------------
@@ -490,7 +514,7 @@
    by tier-number — the caller chooses based on cumulative billing-period usage."
   ([rate-plan zdt] (resolve-prices rate-plan zdt nil))
   ([rate-plan ^ZonedDateTime zdt opts]
-   (let [version       (:urpx/hasRatePlanVersion rate-plan)
+   (let [version       (plan-version rate-plan opts :urpx/hasRatePlanVersion)
          plan-elements (:urpx/hasPlanElements version)
          seasons       (:urpx/hasSeasons plan-elements)
          seasons-by-id (into {} (map (juxt :jsonld/id identity)) seasons)
@@ -500,7 +524,7 @@
          tiers-by-num  (service-tiers-by-number billing)
          prices        (:urpx/hasPrices version)
          holiday?      (or (:holiday? opts)
-                           (holidays/derive-predicate rate-plan))
+                           (holidays/derive-predicate rate-plan version))
 
          date          (.toLocalDate zdt)
          local-time    (.toLocalTime zdt)
@@ -559,11 +583,12 @@
    :urpx/applicableToRatePlan list. Returns true when `plan-id` is nil so
    callers that don't have a plan id (e.g. resolving a modifier in isolation)
    are not blocked."
-  [modifier plan-id]
+  ([modifier plan-id] (modifier-applies-to? modifier plan-id nil))
+  ([modifier plan-id opts]
   (or (nil? plan-id)
-      (let [version (:urpx/hasRatePlanModifierVersion modifier)
+      (let [version (plan-version modifier opts :urpx/hasRatePlanModifierVersion)
             refs    (:urpx/applicableToRatePlan version)]
-        (boolean (some #(= plan-id (:jsonld/id %)) refs)))))
+        (boolean (some #(= plan-id (:jsonld/id %)) refs))))))
 
 (defn- modifier-ledger-results
   "Build a vector of LedgerResult entries for `modifier` at `zdt`.
@@ -580,8 +605,10 @@
       preserves the caller-picks contract for matrix-style modifiers
       (e.g. CPAU E-HRA's 4x4 reserve-level x generation-tier matrix)
       whose PDs typically don't carry touPeriodNumber anyway."
-  [modifier ^ZonedDateTime zdt base-period-num holiday?]
-  (let [version       (:urpx/hasRatePlanModifierVersion modifier)
+  ([modifier zdt base-period-num holiday?]
+   (modifier-ledger-results modifier zdt base-period-num holiday? nil))
+  ([modifier ^ZonedDateTime zdt base-period-num holiday? opts]
+  (let [version       (plan-version modifier opts :urpx/hasRatePlanModifierVersion)
         plan-elts     (:urpx/hasPlanElements version)
         billing       (:urpx/hasBillingModel plan-elts)
         ledgers       (:urpx/hasLedger billing)
@@ -624,7 +651,7 @@
                :urpx.resolved/ledger-name (:urpx/name ledger)
                :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
                :urpx.resolved/tiers       tier-entries}
-              (ledger-metric-info ledger mi-index))))))
+              (ledger-metric-info ledger mi-index)))))))
 
 (defn resolve-modifier-prices
   "Resolve every per-energy unit price that `modifier` (a coerced

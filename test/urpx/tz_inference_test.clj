@@ -81,3 +81,31 @@
                           [:urpx/hasRatePlanVersion]
                           dissoc :urpx/publishedBy)]
       (is (nil? (tz/infer-zone plan))))))
+
+;; ---------------------------------------------------------------------------
+;; v0.5.1: urpx:publishedBy left the version shapes; urpx:offeredBy replaced it
+;; ---------------------------------------------------------------------------
+
+(deftest offered-by-on-an-un-nested-snapshot
+  (testing "v0.5.1 dropped urpx:publishedBy from RatePlanVersionShape, which is
+            sh:closed, and put urpx:offeredBy there instead. Inference must read
+            the snapshot's offeredBy, or every v0.5.1 document silently yields
+            nil."
+    (let [plan     (fixtures/load-rate-plan "pge-e-1-2026-03-01")
+          version  (:urpx/hasRatePlanVersion plan)
+          shell    (dissoc plan :urpx/hasRatePlanVersion)
+          snapshot (-> version
+                       (dissoc :urpx/publishedBy)
+                       (assoc :urpx/offeredBy (:urpx/publishedBy version)
+                              :urpx/forRatePlan {:jsonld/id (:jsonld/id plan)}))]
+      (testing "the shell alone infers nothing, since the organization left with
+                the version"
+        (is (nil? (tz/infer-zone shell))))
+      (testing "with the snapshot supplied, offeredBy resolves the same zone the
+                nested publishedBy did"
+        (let [{:keys [zone inferred-from]} (tz/infer-zone shell {:version snapshot})]
+          (is (= la zone))
+          (is (= :eia-id (:source inferred-from)))))
+      (testing "publishedBy on a snapshot still works, for a document that
+                carries the v0.2.x key on an un-nested version"
+        (is (= la (:zone (tz/infer-zone shell {:version version}))))))))

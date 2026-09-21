@@ -175,12 +175,19 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- plan-calendar
-  "Return the urpx:HolidayCalendar embedded in a coerced rate plan or
-   modifier, or nil when none is present. Looks under both RatePlanVersion
-   and RatePlanModifierVersion."
-  [plan]
-  (or (get-in plan [:urpx/hasRatePlanVersion         :urpx/hasPlanElements :urpx/hasHolidayCalendar])
-      (get-in plan [:urpx/hasRatePlanModifierVersion :urpx/hasPlanElements :urpx/hasHolidayCalendar])))
+  "Return the urpx:HolidayCalendar for a coerced rate plan or modifier, or nil
+   when none is present.
+
+   Three arms, in precedence order. A `version` snapshot supplied by the caller
+   wins: under v0.5.1 un-nesting the snapshot is a top-level sibling of the
+   identity plan, so the plan itself carries no calendar to find. Otherwise the
+   two v0.2.x nested paths are read as before. The property path below the
+   version is identical in both shapes."
+  ([plan] (plan-calendar plan nil))
+  ([plan version]
+   (or (get-in version [:urpx/hasPlanElements :urpx/hasHolidayCalendar])
+       (get-in plan [:urpx/hasRatePlanVersion         :urpx/hasPlanElements :urpx/hasHolidayCalendar])
+       (get-in plan [:urpx/hasRatePlanModifierVersion :urpx/hasPlanElements :urpx/hasHolidayCalendar]))))
 
 ;; ---------------------------------------------------------------------------
 ;; Public API
@@ -193,9 +200,14 @@
    The predicate computes the holiday set for any year on demand; results
    are cached internally so reusing the predicate across many dates is
    cheap. Throws ex-info if any Holiday in the calendar carries an
-   unparseable urpx:holidayRule."
-  [plan]
-  (when-let [calendar (plan-calendar plan)]
+   unparseable urpx:holidayRule.
+
+   The 2-arity takes a resolved version snapshot, for v0.5.1 documents that
+   carry the version top-level rather than nested under the plan. Without it
+   such a plan yields no calendar and every date reads as a non-holiday."
+  ([plan] (derive-predicate plan nil))
+  ([plan version]
+  (when-let [calendar (plan-calendar plan version)]
     (let [year-fns (->> (:urpx/hasHoliday calendar)
                         (mapv holiday->year-fn))
           cache    (ConcurrentHashMap.)]
@@ -204,4 +216,4 @@
               dates (or (.get cache year)
                         (let [s (into #{} (keep #(% year)) year-fns)]
                           (or (.putIfAbsent cache year s) s)))]
-          (contains? dates d))))))
+          (contains? dates d)))))))

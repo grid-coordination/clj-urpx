@@ -62,3 +62,47 @@
    already has the bare id."
   [index id]
   (get index id))
+
+;; ---------------------------------------------------------------------------
+;; Back-pointer index (URPX v0.5.1 un-nesting)
+;; ---------------------------------------------------------------------------
+
+(def ^:private version-back-pointer
+  "Version @type -> the property naming the entity it is a snapshot of.
+   urpx:forRatePlan and urpx:forRatePlanModifier are declared owl:inverseOf
+   urpx:hasRatePlanVersion / urpx:hasRatePlanModifierVersion, and both are
+   sh:minCount 1 sh:maxCount 1 on their version shapes, so a conformant v0.5.1
+   snapshot always carries one even when the document also nests it."
+  {"urpx:RatePlanVersion"         :urpx/forRatePlan
+   "urpx:RatePlanModifierVersion" :urpx/forRatePlanModifier})
+
+(defn- back-pointer-walk
+  [acc node]
+  (cond
+    (map? node)
+    (let [k   (version-back-pointer (:jsonld/type node))
+          pid (when k (:jsonld/id (get node k)))
+          acc (if pid (update acc pid (fnil conj []) node) acc)]
+      (reduce-kv (fn [a _ v] (back-pointer-walk a v)) acc node))
+
+    (sequential? node)
+    (reduce back-pointer-walk acc node)
+
+    :else acc))
+
+(defn versions-by-plan
+  "Walk a URPX document and return {plan-id [version-snapshot ...]}, keyed by
+   the @id the snapshot points back at through urpx:forRatePlan or
+   urpx:forRatePlanModifier.
+
+   This is the v0.5.1 un-nested path: a document may state the plan-to-version
+   link downward (urpx:hasRatePlanVersion, a nested map), upward (the back
+   pointer, with the snapshot top-level), or both. Indexing on the back pointer
+   reaches the snapshot in every one of those shapes.
+
+   The back pointer may be a bare reference or a fully embedded RatePlan node;
+   both expose :jsonld/id, so one accessor covers each. Walks the raw structure
+   rather than `build-index`, so a snapshot carrying no @id of its own is still
+   found."
+  [doc]
+  (back-pointer-walk {} doc))

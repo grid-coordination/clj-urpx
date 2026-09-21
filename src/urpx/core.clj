@@ -209,3 +209,42 @@
       (throw (ex-info "Multiple urpx:RatePlanModifier entities in @graph; use load-graph to disambiguate"
                       {:src src
                        :modifier-ids (mapv :jsonld/id modifiers)})))))
+
+(defn- load-unique-version
+  "Shared body for the two version loaders: filter the document's entities by
+   `type-literal` and insist on exactly one."
+  [src type-literal]
+  (let [entities (mapcat expand-document-entities (load-graph src))
+        found    (filter #(= type-literal (:jsonld/type %)) entities)]
+    (case (count found)
+      0 (throw (ex-info (str "No " type-literal " entity in document")
+                        {:src src
+                         :entity-types (mapv :jsonld/type entities)}))
+      1 (first found)
+      (throw (ex-info (str "Multiple " type-literal " entities in @graph; use load-graph to disambiguate")
+                      {:src src
+                       :version-ids (mapv :jsonld/id found)})))))
+
+(defn load-rate-plan-version
+  "Load a top-level urpx:RatePlanVersion snapshot from `src`.
+
+   v0.5.1 un-nests the version: a document may carry the snapshot as a sibling
+   of the identity urpx:RatePlan rather than nested under
+   urpx:hasRatePlanVersion, with the link stated upward as urpx:forRatePlan.
+   All three v0.5.1 examples shipped with urpx-org/urpx do exactly this, and
+   none asserts the down-pointer.
+
+   `load-rate-plan` discards such a snapshot, since it filters for
+   urpx:RatePlan; this is its counterpart. Use `urpx.index/versions-by-plan`
+   when a document carries several snapshots and you need them keyed by the
+   plan they belong to.
+
+   Zero or more than one urpx:RatePlanVersion is an error."
+  [src]
+  (load-unique-version src "urpx:RatePlanVersion"))
+
+(defn load-rate-plan-modifier-version
+  "Load a top-level urpx:RatePlanModifierVersion snapshot from `src`. Parallel
+   to `load-rate-plan-version`; the back pointer is urpx:forRatePlanModifier."
+  [src]
+  (load-unique-version src "urpx:RatePlanModifierVersion"))
