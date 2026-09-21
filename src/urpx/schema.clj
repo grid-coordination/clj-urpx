@@ -916,6 +916,49 @@
    [:urpx/hasTariffBookReference {:optional true} TariffBookReference]])
 
 ;; ---------------------------------------------------------------------------
+;; Typed identity (URPX v0.5.1)
+;;
+;; A plan, a modifier and their version snapshots can each carry typed external
+;; identifiers: a CPUC MIDAS RIN, a utility tariff code, whatever register
+;; applies. All three shapes require skos:notation and urpx:scheme and are
+;; sh:closed upstream; clj-urpx does not enforce closedness.
+;; ---------------------------------------------------------------------------
+
+(def ^:private identifier-entries
+  [[:skos/notation :string]
+   ;; urpx:IdentifierScheme is an OPEN class, deliberately: the ontology says
+   ;; "not a closed enumeration ... an implementer operating a scheme that is
+   ;; not among them mints its own IRI as an IdentifierScheme instance." There
+   ;; is no sh:in on this path, so a plain Ref is correct and an :enum would be
+   ;; wrong. The vocabulary publishes no named scheme individuals at 95eb8e22.
+   [:urpx/scheme Ref]
+   [:urpx/identifierJurisdiction {:optional true} Ref]])
+
+(def RatePlanIdentifier
+  "A typed external identifier for a urpx:RatePlan, e.g. a CPUC MIDAS RIN."
+  (into [:map
+         [:jsonld/type [:= "urpx:RatePlanIdentifier"]]
+         [:jsonld/id {:optional true} :string]]
+        identifier-entries))
+
+(def RatePlanModifierIdentifier
+  "Parallel to `RatePlanIdentifier`, for a urpx:RatePlanModifier."
+  (into [:map
+         [:jsonld/type [:= "urpx:RatePlanModifierIdentifier"]]
+         [:jsonld/id {:optional true} :string]]
+        identifier-entries))
+
+(def OrganizationIdentifier
+  "A typed external identifier for an organization, hung off urpx:hasIdentity.
+   v0.5.1 reshaped this: urpx:identifierScheme and urpx:utilityId are gone and
+   skos:notation plus urpx:scheme are now required. An EIA id rides here as
+   notation under the EIA scheme rather than as the former urpx:eiaId."
+  (into [:map
+         [:jsonld/type [:= "urpx:OrganizationIdentifier"]]
+         [:jsonld/id {:optional true} :string]]
+        identifier-entries))
+
+;; ---------------------------------------------------------------------------
 ;; Coverage machinery (URPX v0.5.1)
 ;;
 ;; A version snapshot states what it does and does not cover, so a consumer can
@@ -1172,6 +1215,15 @@
    [:urpx/hasPriceDefinitionReference
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector [:or PriceDefinitionReference ExclusiveRef]]]
+   ;; v0.5.1 typed identity. hasIdentifier and hasLocationDataSet are 0..N
+   ;; upstream; timezoneIdentifier is maxCount 1.
+   [:urpx/hasIdentifier
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or RatePlanIdentifier ExclusiveRef]]]
+   [:urpx/hasLocationDataSet
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/timezoneIdentifier {:optional true} :string]
    [:urpx/hasPlanElements PlanElements]
    [:urpx/hasPrices       Prices]])
 
@@ -1200,6 +1252,14 @@
    ;; tz_inference.clj:46 all read this as a single map, so a vector here would
    ;; validate documents the resolver then silently misreads. URPX-6aw.4 owns
    ;; the reader rewrite and the arity widening lands with it.
+   ;; v0.5.1 typed identity. hasIdentifier and hasLocationDataSet are 0..N
+   ;; upstream; timezoneIdentifier is maxCount 1.
+   [:urpx/hasIdentifier
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or RatePlanIdentifier ExclusiveRef]]]
+   [:urpx/hasLocationDataSet
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
    [:urpx/hasRatePlanVersion {:optional true} RatePlanVersion]])
 
 ;; ---------------------------------------------------------------------------
@@ -1265,6 +1325,15 @@
    [:urpx/hasPriceDefinitionReference
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector [:or PriceDefinitionReference ExclusiveRef]]]
+   ;; v0.5.1 typed identity. hasIdentifier and hasLocationDataSet are 0..N
+   ;; upstream; timezoneIdentifier is maxCount 1.
+   [:urpx/hasIdentifier
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or RatePlanModifierIdentifier ExclusiveRef]]]
+   [:urpx/hasLocationDataSet
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/timezoneIdentifier {:optional true} :string]
    [:urpx/hasPlanElements PlanElements]
    [:urpx/hasPrices       Prices]])
 
@@ -1285,6 +1354,14 @@
    ;; Optional for the same reason as RatePlan/hasRatePlanVersion above, and
    ;; likewise not yet widened to 0..N: holidays.clj:183, tz_inference.clj:47
    ;; and price.clj:564/584 read it as a single map.
+   ;; v0.5.1 typed identity. hasIdentifier and hasLocationDataSet are 0..N
+   ;; upstream; timezoneIdentifier is maxCount 1.
+   [:urpx/hasIdentifier
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or RatePlanModifierIdentifier ExclusiveRef]]]
+   [:urpx/hasLocationDataSet
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
    [:urpx/hasRatePlanModifierVersion {:optional true} RatePlanModifierVersion]])
 
 ;; ---------------------------------------------------------------------------

@@ -788,3 +788,61 @@
     (is (not (m/validate s/SourcePublication
                          {:jsonld/type "urpx:SourcePublication"
                           :urpx/publicationType {:jsonld/id "urpx:pressRelease"}})))))
+
+;; ---------------------------------------------------------------------------
+;; Typed identity on plans, modifiers and their version snapshots
+;; ---------------------------------------------------------------------------
+
+(deftest identifier-shapes-require-notation-and-scheme
+  (let [rin {:jsonld/type "urpx:RatePlanIdentifier"
+             :skos/notation "USCA-PGE-E-1-2026-03-01"
+             :urpx/scheme {:jsonld/id "urpx:caMidasRinScheme"}}]
+    (is (m/validate s/RatePlanIdentifier rin))
+    (testing "both skos:notation and urpx:scheme are sh:minCount 1"
+      (is (not (m/validate s/RatePlanIdentifier (dissoc rin :skos/notation))))
+      (is (not (m/validate s/RatePlanIdentifier (dissoc rin :urpx/scheme)))))
+    (testing "identifierJurisdiction is the optional third path"
+      (is (m/validate s/RatePlanIdentifier
+                      (assoc rin :urpx/identifierJurisdiction {:jsonld/id "urpx:us-ca"}))))
+    (testing "urpx:IdentifierScheme is an OPEN class: the ontology says an
+              implementer may mint its own scheme IRI, and there is no sh:in on
+              the path, so an unrecognized scheme must be accepted"
+      (is (m/validate s/RatePlanIdentifier
+                      (assoc rin :urpx/scheme {:jsonld/id "acme:ownRegisterScheme"}))))
+    (testing "the modifier and organization shapes are parallel"
+      (is (m/validate s/RatePlanModifierIdentifier
+                      (assoc rin :jsonld/type "urpx:RatePlanModifierIdentifier")))
+      (is (m/validate s/OrganizationIdentifier
+                      (assoc rin :jsonld/type "urpx:OrganizationIdentifier"))))))
+
+(deftest version-snapshots-carry-their-own-identity
+  (testing "the Q6 domain widening put hasIdentifier, hasLocationDataSet and
+            timezoneIdentifier on the version classes, so a resolved snapshot
+            carries its own RIN rather than borrowing the plan's"
+    (let [rin {:jsonld/type "urpx:RatePlanIdentifier"
+               :skos/notation "USCA-PGE-E-1"
+               :urpx/scheme {:jsonld/id "urpx:caMidasRinScheme"}}
+          v   (assoc minimal-version
+                     :urpx/hasIdentifier [rin]
+                     :urpx/timezoneIdentifier "America/Los_Angeles"
+                     :urpx/hasLocationDataSet [{:jsonld/id "pge:territory-p"}])]
+      (is (m/validate s/RatePlanVersion v))
+      (testing "a single identifier map normalizes to a vector"
+        (let [c (coerce/coerce s/RatePlanVersion (assoc minimal-version :urpx/hasIdentifier rin))]
+          (is (vector? (:urpx/hasIdentifier c)))))
+      (testing "a bare @id reference is accepted, but a malformed identifier is
+                not waved through the reference arm"
+        (is (m/validate s/RatePlanVersion
+                        (assoc minimal-version :urpx/hasIdentifier [{:jsonld/id "pge:rin-1"}])))
+        (is (not (m/validate s/RatePlanVersion
+                             (assoc minimal-version :urpx/hasIdentifier
+                                    [{:jsonld/id "pge:rin-1" :skos/notation 42}])))))))
+  (testing "the identity shell carries it too"
+    (let [plan {:jsonld/type "urpx:RatePlan"
+                :urpx/ratePlanUniqueIdentifier "E-1"
+                :urpx/name "Residential"
+                :urpx/initialEffectiveDate (LocalDate/of 2026 1 1)
+                :urpx/hasIdentifier [{:jsonld/type "urpx:RatePlanIdentifier"
+                                      :skos/notation "USCA-PGE-E-1"
+                                      :urpx/scheme {:jsonld/id "urpx:caMidasRinScheme"}}]}]
+      (is (m/validate s/RatePlan plan)))))

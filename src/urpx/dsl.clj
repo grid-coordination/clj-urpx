@@ -299,6 +299,9 @@
 (def data-source-reference     (make-builder schema/DataSourceReference))
 (def rate-case                 (make-builder schema/RateCase))
 (def tariff-filing             (make-builder schema/TariffFiling))
+(def rate-plan-identifier      (make-builder schema/RatePlanIdentifier))
+(def rate-plan-modifier-identifier (make-builder schema/RatePlanModifierIdentifier))
+(def organization-identifier   (make-builder schema/OrganizationIdentifier))
 ;; No builder for schema/SourcePublication: its :jsonld/type is an :enum so
 ;; both the v0.5.1 and v0.2.x literals validate, and make-builder requires a
 ;; [:= "..."] entry (see entity-type) and throws otherwise. Build one by hand
