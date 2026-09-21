@@ -102,7 +102,46 @@
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"COERCED"
                           (#'schedule/harvest-literals {:urpx/startTime "16:00:00"})))
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"COERCED"
-                          (#'schedule/harvest-literals {:urpx/startDate "2026-03-01"})))))
+                          (#'schedule/harvest-literals {:urpx/startDate "2026-03-01"}))))
+
+  (testing "a DATE-SHAPED STRING IS NOT EVIDENCE OF ANYTHING on its own.
+            urpx:version is rdfs:range xsd:string, and every filing in the
+            corpus uses the effective date as its version LABEL, so
+            \"2026-03-20\" is a perfectly coerced string. The first version of
+            this guard tested the shape of strings, which reads oddly next to
+            harvesting by java.time type, and rejected all 33 modifier filings
+            in the corpus and therefore every composed horizon.
+
+            The signature of an uncoerced document is having NO java.time
+            values at all while carrying date-shaped strings."
+    (is (map? (#'schedule/harvest-literals
+               {:urpx/version "2026-03-20"
+                :urpx/effectiveDateTime (LocalDateTime/of 2026 3 20 0 0)}))
+        "a version label alongside real temporals is fine")
+    (is (= #{(LocalDateTime/of 2026 3 20 0 0)}
+           (:date-times (#'schedule/harvest-literals
+                         {:urpx/version "2026-03-20"
+                          :urpx/effectiveDateTime (LocalDateTime/of 2026 3 20 0 0)})))
+        "and the label is not harvested as a candidate")
+    (is (map? (#'schedule/harvest-literals {:urpx/version "2026-03-20"
+                                            :urpx/startDate (LocalDate/of 2026 1 1)}))
+        "one real temporal anywhere is enough to show the document was coerced")))
+
+(deftest a-composed-horizon-segments
+  (testing "every modifier filing in the corpus carries urpx:version as a
+            date-shaped label, so a guard that rejected those rejected every
+            COMPOSED horizon, which is the path a price server actually needs."
+    (let [base  (fixtures/load-rate-plan "sce-d-2026-03-20")
+          care  (fixtures/load-modifier "sce-care-2026-03-20")
+          start (.toInstant (zdt 2026 7 15 0 0))
+          end   (.plus start (Duration/ofHours 72))
+          alone (schedule/price-segments base [] start end la)
+          with  (schedule/price-segments base [care] start end la)]
+      (is (seq alone))
+      (is (seq with) "the composed horizon must segment, not throw")
+      (is (= (.atZone end la) (:tick/end (last with))))
+      (is (= (map :tick/beginning (rest with)) (map :tick/end (butlast with)))
+          "and still tile"))))
 
 (deftest a-non-hour-boundary-is-representable
   (testing "the corpus contains one time literal that is not on an hour,

@@ -217,16 +217,35 @@
                 (instance? LocalDateTime x) (vswap! acc update :date-times conj x)
                 (instance? LocalDate x)     (vswap! acc update :dates conj x)
                 (string? x) (when (re-find uncoerced-re x)
-                              (throw (ex-info (str "price-segments needs a COERCED document: found the "
-                                                   "raw temporal string " (pr-str x) ". Run it through "
-                                                   "urpx.coerce first; harvesting an uncoerced document "
-                                                   "silently narrows the candidate set to midnights.")
-                                              {:reason :uncoerced-document :value x})))
+                              (vswap! acc update :date-shaped-strings (fnil inc 0)))
                 (map? x) (run! walk (vals x))
                 (sequential? x) (run! walk x)
                 :else nil))]
       (walk doc))
-    @acc))
+    ;; The guard is that the document yielded NO temporal values at all while
+    ;; containing date-shaped strings. That is the signature of a document that
+    ;; was never coerced, whose literals are all still strings, and which would
+    ;; harvest nothing and narrow the candidate set to midnights quietly.
+    ;;
+    ;; It is NOT enough that a date-shaped string exists. urpx:version is
+    ;; rdfs:range xsd:string and every filing in the corpus uses the effective
+    ;; date as its version LABEL, so "2026-03-20" is a perfectly coerced string.
+    ;; The first version of this guard was shape-based on strings, which reads
+    ;; oddly next to harvesting by java.time type and rejected all 33 modifier
+    ;; filings in the corpus. A coerced document carries real temporals
+    ;; elsewhere, so it passes; an uncoerced one carries none, so it does not.
+    (let [{:keys [times dates date-times date-shaped-strings]} @acc]
+      (when (and (pos? (or date-shaped-strings 0))
+                 (empty? times) (empty? dates) (empty? date-times))
+        (throw (ex-info (str "price-segments needs a COERCED document: it carries "
+                             date-shaped-strings " date-shaped string(s) and no java.time "
+                             "values at all, which is what an uncoerced document looks "
+                             "like. Run it through urpx.coerce first; harvesting an "
+                             "uncoerced document silently narrows the candidate set to "
+                             "midnights.")
+                        {:reason :uncoerced-document
+                         :date-shaped-strings date-shaped-strings}))))
+    (select-keys @acc [:times :dates :date-times])))
 
 (defn- local->instants
   "Every instant the local date-time `ldt` corresponds to in `zone`.
