@@ -519,3 +519,85 @@
                                [{:jsonld/id "x:ar" :jsonld/type "urpx:ApplicabilityRule"}])))
         (is (not (m/validate s/ExclusiveRef
                              {:jsonld/id "x:ar" :jsonld/type "urpx:ApplicabilityRule"})))))))
+
+;; ---------------------------------------------------------------------------
+;; v0.5.1 coverage machinery (CoverageClaim, Evaluation, ModelExclusion,
+;; PriceDefinitionReference) on the version snapshots
+;; ---------------------------------------------------------------------------
+
+(def ^:private minimal-version
+  {:jsonld/type "urpx:RatePlanVersion"
+   :urpx/effectiveDateTime (LocalDateTime/of 2026 1 1 0 0)
+   :urpx/hasPlanElements
+   {:jsonld/type "urpx:PlanElements"
+    :urpx/hasMetricInput [{:jsonld/type "urpx:MetricInput"
+                           :urpx/name "kWh"
+                           :urpx/metricInputType {:jsonld/id "urpx:measuredMetricInput"}}]
+    :urpx/hasBillingModel {:jsonld/type "urpx:BillingModel"
+                           :urpx/hasPriceDefinition []}}
+   :urpx/hasPrices {:jsonld/type "urpx:Prices"}})
+
+(deftest coverage-claim-on-version-snapshots
+  (let [claim {:jsonld/type "urpx:CoverageClaim"
+               :urpx/completenessResult {:jsonld/id "urpx:complete"}}]
+    (testing "a snapshot carrying forRatePlan + an inline CoverageClaim validates"
+      (is (m/validate s/RatePlanVersion
+                      (assoc minimal-version
+                             :urpx/forRatePlan {:jsonld/id "urpx:rp-1"}
+                             :urpx/hasCoverageClaim claim))))
+    (testing "hasCoverageClaim given as a bare @id reference also validates"
+      (is (m/validate s/RatePlanVersion
+                      (assoc minimal-version
+                             :urpx/forRatePlan {:jsonld/id "urpx:rp-1"}
+                             :urpx/hasCoverageClaim {:jsonld/id "urpx:cc-1"}))))
+    (testing "both stay OPTIONAL until the last migration wave: v0.5.1 requires
+              them 1..1, but the whole v0.2.x corpus omits them"
+      (is (m/validate s/RatePlanVersion minimal-version)))
+    (testing "a malformed claim cannot slip through the reference arm, because
+              that arm is ExclusiveRef rather than the open Ref"
+      (is (not (m/validate s/RatePlanVersion
+                           (assoc minimal-version :urpx/hasCoverageClaim
+                                  {:jsonld/id "urpx:cc-1"
+                                   :urpx/completenessResult "not-a-ref"})))))
+    (testing "RatePlanModifierVersion carries the same four entries, with
+              forRatePlanModifier in place of forRatePlan"
+      (let [mv {:jsonld/type "urpx:RatePlanModifierVersion"
+                :urpx/modifierVersionNumber "1"
+                :urpx/effectiveDateTime (LocalDateTime/of 2026 1 1 0 0)
+                :urpx/hasPlanElements (:urpx/hasPlanElements minimal-version)
+                :urpx/hasPrices {:jsonld/type "urpx:Prices"}}]
+        (is (m/validate s/RatePlanModifierVersion
+                        (assoc mv :urpx/forRatePlanModifier {:jsonld/id "urpx:m-1"}
+                               :urpx/hasCoverageClaim claim)))))))
+
+(deftest coverage-required-fields
+  (testing "CoverageClaim requires completenessResult (sh:minCount 1)"
+    (is (m/validate s/CoverageClaim
+                    {:jsonld/type "urpx:CoverageClaim"
+                     :urpx/completenessResult {:jsonld/id "urpx:partial"}}))
+    (is (some? (m/explain s/CoverageClaim {:jsonld/type "urpx:CoverageClaim"}))))
+  (testing "PriceDefinitionReference requires referenceInclusion (sh:minCount 1)"
+    (is (m/validate s/PriceDefinitionReference
+                    {:jsonld/type "urpx:PriceDefinitionReference"
+                     :urpx/referenceInclusion {:jsonld/id "urpx:includedHere"}}))
+    (is (some? (m/explain s/PriceDefinitionReference
+                          {:jsonld/type "urpx:PriceDefinitionReference"}))))
+  (testing "ModelExclusion requires both excludedModel and exclusionReason"
+    (is (m/validate s/ModelExclusion
+                    {:jsonld/type "urpx:ModelExclusion"
+                     :urpx/excludedModel {:jsonld/id "urpx:pm-1"}
+                     :urpx/exclusionReason {:jsonld/id "urpx:pruned"}}))
+    (is (not (m/validate s/ModelExclusion
+                         {:jsonld/type "urpx:ModelExclusion"
+                          :urpx/excludedModel {:jsonld/id "urpx:pm-1"}}))))
+  (testing "Evaluation nests ModelExclusion, and a single map normalizes to a
+            vector through the single-or-vec decoder"
+    (let [coerced (coerce/coerce s/Evaluation
+                                 {:jsonld/type "urpx:Evaluation"
+                                  :urpx/evaluationKind {:jsonld/id "urpx:validation"}
+                                  :urpx/hasModelExclusion
+                                  {:jsonld/type "urpx:ModelExclusion"
+                                   :urpx/excludedModel {:jsonld/id "urpx:pm-1"}
+                                   :urpx/exclusionReason {:jsonld/id "urpx:voided"}}})]
+      (is (vector? (:urpx/hasModelExclusion coerced)))
+      (is (m/validate s/Evaluation coerced)))))

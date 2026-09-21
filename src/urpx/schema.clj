@@ -825,6 +825,70 @@
    [:urpx/hasTariffBookReference {:optional true} TariffBookReference]])
 
 ;; ---------------------------------------------------------------------------
+;; Coverage machinery (URPX v0.5.1)
+;;
+;; A version snapshot states what it does and does not cover, so a consumer can
+;; tell a complete resolution from a partial one. Read from urpx-shacl at
+;; urpx-org/urpx 95eb8e22. Enum-valued slots stay bare Refs here; membership
+;; enforcement is a separate concern.
+;; ---------------------------------------------------------------------------
+
+(def ModelExclusion
+  "Something a PricingModel deliberately leaves out, and why. New in v0.5.1.
+   urpx:PricingModel is not modeled in clj-urpx, so excludedModel stays a Ref."
+  [:map
+   [:jsonld/type [:= "urpx:ModelExclusion"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/excludedModel Ref]
+   [:urpx/exclusionReason Ref]
+   [:urpx/description {:optional true} :string]])
+
+(def Evaluation
+  "How a coverage claim was arrived at: who evaluated it, when, and of what
+   kind. Reached from CoverageClaim via urpx:explainedBy."
+  [:map
+   [:jsonld/type [:= "urpx:Evaluation"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/evaluationKind {:optional true} Ref]
+   [:urpx/description    {:optional true} :string]
+   [:urpx/evaluatedBy    {:optional true} [:or Organization ExclusiveRef]]
+   [:urpx/evaluatedOn    {:optional true} DateTime]
+   [:urpx/hasModelExclusion
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or ModelExclusion ExclusiveRef]]]])
+
+(def CoverageClaim
+  "What a version snapshot claims to cover. urpx:completenessResult is the one
+   required field (sh:minCount 1 on urpx-shacl:CoverageClaimShape)."
+  [:map
+   [:jsonld/type [:= "urpx:CoverageClaim"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/completenessResult Ref]
+   [:urpx/confidence       {:optional true} Ref]
+   [:urpx/selfContained    {:optional true} :boolean]
+   [:urpx/stale            {:optional true} :boolean]
+   [:urpx/fallbackSourced  {:optional true} :boolean]
+   [:urpx/explainedBy
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or Evaluation ExclusiveRef]]]])
+
+(def PriceDefinitionReference
+  "A PriceDefinition a snapshot relies on, and whether its content is included
+   here or has to be retrieved elsewhere. urpx:referenceInclusion is required.
+   urpx:ModelCollection is not modeled, so resolvedFrom stays a Ref vector."
+  [:map
+   [:jsonld/type [:= "urpx:PriceDefinitionReference"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/referenceInclusion Ref]
+   [:urpx/referencesPriceDefinition {:optional true} Ref]
+   [:urpx/documentedBy
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or DataSourceReference ExclusiveRef]]]
+   [:urpx/resolvedFrom
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]])
+
+;; ---------------------------------------------------------------------------
 ;; PriceSetAlternative(s) — pairs with ProfileAlternatives above
 ;; ---------------------------------------------------------------------------
 
@@ -1001,6 +1065,18 @@
    [:urpx/observesHoliday
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
+   ;; v0.5.1 coverage machinery. urpx-shacl requires forRatePlan and
+   ;; hasCoverageClaim at 1..1 on this shape at 95eb8e22; both are held
+   ;; OPTIONAL here because v0.2.1 has zero occurrences of either term and all
+   ;; 73 corpus filings still declare targetURPXVersion v0.2.0, so requiring
+   ;; them today would reject the entire corpus and all four vendored
+   ;; fixtures. Flip to required once the last migration wave lands.
+   [:urpx/forRatePlan {:optional true} Ref]
+   [:urpx/hasCoverageClaim {:optional true} [:or CoverageClaim ExclusiveRef]]
+   [:urpx/selfContained {:optional true} :boolean]
+   [:urpx/hasPriceDefinitionReference
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or PriceDefinitionReference ExclusiveRef]]]
    [:urpx/hasPlanElements PlanElements]
    [:urpx/hasPrices       Prices]])
 
@@ -1070,6 +1146,18 @@
    [:urpx/applicableToRatePlanVersion
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
+   ;; v0.5.1 coverage machinery. urpx-shacl requires forRatePlanModifier and
+   ;; hasCoverageClaim at 1..1 on this shape at 95eb8e22; both are held
+   ;; OPTIONAL here because v0.2.1 has zero occurrences of either term and all
+   ;; 73 corpus filings still declare targetURPXVersion v0.2.0, so requiring
+   ;; them today would reject the entire corpus and all four vendored
+   ;; fixtures. Flip to required once the last migration wave lands.
+   [:urpx/forRatePlanModifier {:optional true} Ref]
+   [:urpx/hasCoverageClaim {:optional true} [:or CoverageClaim ExclusiveRef]]
+   [:urpx/selfContained {:optional true} :boolean]
+   [:urpx/hasPriceDefinitionReference
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or PriceDefinitionReference ExclusiveRef]]]
    [:urpx/hasPlanElements PlanElements]
    [:urpx/hasPrices       Prices]])
 
