@@ -253,3 +253,150 @@
        (testing "the assembled PriceSet validates, summary and all"
          (is (m/validate schema/PriceSet ps)
              (pr-str (m/explain schema/PriceSet ps))))))))
+
+;; ---------------------------------------------------------------------------
+;; Where a summary may hang, and what that placement does NOT do
+;;
+;; urpx:hasPriceSummary is rdfs:domain urpx:PriceSet, so a summary attaches to
+;; one PriceSet. A whole-bill subtotal has no single natural set to hang off: a
+;; discount spanning 25 line items crosses generation, distribution, surcharge
+;; and adjustment sets, and PriceSetShape puts urpx:hasPrice at sh:minCount 1,
+;; so there is no empty subtotal-only set to mint either. These tests pin the
+;; three resolver behaviors that decide what an author may safely do.
+;; ---------------------------------------------------------------------------
+
+(defn- add-price-set [doc new-set]
+  (clojure.walk/postwalk
+   (fn [n] (if (and (map? n) (vector? (:urpx/hasPriceSet n)))
+             (update n :urpx/hasPriceSet conj new-set)
+             n))
+   doc))
+
+(defn- tier-ids [resolved]
+  (->> (:urpx.resolved/ledgers resolved)
+       (mapcat :urpx.resolved/tiers)
+       (map :urpx.resolved/price-id)))
+
+(deftest summary-members-may-live-in-any-price-set
+  (testing "urpx:includesPrice is resolved through the document index, not
+            through the PriceSet the summary hangs off. A summary attached to
+            the generation set may therefore name prices in the distribution
+            and adjustment sets, which is what a whole-bill subtotal has to do:
+            no single PriceSet holds all of a discount's line items, and
+            PriceSetShape's sh:minCount 1 on hasPrice means an empty
+            subtotal-only set cannot be minted to hold them either."
+    (let [plan     (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          idx      (index/build-index plan)
+          ;; deliberately drawn from two sets OTHER than the one the summary
+          ;; will hang off
+          members  ["pge:price-dist-summer-peak" "pge:price-public-purpose"]
+          expected (* -0.325M (reduce + 0M (map #(:urpx/unitPrice (get idx %)) members)))
+          plan'    (-> plan
+                       (attach-summary "pge:ps-generation-charges"
+                                       {:jsonld/type "urpx:PriceSummary"
+                                        :jsonld/id   "pge:care-basis"
+                                        :urpx/name   "CARE discountable (whole bill)"
+                                        :urpx/includesPrice (mapv (fn [id] {:jsonld/id id}) members)})
+                       (rewrite-price "pge:price-gen-summer-peak"
+                                      (fn [n] (-> n (dissoc :urpx/unitPrice)
+                                                  (assoc :urpx/multiplier -0.325M
+                                                         :urpx/basedOnPrice {:jsonld/id "pge:care-basis"})))))
+          tier     (->> (price/resolve-prices plan' (zdt))
+                        (:urpx.resolved/ledgers)
+                        (mapcat :urpx.resolved/tiers)
+                        (filter #(= "pge:price-gen-summer-peak" (:urpx.resolved/price-id %)))
+                        first)]
+      (testing "the members really are in other sets, or this proves nothing"
+        (let [sets (index/entities-of-type plan "urpx:PriceSet")
+              home (fn [pid] (some (fn [[sid ps]]
+                                     (when (some #(= pid (:jsonld/id %)) (:urpx/hasPrice ps)) sid))
+                                   sets))]
+          (is (= #{"pge:ps-distribution-charges" "pge:ps-adjustment-charges"}
+                 (set (map home members))))))
+      (is (nil? (:urpx.resolved/unvaluable tier))
+          (str "expected a value, got " (pr-str (:urpx.resolved/unvaluable tier))))
+      (is (= expected (:urpx.resolved/unit-price tier))))))
+
+(deftest attaching-a-summary-does-not-price-anything
+  (testing "a summary is not a priced member of the set it hangs off. Prices are
+            collected from urpx:hasPrice; urpx:hasPriceSummary is a different
+            property and is never walked for tiers, so attaching a subtotal
+            cannot inflate the set it attaches to. A stated urpx:summaryAmount
+            does not leak in either, which is the point of not trusting it."
+    (let [plan   (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          plan'  (attach-summary plan "pge:ps-generation-charges"
+                                 {:jsonld/type "urpx:PriceSummary"
+                                  :jsonld/id   "pge:s"
+                                  ;; deliberately absurd, and deliberately ignored
+                                  :urpx/summaryAmount 999999M
+                                  :urpx/includesPrice [{:jsonld/id "pge:price-gen-summer-peak"}
+                                                       {:jsonld/id "pge:price-gen-winter-peak"}]})
+          before (price/resolve-prices plan (zdt))
+          after  (price/resolve-prices plan' (zdt))]
+      (is (= before after) "resolution is byte-identical with the summary attached")
+      (is (= (price/marginal-unit-rate before) (price/marginal-unit-rate after))))))
+
+(deftest repeating-prices-in-a-second-set-does-not-double-count
+  (testing "an author who mints a PriceSet repeating line items already priced
+            elsewhere does not get them counted twice. active-prices-by-pd keys
+            on [referencesPriceDefinition, serviceTierNumber] and keeps one
+            entry per key, so a repeated Price collides with its original.
+
+            The protection is that dedup, and it holds only while the repeated
+            Prices reference the SAME PriceDefinition. Minting parallel
+            PriceDefinitions for the repeated set defeats it, and the companion
+            test below pins that so the boundary is not mistaken for a
+            guarantee."
+    (let [plan   (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          sets   (index/entities-of-type plan "urpx:PriceSet")
+          gen    (get sets "pge:ps-generation-charges")
+          before (price/resolve-prices plan (zdt))
+          ;; the same Price nodes again, under a second set carrying the summary
+          plan'  (add-price-set plan
+                                (assoc gen
+                                       :jsonld/id "pge:ps-care-discountable"
+                                       :urpx/name "CARE discountable"
+                                       :urpx/hasPriceSummary
+                                       [{:jsonld/type "urpx:PriceSummary"
+                                         :jsonld/id   "pge:care-basis"
+                                         :urpx/includesPrice
+                                         (mapv #(select-keys % [:jsonld/id]) (:urpx/hasPrice gen))}]))
+          after  (price/resolve-prices plan' (zdt))]
+      (is (= (frequencies (tier-ids before)) (frequencies (tier-ids after)))
+          "no price surfaces more than it did before")
+      (is (every? #(= 1 %) (vals (frequencies (tier-ids after))))
+          "and no price surfaces twice")
+      (is (= (price/marginal-unit-rate before) (price/marginal-unit-rate after))))))
+
+(deftest minting-parallel-price-definitions-DOES-duplicate
+  (testing "the boundary of the dedup above, pinned deliberately. Repeating a
+            Price is safe because it collides with its original on
+            PriceDefinition; giving the repeat its OWN PriceDefinition on the
+            same ledger makes it a distinct priced line and it surfaces as an
+            additional tier. An author building a discountable subtotal should
+            repeat the Prices, never mint parallel PriceDefinitions for them."
+    (let [plan     (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          sets     (index/entities-of-type plan "urpx:PriceSet")
+          pds      (index/entities-of-type plan "urpx:PriceDefinition")
+          gen      (get sets "pge:ps-generation-charges")
+          pd-ids   (into #{} (keep #(get-in % [:urpx/referencesPriceDefinition :jsonld/id])
+                                   (:urpx/hasPrice gen)))
+          dup-pds  (mapv #(assoc (get pds %) :jsonld/id (str % "-care")) pd-ids)
+          dup-prcs (mapv (fn [p]
+                           (-> p
+                               (assoc :jsonld/id (str (:jsonld/id p) "-care"))
+                               (assoc-in [:urpx/referencesPriceDefinition :jsonld/id]
+                                         (str (get-in p [:urpx/referencesPriceDefinition :jsonld/id]) "-care"))))
+                         (:urpx/hasPrice gen))
+          pw       (fn [f d] (clojure.walk/postwalk f d))
+          plan'    (->> plan
+                        (pw (fn [n] (if (and (map? n) (vector? (:urpx/hasPriceDefinition n)))
+                                      (update n :urpx/hasPriceDefinition into dup-pds) n)))
+                        (pw (fn [n] (if (and (map? n) (vector? (:urpx/hasPriceSet n)))
+                                      (update n :urpx/hasPriceSet conj
+                                              (assoc gen :jsonld/id "pge:ps-care"
+                                                     :urpx/hasPrice dup-prcs)) n))))
+          before   (count (tier-ids (price/resolve-prices plan (zdt))))
+          after    (count (tier-ids (price/resolve-prices plan' (zdt))))]
+      (is (< before after)
+          "parallel PriceDefinitions add tiers; this is the shape to avoid"))))
