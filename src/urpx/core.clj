@@ -141,8 +141,13 @@
    a corpus part-way through a wave-by-wave migration loads either way."
   #{"urpx:URPXDocument" "urpx:URPXPackage"})
 
-(defn- expand-document-entities
-  "If `entity` is one of `wrapper-types`, return its embedded payload
+(defn expand-document-entities
+  "Public because it is the one piece a CLI or a third-party consumer needs and
+   cannot otherwise reach: `load-graph` returns top-level entities only, so
+   anything that walks a document itself would never descend a wrapper and
+   would validate the wrapper metadata alone.
+
+   If `entity` is one of `wrapper-types`, return its embedded payload
    entities: urpx:hasRatePlan and urpx:hasRatePlanModifier (both wrappers),
    urpx:hasTariffPublication (v0.2.x URPXDocument only), and urpx:packages
    (the general containment pointer added in v0.3.0). Otherwise return
