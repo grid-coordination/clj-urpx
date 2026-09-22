@@ -34,18 +34,18 @@ dest=$repo_root/test/resources/urpx-fixtures
 fixtures=(
   "pge-e-1-2026-03-01             1e4ad46  us/ca/pge/electricity/e-1/versions/2026-03-01/rate-plan_pge_e-1_2026-03-01.jsonld"
   "pge-e-tou-c-2026-03-01         1e4ad46  us/ca/pge/electricity/e-tou-c/versions/2026-03-01/rate-plan_pge_e-tou-c_2026-03-01.jsonld"
-  "pge-e-tou-d-2026-03-27         1e4ad46  us/ca/pge/electricity/e-tou-d/versions/2026-03-27/rate-plan_pge_e-tou-d_2026-03-27.jsonld"
-  "pge-ev2-2026-03-27             1e4ad46  us/ca/pge/electricity/ev2/versions/2026-03-27/rate-plan_pge_ev2_2026-03-27.jsonld"
+  "pge-e-tou-d-2026-03-27         26e0acb  us/ca/pge/electricity/e-tou-d/versions/2026-03-27/rate-plan_pge_e-tou-d_2026-03-27.jsonld"
+  "pge-ev2-2026-03-27             26e0acb  us/ca/pge/electricity/ev2/versions/2026-03-27/rate-plan_pge_ev2_2026-03-27.jsonld"
 
   # LADWP, migration wave 1, URPX v0.5.1. Vendored ALONGSIDE the v0.2.x PG&E
   # set rather than replacing it: the corpus is mixed-vocabulary for the whole
   # migration, so the suite should exercise both at once. Three of the five are
   # RatePlanModifiers, and NEM is export-direction rather than a discount.
-  "ladwp-r-1a-2026-04-01          6453536  us/ca/ladwp/electricity/r-1a/versions/2026-04-01/rate-plan_ladwp_r-1a_2026-04-01.jsonld"
-  "ladwp-r-1b-2026-04-01          6453536  us/ca/ladwp/electricity/r-1b/versions/2026-04-01/rate-plan_ladwp_r-1b_2026-04-01.jsonld"
-  "ladwp-ez-save-2008-09-01       6453536  us/ca/ladwp/electricity/ez-save/versions/2008-09-01/rate-plan-modifier_ladwp_ez-save_2008-09-01.jsonld"
-  "ladwp-lifeline-2008-09-01      6453536  us/ca/ladwp/electricity/lifeline/versions/2008-09-01/rate-plan-modifier_ladwp_lifeline_2008-09-01.jsonld"
-  "ladwp-nem-2008-09-01           6453536  us/ca/ladwp/electricity/nem/versions/2008-09-01/rate-plan-modifier_ladwp_nem_2008-09-01.jsonld"
+  "ladwp-r-1a-2026-04-01          26e0acb  us/ca/ladwp/electricity/r-1a/versions/2026-04-01/rate-plan_ladwp_r-1a_2026-04-01.jsonld"
+  "ladwp-r-1b-2026-04-01          26e0acb  us/ca/ladwp/electricity/r-1b/versions/2026-04-01/rate-plan_ladwp_r-1b_2026-04-01.jsonld"
+  "ladwp-ez-save-2008-09-01       26e0acb  us/ca/ladwp/electricity/ez-save/versions/2008-09-01/rate-plan-modifier_ladwp_ez-save_2008-09-01.jsonld"
+  "ladwp-lifeline-2008-09-01      26e0acb  us/ca/ladwp/electricity/lifeline/versions/2008-09-01/rate-plan-modifier_ladwp_lifeline_2008-09-01.jsonld"
+  "ladwp-nem-2008-09-01           26e0acb  us/ca/ladwp/electricity/nem/versions/2008-09-01/rate-plan-modifier_ladwp_nem_2008-09-01.jsonld"
 
   # SCE and SDG&E, URPX v0.5.1, the first percentage discounts in the corpus:
   # a urpx:Price carrying urpx:multiplier over a urpx:PriceSummary instead of a
@@ -56,7 +56,7 @@ fixtures=(
   # grants none. Each base plan is a separate filing from its modifiers here,
   # unlike the PG&E @graph bundles, so the cross-document dereference is
   # exercised the way the corpus actually files it.
-  "sce-d-2026-03-20               384ffb1  us/ca/sce/electricity/d/versions/2026-03-20/rate-plan_sce_d_2026-03-20.jsonld"
+  "sce-d-2026-03-20               26e0acb  us/ca/sce/electricity/d/versions/2026-03-20/rate-plan_sce_d_2026-03-20.jsonld"
   "sce-care-2026-03-20            384ffb1  us/ca/sce/electricity/care/versions/2026-03-20/rate-plan-modifier_sce_care_2026-03-20.jsonld"
   "sce-fera-2026-03-20            384ffb1  us/ca/sce/electricity/fera/versions/2026-03-20/rate-plan-modifier_sce_fera_2026-03-20.jsonld"
   "sdge-dr-2026-04-01             384ffb1  us/ca/sdge/electricity/dr/versions/2026-04-01/rate-plan_sdge_dr_2026-04-01.jsonld"
@@ -78,7 +78,7 @@ fixtures=(
   # selection. sce:d-2025-11-15 and sce:d-2026-03-20 price differently, so a
   # rule that picked the wrong one produces a visibly wrong rate rather than a
   # subtly wrong one.
-  "sce-d-2025-11-15               28390dc  us/ca/sce/electricity/d/versions/2025-11-15/rate-plan_sce_d_2025-11-15.jsonld"
+  "sce-d-2025-11-15               26e0acb  us/ca/sce/electricity/d/versions/2025-11-15/rate-plan_sce_d_2025-11-15.jsonld"
 
   # The two event-driven (urpx:hasDynamicPricing) pairs in the corpus, vendored
   # for GH#5. SMUD is the clean case: a critical peak Event Charge and nothing

@@ -43,7 +43,10 @@
     "urpx:targetURPXVersion": {
       "@type": "xsd:anyURI"
     },
-    "skos": "http://www.w3.org/2004/02/skos/core#"
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "urpx:evaluatedOn": {
+      "@type": "xsd:dateTime"
+    }
   },
   "@type": "urpx:URPXPackage",
   "@id": "ladwp:doc-nem-2008-09-01",
@@ -118,10 +121,12 @@
                   },
                   "urpx:leftOperand": {
                     "@type": "urpx:CustomOperandNode",
+                    "@id": "ladwp:cn-nem-customer-generator-left-operand",
                     "urpx:customConditionProperty": "Customer-Generator (on-site PV/wind/hybrid)"
                   },
                   "urpx:rightOperand": {
                     "@type": "urpx:CustomOperandNode",
+                    "@id": "ladwp:cn-nem-customer-generator-right-operand",
                     "urpx:stringValue": "true"
                   }
                 },
@@ -133,10 +138,12 @@
                   },
                   "urpx:leftOperand": {
                     "@type": "urpx:CustomOperandNode",
+                    "@id": "ladwp:cn-nem-bidirectional-meter-left-operand",
                     "urpx:customConditionProperty": "metering"
                   },
                   "urpx:rightOperand": {
                     "@type": "urpx:CustomOperandNode",
+                    "@id": "ladwp:cn-nem-bidirectional-meter-right-operand",
                     "urpx:stringValue": "Bidirectional meter"
                   }
                 },
@@ -148,10 +155,12 @@
                   },
                   "urpx:leftOperand": {
                     "@type": "urpx:CustomOperandNode",
+                    "@id": "ladwp:cn-nem-capacity-limit-left-operand",
                     "urpx:customConditionProperty": "Generation nameplate capacity (MW)"
                   },
                   "urpx:rightOperand": {
                     "@type": "urpx:CustomOperandNode",
+                    "@id": "ladwp:cn-nem-capacity-limit-right-operand",
                     "urpx:stringValue": "1.0"
                   }
                 }
@@ -162,6 +171,7 @@
       ],
       "urpx:hasPlanElements": {
         "@type": "urpx:PlanElements",
+        "@id": "ladwp:nem-2008-09-01-plan-elements",
         "urpx:hasMetricInput": [
           {
             "@type": "urpx:MetricInput",
@@ -187,6 +197,7 @@
         ],
         "urpx:hasBillingModel": {
           "@type": "urpx:BillingModel",
+          "@id": "ladwp:nem-2008-09-01-plan-elements-billing-model",
           "urpx:hasLedger": [
             {
               "@type": "urpx:Ledger",
@@ -223,6 +234,7 @@
       },
       "urpx:hasPrices": {
         "@type": "urpx:Prices",
+        "@id": "ladwp:nem-2008-09-01-prices",
         "urpx:hasPrice": [
           {
             "@type": "urpx:Price",
@@ -265,12 +277,21 @@
         "@id": "ladwp:nem"
       },
       "urpx:hasCoverageClaim": {
-        "@id": "ladwp:nem-2008-09-01-coverage",
+        "@id": "ladwp:cc-nem-2008-09-01",
         "@type": "urpx:CoverageClaim",
         "urpx:completenessResult": {
           "@id": "urpx:partial"
         },
-        "urpx:selfContained": true
+        "urpx:selfContained": true,
+        "urpx:explainedBy": {
+          "@type": "urpx:Evaluation",
+          "@id": "ladwp:cc-nem-2008-09-01-evaluation",
+          "urpx:evaluationKind": {
+            "@id": "urpx:coverageEvaluation"
+          },
+          "urpx:description": "The rider's central number is absent. Service Rider NEM Section 3.b compensates excess exported energy using \"the applicable Rate Schedule energy pricing\", meaning whatever energy charge the customer's own base schedule carries for the tier, period and season in question, and this filing ships a placeholder credit of zero in its place. This is a gap in the filing rather than in the vocabulary. urpx:basedOnPrice is constrained only to resolve to a urpx:Price or urpx:PriceSummary in the validated graph, with nothing scoping it to the referring document, and multiple values are read as candidate bases of which one is present, so \"the energy charge of whichever plan this customer is on\" is expressible and has not yet been written here. A consumer must compute the credit from the customer's own R-1(A) or R-1(B) prices, and the zero here must not be read as zero-value export. Two further billing provisions survive only as descriptive prose, and a third is absent altogether. Section 3.b suspends, in any period where generation exceeds consumption, all charges \"based upon kWh\" and not the energy charge alone, which on the current residential schedules also drops the ECA, ESA, RCA, VEA, CRPSEA, VRPSEA and IRCA adjustments; the filing's prose narrows this to the energy charges, and nothing in its structure conditions any of those charges on net flow. Section 3.c rolls a credit balance forward to later bills, excluding Taxes and Minimum Charges, and zeroes any remaining balance at termination of service with no further compensation. Section 3.d, which confines a credit balance to the bill for the meter that recorded the excess energy, appears nowhere in the filing, neither in structure nor in prose; a consumer aggregating credits across a multi-meter premises would be wrong to do so and nothing here says otherwise. The eligibility rule carries the rider's applicability conditions in its description but tests only three in structured form (on-site solar, wind or hybrid generation, bidirectional metering, and the one-megawatt cap), so the parallel-operation, own-load-offset, interconnection-cost and signed-interconnection-agreement conditions, and the exclusion of customers on Schedules CG-2 and CG-3, cannot be evaluated automatically. Out of scope rather than missing: Sections 2.b and 2.c allocate the cost of atypical or additional meters and Section 1.a reserves the final applicability determination to the Department, all administrative rather than rate provisions, and Section 2.d's option to buy Green Power is a separate rider, Service Rider REO.",
+          "urpx:evaluatedOn": "2026-09-21T00:00:00"
+        }
       }
     }
   }

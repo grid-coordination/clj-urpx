@@ -442,8 +442,8 @@
             },
             {
               "@type": "urpx:PriceDefinition",
-              "@id": "sce:d-2026-03-20-pd-cia",
-              "urpx:name": "Conservation Incentive Adjustment (CIA) — tier-varying",
+              "@id": "sce:d-2026-03-20-pd-cia-baseline",
+              "urpx:name": "Conservation Incentive Adjustment (CIA), Baseline Service (Tier 1)",
               "urpx:chargeType": {
                 "@id": "urpx:adjustmentPowerCost"
               },
@@ -453,6 +453,25 @@
               "urpx:billPortion": {
                 "@id": "urpx:deliveryPortion"
               },
+              "urpx:serviceTierNumber": 1,
+              "urpx:referencesLedger": {
+                "@id": "sce:d-2026-03-20-ledger-cia"
+              }
+            },
+            {
+              "@type": "urpx:PriceDefinition",
+              "@id": "sce:d-2026-03-20-pd-cia-nonbaseline",
+              "urpx:name": "Conservation Incentive Adjustment (CIA), Nonbaseline Service (Tier 2)",
+              "urpx:chargeType": {
+                "@id": "urpx:adjustmentPowerCost"
+              },
+              "urpx:chargeCategory": {
+                "@id": "urpx:adjustment"
+              },
+              "urpx:billPortion": {
+                "@id": "urpx:deliveryPortion"
+              },
+              "urpx:serviceTierNumber": 2,
               "urpx:referencesLedger": {
                 "@id": "sce:d-2026-03-20-ledger-cia"
               }
@@ -718,21 +737,19 @@
                 "@type": "urpx:Price",
                 "@id": "sce:price-cia-baseline-2026-03-20",
                 "urpx:referencesPriceDefinition": {
-                  "@id": "sce:d-2026-03-20-pd-cia"
+                  "@id": "sce:d-2026-03-20-pd-cia-baseline"
                 },
                 "urpx:name": "Conservation Incentive Adjustment — Tier 1 (Baseline credit)",
-                "urpx:unitPrice": "-0.03740",
-                "urpx:serviceTierNumber": 1
+                "urpx:unitPrice": "-0.03740"
               },
               {
                 "@type": "urpx:Price",
                 "@id": "sce:price-cia-nonbaseline-2026-03-20",
                 "urpx:referencesPriceDefinition": {
-                  "@id": "sce:d-2026-03-20-pd-cia"
+                  "@id": "sce:d-2026-03-20-pd-cia-nonbaseline"
                 },
                 "urpx:name": "Conservation Incentive Adjustment — Tier 2 (Nonbaseline charge)",
-                "urpx:unitPrice": "0.06368",
-                "urpx:serviceTierNumber": 2
+                "urpx:unitPrice": "0.06368"
               },
               {
                 "@type": "urpx:Price",

@@ -117,12 +117,14 @@
               },
               "urpx:leftOperand": {
                 "@type": "urpx:ObjectOperandNode",
+                "@id": "ladwp:cn-residential-r-1a-left-operand",
                 "urpx:conditionProperty": {
                   "@id": "urpx:hasCustomerKind"
                 }
               },
               "urpx:rightOperand": {
                 "@type": "urpx:ObjectOperandNode",
+                "@id": "ladwp:cn-residential-r-1a-right-operand",
                 "urpx:referencesValue": {
                   "@id": "urpx:residentialKind"
                 }
@@ -133,10 +135,11 @@
       ],
       "urpx:hasPlanElements": {
         "@type": "urpx:PlanElements",
+        "@id": "ladwp:r-1a-2026-04-01-plan-elements",
         "urpx:hasSeasons": [
           {
             "@type": "urpx:Season",
-            "@id": "ladwp:season-high",
+            "@id": "ladwp:r-1a-2026-04-01-season-high",
             "urpx:seasonName": "High Season",
             "urpx:month": [
               "--06",
@@ -147,7 +150,7 @@
           },
           {
             "@type": "urpx:Season",
-            "@id": "ladwp:season-low",
+            "@id": "ladwp:r-1a-2026-04-01-season-low",
             "urpx:seasonName": "Low Season",
             "urpx:month": [
               "--10",
@@ -164,7 +167,7 @@
         "urpx:hasMetricInput": [
           {
             "@type": "urpx:MetricInput",
-            "@id": "ladwp:mi-energy",
+            "@id": "ladwp:r-1a-2026-04-01-mi-energy",
             "urpx:name": "kWh Energy Consumption Prices",
             "urpx:metricInputType": {
               "@id": "urpx:measuredMetricInput"
@@ -182,7 +185,7 @@
           },
           {
             "@type": "urpx:MetricInput",
-            "@id": "ladwp:mi-meter-count",
+            "@id": "ladwp:r-1a-2026-04-01-mi-meter-count",
             "urpx:name": "Per Meter Prices",
             "urpx:metricInputType": {
               "@id": "urpx:profileMetricInput"
@@ -194,11 +197,12 @@
         ],
         "urpx:hasBillingModel": {
           "@type": "urpx:BillingModel",
+          "@id": "ladwp:r-1a-2026-04-01-plan-elements-billing-model",
           "urpx:hasServiceTiers": {
             "@type": "urpx:ServiceTiers",
             "@id": "ladwp:tiers-r-1a",
             "urpx:referencesMetricInput": {
-              "@id": "ladwp:mi-energy"
+              "@id": "ladwp:r-1a-2026-04-01-mi-energy"
             },
             "urpx:hasServiceTier": [
               {
@@ -306,24 +310,24 @@
           "urpx:hasLedger": [
             {
               "@type": "urpx:Ledger",
-              "@id": "ladwp:ledger-energy",
+              "@id": "ladwp:r-1a-2026-04-01-ledger-energy",
               "urpx:name": "Energy Charges (Tier-varying)",
               "urpx:ledgerType": {
                 "@id": "urpx:bundledLedger"
               },
               "urpx:referencesMetricInput": {
-                "@id": "ladwp:mi-energy"
+                "@id": "ladwp:r-1a-2026-04-01-mi-energy"
               }
             },
             {
               "@type": "urpx:Ledger",
-              "@id": "ladwp:ledger-adjustments",
+              "@id": "ladwp:r-1a-2026-04-01-ledger-adjustments",
               "urpx:name": "Pass-through Adjustment Factors (quarterly)",
               "urpx:ledgerType": {
                 "@id": "urpx:bundledLedger"
               },
               "urpx:referencesMetricInput": {
-                "@id": "ladwp:mi-energy"
+                "@id": "ladwp:r-1a-2026-04-01-mi-energy"
               }
             },
             {
@@ -334,7 +338,7 @@
                 "@id": "urpx:bundledLedger"
               },
               "urpx:referencesMetricInput": {
-                "@id": "ladwp:mi-meter-count"
+                "@id": "ladwp:r-1a-2026-04-01-mi-meter-count"
               }
             },
             {
@@ -345,7 +349,7 @@
                 "@id": "urpx:bundledLedger"
               },
               "urpx:referencesMetricInput": {
-                "@id": "ladwp:mi-meter-count"
+                "@id": "ladwp:r-1a-2026-04-01-mi-meter-count"
               }
             }
           ],
@@ -373,7 +377,7 @@
                 ]
               },
               "urpx:referencesLedger": {
-                "@id": "ladwp:ledger-energy"
+                "@id": "ladwp:r-1a-2026-04-01-ledger-energy"
               }
             },
             {
@@ -403,7 +407,7 @@
                 ]
               },
               "urpx:referencesLedger": {
-                "@id": "ladwp:ledger-energy"
+                "@id": "ladwp:r-1a-2026-04-01-ledger-energy"
               }
             },
             {
@@ -422,6 +426,7 @@
               "urpx:baseQuantity": "1",
               "urpx:hasCalculationMethod": {
                 "@type": "urpx:CalculationMethod",
+                "@id": "ladwp:pd-power-access-charge-calculation-method",
                 "urpx:intervalDuration": "P1M"
               },
               "urpx:referencesLedger": {
@@ -430,7 +435,7 @@
             },
             {
               "@type": "urpx:PriceDefinition",
-              "@id": "ladwp:pd-eca",
+              "@id": "ladwp:r-1a-2026-04-01-pd-eca",
               "urpx:name": "Energy Cost Adjustment (ECA)",
               "urpx:chargeType": {
                 "@id": "urpx:adjustmentPowerCost"
@@ -442,12 +447,12 @@
                 "@id": "urpx:bundledPortion"
               },
               "urpx:referencesLedger": {
-                "@id": "ladwp:ledger-adjustments"
+                "@id": "ladwp:r-1a-2026-04-01-ledger-adjustments"
               }
             },
             {
               "@type": "urpx:PriceDefinition",
-              "@id": "ladwp:pd-esa",
+              "@id": "ladwp:r-1a-2026-04-01-pd-esa",
               "urpx:name": "Electric Subsidy Adjustment (ESA)",
               "urpx:chargeType": {
                 "@id": "urpx:adjustmentPowerCost"
@@ -459,12 +464,12 @@
                 "@id": "urpx:bundledPortion"
               },
               "urpx:referencesLedger": {
-                "@id": "ladwp:ledger-adjustments"
+                "@id": "ladwp:r-1a-2026-04-01-ledger-adjustments"
               }
             },
             {
               "@type": "urpx:PriceDefinition",
-              "@id": "ladwp:pd-rca",
+              "@id": "ladwp:r-1a-2026-04-01-pd-rca",
               "urpx:name": "Reliability Cost Adjustment (RCA)",
               "urpx:chargeType": {
                 "@id": "urpx:reliabilityCharge"
@@ -476,12 +481,12 @@
                 "@id": "urpx:bundledPortion"
               },
               "urpx:referencesLedger": {
-                "@id": "ladwp:ledger-adjustments"
+                "@id": "ladwp:r-1a-2026-04-01-ledger-adjustments"
               }
             },
             {
               "@type": "urpx:PriceDefinition",
-              "@id": "ladwp:pd-irca",
+              "@id": "ladwp:r-1a-2026-04-01-pd-irca",
               "urpx:name": "Incremental Reliability Cost Adjustment (IRCA)",
               "urpx:chargeType": {
                 "@id": "urpx:reliabilityCharge"
@@ -493,12 +498,12 @@
                 "@id": "urpx:bundledPortion"
               },
               "urpx:referencesLedger": {
-                "@id": "ladwp:ledger-adjustments"
+                "@id": "ladwp:r-1a-2026-04-01-ledger-adjustments"
               }
             },
             {
               "@type": "urpx:PriceDefinition",
-              "@id": "ladwp:pd-vea",
+              "@id": "ladwp:r-1a-2026-04-01-pd-vea",
               "urpx:name": "Variable Energy Adjustment (VEA)",
               "urpx:chargeType": {
                 "@id": "urpx:adjustmentPowerCost"
@@ -510,12 +515,12 @@
                 "@id": "urpx:bundledPortion"
               },
               "urpx:referencesLedger": {
-                "@id": "ladwp:ledger-adjustments"
+                "@id": "ladwp:r-1a-2026-04-01-ledger-adjustments"
               }
             },
             {
               "@type": "urpx:PriceDefinition",
-              "@id": "ladwp:pd-crpsea",
+              "@id": "ladwp:r-1a-2026-04-01-pd-crpsea",
               "urpx:name": "Capped Renewable Portfolio Standard Energy Adjustment (CRPSEA)",
               "urpx:chargeType": {
                 "@id": "urpx:environmentalFunding"
@@ -527,12 +532,12 @@
                 "@id": "urpx:bundledPortion"
               },
               "urpx:referencesLedger": {
-                "@id": "ladwp:ledger-adjustments"
+                "@id": "ladwp:r-1a-2026-04-01-ledger-adjustments"
               }
             },
             {
               "@type": "urpx:PriceDefinition",
-              "@id": "ladwp:pd-vrpsea",
+              "@id": "ladwp:r-1a-2026-04-01-pd-vrpsea",
               "urpx:name": "Variable Renewable Portfolio Standard Energy Adjustment (VRPSEA)",
               "urpx:chargeType": {
                 "@id": "urpx:environmentalFunding"
@@ -544,7 +549,7 @@
                 "@id": "urpx:bundledPortion"
               },
               "urpx:referencesLedger": {
-                "@id": "ladwp:ledger-adjustments"
+                "@id": "ladwp:r-1a-2026-04-01-ledger-adjustments"
               }
             },
             {
@@ -563,6 +568,7 @@
               "urpx:baseQuantity": "1",
               "urpx:hasCalculationMethod": {
                 "@type": "urpx:CalculationMethod",
+                "@id": "ladwp:pd-minimum-charge-calculation-method",
                 "urpx:intervalDuration": "P1M"
               },
               "urpx:referencesLedger": {
@@ -574,6 +580,7 @@
       },
       "urpx:hasPrices": {
         "@type": "urpx:Prices",
+        "@id": "ladwp:r-1a-2026-04-01-prices",
         "urpx:hasPrice": [
           {
             "@type": "urpx:Price",
@@ -783,68 +790,68 @@
           },
           {
             "@type": "urpx:PriceSet",
-            "@id": "ladwp:ps-adjustment-factors-2026-q2",
+            "@id": "ladwp:r-1a-2026-04-01-ps-adjustment-factors-2026-q2",
             "urpx:startDate": "2026-04-01",
             "urpx:hasPrice": [
               {
                 "@type": "urpx:Price",
-                "@id": "ladwp:price-eca-2026-q2",
+                "@id": "ladwp:r-1a-2026-04-01-price-eca-2026-q2",
                 "urpx:referencesPriceDefinition": {
-                  "@id": "ladwp:pd-eca"
+                  "@id": "ladwp:r-1a-2026-04-01-pd-eca"
                 },
                 "urpx:name": "Energy Cost Adjustment (Apr-Jun 2026)",
                 "urpx:unitPrice": "0.05690"
               },
               {
                 "@type": "urpx:Price",
-                "@id": "ladwp:price-esa-2026-q2",
+                "@id": "ladwp:r-1a-2026-04-01-price-esa-2026-q2",
                 "urpx:referencesPriceDefinition": {
-                  "@id": "ladwp:pd-esa"
+                  "@id": "ladwp:r-1a-2026-04-01-pd-esa"
                 },
                 "urpx:name": "Electric Subsidy Adjustment (Apr-Jun 2026)",
                 "urpx:unitPrice": "0.00147"
               },
               {
                 "@type": "urpx:Price",
-                "@id": "ladwp:price-rca-2026-q2",
+                "@id": "ladwp:r-1a-2026-04-01-price-rca-2026-q2",
                 "urpx:referencesPriceDefinition": {
-                  "@id": "ladwp:pd-rca"
+                  "@id": "ladwp:r-1a-2026-04-01-pd-rca"
                 },
                 "urpx:name": "Reliability Cost Adjustment (Apr-Jun 2026)",
                 "urpx:unitPrice": "0.00300"
               },
               {
                 "@type": "urpx:Price",
-                "@id": "ladwp:price-irca-2026-q2",
+                "@id": "ladwp:r-1a-2026-04-01-price-irca-2026-q2",
                 "urpx:referencesPriceDefinition": {
-                  "@id": "ladwp:pd-irca"
+                  "@id": "ladwp:r-1a-2026-04-01-pd-irca"
                 },
                 "urpx:name": "Incremental Reliability Cost Adjustment (Apr-Jun 2026)",
                 "urpx:unitPrice": "0.05505"
               },
               {
                 "@type": "urpx:Price",
-                "@id": "ladwp:price-vea-2026-q2",
+                "@id": "ladwp:r-1a-2026-04-01-price-vea-2026-q2",
                 "urpx:referencesPriceDefinition": {
-                  "@id": "ladwp:pd-vea"
+                  "@id": "ladwp:r-1a-2026-04-01-pd-vea"
                 },
                 "urpx:name": "Variable Energy Adjustment (Apr-Jun 2026)",
                 "urpx:unitPrice": "0.00503"
               },
               {
                 "@type": "urpx:Price",
-                "@id": "ladwp:price-crpsea-2026-q2",
+                "@id": "ladwp:r-1a-2026-04-01-price-crpsea-2026-q2",
                 "urpx:referencesPriceDefinition": {
-                  "@id": "ladwp:pd-crpsea"
+                  "@id": "ladwp:r-1a-2026-04-01-pd-crpsea"
                 },
                 "urpx:name": "Capped Renewable Portfolio Standard Energy Adjustment (Apr-Jun 2026)",
                 "urpx:unitPrice": "0.01779"
               },
               {
                 "@type": "urpx:Price",
-                "@id": "ladwp:price-vrpsea-2026-q2",
+                "@id": "ladwp:r-1a-2026-04-01-price-vrpsea-2026-q2",
                 "urpx:referencesPriceDefinition": {
-                  "@id": "ladwp:pd-vrpsea"
+                  "@id": "ladwp:r-1a-2026-04-01-pd-vrpsea"
                 },
                 "urpx:name": "Variable Renewable Portfolio Standard Energy Adjustment (Apr-Jun 2026)",
                 "urpx:unitPrice": "0.03296"
@@ -882,7 +889,7 @@
         "@id": "ladwp:r-1a"
       },
       "urpx:hasCoverageClaim": {
-        "@id": "ladwp:r-1a-2026-04-01-coverage",
+        "@id": "ladwp:cc-r-1a-2026-04-01",
         "@type": "urpx:CoverageClaim",
         "urpx:completenessResult": {
           "@id": "urpx:complete"

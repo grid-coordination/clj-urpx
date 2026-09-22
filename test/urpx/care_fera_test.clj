@@ -48,15 +48,27 @@
    ladder whose rungs are alternatives per kWh, so only the lowest contributes.
    SCE Schedule D names both Conservation Incentive Adjustment rungs, -0.03740
    baseline and +0.06368 over-baseline; summing both gives 0.37353, a subtotal
-   matching no bill any customer can receive."
+   matching no bill any customer can receive.
+
+   The number is read from the Price FIRST and then from its PriceDefinition,
+   because URPX puts it on both and 69 of 73 filings use the definition. This
+   helper read only the Price, which is the identical narrow read that made the
+   0.22.0 summary tier fix pass on a fixture and do nothing on the corpus; it
+   went unnoticed here for the same reason, that the fixture happened to carry
+   the minority form. Re-pinning the fixture to the house idiom is what exposed
+   it: the helper silently went back to summing both rungs and computed 0.37353
+   again, the exact subtotal its own docstring calls impossible."
   [plan summary-id]
   (let [idx (index/build-index plan)
+        tier-of (fn [n] (or (:urpx/serviceTierNumber n)
+                            (:urpx/serviceTierNumber
+                             (get idx (get-in n [:urpx/referencesPriceDefinition :jsonld/id])))))
         nodes (->> (get-in (summaries plan) [summary-id :urpx/includesPrice])
                    (map #(get idx (:jsonld/id %)))
                    (remove nil?))
-        {tiered true bare false} (group-by #(some? (:urpx/serviceTierNumber %)) nodes)]
+        {tiered true bare false} (group-by #(some? (tier-of %)) nodes)]
     (->> (cond-> (vec bare)
-           (seq tiered) (conj (first (sort-by :urpx/serviceTierNumber tiered))))
+           (seq tiered) (conj (first (sort-by tier-of tiered))))
          (map :urpx/unitPrice)
          (remove nil?)
          (reduce + 0M))))
@@ -150,8 +162,11 @@
         (let [idx (index/build-index plan)
               tiered (->> (get-in ss [sce-shared :urpx/includesPrice])
                           (map #(get idx (:jsonld/id %)))
-                          (filter :urpx/serviceTierNumber))]
-          (is (= 2 (count tiered)))
+                          (filter #(or (:urpx/serviceTierNumber %)
+                                       (:urpx/serviceTierNumber
+                                        (get idx (get-in % [:urpx/referencesPriceDefinition
+                                                            :jsonld/id]))))))]
+          (is (= 2 (count tiered)) "read from either placement, as the filing may use either")
           (is (= 0.30985M base))))
 
       (testing "CARE 32.5 percent"
@@ -193,46 +208,56 @@
 (deftest the-tier-discriminator-is-read-from-either-placement
   (testing "URPX puts urpx:serviceTierNumber on both urpx:Price and
             urpx:PriceDefinition, and filings use both. 69 of 73 corpus filings
-            carry it on the DEFINITION, one per tier, which is the house idiom;
-            this fixture is pinned before that idiom and carries it on the
-            PRICE.
+            carry it on the DEFINITION, one per tier, which is the house idiom,
+            and this fixture now does too.
 
             The first version of the summary tier fix read only the Price, so
-            it computed the right answer on this fixture and no answer at all
-            on the corpus. tier-info has read both since long before, three
-            hundred lines up in the same file; not reusing it was the defect.
+            it computed the right answer on the fixture as it was then pinned
+            and no answer at all on the corpus. tier-info has read both since
+            long before, three hundred lines up in the same file; not reusing it
+            was the defect.
+
+            The fixture was re-pinned once the corpus moved it to the house
+            idiom, so the construction runs the other way now: the definition
+            form is what is filed, and the PRICE form is derived from it. That
+            is the better direction, because the derived half is the minority
+            idiom rather than the one every filing uses.
 
             Pinned for BOTH placements, because a test covering one is exactly
             what let the narrow version through."
-    (let [care     (fixtures/load-modifier "sce-care-2026-03-20")
-          on-price (fixtures/load-rate-plan "sce-d-2026-03-20")
-          tiered   (->> (index/entities-of-type on-price "urpx:Price")
-                        vals (filter :urpx/serviceTierNumber)
-                        (sort-by :urpx/serviceTierNumber))
-          shared   (get-in (first tiered) [:urpx/referencesPriceDefinition :jsonld/id])
-          split-id #(str shared "-tier-" %)
-          ;; Relocate the way the corpus does: SPLIT the shared definition into
-          ;; one per tier and repoint each Price at its own. Merely moving the
-          ;; number onto the single shared definition is not faithful and
-          ;; produces a right-looking answer by luck.
-          on-pd (-> (clojure.walk/postwalk
-                     (fn [n]
-                       (if (and (map? n) (= "urpx:Price" (:jsonld/type n))
-                                (:urpx/serviceTierNumber n))
-                         (-> n
-                             (assoc :urpx/referencesPriceDefinition
-                                    {:jsonld/id (split-id (:urpx/serviceTierNumber n))})
-                             (dissoc :urpx/serviceTierNumber))
-                         n))
-                     on-price)
-                    (update-in [:urpx/hasRatePlanVersion :urpx/hasPlanElements
-                                :urpx/hasBillingModel :urpx/hasPriceDefinition]
-                               (fn [pds]
-                                 (let [base (some #(when (= shared (:jsonld/id %)) %) pds)]
-                                   (into (vec (remove #(= shared (:jsonld/id %)) pds))
-                                         (for [t (map :urpx/serviceTierNumber tiered)]
-                                           (assoc base :jsonld/id (split-id t)
-                                                  :urpx/serviceTierNumber t)))))))
+    (let [care    (fixtures/load-modifier "sce-care-2026-03-20")
+          on-pd   (fixtures/load-rate-plan "sce-d-2026-03-20")
+          tiered  (->> (index/entities-of-type on-pd "urpx:PriceDefinition")
+                       vals (filter :urpx/serviceTierNumber)
+                       (sort-by :urpx/serviceTierNumber))
+          pd-ids  (set (map :jsonld/id tiered))
+          ;; Collapse the way the corpus used to file it: point every tiered
+          ;; Price at ONE shared definition and carry the discriminator on the
+          ;; Price instead. Merely copying the number onto the Price while
+          ;; leaving the split definitions in place is not the minority idiom,
+          ;; it is both at once, and would pass for the wrong reason.
+          shared  (:jsonld/id (first tiered))
+          tier-of (into {} (map (juxt :jsonld/id :urpx/serviceTierNumber)) tiered)
+          on-price (-> (clojure.walk/postwalk
+                        (fn [n]
+                          (if (and (map? n) (= "urpx:Price" (:jsonld/type n))
+                                   (contains? pd-ids (get-in n [:urpx/referencesPriceDefinition
+                                                                :jsonld/id])))
+                            (-> n
+                                (assoc :urpx/serviceTierNumber
+                                       (tier-of (get-in n [:urpx/referencesPriceDefinition
+                                                           :jsonld/id])))
+                                (assoc :urpx/referencesPriceDefinition {:jsonld/id shared}))
+                            n))
+                        on-pd)
+                       (update-in [:urpx/hasRatePlanVersion :urpx/hasPlanElements
+                                   :urpx/hasBillingModel :urpx/hasPriceDefinition]
+                                  (fn [pds]
+                                    (into (vec (remove #(and (contains? pd-ids (:jsonld/id %))
+                                                             (not= shared (:jsonld/id %)))
+                                                       pds))
+                                          [(-> (some #(when (= shared (:jsonld/id %)) %) pds)
+                                               (dissoc :urpx/serviceTierNumber))]))))
           discount (fn [plan]
                      (->> (price/resolve-prices-with-modifiers plan [care] (summer-peak))
                           :urpx.resolved/ledgers
@@ -243,15 +268,20 @@
 
       (testing "the relocation is faithful, or this proves nothing"
         (is (= 2 (count tiered)) "two CIA rungs to relocate")
-        (is (some? shared) "which shared one definition before")
-        (is (not-any? :urpx/serviceTierNumber
-                      (vals (index/entities-of-type on-pd "urpx:Price")))
-            "no Price carries the number any more")
         (is (= 2 (count (filter :urpx/serviceTierNumber
                                 (vals (index/entities-of-type on-pd "urpx:PriceDefinition")))))
-            "and two definitions carry it, one per rung"))
+            "the filed form carries the number on two definitions, one per rung")
+        (is (not-any? :urpx/serviceTierNumber
+                      (vals (index/entities-of-type on-pd "urpx:Price")))
+            "and on no Price")
+        (is (= 2 (count (filter :urpx/serviceTierNumber
+                                (vals (index/entities-of-type on-price "urpx:Price")))))
+            "while the derived form carries it on two Prices")
+        (is (not-any? :urpx/serviceTierNumber
+                      (vals (index/entities-of-type on-price "urpx:PriceDefinition")))
+            "and on no definition, so the two forms are genuinely exclusive"))
 
-      (is (= -0.10070125M (discount on-price)) "discriminator on the Price")
       (is (= -0.10070125M (discount on-pd)) "discriminator on the PriceDefinition")
+      (is (= -0.10070125M (discount on-price)) "discriminator on the Price")
       (is (= (discount on-price) (discount on-pd))
           "the placement a filer chose must not change the answer"))))

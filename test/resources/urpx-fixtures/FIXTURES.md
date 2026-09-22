@@ -20,6 +20,16 @@ Unlike the PG&E `@graph` bundles, each of these base plans is a **separate filin
 
 The PG&E four changed structurally at wave 4, not just in prefixes: a `urpx:URPXPackage` was INSERTED INTO their existing `@graph` as a sibling rather than wrapping it, because `URPXPackageShape` is `sh:closed` and admits neither `urpx:ProgramEnrollment` nor `urpx:RateCase`, which these filings carry. The plan and its modifier are embedded inside that package, so `load-graph` alone no longer reaches them and the wrapper has to be descended. `urpx:TariffPublication` became `urpx:SourcePublication`, and two `urpx:supersedes` links were dropped because the v0.5.1 version shapes are closed and do not admit the property. The library targets v0.5.1 and accepts v0.2.x in full; because no vendored fixture carries the v0.2.x shape any more, that half is exercised by a synthetic v0.2.x document in `urpx.v051-fixtures-test` rather than by a fixture.
 
+## Why the pins differ, and why some are deliberately old
+
+A pin is not staleness to be cleaned up on a schedule. A stale pin can preserve coverage the corpus no longer has, or hide the shape real filings actually use, and this set contains one of each. Re-sync fixture by fixture, and record the reason here.
+
+**`sdge-ev-tou-2026-04-01` stays at `28390dc` on purpose.** At that commit it carries twelve `urpx:Price` nodes with `urpx:touPeriodNumber`; at current corpus HEAD it carries none, because the corpus collapsed them onto the PriceDefinition. That property's mishandling overstated SDG&E's CARE discount 3.09x, fixed in 0.22.0, and this is the only place the shape survives. Re-pinning would leave `urpx.price-test/a-price-carries-its-own-tou-period` green while testing nothing, which is why its own guard assertion counts the twelve. If the pin ever has to move, replace the case with a synthetic document first, the way the v0.2.x acceptance case was replaced.
+
+**`sce-d-2026-03-20` moved to `26e0acb` for the opposite reason.** It was pinned at `384ffb1`, which carries `urpx:serviceTierNumber` on the Price; 69 of 73 filings carry it on the PriceDefinition, and that staleness is exactly why the 0.22.0 summary tier fix passed here and did nothing on the corpus, needing 0.23.0. The fixture now carries the house idiom, `urpx.care-fera-test` derives the minority form from it rather than the other way round, and re-pinning immediately exposed that the test's own `subtotal` helper still had the same narrow read.
+
+**`pge-e-1-2026-03-01` and `pge-e-tou-c-2026-03-01` stay at `1e4ad46`.** The corpus has since re-scoped every subordinate `@id` to its owning version and named its blank nodes. Measured: no `@type` count changes, no URPX property is added or removed, no literal value differs, and no resolved number moves at any instant. The change is identity only, so re-pinning buys nothing and costs about seventy IRI-string updates across five test namespaces and the README. It is also hazardous rather than merely tedious: `pge:pa-vintage-2020` exists in both fixtures and maps to two different scoped IRIs, and within one fixture three nodes share the suffix (`pa-`, `cn-pa-`, `cx-pa-`). Move these when there is a substantive reason, not to make the pins match.
+
 ## Source and license
 
 All vendored `.jsonld` files originate in the
@@ -39,21 +49,21 @@ Fixtures are snapshots, pinned to a specific upstream commit on the
 |--------------------------------------|------------------------|---------------|
 | `pge-e-1-2026-03-01.jsonld`          | `main`               | `1e4ad46`     |
 | `pge-e-tou-c-2026-03-01.jsonld`      | `main`               | `1e4ad46`     |
-| `pge-e-tou-d-2026-03-27.jsonld`      | `main`               | `1e4ad46`     |
-| `pge-ev2-2026-03-27.jsonld`          | `main`               | `1e4ad46`     |
-| `ladwp-r-1a-2026-04-01.jsonld`       | `main`               | `6453536`     |
-| `ladwp-r-1b-2026-04-01.jsonld`       | `main`               | `6453536`     |
-| `ladwp-ez-save-2008-09-01.jsonld`    | `main`               | `6453536`     |
-| `ladwp-lifeline-2008-09-01.jsonld`   | `main`               | `6453536`     |
-| `ladwp-nem-2008-09-01.jsonld`        | `main`               | `6453536`     |
-| `sce-d-2026-03-20.jsonld`            | `main`               | `384ffb1`     |
+| `pge-e-tou-d-2026-03-27.jsonld`      | `main`               | `26e0acb`     |
+| `pge-ev2-2026-03-27.jsonld`          | `main`               | `26e0acb`     |
+| `ladwp-r-1a-2026-04-01.jsonld`       | `main`               | `26e0acb`     |
+| `ladwp-r-1b-2026-04-01.jsonld`       | `main`               | `26e0acb`     |
+| `ladwp-ez-save-2008-09-01.jsonld`    | `main`               | `26e0acb`     |
+| `ladwp-lifeline-2008-09-01.jsonld`   | `main`               | `26e0acb`     |
+| `ladwp-nem-2008-09-01.jsonld`        | `main`               | `26e0acb`     |
+| `sce-d-2026-03-20.jsonld`            | `main`               | `26e0acb`     |
 | `sce-care-2026-03-20.jsonld`         | `main`               | `384ffb1`     |
 | `sce-fera-2026-03-20.jsonld`         | `main`               | `384ffb1`     |
 | `sdge-dr-2026-04-01.jsonld`          | `main`               | `384ffb1`     |
 | `sdge-care-2025-10-01.jsonld`        | `main`               | `384ffb1`     |
 | `sdge-fera-2026-04-01.jsonld`        | `main`               | `384ffb1`     |
 | `cpau-e-14-2025-07-01.jsonld`        | `main`               | `28390dc`     |
-| `sce-d-2025-11-15.jsonld`            | `main`               | `28390dc`     |
+| `sce-d-2025-11-15.jsonld`            | `main`               | `26e0acb`     |
 | `smud-tod-5-8pm-2026-01-01.jsonld`   | `main`               | `28390dc`     |
 | `smud-cpp-2026-01-01.jsonld`         | `main`               | `28390dc`     |
 | `sce-tou-d-prime-2026-03-20.jsonld`  | `main`               | `28390dc`     |

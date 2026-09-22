@@ -43,7 +43,10 @@
     "urpx:targetURPXVersion": {
       "@type": "xsd:anyURI"
     },
-    "skos": "http://www.w3.org/2004/02/skos/core#"
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "urpx:evaluatedOn": {
+      "@type": "xsd:dateTime"
+    }
   },
   "@type": "urpx:URPXPackage",
   "@id": "ladwp:doc-lifeline-2008-09-01",
@@ -116,12 +119,14 @@
                   },
                   "urpx:leftOperand": {
                     "@type": "urpx:ObjectOperandNode",
+                    "@id": "ladwp:lifeline-2008-09-01-cn-residential-left-operand",
                     "urpx:conditionProperty": {
                       "@id": "urpx:hasCustomerKind"
                     }
                   },
                   "urpx:rightOperand": {
                     "@type": "urpx:ObjectOperandNode",
+                    "@id": "ladwp:lifeline-2008-09-01-cn-residential-right-operand",
                     "urpx:referencesValue": {
                       "@id": "urpx:residentialKind"
                     }
@@ -135,10 +140,12 @@
                   },
                   "urpx:leftOperand": {
                     "@type": "urpx:CustomOperandNode",
+                    "@id": "ladwp:lifeline-2008-09-01-cn-program-enrollment-left-operand",
                     "urpx:customConditionProperty": "Program Enrollment"
                   },
                   "urpx:rightOperand": {
                     "@type": "urpx:CustomOperandNode",
+                    "@id": "ladwp:lifeline-2008-09-01-cn-program-enrollment-right-operand",
                     "urpx:stringValue": "Lifeline"
                   }
                 }
@@ -149,6 +156,7 @@
       ],
       "urpx:hasPlanElements": {
         "@type": "urpx:PlanElements",
+        "@id": "ladwp:lifeline-2008-09-01-plan-elements",
         "urpx:hasMetricInput": [
           {
             "@type": "urpx:MetricInput",
@@ -164,6 +172,7 @@
         ],
         "urpx:hasBillingModel": {
           "@type": "urpx:BillingModel",
+          "@id": "ladwp:lifeline-2008-09-01-plan-elements-billing-model",
           "urpx:hasLedger": [
             {
               "@type": "urpx:Ledger",
@@ -194,6 +203,7 @@
               "urpx:baseQuantity": "1",
               "urpx:hasCalculationMethod": {
                 "@type": "urpx:CalculationMethod",
+                "@id": "ladwp:lifeline-pd-subsidy-2008-09-01-calculation-method",
                 "urpx:intervalDuration": "P1D"
               },
               "urpx:referencesLedger": {
@@ -205,6 +215,7 @@
       },
       "urpx:hasPrices": {
         "@type": "urpx:Prices",
+        "@id": "ladwp:lifeline-2008-09-01-prices",
         "urpx:hasPrice": [
           {
             "@type": "urpx:Price",
@@ -247,12 +258,21 @@
         "@id": "ladwp:lifeline"
       },
       "urpx:hasCoverageClaim": {
-        "@id": "ladwp:lifeline-2008-09-01-coverage",
+        "@id": "ladwp:cc-lifeline-2008-09-01",
         "@type": "urpx:CoverageClaim",
         "urpx:completenessResult": {
           "@id": "urpx:partial"
         },
-        "urpx:selfContained": true
+        "urpx:selfContained": true,
+        "urpx:explainedBy": {
+          "@type": "urpx:Evaluation",
+          "@id": "ladwp:cc-lifeline-2008-09-01-evaluation",
+          "urpx:evaluationKind": {
+            "@id": "urpx:coverageEvaluation"
+          },
+          "urpx:description": "Three provisions of Schedule R-1's Lifeline Service are not represented, and the eligibility rule is narrower than the tariff's. Section 5.a.(4) escalates the credit for customers who qualify more than once: a customer eligible in two of the three criteria categories receives 150 percent of the Lifeline Credit, and one eligible in all three receives 175 percent. This filing models a single value, the base $17.71 per month (published as $35.42 every two months and modeled as -$0.5817 per meter-day), so a multiply-qualifying customer's credit is understated by half or by three-quarters again. Section 2.e sets a Minimum Charge of $2.00 for Rate E and Section 3 Billing makes it a floor, the bill being Rate A less the Lifeline Credits \"but not less than the Minimum Charge\"; no floor is modeled. Sections 2.e and 3 also strike the ESA and RCA per-kWh adjustments ($0.00147 and $0.00300 per kWh on the current residential rate sheets) along with the credit, which this filing does not do, so both charges survive on a bill computed from base plan plus modifier. On eligibility, Section 5.a enumerates three qualifying paths: a senior citizen or disabled individual eligible for exemption from the City Utility Users Tax, a resident who regularly requires an essential life-support device, and a physician-certified allowance for a named set of conditions or a compromised immune system. None of the three is an income test, and the filing collapses all of them into one enrollment predicate described in terms of age or disability plus income guidelines, which loses the distinction the 150 and 175 percent escalation depends on. Deliberately out of scope: the duty in Section 5.a.(4) to notify LADWP when eligibility ends, and the back-billing of up to 36 months plus interest that follows a failure to notify, are enrollment compliance procedures rather than rate structure.",
+          "urpx:evaluatedOn": "2026-09-21T00:00:00"
+        }
       }
     }
   }

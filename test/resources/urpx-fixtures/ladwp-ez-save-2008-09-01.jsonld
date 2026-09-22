@@ -43,7 +43,10 @@
     "urpx:targetURPXVersion": {
       "@type": "xsd:anyURI"
     },
-    "skos": "http://www.w3.org/2004/02/skos/core#"
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "urpx:evaluatedOn": {
+      "@type": "xsd:dateTime"
+    }
   },
   "@type": "urpx:URPXPackage",
   "@id": "ladwp:doc-ez-save-2008-09-01",
@@ -116,12 +119,14 @@
                   },
                   "urpx:leftOperand": {
                     "@type": "urpx:ObjectOperandNode",
+                    "@id": "ladwp:ez-save-2008-09-01-cn-residential-left-operand",
                     "urpx:conditionProperty": {
                       "@id": "urpx:hasCustomerKind"
                     }
                   },
                   "urpx:rightOperand": {
                     "@type": "urpx:ObjectOperandNode",
+                    "@id": "ladwp:ez-save-2008-09-01-cn-residential-right-operand",
                     "urpx:referencesValue": {
                       "@id": "urpx:residentialKind"
                     }
@@ -135,10 +140,12 @@
                   },
                   "urpx:leftOperand": {
                     "@type": "urpx:CustomOperandNode",
+                    "@id": "ladwp:ez-save-2008-09-01-cn-program-enrollment-left-operand",
                     "urpx:customConditionProperty": "Program Enrollment"
                   },
                   "urpx:rightOperand": {
                     "@type": "urpx:CustomOperandNode",
+                    "@id": "ladwp:ez-save-2008-09-01-cn-program-enrollment-right-operand",
                     "urpx:stringValue": "EZ-Save"
                   }
                 }
@@ -149,6 +156,7 @@
       ],
       "urpx:hasPlanElements": {
         "@type": "urpx:PlanElements",
+        "@id": "ladwp:ez-save-2008-09-01-plan-elements",
         "urpx:hasMetricInput": [
           {
             "@type": "urpx:MetricInput",
@@ -164,6 +172,7 @@
         ],
         "urpx:hasBillingModel": {
           "@type": "urpx:BillingModel",
+          "@id": "ladwp:ez-save-2008-09-01-plan-elements-billing-model",
           "urpx:hasLedger": [
             {
               "@type": "urpx:Ledger",
@@ -194,6 +203,7 @@
               "urpx:baseQuantity": "1",
               "urpx:hasCalculationMethod": {
                 "@type": "urpx:CalculationMethod",
+                "@id": "ladwp:ez-save-pd-subsidy-2008-09-01-calculation-method",
                 "urpx:intervalDuration": "P1D"
               },
               "urpx:referencesLedger": {
@@ -205,6 +215,7 @@
       },
       "urpx:hasPrices": {
         "@type": "urpx:Prices",
+        "@id": "ladwp:ez-save-2008-09-01-prices",
         "urpx:hasPrice": [
           {
             "@type": "urpx:Price",
@@ -247,12 +258,21 @@
         "@id": "ladwp:ez-save"
       },
       "urpx:hasCoverageClaim": {
-        "@id": "ladwp:ez-save-2008-09-01-coverage",
+        "@id": "ladwp:cc-ez-save-2008-09-01",
         "@type": "urpx:CoverageClaim",
         "urpx:completenessResult": {
           "@id": "urpx:partial"
         },
-        "urpx:selfContained": true
+        "urpx:selfContained": true,
+        "urpx:explainedBy": {
+          "@type": "urpx:Evaluation",
+          "@id": "ladwp:cc-ez-save-2008-09-01-evaluation",
+          "urpx:evaluationKind": {
+            "@id": "urpx:coverageEvaluation"
+          },
+          "urpx:description": "The source ordinance states this subsidy as a complete rate rather than as a credit line, and this filing models only the credit. Schedule R-1 Section 2.d, Rate D Low Income Service, sets it at \"Rate A less $8.17, ESA, and RCA\" effective July 1, 2009, and Section 3 Billing repeats the same three-part construction. The filing carries the $8.17 per month (published by LADWP as $16.34 every two months and modeled here as -$0.2683 per meter-day) but not the accompanying waiver of the two per-kWh adjustments: the Electric Subsidy Adjustment and the Reliability Cost Adjustment, $0.00147 and $0.00300 per kWh on the current residential rate sheets, survive on the base plan when this modifier is applied, so a bill computed from base plan plus modifier overstates an EZ-Save customer's charges by their sum on every kWh. Two smaller points of fidelity. The credit is published per two-month billing period and modeled per day at the 60.875-day average, so a customer on a longer or shorter cycle receives a credit slightly away from the published figure. LADWP's residential rates page adds that the subsidy is not to exceed the customer's bill; that floor is not modeled, and binds only where a bill is smaller than the credit. Note also that the ordinance frames Rate D as a variant of Rate A, the standard non-time-of-use service, while this filing offers the credit as a modifier applicable to both R-1(A) and R-1(B). Eligibility is out of scope rather than missing: Section 4.a.(4) states no income test in the tariff, deferring the requirements to the Board of Water and Power Commissioners and to guidelines published off-tariff, so the filing tests enrollment in the program instead.",
+          "urpx:evaluatedOn": "2026-09-21T00:00:00"
+        }
       }
     }
   }

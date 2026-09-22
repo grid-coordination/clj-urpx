@@ -114,7 +114,7 @@ Silent losses. A sweep looked for every way a SHACL-conformant document can lose
 
 ### Added
 
-- Three fixtures pinned at shapes the live corpus no longer has: `sdge-ev-tou-2026-04-01` (12 Prices carrying `touPeriodNumber` directly — urpx-tariffs has since collapsed these, so this is the only place the case survives), `pge-e-tou-c-baseline-tier-2026-03-01` (four Prices, no dates), and `sce-d-2025-11-15` earlier.
+- Three fixtures pinned at shapes the live corpus no longer has: `sdge-ev-tou-2026-04-01` (12 Prices carrying `touPeriodNumber` directly — urpx-rate-plans has since collapsed these, so this is the only place the case survives), `pge-e-tou-c-baseline-tier-2026-03-01` (four Prices, no dates), and `sce-d-2025-11-15` earlier.
 
 **Upgrading:** a filing carrying any of these shapes prices differently, generally more completely. `marginal-unit-rate` gains a fifth refusal, `:outside-version-window`, which fires when a filing is resolved outside the window its version describes — check `:reason` rather than catching broadly.
 
