@@ -1073,17 +1073,25 @@
     (cond-> {:urpx.resolved/unit-price value}
       unvaluable (assoc :urpx.resolved/unvaluable unvaluable))))
 
-(defn- version-effective-at
+(defn version-effective-at
   "The instant `version` takes effect, as a LocalDateTime, or nil if it does not
    say. urpx:effectiveDateTime is preferred; urpx:effectiveDate is read as the
    start of that day. Both are sh:minCount 0, so a conformant version may state
-   neither, and this returns nil rather than inventing an epoch for it."
+   neither, and this returns nil rather than inventing an epoch for it.
+
+   Public as THE SINGLE READER of a version's effective instant. urpx.arrangements
+   re-derived this and got it subtly wrong, requiring urpx:effectiveDateTime and
+   so silently dropping a conformant version that states only urpx:effectiveDate.
+   Two namespaces disagreeing about the same date is the drift this prevents."
   [version]
   (or (:urpx/effectiveDateTime version)
       (some-> (:urpx/effectiveDate version) (.atStartOfDay))))
 
-(defn- version-expired-by?
+(defn version-expired-by?
   "True if `version` states a hard expiration at or before `t`.
+
+   Public alongside `version-effective-at`, and for the same reason: it is the
+   single reader of a version's end bound.
 
    urpx:expirationDate / urpx:expirationDateTime only. The version shapes also
    carry urpx:expectedEndDate and urpx:expectedEndDateTime, which are
@@ -1149,9 +1157,12 @@
                              :at t
                              :ids (mapv :jsonld/id winners)}))))))))
 
-(defn- version-covers?
+(defn version-covers?
   "True if `version` describes the instant `t`: in effect by then, and not
-   expired.
+   expired. `t` is a LocalDateTime.
+
+   Public as the single reader of a version window, so a caller asking whether
+   a snapshot is current gets the same answer this namespace uses to resolve it.
 
    A version stating no effective instant covers everything. It cannot be
    ordered against anything and nothing says it has not started, so refusing

@@ -93,6 +93,76 @@
     "urpx:RatePlanModifierVersion" (coerce-rate-plan-modifier-version raw)
     nil))
 
+(def ^:private uncoerced-re #"^(\d{2}:\d{2}|\d{4}-\d{2}-\d{2})")
+
+(defn temporal-signature
+  "Walk `doc` and report what temporal literals it carries:
+   `{:times #{} :dates #{} :date-times #{} :date-shaped-strings n}`.
+
+   By java.time TYPE rather than by property name, deliberately. A name list
+   would have to be kept in step with the vocabulary, and the one it missed
+   would be a missing value rather than a loud failure.
+
+   THE ONE IMPLEMENTATION of this walk. `urpx.schedule` harvests boundary
+   candidates from it and `urpx.arrangements` uses it only to tell a coerced
+   document from an uncoerced one; two copies of the test is two chances to
+   disagree about what \"coerced\" means."
+  [doc]
+  (let [acc (volatile! {:times #{} :dates #{} :date-times #{} :date-shaped-strings 0})]
+    (letfn [(walk [x]
+              (cond
+                (instance? java.time.LocalTime x)     (vswap! acc update :times conj x)
+                (instance? java.time.LocalDateTime x) (vswap! acc update :date-times conj x)
+                (instance? java.time.LocalDate x)     (vswap! acc update :dates conj x)
+                (string? x) (when (re-find uncoerced-re x)
+                              (vswap! acc update :date-shaped-strings inc))
+                (map? x) (run! walk (vals x))
+                (sequential? x) (run! walk x)
+                :else nil))]
+      (walk doc))
+    @acc))
+
+(defn uncoerced?
+  "True if `doc` has the SIGNATURE of a document that was never coerced: it
+   carries date-shaped strings and no java.time values anywhere at all.
+
+   It is NOT enough that a date-shaped string exists. urpx:version is
+   `rdfs:range xsd:string` and every filing in the production corpus uses its
+   effective date as the version LABEL, so \"2026-03-20\" is a perfectly
+   coerced string. A shape-based test on strings alone rejected all 33 modifier
+   filings when `urpx.schedule` first tried it, which is why the test is the
+   ABSENCE of real temporals rather than the presence of a string.
+
+   A document with no temporal content at all is not uncoerced, merely empty of
+   dates, and reports false."
+  [doc]
+  (let [{:keys [times dates date-times date-shaped-strings]} (temporal-signature doc)]
+    (and (pos? date-shaped-strings) (empty? times) (empty? dates) (empty? date-times))))
+
+(defn check-coerced!
+  "Throw unless every document in `documents` has been coerced.
+
+   `who` names the calling operation in the message. Reading an uncoerced
+   document does not fail loudly on its own: dates stay strings, so anything
+   that compares them throws deep inside, and anything that does NOT compare
+   them quietly answers a different question. `urpx.arrangements/arrangements`
+   returned 202 pairs instead of 144 that way, a plausible number rather than a
+   refusal."
+  [documents who]
+  (let [bad (filter uncoerced? documents)]
+    (when (seq bad)
+      (throw (ex-info (str who " needs COERCED documents: " (count bad) " of "
+                           (count documents) " carry date-shaped strings and no "
+                           "java.time values at all, which is what an uncoerced "
+                           "document looks like. Run them through urpx.coerce "
+                           "first (coerce-doc dispatches on @type). Reading an "
+                           "uncoerced document does not fail loudly: it answers "
+                           "a different question.")
+                      {:reason :uncoerced-document
+                       :who who
+                       :uncoerced (count bad)
+                       :total (count documents)})))))
+
 (defn validate
   "Validate `value` against `schema`. Returns true on success."
   [schema value]

@@ -16,7 +16,8 @@
   window: the first begins at `start` and the last ends at `end`, however the
   grid falls. Pass `{:step (Duration/ofMinutes 15)}` etc. for finer granularity
   when a rate plan defines sub-hour TOU bracket transitions."
-  (:require [urpx.price :as price])
+  (:require [urpx.coerce :as coerce]
+            [urpx.price :as price])
   (:import [java.time Duration Instant LocalDate LocalDateTime LocalTime ZonedDateTime ZoneId]
            [java.time.temporal ChronoUnit]
            [java.time.zone ZoneRules]))
@@ -212,58 +213,27 @@
 ;; invalidate everything here without touching this file.
 ;; ---------------------------------------------------------------------------
 
-(def ^:private uncoerced-re #"^(\d{2}:\d{2}|\d{4}-\d{2}-\d{2})")
-
 (defn- harvest-literals
   "Walk a COERCED document and collect every temporal literal by java.time TYPE:
    LocalTimes, LocalDates and LocalDateTimes.
 
-   By type rather than by property name, deliberately. A name list would have
-   to be kept in step with the vocabulary, and the one it missed would be a
-   missing candidate, which is a silently wrong boundary rather than a loud
-   failure. Typing picks up urpx:startTime and urpx:endTime, every effective,
-   expiration and start date, and anything temporal URPX adds later, for free.
-
-   Throws on a document that was never coerced: raw JSON-LD leaves these as
-   strings, which would harvest nothing and yield a candidate set narrowed to
-   the midnight grid, quietly."
+   The walk and the uncoerced-document test both live in `urpx.coerce` now, so
+   this namespace and `urpx.arrangements` cannot drift about what a coerced
+   document is. Throws on a document that was never coerced: raw JSON-LD leaves
+   these as strings, which would harvest nothing and yield a candidate set
+   narrowed to the midnight grid, quietly."
   [doc]
-  (let [acc (volatile! {:times #{} :dates #{} :date-times #{}})]
-    (letfn [(walk [x]
-              (cond
-                (instance? LocalTime x)     (vswap! acc update :times conj x)
-                (instance? LocalDateTime x) (vswap! acc update :date-times conj x)
-                (instance? LocalDate x)     (vswap! acc update :dates conj x)
-                (string? x) (when (re-find uncoerced-re x)
-                              (vswap! acc update :date-shaped-strings (fnil inc 0)))
-                (map? x) (run! walk (vals x))
-                (sequential? x) (run! walk x)
-                :else nil))]
-      (walk doc))
-    ;; The guard is that the document yielded NO temporal values at all while
-    ;; containing date-shaped strings. That is the signature of a document that
-    ;; was never coerced, whose literals are all still strings, and which would
-    ;; harvest nothing and narrow the candidate set to midnights quietly.
-    ;;
-    ;; It is NOT enough that a date-shaped string exists. urpx:version is
-    ;; rdfs:range xsd:string and every filing in the corpus uses the effective
-    ;; date as its version LABEL, so "2026-03-20" is a perfectly coerced string.
-    ;; The first version of this guard was shape-based on strings, which reads
-    ;; oddly next to harvesting by java.time type and rejected all 33 modifier
-    ;; filings in the corpus. A coerced document carries real temporals
-    ;; elsewhere, so it passes; an uncoerced one carries none, so it does not.
-    (let [{:keys [times dates date-times date-shaped-strings]} @acc]
-      (when (and (pos? (or date-shaped-strings 0))
-                 (empty? times) (empty? dates) (empty? date-times))
-        (throw (ex-info (str "price-segments needs a COERCED document: it carries "
-                             date-shaped-strings " date-shaped string(s) and no java.time "
-                             "values at all, which is what an uncoerced document looks "
-                             "like. Run it through urpx.coerce first; harvesting an "
-                             "uncoerced document silently narrows the candidate set to "
-                             "midnights.")
-                        {:reason :uncoerced-document
-                         :date-shaped-strings date-shaped-strings}))))
-    (select-keys @acc [:times :dates :date-times])))
+  (let [sig (coerce/temporal-signature doc)]
+    (when (coerce/uncoerced? doc)
+      (throw (ex-info (str "price-segments needs a COERCED document: it carries "
+                           (:date-shaped-strings sig) " date-shaped string(s) and no "
+                           "java.time values at all, which is what an uncoerced "
+                           "document looks like. Run it through urpx.coerce first; "
+                           "harvesting an uncoerced document silently narrows the "
+                           "candidate set to midnights.")
+                      {:reason :uncoerced-document
+                       :date-shaped-strings (:date-shaped-strings sig)})))
+    (select-keys sig [:times :dates :date-times])))
 
 (defn- local->instants
   "Every instant the local date-time `ldt` corresponds to in `zone`.
