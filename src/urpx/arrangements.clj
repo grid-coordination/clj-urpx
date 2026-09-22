@@ -323,10 +323,34 @@
 ;; the two readings cannot differ either, by a different route and on a
 ;; different document set.
 ;;
-;; Which means the choice is currently unfalsifiable against this corpus under
-;; EITHER resolution strategy. It is a question about data URPX may yet carry,
-;; not about data anyone holds, and that is why both are shipped rather than one
-;; being chosen on evidence that does not exist. The 159-versus-166 difference reported elsewhere is measured on
+;; Which means the choice is currently unfalsifiable against DATA under either
+;; resolution strategy. It is a question about documents URPX may yet carry, not
+;; about documents anyone holds.
+;;
+;; THERE IS ARTIFACT EVIDENCE, THOUGH, and it was missed on both sides of that
+;; analysis: URPX Decision #090, which introduced urpx:applicableToRatePlanVersion
+;; (documentation/pages/urpx-design-decisions-081-120.md:661). It cuts both ways
+;; and is recorded here rather than summarised, because a one-sided reading of it
+;; would settle this on half the text.
+;;
+;; FOR `named-versions-add`. The decision records "Breaking Change: None - this
+;; is an additive enhancement", and the alternative it selected is credited with
+;; "Preserves the existing document-level properties for document-scoped
+;; relationships". A property whose mere presence retracted compatibility that
+;; urpx:applicableToRatePlan had established would stop documents composing that
+;; composed before, which is hard to call non-breaking or preserving.
+;;
+;; FOR `named-versions-narrow`. The same Rationale says the new properties "avoid
+;; ambiguity where a modifier document is broadly applicable but only certain
+;; modifier versions are valid for a particular rate plan version". Broadly
+;; applicable, only certain valid, is narrowing described.
+;;
+;; The honest reading is that "non-breaking" in a spec changelog usually means
+;; existing documents stay VALID, which adding an optional property cannot
+;; affect either way, rather than that their meaning is unchanged. So it is
+;; evidence and not a settlement, which is why both policies still ship and why
+;; the default is still the one the corpus and the reference implementation
+;; assume rather than the one this paragraph might be read to favour. The 159-versus-166 difference reported elsewhere is measured on
 ;; the union-merged graph that the corpus's own SHACL gate validates, which this
 ;; namespace refuses rather than merges.
 ;;
