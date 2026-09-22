@@ -191,23 +191,84 @@
 ;; Compatibility
 ;; ---------------------------------------------------------------------------
 
-(defn- compatible?
-  "True if modifier version `mv` may combine with base version `bv` of plan
-   `plan-id`.
+(defn- applicability
+  "The two compatibility statements on `mv`, as sets of @ids."
+  [mv]
+  [(into #{} (keep :jsonld/id) (:urpx/applicableToRatePlanVersion mv))
+   (into #{} (keep :jsonld/id) (:urpx/applicableToRatePlan mv))])
 
-   urpx:applicableToRatePlan and urpx:applicableToRatePlanVersion are both
-   sh:minCount 0 with no sh:maxCount on RatePlanModifierVersionShape, and BOTH
-   state compatibility: what may combine, not what a customer has. The
-   version-level statement is the more specific, so when a modifier names any
-   versions it is taken to mean those and only those. A modifier naming neither
-   expresses no compatibility and combines with nothing, which is the reading
-   that refuses rather than guesses."
+;; A COMPATIBILITY POLICY is `(fn [modifier-version base-version plan-id] ->
+;; boolean)`. It exists because URPX does not settle what a version-level
+;; statement means alongside a plan-level one, and this library does not invent
+;; the answer any more than it invents which modifiers a customer holds.
+;;
+;; Both properties are sh:minCount 0 with no sh:maxCount on
+;; RatePlanModifierVersionShape, and BOTH state compatibility: what may
+;; combine, not what anyone has. What is unstated is whether naming a version
+;; NARROWS the plan-level statement or ADDS to it. urpx:applicableToRatePlanVersion
+;; is a plain owl:ObjectProperty, owl:FunctionalProperty appears zero times in
+;; the ontology, and sh:closed closes the property set rather than the value
+;; set, so nothing in the artifacts decides it.
+;;
+;; WHERE THEY CAN DIFFER AT ALL is narrower than it looks. The two readings can
+;; only disagree about a modifier that names SOME version AND names a plan no
+;; named version belongs to. Measured over urpx-rate-plans 9deae4dbaa8b: 33 of
+;; 40 modifier versions name no version, so both policies treat them
+;; identically, and of the 7 that do, the 4 PG&E vintage-PCIA ones name a
+;; version of the only plan they name, so those agree too.
+;;
+;; That leaves exactly two, cpau:e-eec-1-2025-09-01 and cpau:e-nse-1-2025-09-01,
+;; and BOTH are among the three identities this namespace currently refuses as
+;; :conflicting-version-id. So on the corpus the library can enumerate today,
+;; the two policies are INDISTINGUISHABLE: 1041 arrangements and 193 pairs
+;; either way. The 159-versus-166 difference reported elsewhere is measured on
+;; the union-merged graph that the corpus's own SHACL gate validates, which this
+;; namespace refuses rather than merges.
+;;
+;; The two questions are therefore entangled: they are the same filings. Both
+;; policies are shipped so that settling the copies question does not also
+;; require settling this one silently.
+
+(defn named-versions-narrow
+  "The default policy: naming any urpx:applicableToRatePlanVersion means those
+   versions and no others, overriding urpx:applicableToRatePlan.
+
+   Reads with the ontology's own wording, \"Defines which SPECIFIC rate plan
+   versions are compatible with this modifier version\", and it is the only
+   reading under which the property can express a restriction at all: under
+   `named-versions-add` a version statement can only widen, and then only to a
+   version whose plan is not already named, which no modifier in the production
+   corpus does.
+
+   KNOWN COST, stated because it is not small. The rule is NON-MONOTONIC.
+   Merging a document that adds a version statement REMOVES compatibility with
+   a plan named only by urpx:applicableToRatePlan, and RDF merge never retracts.
+   A partial view of a corpus can therefore yield MORE arrangements than the
+   whole of it. It is the default because it is what the corpus and the peer
+   reference implementation both assume today, not because it is known right."
   [mv bv plan-id]
-  (let [by-version (into #{} (keep :jsonld/id) (:urpx/applicableToRatePlanVersion mv))
-        by-plan    (into #{} (keep :jsonld/id) (:urpx/applicableToRatePlan mv))]
+  (let [[by-version by-plan] (applicability mv)]
     (if (seq by-version)
       (contains? by-version (:jsonld/id bv))
       (contains? by-plan plan-id))))
+
+(defn named-versions-add
+  "The monotone policy: a version statement ADDS to urpx:applicableToRatePlan
+   and never removes from it.
+
+   Sound under RDF, which is what URPX documents denote: merging graphs adds
+   triples and never retracts, so a larger corpus can only ever yield more
+   compatibility. It also stops the plan-level statement being cancelled by
+   triples that never mention the plan it names.
+
+   KNOWN COST. It leaves urpx:applicableToRatePlanVersion with almost nothing
+   to do: it can only widen, and only to a version whose plan is not already
+   named. A publisher wanting to say \"this modifier applies only to version X
+   of plan P\" has no way to say it under this reading."
+  [mv bv plan-id]
+  (let [[by-version by-plan] (applicability mv)]
+    (or (contains? by-version (:jsonld/id bv))
+        (contains? by-plan plan-id))))
 
 ;; ---------------------------------------------------------------------------
 ;; Open dimensions
@@ -270,6 +331,11 @@
    a modifier names any versions, those are taken to be exhaustive, because the
    version-level statement is the more specific.
 
+   WHICH READING applies is a caller policy, `:compatibility`, defaulting to
+   `named-versions-narrow`. URPX does not settle whether naming a version
+   narrows the plan-level statement or adds to it, so this library does not
+   settle it either; see the policies for the evidence on each side.
+
    Counts below are AS MEASURED AT ONE CORPUS REVISION, urpx-rate-plans
    9deae4dbaa8b, because a bare \"37 of 37\" is a claim with no stated conditions
    and this one had already drifted twice before it was pinned: 40 distinct
@@ -288,18 +354,23 @@
    Choosing among them is the caller's, which is why `arrangements` takes a
    combining policy rather than inventing one.
 
-   `:at` restricts to modifier versions current at that instant."
+   Options:
+     :at             a ZonedDateTime. Restricts to modifier versions current then.
+     :compatibility  fn `[modifier-version base-version plan-id] -> boolean`.
+                     Defaults to `named-versions-narrow`; `named-versions-add`
+                     is the monotone alternative."
   ([documents base-version] (applicable-modifiers documents base-version nil))
   ([documents base-version opts]
    (let [_       (coerce/check-coerced! documents "urpx.arrangements/applicable-modifiers")
          t       (some-> ^ZonedDateTime (:at opts) (.toLocalDateTime))
+         compat  (or (:compatibility opts) named-versions-narrow)
          plan-id (:jsonld/id (:urpx/forRatePlan base-version))
          triples (mapcat #(versions-in % "urpx:RatePlanModifierVersion") documents)
          _       (check-no-conflicting-ids! {"urpx:RatePlanModifierVersion" triples})]
      (->> (current-versions triples t)
           vals
           (mapcat #(map second %))
-          (filter #(compatible? % base-version plan-id))
+          (filter #(compat % base-version plan-id))
           (sort-by :jsonld/id)
           vec))))
 
@@ -373,6 +444,14 @@
      :combine  fn from the compatible modifier versions of one base version to a
                seq of the modifier SETS a customer might hold. Defaults to
                `one-modifier-at-most`.
+     :compatibility  fn `[modifier-version base-version plan-id] -> boolean`
+               deciding which modifiers MAY apply. Defaults to
+               `named-versions-narrow`; `named-versions-add` is the monotone
+               alternative. TWO POLICIES, not one, because URPX does not say
+               whether naming a urpx:applicableToRatePlanVersion narrows
+               urpx:applicableToRatePlan or adds to it. They are
+               indistinguishable on the corpus this namespace can enumerate
+               today; see the policies for where that stops being true.
 
    THE COMBINING POLICY IS THE CALLER'S BECAUSE URPX CANNOT STATE IT. Nothing
    in the ontology expresses exclusivity or combinability between modifiers,
@@ -400,6 +479,7 @@
   ([documents opts]
    (let [_       (coerce/check-coerced! documents "urpx.arrangements/arrangements")
          combine (or (:combine opts) one-modifier-at-most)
+         compat  (or (:compatibility opts) named-versions-narrow)
          t     (some-> ^ZonedDateTime (:at opts) (.toLocalDateTime))
          plans (mapcat #(versions-in % "urpx:RatePlanVersion") documents)
          mods  (mapcat #(versions-in % "urpx:RatePlanModifierVersion") documents)
@@ -415,7 +495,7 @@
                 :let [ctriples (vec (sort-by #(:jsonld/id (second %))
                                              (for [[_ cands] live-mods
                                                    [_ mv _ :as tr] cands
-                                                   :when (compatible? mv bv plan-id)]
+                                                   :when (compat mv bv plan-id)]
                                                tr)))
                       ;; `combine` is a CALLER-SUPPLIED policy and sees version
                       ;; nodes, never the [id version doc] triples this

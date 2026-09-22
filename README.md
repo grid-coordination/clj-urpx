@@ -594,10 +594,19 @@ So the discovery functions are queryable on their own, without enumerating anyth
 
 Nothing in URPX expresses exclusivity or combinability **between** modifiers, so how many a customer may hold at once is a caller policy, passed as `:combine`:
 
-| Policy | Yields |
+| `:combine` policy | Yields |
 |--------|--------|
 | `one-modifier-at-most` (default) | the base version alone, or with exactly one modifier |
 | `every-subset` | every subset, which is complete but pairs programs no document says can be paired |
+
+**Which modifiers a version is compatible with is a second policy**, `:compatibility`, for the same reason: URPX does not say whether naming a `urpx:applicableToRatePlanVersion` *narrows* `urpx:applicableToRatePlan` or *adds* to it. The property is a plain `owl:ObjectProperty`, `owl:FunctionalProperty` appears zero times in the ontology, and `sh:closed` closes the property set rather than the value set.
+
+| `:compatibility` policy | Reads a named version as |
+|--------|--------|
+| `named-versions-narrow` (default) | those versions and no others, overriding the plan list. Fits the ontology's "which **specific** versions", and is the only reading under which the property can express a restriction. Known cost: **non-monotonic**, so merging a document can *remove* compatibility |
+| `named-versions-add` | an addition to the plan list, never a removal. Sound under RDF merge. Known cost: the property can then only widen, and only to a version whose plan is not already named |
+
+The two are indistinguishable on most corpora. They can differ only about a modifier that names some version *and* names a plan no named version belongs to.
 
 ### Traversing a corpus
 
@@ -775,7 +784,7 @@ For a longer worked walkthrough that mirrors selected examples from the upstream
 | `urpx.emit`          | Write-side: `write-rate-plan`, `write-rate-plan-modifier`, `write-urpx-document`, `write-urpx-package` |
 | `urpx.validate`      | Single-file CLI checker (`clojure -M:validate <file.jsonld>`), tri-state exit |
 | `urpx.dsl`           | Authoring DSL: `dsl-scope`, `make-builder`, named builders for every entity type |
-| `urpx.arrangements`  | Optional enumerator: `arrangements`, `arrangement-id`, `plan-versions`, `applicable-modifiers`, `offered-by`, the `one-modifier-at-most` / `every-subset` policies, and `resolve-at` / `segments-for` / `schedule-for` for prices. Requires `urpx.price`; nothing in the library requires it |
+| `urpx.arrangements`  | Optional enumerator: `arrangements`, `arrangement-id`, `plan-versions`, `applicable-modifiers`, `offered-by`, the `one-modifier-at-most` / `every-subset` and `named-versions-narrow` / `named-versions-add` policies, and `resolve-at` / `segments-for` / `schedule-for` for prices. Requires `urpx.price`; nothing in the library requires it |
 
 ## Status
 

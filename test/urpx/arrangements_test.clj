@@ -407,31 +407,41 @@
           "and it is v1 that was used, marked out of window, rather than the
            version urpx.price would have picked for July on its own"))))
 
-(deftest a-modifier-naming-versions-is-taken-to-mean-those-only
-  (testing "CONTESTED READING, pinned deliberately so that changing it is a
-            deliberate act rather than a silent drift.
+(deftest the-two-compatibility-readings-are-both-available
+  (testing "URPX does not say whether naming a urpx:applicableToRatePlanVersion
+            NARROWS urpx:applicableToRatePlan or ADDS to it, so neither is
+            baked in. The property is a plain owl:ObjectProperty,
+            owl:FunctionalProperty appears zero times in the ontology, and
+            sh:closed closes the property set rather than the value set.
 
-            urpx:applicableToRatePlanVersion is read as EXHAUSTIVE: a modifier
-            naming any version combines with those and no others, even where
-            urpx:applicableToRatePlan names the plan. The ontology supports the
-            wording (\"Defines which SPECIFIC rate plan versions are compatible
-            with this modifier version\") and nothing states it either way.
+            The default narrows, matching the ontology's wording and what the
+            corpus and the peer reference implementation both assume. The
+            monotone reading is sound under RDF, where merging adds triples and
+            never retracts, so a larger corpus cannot yield fewer arrangements.
 
-            The reading is known to be non-monotonic: merging a document that
-            adds a version REMOVES compatibility with plans named only by
-            applicableToRatePlan, and RDF merge never retracts. Over the
-            production corpus the two readings differ by exactly 7 of 166
-            base/modifier pairs. Which is right is a URPX question and is open;
-            until it is settled, this test is what makes the current answer
-            visible."
+            CONSTRUCTED, and it has to be: the only two modifiers in the
+            production corpus where the readings differ are both among the
+            identities the namespace refuses as :conflicting-version-id, so on
+            the corpus it can enumerate the two policies are indistinguishable
+            (1041 arrangements, 193 pairs either way)."
     (let [plan (plan-doc "x:p" "x:p-v1" (ldt 2026 1 1))
           m    (modifier-doc "x:m" "x:m-v" (ldt 2026 1 1)
                              {:urpx/applicableToRatePlan        [{:jsonld/id "x:p"}]
-                              :urpx/applicableToRatePlanVersion [{:jsonld/id "x:p-v2"}]})]
-      (is (= [] (mapv :jsonld/id (arr/applicable-modifiers [plan m]
-                                                           (:urpx/hasRatePlanVersion plan))))
-          "names a version, and it is not this one, so it does not apply here
-           even though it names this version's PLAN"))))
+                              :urpx/applicableToRatePlanVersion [{:jsonld/id "x:other-v"}]})
+          bv   (:urpx/hasRatePlanVersion plan)
+          ids  #(mapv :jsonld/id (arr/applicable-modifiers [plan m] bv %))]
+      (is (= [] (ids nil))
+          "default: naming a version means those and only those, so naming
+           x:other-v excludes this one even though its PLAN is named")
+      (is (= [] (ids {:compatibility arr/named-versions-narrow}))
+          "stated explicitly, same answer")
+      (is (= ["x:m-v"] (ids {:compatibility arr/named-versions-add}))
+          "monotone: the version statement adds, so the plan statement still
+           applies and the modifier is compatible")
+      (is (= [[] ["x:m-v"]]
+             (mapv :urpx.arrangement/modifier-version-ids
+                   (arr/arrangements [plan m] {:compatibility arr/named-versions-add})))
+          "and the policy reaches arrangements, not only applicable-modifiers"))))
 
 (deftest a-modifier-naming-no-plan-and-no-version-combines-with-nothing
   (testing "both properties are sh:minCount 0, so a conformant modifier version
