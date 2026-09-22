@@ -1,0 +1,562 @@
+(ns urpx.arrangements
+  "Enumerate the service arrangements a set of URPX documents expresses.
+
+  A SERVICE ARRANGEMENT is one urpx:RatePlanVersion, plus every
+  urpx:RatePlanModifierVersion compatible with it, plus one
+  urpx:ProfileAlternative for each dimension any of them leaves open. Fully
+  determined: given an instant inside its window it resolves to prices with no
+  further input. If a choice is still outstanding it is not one arrangement but
+  several, and each of those is an arrangement in its own right.
+
+  `urpx:ServiceArrangement` IS NOT A URPX CLASS. It occurs zero times in the
+  ontology and zero times in the SHACL shapes. It is a name for a thing the
+  standard describes the parts of and does not name the whole of, and nothing
+  here writes it into a document or claims a urpx: prefix for it. The concept
+  and its evidence are set out in urpx-rate-plans doc/service-arrangements.md;
+  the cardinalities this namespace relies on were checked against the shapes
+  graph rather than recalled.
+
+  WHAT THIS CAN AND CANNOT ENUMERATE. Which compatible modifiers a given
+  CUSTOMER has is a fact about the customer, and URPX places customer data
+  outside its scope: urpx:AccountServiceAgreement carries the skos:note
+  \"Service account and agreement data lives in customer data, not URPX.\" So
+  this enumerates the arrangements the DOCUMENTS EXPRESS, every combination the
+  filings say is permitted. That set is larger than any one customer's and is
+  what a price server can publish.
+
+  OPTIONAL BY CONSTRUCTION. This namespace requires urpx.price; urpx.price does
+  not require this. A consumer that wants prices for a composition it already
+  knows how to assemble uses urpx.price directly and never loads this file.
+  Nothing here changes an existing arity or return shape."
+  (:require [clojure.string :as str]
+            [urpx.coerce :as coerce]
+            [urpx.index :as index]
+            [urpx.price :as price]
+            [urpx.schedule :as schedule])
+  (:import [java.time Instant ZonedDateTime]))
+
+;; ---------------------------------------------------------------------------
+;; Versions and currency
+;; ---------------------------------------------------------------------------
+
+(def ^:private back-pointer
+  {"urpx:RatePlanVersion"         :urpx/forRatePlan
+   "urpx:RatePlanModifierVersion" :urpx/forRatePlanModifier})
+
+(defn- versions-in
+  "Every version snapshot of `kind` reachable in `doc`, as
+   `[identity-id version source-doc]` triples.
+
+   Read from the BACK POINTER rather than from nesting or from a filing's path.
+   urpx:forRatePlan is sh:minCount 1 sh:maxCount 1 on RatePlanVersionShape, so
+   the link is always there to read; a directory count is not a version count,
+   and this corpus holds two directories carrying one version node.
+
+   THE SOURCE DOCUMENT TRAVELS WITH THE SNAPSHOT and is never recovered by @id
+   later. Two documents may publish the same version @id, so an @id lookup
+   cannot tell their snapshots apart and binds one to whichever document a map
+   happened to keep. Measured on the production corpus before this carried the
+   document: 69 of 1728 base bindings and 641 of 1728 modifier bindings named a
+   document that was not the snapshot's source. That is the 0.28.0 defect class
+   a third time, and the fix is structural rather than another guard.
+
+   No filter on urpx:effectiveDateTime here either. A version stating only
+   urpx:effectiveDate, or neither, is conformant (both are sh:minCount 0), and
+   dropping it silently removed a whole plan from the enumeration while
+   urpx.price resolved the same document normally. Currency is decided below by
+   urpx.price's own readers."
+  [doc kind]
+  (let [k (back-pointer kind)]
+    (into []
+          (comp (filter #(and (map? %) (= kind (:jsonld/type %))))
+                (keep (fn [v] (when-let [pid (:jsonld/id (get v k))] [pid v doc]))))
+          (tree-seq coll? seq doc))))
+
+(defn- distinct-by-node
+  "Drop triples whose snapshot node is EQUAL to one already seen, keeping the
+   first. Two filings carrying a byte-identical version node are one version
+   published twice, which is benign; `check-no-conflicting-ids!` has already
+   refused the case where they differ."
+  [triples]
+  (->> triples (reduce (fn [[seen acc] tr]
+                         (let [v (second tr)]
+                           (if (contains? seen v) [seen acc] [(conj seen v) (conj acc tr)])))
+                       [#{} []])
+       second))
+
+(defn- conflicting-id-groups
+  "Snapshot @ids in `triples` that name MORE THAN ONE distinct snapshot.
+
+   Publishing one @id twice is benign when the two nodes are equal: it is one
+   thing appearing in two filings, and deduplicating is the whole of it. When
+   they differ it is a contradiction, because an @id identifies a thing and
+   there cannot be two of it."
+  [triples]
+  (->> (group-by #(:jsonld/id (second %)) triples)
+       (keep (fn [[id ts]]
+               (let [distinct-nodes (distinct (map second ts))]
+                 (when (and id (> (count distinct-nodes) 1))
+                   [id (count ts)]))))
+       (sort-by first)
+       vec))
+
+(defn- check-no-conflicting-ids!
+  "Refuse when one @id names two different snapshots.
+
+   No escape hatch, deliberately. Where urpx.price refuses two DIFFERENT
+   snapshots tied on an effective instant it can say \"pass :version to choose\",
+   because the caller has two distinguishable things to choose between. Here
+   both carry the same @id, so there is nothing for a caller to name and any
+   option would be asking them to pick arbitrarily, which is what this library
+   exists not to do. The corpus is what has to change.
+
+   Every conflicting @id is named at once rather than the first: finding them
+   one refusal at a time costs a caller a round trip per bad filing, which is
+   the lesson already recorded against :outside-version-window in 0.27.0.
+
+   TAKES EVERY KIND AT ONCE for that same reason. Called once per kind it threw
+   on the base versions before the modifier versions were ever examined, so a
+   corpus with three conflicting @ids reported one. Naming them all was the
+   whole point of this function and calling it twice defeated it."
+  [by-kind]
+  (let [bad (into (sorted-map)
+                  (keep (fn [[kind triples]]
+                          (when-let [g (seq (conflicting-id-groups triples))]
+                            [kind (vec g)])))
+                  by-kind)]
+    (when (seq bad)
+      (throw (ex-info (str "Cannot enumerate: "
+                           (reduce + (map (comp count val) bad))
+                           " version @id(s) each name more than one distinct snapshot, "
+                           "so an @id does not identify a version here. "
+                           (str/join "; "
+                                     (for [[kind gs] bad, [id n] gs]
+                                       (str (pr-str id) " (" kind ") in " n " document(s)")))
+                           ". Two different things cannot share one identifier, and nothing "
+                           "in the documents says which is meant, so there is no choice to "
+                           "offer: the filings have to agree.")
+                      {:reason  :urpx.arrangement/conflicting-version-id
+                       :ids     (vec (mapcat (fn [[_ gs]] (map first gs)) bad))
+                       :counts  (into {} (mapcat val bad))
+                       :by-kind (into {} (map (fn [[k gs]] [k (mapv first gs)])) bad)})))))
+
+(defn- current-versions
+  "For each identity, the version in force at `t`, as a vector of triples.
+   Nil `t` keeps every version, which is the whole expressed space rather than
+   the currently-offered one.
+
+   A superseded version is not a service arrangement. Nobody takes service
+   under it, and it does not belong in a set offered for use.
+
+   TIES ARE REFUSED, NOT BROKEN. This read `(apply max-key ...)`, which returns
+   the LAST maximal element, so two snapshots sharing the latest effective
+   instant meant one was silently discarded and which one depended on the order
+   the documents arrived in. On the production corpus that moved the answer
+   between 739 and 731 arrangements, and 144 and 136 distinct pairs, with no
+   error either way. urpx.price refuses exactly this input with
+   :ambiguous-version; a namespace sitting on top of it must not quietly undo
+   that.
+
+   An identity with no version in force at `t` contributes nothing, and that is
+   NOT the same silence: a plan whose versions have all expired, or none of
+   which has taken effect, is genuinely not offered then. urpx.price refuses
+   there because it was asked for one plan's price; this was asked which
+   arrangements exist, and the answer for that plan is none."
+  [triples ^java.time.LocalDateTime t]
+  (let [by-identity (group-by first triples)]
+    (if (nil? t)
+      (into {} (map (fn [[pid ts]] [pid (vec (distinct-by-node ts))])) by-identity)
+      (into {}
+            (keep (fn [[pid ts]]
+                    (let [live (filter #(price/version-covers? (second %) t) ts)]
+                      (when (seq live)
+                        (let [latest  (->> live (map #(price/version-effective-at (second %)))
+                                           (sort) (last))
+                              winners (distinct-by-node
+                                       (filter #(= latest (price/version-effective-at (second %)))
+                                               live))]
+                          (when (> (count winners) 1)
+                            (throw (ex-info (str "Cannot choose a version for " (pr-str pid) ": "
+                                                 (count winners) " snapshots share the latest "
+                                                 "effective instant " latest ", so there is no rule "
+                                                 "here that picks among them.")
+                                            {:reason :urpx.arrangement/ambiguous-version
+                                             :plan-id pid
+                                             :at t
+                                             :ids (mapv #(:jsonld/id (second %)) winners)})))
+                          [pid [(first winners)]])))))
+            by-identity))))
+
+;; ---------------------------------------------------------------------------
+;; Compatibility
+;; ---------------------------------------------------------------------------
+
+(defn- compatible?
+  "True if modifier version `mv` may combine with base version `bv` of plan
+   `plan-id`.
+
+   urpx:applicableToRatePlan and urpx:applicableToRatePlanVersion are both
+   sh:minCount 0 with no sh:maxCount on RatePlanModifierVersionShape, and BOTH
+   state compatibility: what may combine, not what a customer has. The
+   version-level statement is the more specific, so when a modifier names any
+   versions it is taken to mean those and only those. A modifier naming neither
+   expresses no compatibility and combines with nothing, which is the reading
+   that refuses rather than guesses."
+  [mv bv plan-id]
+  (let [by-version (into #{} (keep :jsonld/id) (:urpx/applicableToRatePlanVersion mv))
+        by-plan    (into #{} (keep :jsonld/id) (:urpx/applicableToRatePlan mv))]
+    (if (seq by-version)
+      (contains? by-version (:jsonld/id bv))
+      (contains? by-plan plan-id))))
+
+;; ---------------------------------------------------------------------------
+;; Open dimensions
+;; ---------------------------------------------------------------------------
+
+(defn- open-dimensions
+  "Container @id -> the urpx:ProfileAlternative @ids it offers, across every
+   version in the arrangement.
+
+   urpx:PlanElementsShape.hasProfileAlternatives is sh:maxCount 1, so one
+   version reaches at most one container, but a composition reaches one per
+   document. The container's urpx:hasProfileAlternative members are already the
+   CELLS of whatever cross product its dimensions describe, so a choice is one
+   member per container rather than one per dimension."
+  [versions]
+  (into {}
+        (for [v versions
+              [cid pas] (index/entities-of-type v "urpx:ProfileAlternatives")
+              :let [alts (into [] (keep :jsonld/id) (:urpx/hasProfileAlternative pas))]
+              :when (seq alts)]
+          [cid alts])))
+
+(defn- selection-combinations
+  "Every way of choosing one alternative per open dimension. One combination
+   when nothing is open, which is the arrangement itself rather than none."
+  [dims]
+  (reduce (fn [acc [cid alts]]
+            (for [m acc a alts] (assoc m cid a)))
+          [{}]
+          (sort-by key dims)))
+
+;; ---------------------------------------------------------------------------
+;; Public API
+;; ---------------------------------------------------------------------------
+
+(defn plan-versions
+  "Every urpx:RatePlanVersion in `documents`, as a vector of snapshots.
+
+   `:at` restricts to the version of each plan identity in force at that
+   instant. Omit it for every version the documents carry."
+  ([documents] (plan-versions documents nil))
+  ([documents opts]
+   (let [_       (coerce/check-coerced! documents "urpx.arrangements/plan-versions")
+         t       (some-> ^ZonedDateTime (:at opts) (.toLocalDateTime))
+         triples (mapcat #(versions-in % "urpx:RatePlanVersion") documents)
+         _       (check-no-conflicting-ids! {"urpx:RatePlanVersion" triples})]
+     (->> (current-versions triples t)
+          vals
+          (mapcat #(map second %))
+          (sort-by :jsonld/id)
+          vec))))
+
+(defn applicable-modifiers
+  "The urpx:RatePlanModifierVersions in `documents` that MAY apply to
+   `base-version`.
+
+   This is the query a consumer actually wants, and it is the half URPX can
+   answer. urpx:applicableToRatePlan states compatibility with a plan identity;
+   urpx:applicableToRatePlanVersion states it against a specific version. Where
+   a modifier names any versions, those are taken to be exhaustive, because the
+   version-level statement is the more specific.
+
+   Counts below are AS MEASURED AT ONE CORPUS REVISION, urpx-rate-plans
+   9deae4dbaa8b, because a bare \"37 of 37\" is a claim with no stated conditions
+   and this one had already drifted twice before it was pinned: 40 distinct
+   modifier version nodes, applicableToRatePlan on 40 of 40 naming 3.40 plans
+   on average, applicableToRatePlanVersion on 7 of 40.
+
+   WHAT THIS DOES NOT ANSWER, deliberately. Which of these a given customer HAS
+   is a fact about the customer, and URPX places customer data outside its
+   scope: urpx:AccountServiceAgreement carries the skos:note \"Service account
+   and agreement data lives in customer data, not URPX.\" Nor does URPX say
+   which modifiers may be held TOGETHER: there is no property anywhere in the
+   ontology expressing exclusivity or combinability between modifiers, and
+   urpx:modifierCategory and urpx:modifierType, which might have served as a
+   signal, are unset on all 40. So CARE and FERA are both returned for SCE
+   Schedule D and nothing in the documents says a customer has at most one.
+   Choosing among them is the caller's, which is why `arrangements` takes a
+   combining policy rather than inventing one.
+
+   `:at` restricts to modifier versions current at that instant."
+  ([documents base-version] (applicable-modifiers documents base-version nil))
+  ([documents base-version opts]
+   (let [_       (coerce/check-coerced! documents "urpx.arrangements/applicable-modifiers")
+         t       (some-> ^ZonedDateTime (:at opts) (.toLocalDateTime))
+         plan-id (:jsonld/id (:urpx/forRatePlan base-version))
+         triples (mapcat #(versions-in % "urpx:RatePlanModifierVersion") documents)
+         _       (check-no-conflicting-ids! {"urpx:RatePlanModifierVersion" triples})]
+     (->> (current-versions triples t)
+          vals
+          (mapcat #(map second %))
+          (filter #(compatible? % base-version plan-id))
+          (sort-by :jsonld/id)
+          vec))))
+
+(defn offered-by
+  "Group version snapshots by the urpx:Organization @id that offers them, for a
+   broader search than one plan at a time.
+
+   urpx:offeredBy is populated on all 40 modifier version nodes at
+   urpx-rate-plans 9deae4dbaa8b.
+
+   This used to add that urpx:applicableToRateGroup and urpx:hasServiceClass
+   \"would also serve this purpose and are unset on all 37\", which was wrong in
+   kind rather than in degree: both appear ZERO times in
+   RatePlanModifierVersionShape, so they cannot be set on a modifier version at
+   all and there was never anything to be unset. Asserting a mechanism that is
+   not in the ontology."
+  [versions]
+  (into (sorted-map)
+        (map (fn [[k vs]] [k (vec (sort-by :jsonld/id vs))]))
+        (group-by #(:jsonld/id (:urpx/offeredBy %)) versions)))
+
+(defn one-modifier-at-most
+  "The default combining policy: the empty set, and each modifier on its own.
+
+   Conservative because URPX cannot state which modifiers combine. Every
+   arrangement it yields is one the documents support, and it is knowingly
+   INCOMPLETE: real multi-overlay arrangements exist, and California publishes
+   identifiers for some of them, so a caller that knows its own program rules
+   should pass its own policy rather than accept this one."
+  [modifier-versions]
+  (cons [] (map vector modifier-versions)))
+
+(defn every-subset
+  "A combining policy yielding every subset, including the empty one.
+
+   Complete and unfiltered: it will pair mutually exclusive programs, since
+   nothing in the documents marks them exclusive. 2^n per base version, so use
+   it on a narrowed modifier list rather than a whole corpus."
+  [modifier-versions]
+  (reduce (fn [acc m] (concat acc (map #(conj % m) acc)))
+          [[]]
+          modifier-versions))
+
+(defn arrangement-id
+  "The intrinsic identity of `arrangement`:
+
+     [base-version-iri [modifier-version-iris sorted] [[container alternative] sorted]]
+
+   Computable from the documents alone, stable across regeneration, external
+   nothing. Two arrangements are the same when this matches and different
+   otherwise, INCLUDING when they resolve to the same price: a bundled customer
+   and one buying generation elsewhere may pay the same delivery rate and are
+   on different arrangements."
+  [arrangement]
+  [(:urpx.arrangement/version-id arrangement)
+   (vec (sort (:urpx.arrangement/modifier-version-ids arrangement)))
+   (vec (sort-by first (:urpx.arrangement/selections arrangement)))])
+
+(defn arrangements
+  "Every service arrangement `documents` expresses, as a vector.
+
+   `documents` is a seq of coerced urpx:RatePlan and urpx:RatePlanModifier
+   documents, the same values urpx.price takes.
+
+   Options:
+     :at       a ZonedDateTime. Restricts to arrangements whose every component
+               is CURRENT at that instant: the latest version of each identity
+               to have taken effect and not expired. Omit to enumerate the whole
+               expressed space across every version, a different and larger
+               question.
+     :combine  fn from the compatible modifier versions of one base version to a
+               seq of the modifier SETS a customer might hold. Defaults to
+               `one-modifier-at-most`.
+
+   THE COMBINING POLICY IS THE CALLER'S BECAUSE URPX CANNOT STATE IT. Nothing
+   in the ontology expresses exclusivity or combinability between modifiers,
+   and urpx:modifierCategory and urpx:modifierType, the only properties that
+   might have served, are unset on all 40 modifier version nodes at
+   urpx-rate-plans 9deae4dbaa8b. So CARE and FERA are both compatible with SCE Schedule D and no
+   document says a customer has at most one. The default is conservative and
+   knowingly incomplete; `every-subset` is complete and knowingly wrong; a
+   caller holding its own program rules should pass those instead. Use
+   `applicable-modifiers` to see what it is choosing among.
+
+   Each arrangement is a map:
+     :urpx.arrangement/rate-plan            the coerced base document
+     :urpx.arrangement/version              the base version snapshot
+     :urpx.arrangement/version-id           its @id
+     :urpx.arrangement/plan-id              the plan identity @id
+     :urpx.arrangement/modifiers            coerced modifier documents, in order
+     :urpx.arrangement/modifier-versions    their snapshots
+     :urpx.arrangement/modifier-version-ids their @ids
+     :urpx.arrangement/selections           {container-@id alternative-@id}
+
+   Deterministic: sorted by `arrangement-id`, so regenerating the same
+   documents gives the same order. Nothing here consults wall-clock time."
+  ([documents] (arrangements documents nil))
+  ([documents opts]
+   (let [_       (coerce/check-coerced! documents "urpx.arrangements/arrangements")
+         combine (or (:combine opts) one-modifier-at-most)
+         t     (some-> ^ZonedDateTime (:at opts) (.toLocalDateTime))
+         plans (mapcat #(versions-in % "urpx:RatePlanVersion") documents)
+         mods  (mapcat #(versions-in % "urpx:RatePlanModifierVersion") documents)
+         _     (check-no-conflicting-ids! {"urpx:RatePlanVersion"         plans
+                                          "urpx:RatePlanModifierVersion" mods})
+         live-plans (current-versions plans t)
+         live-mods  (current-versions mods t)]
+     ;; Base version and modifier versions are carried as [id version doc]
+     ;; triples the whole way, so the document attached to an arrangement is
+     ;; the one the snapshot was read out of rather than one looked up by @id.
+     (->> (for [[plan-id bvs] live-plans
+                [_ bv bdoc] bvs
+                :let [ctriples (vec (sort-by #(:jsonld/id (second %))
+                                             (for [[_ cands] live-mods
+                                                   [_ mv _ :as tr] cands
+                                                   :when (compatible? mv bv plan-id)]
+                                               tr)))
+                      ;; `combine` is a CALLER-SUPPLIED policy and sees version
+                      ;; nodes, never the [id version doc] triples this
+                      ;; namespace carries internally. Mapping the chosen nodes
+                      ;; back to their triples is by NODE, not by @id: by @id is
+                      ;; the lookup that bound 641 modifier snapshots to the
+                      ;; wrong document. Nodes are distinct within this list -
+                      ;; `check-no-conflicting-ids!` refused one @id naming two
+                      ;; different nodes, and `distinct-by-node` dropped exact
+                      ;; duplicates - so the map is total and unambiguous.
+                      by-node (into {} (map (fn [tr] [(second tr) tr])) ctriples)]
+                mvs (combine (mapv second ctriples))
+                :let [mvs      (vec (sort-by :jsonld/id mvs))
+                      mtriples (mapv by-node mvs)
+                      dims     (open-dimensions (cons bv mvs))]
+                sel (selection-combinations dims)]
+            {:urpx.arrangement/rate-plan            bdoc
+             :urpx.arrangement/version              bv
+             :urpx.arrangement/version-id           (:jsonld/id bv)
+             :urpx.arrangement/plan-id              plan-id
+             :urpx.arrangement/modifiers            (mapv #(nth % 2) mtriples)
+             :urpx.arrangement/modifier-versions    mvs
+             :urpx.arrangement/modifier-version-ids (mapv :jsonld/id mvs)
+             :urpx.arrangement/selections           sel})
+          (sort-by arrangement-id)
+          vec))))
+
+(defn- bound-opts
+  "The opts that bind `arrangement` to its own documents, merged under `opts`.
+
+   ONE BUILDER for every entry point here. resolve-at, segments-for and
+   schedule-for must hand urpx.price an identical binding or they answer
+   different questions about the same arrangement, and a second copy of this
+   map is the drift that put an effectiveDateTime filter in this namespace
+   while urpx.price read effectiveDate too.
+
+   The two keys the arrangement itself determines are REFUSED rather than
+   merged. Silently letting a caller's `:version` win would restore the exact
+   defect these functions exist to prevent; silently letting the arrangement
+   win would ignore an opt the caller meant. A caller who wants a different
+   version or a different selection wants a different arrangement."
+  [arrangement opts]
+  (when-let [bound (seq (filter (set (keys opts)) [:version :profile-alternatives]))]
+    (throw (ex-info "Opt is determined by the arrangement and cannot be overridden"
+                    {:reason :urpx.arrangement/opt-determined-by-arrangement
+                     :keys (vec bound)
+                     :arrangement-id (arrangement-id arrangement)})))
+  (merge {:profile-alternatives (:urpx.arrangement/selections arrangement)
+          :version (into {(:jsonld/id (:urpx.arrangement/rate-plan arrangement))
+                          (:urpx.arrangement/version arrangement)}
+                         (map (fn [d v] [(:jsonld/id d) v])
+                              (:urpx.arrangement/modifiers arrangement)
+                              (:urpx.arrangement/modifier-versions arrangement)))}
+         opts))
+
+(defn resolve-at
+  "Resolve `arrangement` at `zdt`, returning what
+   `urpx.price/resolve-prices-with-modifiers` returns.
+
+   A convenience over urpx.price, not a replacement: it binds each document to
+   its own version and hands the arrangement's selections through as
+   `:profile-alternatives`, so the opts cannot reach a document they do not
+   belong to. Both `:version` defects fixed in 0.28.0 were an opt and a document
+   failing to line up: one applied the base plan's snapshot to every modifier,
+   the other re-derived the snapshot on the holiday path and ignored the opt
+   entirely. An arrangement makes both unrepresentable rather than repeatedly
+   fixable.
+
+   The binding does more than choose. Handed a document carrying several
+   version snapshots, urpx.price refuses outright rather than picking one, so
+   this is what makes such a document resolvable at all.
+
+   Extra `opts` merge over the arrangement's own, except `:version` and
+   `:profile-alternatives`, which are refused. See `bound-opts`."
+  ([arrangement ^ZonedDateTime zdt] (resolve-at arrangement zdt nil))
+  ([arrangement ^ZonedDateTime zdt opts]
+   (price/resolve-prices-with-modifiers
+    (:urpx.arrangement/rate-plan arrangement)
+    (:urpx.arrangement/modifiers arrangement)
+    zdt
+    (bound-opts arrangement opts))))
+
+;; ---------------------------------------------------------------------------
+;; Horizons
+;;
+;; `resolve-at` answers one instant. A price server publishes a WINDOW: the
+;; interval containing now and some number of them forward. Both functions
+;; below exist because doing that through urpx.schedule directly means taking
+;; an arrangement apart into its rate-plan and modifier documents and rebuilding
+;; the per-document `:version` map by hand, which is the reconstruction
+;; `resolve-at` exists to prevent and the defect class this library has fixed
+;; three times.
+;;
+;; `start` and `end` are Instants and `zone` may be nil, matching urpx.schedule
+;; rather than `resolve-at`'s ZonedDateTime. A caller mixing the two namespaces
+;; over one horizon should not have to convert between them at every call.
+;; ---------------------------------------------------------------------------
+
+(defn segments-for
+  "Exact price segments for `arrangement` across `[start, end)`, as
+   `urpx.schedule/price-segments` returns them.
+
+   PREFER THIS over `schedule-for` for publishing. Boundaries are derived from
+   the documents rather than discovered by sampling, so a segment ends where
+   the tariff actually changes and not where a step grid happened to land. For
+   a consumer handing intervals to an optimizer that is the difference between
+   a schedule that is right and one that is right only because every bracket in
+   that plan sits on an hour.
+
+   A resolution that throws inside the window becomes a segment carrying
+   `:urpx.interval/refused` rather than aborting the horizon, and equal
+   refusals merge, so a stretch the arrangement does not cover is one segment
+   and not one per candidate instant. That is what lets a publisher emit the
+   part of a window it can price and say plainly what it cannot.
+
+   `zone` may be nil when the plan declares `urpx:timezoneIdentifier`. Extra
+   `opts` are as `resolve-at`: merged, except the two the arrangement
+   determines, which are refused."
+  ([arrangement start end] (segments-for arrangement start end nil nil))
+  ([arrangement start end zone] (segments-for arrangement start end zone nil))
+  ([arrangement ^Instant start ^Instant end zone opts]
+   (schedule/price-segments (:urpx.arrangement/rate-plan arrangement)
+                            (:urpx.arrangement/modifiers arrangement)
+                            start end zone
+                            (bound-opts arrangement opts))))
+
+(defn schedule-for
+  "A stepped price schedule for `arrangement` across `[start, end)`, as
+   `urpx.schedule/price-schedule-with-modifiers` returns them.
+
+   Walks a grid, default hourly, merging adjacent steps whose resolution is
+   equal. Use it when a caller genuinely wants a fixed cadence; use
+   `segments-for` when they want the truth about where prices change, which for
+   a price server is almost always the question.
+
+   Same `zone` and `opts` handling as `segments-for`."
+  ([arrangement start end] (schedule-for arrangement start end nil nil))
+  ([arrangement start end zone] (schedule-for arrangement start end zone nil))
+  ([arrangement ^Instant start ^Instant end zone opts]
+   (schedule/price-schedule-with-modifiers
+    (:urpx.arrangement/rate-plan arrangement)
+    (:urpx.arrangement/modifiers arrangement)
+    start end zone
+    (bound-opts arrangement opts))))

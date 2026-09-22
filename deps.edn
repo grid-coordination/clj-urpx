@@ -18,7 +18,12 @@
            :drift {:extra-paths ["dev"]
                    :main-opts ["-m" "drift"]}
 
-           :dev {:extra-paths ["dev"]}
+           ;; Dev only. babashka/fs and tools.gitlibs are corpus-walking tools
+           ;; for dev/corpus_sweep.clj; the library itself does no filesystem
+           ;; traversal and fetches nothing, so neither is a runtime dep.
+           :dev {:extra-paths ["dev"]
+                 :extra-deps {babashka/fs {:mvn/version "0.5.22"}
+                              org.clojure/tools.gitlibs {:mvn/version "2.5.197"}}}
 
            :build {:deps {io.github.clojure/tools.build
                           {:git/tag "v0.10.10" :git/sha "deedd62"}

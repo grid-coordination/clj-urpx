@@ -529,6 +529,106 @@ The guard is scoped to prices that would actually be summed. Across the producti
 
 Adjacent steps with identical resolved ledgers are still merged, so a quarter-hour walk across an hour-aligned plan produces the same merged intervals as the hourly walk.
 
+## Enumerating service arrangements (optional)
+
+A **service arrangement** is one `urpx:RatePlanVersion`, plus the compatible `urpx:RatePlanModifierVersion`s, plus one `urpx:ProfileAlternative` for each dimension any of them leaves open. It is fully determined: given an instant inside its window it resolves to prices with no further input. If a choice is still outstanding it is not one arrangement but several, and each of those is an arrangement in its own right.
+
+`urpx:ServiceArrangement` is **not** a URPX class. It occurs zero times in the ontology and zero times in the SHACL shapes; nothing here writes it into a document or claims a `urpx:` prefix for it.
+
+`urpx.arrangements` is **optional by construction**. It requires `urpx.price`; `urpx.price` does not require it. A consumer that already knows how to assemble a composition uses `urpx.price` directly and never loads this namespace.
+
+```clojure
+(require '[urpx.arrangements :as arr])
+
+(def docs [schedule-d care fera])
+
+(arr/arrangements docs {:at now})
+;; => a sequence of arrangement maps, each fully determined
+
+(arr/resolve-at (first (arr/arrangements docs)) now)
+;; => what urpx.price/resolve-prices-with-modifiers returns
+```
+
+`resolve-at` binds each document to its own version and passes the arrangement's selections through as `:profile-alternatives`, so an opt cannot reach a document it does not belong to. Those two keys are **refused** rather than merged if a caller passes them: a caller who wants a different version or a different selection wants a different arrangement.
+
+### What it refuses
+
+Enumeration answers a question about a whole corpus, so a corpus that does not determine an answer gets a refusal rather than one of the answers it might have meant. Each carries a named `:reason` in `ex-data`.
+
+| `:reason` | When |
+|---|---|
+| `:uncoerced-document` | a document still carries date-shaped strings and no `java.time` values. Reading one does not fail loudly on its own: it answers a different question |
+| `:urpx.arrangement/conflicting-version-id` | one version `@id` names two snapshots that differ. An `@id` identifies a thing, so this is a contradiction, and every offending `@id` is named at once |
+| `:urpx.arrangement/ambiguous-version` | two distinct snapshots of one identity share the latest effective instant, the same input `urpx.price` refuses with `:ambiguous-version` |
+
+Publishing one `@id` twice with byte-identical content is *not* refused: that is one version appearing in two filings, and it is deduplicated.
+
+One further refusal is about the caller rather than the corpus. `resolve-at`, `segments-for` and `schedule-for` all reject `:version` and `:profile-alternatives` in their `opts` with `:reason :urpx.arrangement/opt-determined-by-arrangement`, because the arrangement determines both. Letting the caller's value win would restore the defect these functions exist to prevent; letting the arrangement win silently would ignore an opt the caller meant. Every other opt is merged and passes through.
+
+### Horizons: prices over a window
+
+`resolve-at` answers one instant. A price server publishes a window: the interval containing now and some number of them forward. Two functions take an arrangement and do that, binding each document to its own version the same way `resolve-at` does.
+
+```clojure
+(arr/segments-for  arrangement start end)   ; exact boundaries, from the documents
+(arr/schedule-for  arrangement start end)   ; a stepped grid
+```
+
+`start` and `end` are `Instant`s and `zone` may be `nil` when the plan declares `urpx:timezoneIdentifier`, matching `urpx.schedule` rather than `resolve-at`, so a caller mixing the two namespaces over one horizon is not converting at every call.
+
+**Prefer `segments-for`.** Its boundaries are read out of the documents rather than discovered by sampling, so a segment ends where the tariff actually changes. A stepped walk can only find a boundary it lands on: over one July day of PG&E E-TOU-C with a six-hour step, `segments-for` returns boundaries at 00:00, 16:00 and 21:00, while `schedule-for` returns 00:00 and 18:00, inventing a boundary that is not a transition and missing both that are. For a consumer handing intervals to an optimizer that is the difference between a schedule that is right and one that is right only because its step happened to be fine enough.
+
+A resolution that throws inside the window becomes a segment carrying `:urpx.interval/refused` rather than aborting the horizon, and equal refusals merge. A publisher can emit the part of a window it can price and say plainly what it cannot.
+
+### What may apply, and what does apply
+
+The library answers the first; only the caller can answer the second. `urpx:applicableToRatePlan` states which plans a modifier may apply to, and is populated on every modifier version in the production corpus. Which of them a given **customer holds** is not in any document, because URPX places customer data outside its scope (`urpx:AccountServiceAgreement` carries the note "Service account and agreement data lives in customer data, not URPX").
+
+So the discovery functions are queryable on their own, without enumerating anything:
+
+```clojure
+(arr/plan-versions docs)                    ; every version snapshot, or {:at t} for current ones
+(arr/applicable-modifiers docs plan-version) ; what may apply to this plan version
+(arr/offered-by modifier-versions)           ; group by urpx:offeredBy, for a broader search
+```
+
+Nothing in URPX expresses exclusivity or combinability **between** modifiers, so how many a customer may hold at once is a caller policy, passed as `:combine`:
+
+| Policy | Yields |
+|--------|--------|
+| `one-modifier-at-most` (default) | the base version alone, or with exactly one modifier |
+| `every-subset` | every subset, which is complete but pairs programs no document says can be paired |
+
+### Traversing a corpus
+
+The library does no directory traversal and has no filesystem dependency: `arrangements` takes documents that are already loaded. A directory layout is a corpus convention, not a URPX one, so walking one is the caller's job, and `urpx.core/load-graph` takes anything `clojure.java.io/reader` coerces (a `File`, `URL`, `Reader`, `InputStream`, or path string). With [babashka/fs](https://github.com/babashka/fs):
+
+```clojure
+(require '[babashka.fs :as fs] '[urpx.core :as core] '[urpx.coerce :as coerce])
+
+(def docs (->> (fs/glob "corpus" "**/*.jsonld")
+               (mapcat (comp core/load-graph fs/file))
+               (mapcat core/expand-document-entities)
+               (keep coerce/coerce-doc)))
+```
+
+Three things there are load-bearing:
+
+- **`load-graph`, not `load-rate-plan`.** The latter throws on a file carrying only a modifier. Dropping those silently makes every composition vacuous.
+- **`expand-document-entities`** descends a `urpx:URPXPackage` wrapper. Without it a wrapped filing contributes nothing.
+- **`coerce/coerce-doc`** is not optional. `load-graph` returns parsed but untyped entities, so `urpx:effectiveDateTime` is still a string and every version-window comparison fails. `coerce-doc` dispatches on `@type` and returns `nil` for types this library does not model, so `keep` drops them.
+
+`dev/corpus_sweep.clj` is a worked example. It takes the corpus as an argument and names none itself, since privileging one corpus in a library that reads a standard would make every other consumer's corpus the special case:
+
+```text
+clojure -M:dev -m corpus-sweep ../some-corpus
+clojure -M:dev -m corpus-sweep git@github.com:org/some-corpus.git main
+```
+
+A git URL is resolved and procured with [tools.gitlibs](https://github.com/clojure/tools.gitlibs), which caches under `~/.gitlibs` and writes nothing into the repo, so a count is pinned to a SHA and can be re-derived later. A path is not pinned that way, and a clone may be legitimately ahead of its remote, so the path form reports the tree's SHA, how far ahead of upstream it is, and how many files are dirty rather than letting a reader assume the two forms agree.
+
+`babashka/fs` and `tools.gitlibs` are dev dependencies under the `:dev` alias, never runtime dependencies of the library.
+
 ## Writing URPX JSON-LD
 
 The library also supports the inverse direction: emit URPX JSON-LD from a coerced Clojure entity. Useful for round-trip validation, programmatic generation of URPX documents, and authoring fixtures in idiomatic Clojure.
@@ -667,14 +767,15 @@ For a longer worked walkthrough that mirrors selected examples from the upstream
 |------------------|---------|
 | `urpx.core`          | JSON-LD parsing and loading (`parse-rate-plan`, `load-rate-plan`, `load-rate-plan-version`, `parse-graph`, `load-graph`, `expand-document-entities`) |
 | `urpx.schema`    | Malli schemas for the coerced URPX entity model |
-| `urpx.coerce`    | Schema-driven coercion: strings → typed values; `validate`, `explain` |
+| `urpx.coerce`    | Schema-driven coercion: strings → typed values; `coerce-doc` dispatches on `@type`; `validate`, `explain`; `uncoerced?` and `check-coerced!` tell a coerced document from a raw one |
 | `urpx.index`     | `build-index`, `resolve-ref`, `get-entity` for `@id` references; `versions-by-plan` for v0.5.1 back-pointers; `single` and `entities-of-type` |
-| `urpx.price`         | `resolve-prices`, `resolve-modifier-prices`, `resolve-prices-with-modifiers`, `marginal-unit-rate` |
-| `urpx.schedule`      | `price-schedule`, `price-schedule-days`, `price-schedule-with-modifiers`, `price-schedule-days-with-modifiers` |
+| `urpx.price`         | `resolve-prices`, `resolve-modifier-prices`, `resolve-prices-with-modifiers`, `marginal-unit-rate`, `measurement-kinds`, `has-energy-ledger?`; `version-effective-at`, `version-expired-by?` and `version-covers?` are the single readers of a version window |
+| `urpx.schedule`      | `price-segments` (exact boundaries, derived); `price-schedule`, `price-schedule-days`, `price-schedule-with-modifiers`, `price-schedule-days-with-modifiers` (stepped) |
 | `urpx.tz-inference`  | `infer-zone` (opt-in fallback when `urpx:timezoneIdentifier` is absent) |
 | `urpx.emit`          | Write-side: `write-rate-plan`, `write-rate-plan-modifier`, `write-urpx-document`, `write-urpx-package` |
 | `urpx.validate`      | Single-file CLI checker (`clojure -M:validate <file.jsonld>`), tri-state exit |
 | `urpx.dsl`           | Authoring DSL: `dsl-scope`, `make-builder`, named builders for every entity type |
+| `urpx.arrangements`  | Optional enumerator: `arrangements`, `arrangement-id`, `plan-versions`, `applicable-modifiers`, `offered-by`, the `one-modifier-at-most` / `every-subset` policies, and `resolve-at` / `segments-for` / `schedule-for` for prices. Requires `urpx.price`; nothing in the library requires it |
 
 ## Status
 

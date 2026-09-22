@@ -9,6 +9,60 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Added
+
+- **`urpx.arrangements`, an optional enumerator for service arrangements.** A *service arrangement* is one `urpx:RatePlanVersion`, plus the compatible `urpx:RatePlanModifierVersion`s, plus one `urpx:ProfileAlternative` for each dimension any of them leaves open: fully determined, so given an instant inside its window it resolves to prices with no further input. If a choice is still outstanding it is not one arrangement but several.
+
+  `urpx:ServiceArrangement` is **not** a URPX class. Zero occurrences in the ontology, zero in the SHACL shapes; nothing here writes it into a document or claims a `urpx:` prefix for it.
+
+  **Optional by construction.** The namespace requires `urpx.price`; nothing in the library requires the namespace, and a test asserts that over the whole of `src/` by reading the `ns` forms on disk. A consumer that assembles its own compositions never loads the file.
+
+  Public: `arrangements`, `plan-versions`, `applicable-modifiers`, `offered-by`, `arrangement-id`, `resolve-at`, and the two combining policies `one-modifier-at-most` (the default) and `every-subset`.
+
+- **Discovery of what may apply, separate from what does apply.** `applicable-modifiers` answers which modifiers a plan version may take, read from `urpx:applicableToRatePlanVersion` where present and `urpx:applicableToRatePlan` otherwise; `offered-by` groups by `urpx:offeredBy` for a broader search. Which modifiers a given **customer holds** is in no document, because URPX places customer data outside its scope, so it is a caller policy passed as `:combine` rather than an assumption made here. Nothing in the ontology expresses exclusivity or combinability between modifiers, so `every-subset` is complete but will pair programs no filing says can be paired.
+
+- **`dev/corpus_sweep.clj`**, a worked example of walking a corpus. It takes the corpus as an argument and names none itself: a library that reads a standard should not privilege one corpus in its own source. A git URL is pinned to a SHA via `clojure.tools.gitlibs`; a path is not, and since a clone may be legitimately ahead of its remote, the path form reports the tree's SHA, commits ahead of upstream, and dirty count rather than letting the two forms be assumed equal. `babashka/fs` and `tools.gitlibs` are `:dev` dependencies only; the library does no filesystem traversal and fetches nothing.
+
+- **`segments-for` and `schedule-for`, horizons that take an arrangement.** `resolve-at` answers one instant; a price server publishes a window. Doing that through `urpx.schedule` directly meant taking an arrangement apart and rebuilding the per-document `:version` map by hand, which is the reconstruction `resolve-at` exists to prevent and the defect class this library has fixed three times. One builder now produces the binding for all three entry points, so they cannot drift about what an arrangement means, and both refuse `:version` and `:profile-alternatives` as `resolve-at` does.
+
+  `segments-for` is the one to publish from: its boundaries come out of the documents rather than from sampling. Over one July day of PG&E E-TOU-C at a six-hour step it returns 00:00, 16:00 and 21:00 where the stepped walk returns 00:00 and 18:00, inventing a boundary that is not a transition and missing both that are.
+
+- **`urpx.price/version-effective-at`, `version-expired-by?` and `version-covers?` are now public**, as the single readers of a version window. They were private and `urpx.arrangements` re-derived them, which is how it came to require `urpx:effectiveDateTime` where `urpx.price` also read `urpx:effectiveDate`. A consumer asking whether a snapshot is current now gets the same answer the resolver uses.
+
+- **`urpx.coerce/uncoerced?`, `check-coerced!` and `temporal-signature` are public**, one implementation of the test that tells a coerced document from a raw one. `urpx.schedule` had it privately and `urpx.arrangements` needed it; two copies would have been two chances to disagree about what "coerced" means.
+
+- **Three refusals, because enumeration asks a question about a whole corpus.** A corpus that does not determine an answer gets a named `:reason` rather than one of the answers it might have meant: `:uncoerced-document`, `:urpx.arrangement/conflicting-version-id` (one version `@id` naming two snapshots that differ, every offending `@id` named at once), and `:urpx.arrangement/ambiguous-version` (two distinct snapshots of one identity sharing the latest effective instant, the input `urpx.price` already refuses). One `@id` published twice with byte-identical content is deduplicated, not refused.
+
+### Fixed
+
+All four were found by an adversarial audit of this namespace before its first release, seven of the eight lenses independently finding the first.
+
+- **The enumeration depended on the order the documents were passed in.** `current-versions` broke a tie on `urpx:effectiveDateTime` with `(apply max-key ...)`, which returns the *last* maximal element, so when two snapshots of one identity shared an effective instant one was silently discarded and which one depended on seq order. Over the production corpus at `889344b` that moved the answer between **739 arrangements / 144 distinct pairs** in glob order and **731 / 136** reversed, with no error either way, and the eight pairs that vanished were all CPAU. `urpx.price` refuses exactly this input with `:ambiguous-version` and says "there is no rule here that picks among them"; a namespace sitting on top of it was quietly undoing that. Ties are now refused.
+
+- **A version snapshot was paired with a document it did not come from.** `plan-doc` / `mod-doc` were `(into {} ...)` keyed by version `@id`, so where two documents publish one `@id` the loser's snapshot was bound to the winner's document. Measured on the corpus: **69 of 1728** base bindings and **641 of 1728** modifier bindings named a document that was not the snapshot's source. This is the `:version` defect class of 0.28.0 for the third time, so the fix is structural rather than another guard: the source document now travels with the snapshot as an `[identity-id version document]` triple and is never recovered by `@id`. The caller-supplied `:combine` policy still sees version nodes, never the triples.
+
+- **`arrangement-id` was not unique, and its docstring and the README both said it was.** 1728 arrangements collapsed to 1068 distinct ids, 272 ids were carried by more than one arrangement, and 20 were shared by arrangements that genuinely differed. Now unique: 1041 of 1041 across all versions, 712 of 712 at an instant.
+
+- **A conformant version stating only `urpx:effectiveDate` was silently dropped**, taking its whole plan out of the enumeration, while `urpx.price` resolved the same document normally. Both properties are `sh:minCount 0`. The cause was re-deriving what `urpx.price` already read, so `version-effective-at`, `version-expired-by?` and `version-covers?` are now **public** there and are the single readers; `urpx.arrangements` calls them instead of keeping a second copy. The same de-duplication moved the uncoerced-document test into `urpx.coerce`, which `urpx.schedule` now shares.
+
+- **Uncoerced documents were answered rather than refused.** `urpx.core/load-graph` returns parsed but untyped entities, so `urpx:effectiveDateTime` is still a string. With an instant that threw a `ClassCastException` from deep inside; with no instant nothing compares a date at all, so the documents sailed through and **202** pairs came back where the coerced form gives 144 — a plausible number, not a refusal. Found when a consumer's cross-check probe walked into it, where it would have read as an enumeration disagreement between two implementations.
+
+- **Six guards that could be deleted with the suite green**, found by re-running a mutation battery against the tests rather than by reading them. Five were still green after the first round of fixes: `resolve-at`'s per-document `:version` map, both branches of the compatibility rule, `applicable-modifiers`' documented `:at` option, and the selections component of `arrangement-id`. Each now has a test and a mutation proof that it fails when the behavior it names is broken.
+
+  The `:version` map was invisible for a structural reason worth recording: **no fixture carries more than one version in one document**, so `urpx.price`'s own rules could only ever reach the same snapshot the arrangement had bound. Made visible with a constructed two-version document, the binding turns out to do more than choose. Without it `urpx.price` refuses the document outright ("Multiple nested version snapshots; this library reads one"), so the map is not an optimization over urpx.price's rules, it is what makes a multi-version document resolvable at all.
+
+  One of the six pins a **contested reading**: `urpx:applicableToRatePlanVersion` is treated as exhaustive, so a modifier naming any version combines with those and no others. The ontology's wording supports it ("which *specific* rate plan versions are compatible") but the reading is non-monotonic, and merging a document that adds a version removes compatibility with plans named only by `applicableToRatePlan`. Over the production corpus the two readings differ by exactly 7 of 166 base/modifier pairs. URPX states neither; the test exists so that changing the answer is a deliberate act.
+
+- **`check-no-conflicting-ids!` was called once per kind**, so it threw on the base versions before the modifier versions were examined and reported one conflicting `@id` where the corpus has three. Naming them all at once was the entire purpose of the function and calling it twice defeated it. It now takes every kind together, and `ex-data` gains `:by-kind`.
+
+- **A test that compared a value to itself.** The `resolve-at` opt pass-through assertion passed a `:holiday?` opt and compared the result to the same number the un-opted call returns, so the wrong opt, the opposite opt and a nonsense opt all satisfied it. It cannot be fixed by comparing values either: the predicate provably does not change any fixture's rate, and SCE Schedule D never consults it at all. It now counts the predicate's own invocations on the one fixture that invokes it. Every guard added here carries a mutation proof that it fails when the behavior it names is broken.
+
+### Changed
+
+- **`resolve-at` refuses `:version` and `:profile-alternatives` instead of merging them.** An arrangement determines both. Letting a caller's value win would restore the exact defect the function exists to prevent (an opt reaching, or failing to reach, the document it belongs to: both such defects are fixed in 0.28.0); letting the arrangement win silently would ignore an opt the caller meant. `ex-data` carries `:reason :urpx.arrangement/opt-determined-by-arrangement`. A caller who wants a different version or selection wants a different arrangement.
+
 ## [0.28.0] — 2026-09-22
 
 ### Fixed
