@@ -1657,29 +1657,34 @@
       (testing "and asking for the during-event bound resolves it"
         (is (= 0.50M (price/marginal-unit-rate only-event {:include-dynamic-pricing? true})))))))
 
-(deftest condition-gated-prices-still-fire-unconditionally
-  (testing "THE LIMIT OF THIS CHANGE, pinned so it is not mistaken for a fix.
-            SCE PRIME-CPP carries three prices: an event charge tagged with
-            urpx:hasDynamicPricing, and two CREDITS gated by
-            urpx:ConditionExpression predicates this library does not evaluate
-            (`Is CPP Event Today' = false, and a grandfathered-customer
-            attribute). Excluding the event charge leaves both credits applying
-            unconditionally, so the marginal rate goes NEGATIVE.
+(deftest condition-gated-prices-are-refused-rather-than-assumed
+  (testing "This test used to pin the LIMIT of the event-price change: SCE
+            PRIME-CPP carries an event charge tagged urpx:hasDynamicPricing and
+            two CREDITS gated by urpx:ConditionExpression predicates this
+            library does not evaluate (`is a CPP event called today' and a
+            grandfathered-customer attribute). Excluding the event charge left
+            both credits applying unconditionally and the marginal rate went
+            NEGATIVE, -0.13897, which says a customer is paid to consume. The
+            docstring here called that preferable to a plausible wrong number,
+            which was true and was still a wrong number.
 
-            That is not a regression introduced here: the number was already
-            wrong, mixing an event charge with credits that may not apply. It
-            is now wrong in a more visible direction, which under this
-            library's habits is preferable to a plausible wrong number. The
-            real fix is evaluating the condition expressions, which URPX has
-            not yet defined a consumer-facing shape for."
+            It is now refused. Summing a price whose condition cannot be
+            evaluated reports an assumption as a number, and this library
+            refuses every other case of that. The caller can still ask for the
+            every-condition-true upper bound explicitly."
     (let [plan (fixtures/load-rate-plan "sce-tou-d-prime-2026-03-20")
           cpp  (fixtures/load-modifier "sce-tou-d-prime-cpp-2026-03-20")
           when- (zdt 2026 7 15 17)
           comp- (price/resolve-prices-with-modifiers plan [cpp] when-)]
       (is (= 0.60067M (price/marginal-unit-rate (price/resolve-prices plan when-)))
           "the base plan alone is right")
-      (is (neg? (price/marginal-unit-rate comp-))
-          "and the composed rate is visibly wrong, because two credits fire ungated")
+      (is (= :condition-gated-tier
+             (try (price/marginal-unit-rate comp-) nil
+                  (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))
+          "and the composed rate refuses rather than reporting the assumption")
+      (is (neg? (price/marginal-unit-rate comp- {:assume-conditions-hold? true}))
+          "the number the refusal replaces is still reachable on request, and is
+           still negative, which is why it is refused")
       (testing "the credits carry applicability rules, which is what marks them
                 as gated by something unevaluated"
         (let [ids (->> (:urpx.resolved/ledgers comp-)

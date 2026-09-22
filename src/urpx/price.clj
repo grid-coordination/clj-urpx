@@ -1804,7 +1804,7 @@
    Useful for price signaling: when you don't know a customer's usage but want
    a single $/kWh number, this is the marginal rate at zero baseline usage.
 
-   REFUSES, rather than returning a number, in five cases, each carrying a
+   REFUSES, rather than returning a number, in six cases, each carrying a
    named `:reason` in its ex-data so a sweeping consumer can classify:
 
      :no-energy-ledger            this plan prices nothing per kWh, so the
@@ -1824,6 +1824,12 @@
                                   caller nothing and does not refuse; not
                                   KNOWING what was withheld is not evidence that
                                   it did not matter, so that refuses
+     :condition-gated-tier        a price in the sum is gated by a
+                                  urpx:ConditionExpression this library does not
+                                  evaluate, so including it would report an
+                                  assumption as a number. Pass
+                                  :assume-conditions-hold? true for the
+                                  every-condition-true upper bound
      :all-energy-tiers-excluded   every energy tier was event-driven, recurring,
                                   or both. Free is not the answer either
      :outside-version-window      the version used does not describe this
@@ -1849,6 +1855,7 @@
   ([resolved] (marginal-unit-rate resolved nil))
   ([resolved opts]
   (let [include-dyn? (:include-dynamic-pricing? opts false)
+        assume-conditions? (:assume-conditions-hold? opts false)
         exclude-tier? (fn [t]
                         (or
                          ;; A recurring charge is priced per interval, not per
@@ -1916,7 +1923,11 @@
         marginal   (mapcat #(-> (remove exclude-tier? (:urpx.resolved/tiers %))
                                 (additive-plus-lowest-rung :urpx.resolved/tier-number))
                            energy)
-        unvaluable (filter :urpx.resolved/unvaluable marginal)]
+        unvaluable (filter :urpx.resolved/unvaluable marginal)
+        ;; Only tiers that would actually ENTER the sum: `marginal` is already
+        ;; import-energy-only and already past exclude-tier?, so a gated export
+        ;; price or a gated event charge is not in scope here.
+        gated      (filter :urpx.resolved/condition-gated marginal)]
     ;; A price from a version that does not describe this instant is the
     ;; confident wrong number this whole function exists to refuse. The
     ;; structural answers alongside it (season, TOU period) stay available on
@@ -1971,6 +1982,42 @@
                            "Inspect :urpx.resolved/unvaluable on the offending tiers.")
                       {:reason :unvaluable-marginal-tier
                        :unvaluable (mapv :urpx.resolved/unvaluable unvaluable)})))
+    ;; A price whose condition this library cannot evaluate fired on the
+    ;; assumption that the condition holds, and summing it reports that
+    ;; assumption as a number. Two shapes reach here and both are wrong:
+    ;;
+    ;; SCE's CCA-CRS files twenty PCIA vintages as twenty condition-gated
+    ;; prices, "Applies when customer's CCA Vintage Year = 2001" and so on.
+    ;; Exactly one applies to any customer; summing all twenty took SCE
+    ;; TOU-D-PRIME from 0.60067 to 0.95664 where the true range is 0.59423 to
+    ;; 0.62691. That is the identical defect this function already refuses when
+    ;; a filing states it as urpx:PriceSetAlternatives, and PG&E states the
+    ;; SAME concept that way. Refusing both means the answer no longer depends
+    ;; on which layer a filer happened to use.
+    ;;
+    ;; SCE's CPP credits are the other shape, a genuine predicate nobody can
+    ;; evaluate: "on non-CPP-Event days" and "when the customer is
+    ;; grandfathered". Applying them unconditionally made the marginal rate
+    ;; NEGATIVE, -0.13897 at summer peak, which says a customer is paid to
+    ;; consume.
+    ;;
+    ;; :assume-conditions-hold? true restores the old behavior for a caller who
+    ;; wants the every-condition-true upper bound, the way
+    ;; :include-dynamic-pricing? does for event prices.
+    (when (and (seq gated) (not assume-conditions?))
+      (throw (ex-info (str "Cannot compute a marginal rate: " (count gated)
+                           " price(s) in the sum are gated by a urpx:ConditionExpression "
+                           "this library does not evaluate, so including them would report "
+                           "an assumption as a number. Inspect "
+                           ":urpx.resolved/condition-gated on the tiers. Pass "
+                           ":assume-conditions-hold? true for the every-condition-true "
+                           "upper bound. Where the gated set is mutually exclusive, as a "
+                           "vintage matrix is, the filing wants urpx:ProfileAlternatives "
+                           "rather than predicates, and the choice then becomes yours to make.")
+                      {:reason :condition-gated-tier
+                       :gated (mapv #(select-keys % [:urpx.resolved/price-id
+                                                     :urpx.resolved/condition-gated])
+                                    gated)})))
     ;; Every energy tier excluded is not an answer of zero either. A modifier
     ;; resolved on its own whose only energy ledger IS the event charge would
     ;; otherwise report free.

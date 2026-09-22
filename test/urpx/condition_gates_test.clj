@@ -47,19 +47,23 @@
                 (mapcat :urpx.resolved/condition-gated g))
           "and the gate carries its own name, so a consumer can see what was assumed"))))
 
-(deftest the-mark-is-what-explains-the-negative-rate
+(deftest the-negative-rate-is-refused-not-reported
   (testing "the rate itself is unchanged: marking decides nothing. What changes
             is that a consumer can now see WHY it is negative rather than having
             to reverse-engineer it from the tier list.
 
             0.80000 event charge, excluded as event-driven. Two credits summing
-            -0.73964, applying on an assumption. The marginal is negative, which
-            says the customer is paid to consume, and it is wrong."
+            -0.73964, applying on an assumption. Assumed in, the marginal is
+            negative, which says the customer is paid to consume."
     (let [r (price/resolve-prices-with-modifiers (prime) [(prime-cpp)] (at))]
-      (is (neg? (price/marginal-unit-rate r))
-          "unchanged by this release: still negative, still wrong")
+      (is (= :condition-gated-tier
+             (try (price/marginal-unit-rate r) nil
+                  (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))
+          "refused, rather than reporting the assumption as a number")
+      (is (neg? (price/marginal-unit-rate r {:assume-conditions-hold? true}))
+          "the assumed-in number is still reachable, and is still negative")
       (is (= 2 (count (gated r)))
-          "but the two prices responsible are now identifiable without the filing")
+          "and the two prices responsible are identifiable without the filing")
       (is (= (reduce + 0M (map :urpx.resolved/unit-price (gated r)))
              -0.73964M)
           "and they are exactly the credits that make it negative"))))
@@ -116,3 +120,60 @@
       (is (re-find #"non-CPP-Event" (str (:urpx.resolved/gate-name max-gate)))
           "and carries the referenced rule's own name, so the dereference
            genuinely happened rather than the bare ref being reported as-is"))))
+
+(deftest exclusivity-filed-as-predicates-is-refused-like-exclusivity-filed-as-alternatives
+  (testing "the bigger half of this, and the one that is really a modeling
+            problem. SCE's CCA-CRS files twenty PCIA vintages as twenty
+            condition-gated prices, 'Applies when customer's CCA Vintage
+            Year = 2001' and so on. Exactly one applies to any customer.
+
+            PG&E files the SAME concept as urpx:PriceSetAlternatives, and this
+            function has refused that since 0.20.0 because the exclusivity is
+            structurally visible. SCE's is invisible, so all twenty were summed
+            and SCE TOU-D-PRIME went from 0.60067 to 0.95664 where the true
+            range is 0.59423 to 0.62691.
+
+            Refusing both means the answer no longer depends on which layer a
+            filer happened to express exclusivity in. This corpus fixture is
+            not vendored, so the case is constructed from the two gated SCE CPP
+            prices, which exercise the same guard."
+    (let [r (price/resolve-prices-with-modifiers (prime) [(prime-cpp)] (at))
+          summed (price/marginal-unit-rate r {:assume-conditions-hold? true})
+          base   (price/marginal-unit-rate (price/resolve-prices (prime) (at)))]
+      (is (= :condition-gated-tier
+             (try (price/marginal-unit-rate r) nil
+                  (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))))
+      (is (not= summed base)
+          "the gated prices genuinely move the number, so the refusal is not academic")
+      (is (= 2 (count (:gated (ex-data (try (price/marginal-unit-rate r)
+                                            (catch clojure.lang.ExceptionInfo e e))))))
+          "and the ex-data names every price the caller has to account for"))))
+
+(deftest a-gated-export-price-does-not-refuse-an-import-rate
+  (testing "the guard is scoped to tiers that would actually enter the sum.
+            Across the corpus, 100,640 of the 101,992 condition-gated tiers are
+            export prices in NBT matrices, where the gate is how the matrix is
+            indexed by vintage, month and hour. urpx:flowDirection urpx:reverse
+            has kept those out of the marginal since 0.21.0, so they must not
+            refuse it either: a guard that fired on them would refuse almost
+            every filing in the corpus.
+
+            Constructed by flipping the CPP modifier's own MetricSpecification
+            to urpx:reverse, so its two gated prices become export while the
+            base plan keeps a real import ledger. Scoping the guard to every
+            tier rather than to the summed ones would refuse this, and would
+            refuse almost every filing in the corpus with it."
+    (let [exported (clojure.walk/postwalk
+                    (fn [n] (if (and (map? n) (= "urpx:MetricSpecification" (:jsonld/type n)))
+                              (assoc n :urpx/flowDirection {:jsonld/id "urpx:reverse"})
+                              n))
+                    (prime-cpp))
+          r (price/resolve-prices-with-modifiers (prime) [exported] (at))]
+      (is (some #(= "urpx:reverse" (get-in % [:urpx.resolved/flow-direction :jsonld/id]))
+                (:urpx.resolved/ledgers r))
+          "sanity: the gated prices really did become export-direction")
+      (is (seq (filter :urpx.resolved/condition-gated
+                       (mapcat :urpx.resolved/tiers (:urpx.resolved/ledgers r))))
+          "sanity: and they are still marked as gated, so the guard could see them")
+      (is (= 0.60067M (price/marginal-unit-rate r))
+          "the import rate answers, because no gated price enters the sum"))))

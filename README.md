@@ -413,7 +413,7 @@ Ask first when sweeping a corpus, so the refusal is not a tax on every caller:
 ;;                                     caller can route rather than skip
 ```
 
-Every refusal `marginal-unit-rate` makes carries a `:reason` in its `ex-data`, so a sweeping consumer can classify instead of catching everything: `:no-energy-ledger`, `:unvaluable-marginal-tier`, `:unselected-alternatives`, `:all-energy-tiers-excluded`, and `:outside-version-window`.
+Every refusal `marginal-unit-rate` makes carries a `:reason` in its `ex-data`, so a sweeping consumer can classify instead of catching everything: `:no-energy-ledger`, `:unvaluable-marginal-tier`, `:unselected-alternatives`, `:condition-gated-tier`, `:all-energy-tiers-excluded`, and `:outside-version-window`.
 
 `resolve-prices` itself carries a `:reason` on six further refusals, all of them a refusal to guess rather than a failure to parse. (It can also propagate a throw from indexing or from holiday-rule derivation; those are malformed-document errors and carry no `:reason`, so classify on the key's presence rather than assuming it.) Three concern versions: `:no-version-in-effect`, `:ambiguous-version` and `:version-without-effective-instant`, when several snapshots cannot be ordered or none covers the instant. Three concern alternatives, and all three are cases where reading on would return a confident wrong number rather than fail:
 
@@ -485,6 +485,16 @@ It also refuses when a ledger is marked but `:urpx.resolved/withheld-prices` is 
 A price that is both present in `:urpx.resolved/tiers` and named by the mark contributes its own tier entry as the evidence, rather than a reconstruction of it. The two views have to be the same map: the refusal asks one and the sum takes the other, so any field that excludes one but not the other defeats the guard.
 
 The distinction is the difference between a question the caller can answer and one they cannot. A vintage-PCIA cell is an attribute of the customer: the caller knows their departure vintage, and naming it is a reasonable ask, so that refusal stands. CPAU's E-HRA cells are the utility's own reserve level and generation band, reset by council vote, which no consumer has a source for; a refusal there would be permanent, and it would be trading a correct rate for an unanswerable question.
+
+### Prices gated by a condition
+
+A `urpx:Price` may carry a `urpx:ConditionExpression`: *applies only if the customer is on a legacy vintage, only on a non-event day, only above a usage threshold*. This library does not evaluate those predicates, and a price whose predicate it cannot evaluate fires **unconditionally**, which is a silent assumption that the predicate holds.
+
+Gated tiers carry `:urpx.resolved/condition-gated`, naming each gate's `@id`, its name, and whether it hangs off the Price or the PriceDefinition. `marginal-unit-rate` **refuses** with `:condition-gated-tier` when such a price would enter its sum, because summing it reports the assumption as a number. Pass `:assume-conditions-hold? true` for the every-condition-true upper bound, exactly as `:include-dynamic-pricing? true` gives the during-event one.
+
+The guard is scoped to prices that would actually be summed. Across the production corpus, 100,640 of 101,992 gated tiers are export prices in net-billing matrices where the gate *is* the lookup key (which vintage, which month, which hour); `urpx:flowDirection urpx:reverse` has kept those out of the marginal since 0.21.0, and they do not refuse it either.
+
+**Two different things reach this refusal, and only one of them is really about conditions.** SCE's CCA-CRS files twenty PCIA vintages as twenty gated prices, one per vintage year, of which exactly one applies to any customer; summing all twenty took SCE TOU-D-PRIME from `0.60067` to `0.95664` where the true range is `0.59423` to `0.62691`. That is the same defect this function already refuses when a filing states it as `urpx:PriceSetAlternatives`, which is how PG&E files the identical concept. Refusing both means the answer no longer depends on which layer a filer happened to use. Where exclusivity is what is meant, the filing wants `ProfileAlternatives`, and the choice then becomes the caller's to make rather than a predicate nobody can evaluate.
 
 ### Sub-hour granularity
 

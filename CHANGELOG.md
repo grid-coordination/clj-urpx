@@ -21,6 +21,16 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
   A rule carrying only `urpx:month` is **not** reported, because that constraint is evaluated. Conditions inside a `urpx:ProfileAlternative` (required on every alternative by the shapes) and inside a `urpx:EligibilityRule` (which answers who may take the tariff) are not reported either, since neither hangs off a Price.
 
+### Changed
+
+- **`marginal-unit-rate` refuses with `:condition-gated-tier` rather than summing a price whose condition it cannot evaluate.** Closes the half of [#5](https://github.com/grid-coordination/clj-urpx/issues/5) that [#9](https://github.com/grid-coordination/clj-urpx/issues/9) tracked. Pass `:assume-conditions-hold? true` for the every-condition-true upper bound, as `:include-dynamic-pricing? true` gives the during-event one.
+
+  **Two different defects reach this guard, and the larger one is a modeling problem.** SCE's CCA-CRS files twenty PCIA vintages as twenty condition-gated prices, one per vintage year, of which exactly one applies to any customer. Summing all twenty took SCE TOU-D-PRIME from `0.60067` to **`0.95664`**, where the true range is `0.59423` to `0.62691`. That is the identical defect this function has refused since 0.20.0 when a filing states it as `urpx:PriceSetAlternatives`, which is how PG&E files the same concept: the answer used to depend on which layer a filer expressed exclusivity in, and now it does not. The other defect is a genuine unevaluable predicate: SCE's CPP credits, gated on "is a CPP event called today" and on a grandfathered-customer attribute, applied at every instant and made the composed marginal **negative**, `-0.13897` at summer peak, which says a customer is paid to consume.
+
+  Scoped to prices that would actually be summed. 100,640 of the corpus's 101,992 gated tiers are export prices in net-billing matrices where the gate is the lookup key; `urpx:flowDirection urpx:reverse` has kept those out of the marginal since 0.21.0 and they do not refuse it either.
+
+**Upgrading:** a composition that returned a number for SCE CCA-CRS, SCE DA-CRS, SCE TOU-D-PRIME-CPP or PG&E E-RSMART now refuses. Every one of those numbers was wrong. Where the gated set is mutually exclusive, the filing wants `urpx:ProfileAlternatives` and the refusal becomes a selection you can make; where the gate is a genuine predicate, `:assume-conditions-hold? true` restores the previous value explicitly.
+
 ## [0.25.0] — 2026-09-21
 
 `urpx:referencesProfileAlternative` on a `urpx:PriceDefinition`, and a narrower rule for when withholding costs the caller an answer.
