@@ -29,7 +29,21 @@
 (deftest build-index-on-pge-e-1
   (let [plan (fixtures/load-rate-plan "pge-e-1-2026-03-01")
         idx (index/build-index plan)]
-    (testing "every entity that has a :jsonld/id is reachable by id"
+    (testing "every entity that has a :jsonld/id is reachable by id, asserted
+              over the whole document rather than over six chosen examples.
+              The six were named as illustrations under a universal claim, so
+              the test covered 6 of 92 entities while saying it covered all of
+              them, and a node type that stopped being indexed would only have
+              been caught if it happened to be one of the six."
+      (let [typed-with-id (->> (tree-seq coll? seq plan)
+                               (filter #(and (map? %) (:jsonld/id %) (:jsonld/type %))))
+            missing (remove #(some? (idx (:jsonld/id %))) typed-with-id)]
+        (is (< 50 (count typed-with-id))
+            "guard: the walk finds the document, so an empty walk cannot pass")
+        (is (empty? (map :jsonld/id missing))
+            "every typed node carrying an @id is in the index")))
+
+    (testing "and the named cases stay named, one per entity kind"
       (is (some? (idx "pge:e-1")) "top-level RatePlan")
       (is (some? (idx "pge:e-1-2026-03-01")) "RatePlanVersion")
       (is (some? (idx "pge:season-summer")) "Season")
