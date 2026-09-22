@@ -643,6 +643,29 @@ Nothing in URPX expresses exclusivity or combinability **between** modifiers, so
 
 The two are indistinguishable on most corpora. They can differ only about a modifier that names some version *and* names a plan no named version belongs to.
 
+**What one `@id` naming several different snapshots means is a third policy**, `:repeated-ids`, because URPX does not say and a client reading one filing wants a different answer from a client merging a corpus.
+
+| `:repeated-ids` policy | Does |
+|--------|--------|
+| `repeated-ids-refuse` (default) | refuses `:conflicting-version-id`, naming every offending `@id` at once. An `@id` identifies a thing, so two different things under one is a contradiction rather than a choice |
+| `repeated-ids-union` | merges them property by property, the reading a corpus whose own SHACL gate validates a *merged* graph already assumes |
+
+Byte-identical repeats are never a conflict under either: one version published in two filings is one version, and it is deduplicated.
+
+`repeated-ids-union` has two costs worth knowing. **RDF merges triples, not meanings**: merging a copy that states `applicableToRatePlanVersion` with one that omits it yields a node that *has* the property, which under `named-versions-narrow` restricts the modifier to exactly those versions — while the omitting copy meant no restriction at all. And it silently reconciles a version `@id` whose content is time-varying, which is a defect on any reading. Only vector-valued properties union; two differing scalars refuse `:unmergeable-property`, since URPX gives many of those `sh:maxCount 1`.
+
+### Comparing two enumerators
+
+```clojure
+(arr/arrangement-pairs documents opts)
+;; => #{["sce:d-2026-03-20" #{}]
+;;      ["sce:d-2026-03-20" #{"sce:care-2026-03-20"}] ...}
+```
+
+One row per composition, with `ProfileAlternative` choices **not** expanded — a coarser question than `arrangements` answers and deliberately a different one. An arrangement with an open dimension is several arrangements and one pair.
+
+It exists so two independent enumerators can be compared on *what composes with what*, without disagreeing about whether a pending choice is one row or several. **Pin every policy explicitly** when the result is a gate's expected value: `:at`, `:combine`, `:compatibility` and `:repeated-ids` each change the answer, and matching defaults across two implementations is agreement by coincidence rather than by construction.
+
 ### Loading documents, and who walks the corpus
 
 The library takes documents. **It never walks a corpus**, and that is a division of labour rather than an omission: a corpus repository is a one-off, there will never be a layout everyone adopts, so finding filings is client-specific while turning what you find into documents is not.
@@ -688,9 +711,12 @@ None is a version today, which is luck rather than design. `scan` does the same 
 
 ```bash
 clojure -M:dev:corpus -m corpus-sweep <path-to-corpus> --layout urpx-rate-plans
+clojure -M:dev:corpus -m corpus-sweep <path-to-urpx>    --layout urpx-upstream
 ```
 
-They exist because a glob looks equivalent to a walk and is not. Over urpx-rate-plans a naive `**/*.jsonld` yields **87** documents where the layout walker yields **84**: the extra three live in `dev/fixtures/`, are not filings, and one is deliberately non-conforming so that corpus's own gate has something to fail on. Nothing errors; the count is simply about something other than the corpus.
+They exist because a glob looks equivalent to a walk and is not, and the two corpora fail differently. Over urpx-rate-plans a naive `**/*.jsonld` yields **87** documents where the walker yields **84**: the extra three live in `dev/fixtures/`, are not filings, and one is deliberately non-conforming. Nothing errors; the count is simply about something else. Over the URPX standard's own repository a naive glob **crashes**, because `dev-docs/samples` carries an instant written `2026-01-01T06:00:00Z` that coercion refuses, and the error names no file.
+
+The upstream test cases are worth walking for a second reason: they exercise shapes the production corpus never uses. Three top-level `RatePlanVersion`s rather than nested ones, two base versions claiming `urpx:complete` where the production corpus has none, the only `TemporalScope` with `scopeKind urpx:coverage` in either tree, and a genuine `:ambiguous-version` tie.
 
 `dev/corpus_sweep.clj` is a full worked example, and pins a corpus to an exact revision with [tools.gitlibs](https://github.com/clojure/tools.gitlibs) rather than to whatever a sibling checkout holds. `babashka/fs` and `tools.gitlibs` are `:dev` dependencies; the library itself does no filesystem traversal and fetches nothing.
 
@@ -898,7 +924,7 @@ For a longer worked walkthrough that mirrors selected examples from the upstream
 | `urpx.emit`          | Write-side: `write-rate-plan`, `write-rate-plan-modifier`, `write-urpx-document`, `write-urpx-package` |
 | `urpx.validate`      | Single-file CLI checker (`clojure -M:validate <file.jsonld>`), tri-state exit |
 | `urpx.dsl`           | Authoring DSL: `dsl-scope`, `make-builder`, named builders for every entity type |
-| `urpx.arrangements`  | Optional enumerator: `arrangements`, `arrangement-id`, `plan-versions`, `applicable-modifiers`, `offered-by`, the `one-modifier-at-most` / `every-subset` and `named-versions-narrow` / `named-versions-add` policies, and `resolve-at` / `segments-for` / `schedule-for` for prices. Requires `urpx.price`; nothing in the library requires it |
+| `urpx.arrangements`  | Optional enumerator: `arrangements`, `arrangement-pairs`, `arrangement-id`, `plan-versions`, `applicable-modifiers`, `offered-by`, the `one-modifier-at-most` / `every-subset`, `named-versions-narrow` / `named-versions-add` and `repeated-ids-refuse` / `repeated-ids-union` policies, and `resolve-at` / `segments-for` / `schedule-for` for prices. Requires `urpx.price`; nothing in the library requires it |
 
 ## Status
 

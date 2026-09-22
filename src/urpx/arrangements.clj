@@ -75,8 +75,8 @@
 (defn- distinct-by-node
   "Drop triples whose snapshot node is EQUAL to one already seen, keeping the
    first. Two filings carrying a byte-identical version node are one version
-   published twice, which is benign; `check-no-conflicting-ids!` has already
-   refused the case where they differ."
+   published twice, which is benign; the :repeated-ids policy has already
+   refused or merged the case where they differ."
   [triples]
   (->> triples (reduce (fn [[seen acc] tr]
                          (let [v (second tr)]
@@ -100,24 +100,22 @@
        (sort-by first)
        vec))
 
-(defn- check-no-conflicting-ids!
-  "Refuse when one @id names two different snapshots.
+(defn repeated-ids-refuse
+  "The default policy for one @id naming more than one distinct snapshot:
+   refuse, naming every offending @id at once.
 
-   No escape hatch, deliberately. Where urpx.price refuses two DIFFERENT
+   An @id identifies a thing, so two different things under one is a
+   contradiction rather than a choice. Where urpx.price refuses two DIFFERENT
    snapshots tied on an effective instant it can say \"pass :version to choose\",
-   because the caller has two distinguishable things to choose between. Here
-   both carry the same @id, so there is nothing for a caller to name and any
-   option would be asking them to pick arbitrarily, which is what this library
-   exists not to do. The corpus is what has to change.
+   because the caller has two distinguishable things to choose between; here
+   both carry the same @id and there is nothing to name.
 
-   Every conflicting @id is named at once rather than the first: finding them
-   one refusal at a time costs a caller a round trip per bad filing, which is
-   the lesson already recorded against :outside-version-window in 0.27.0.
+   Every conflicting @id is named in one refusal, across every kind. Called once
+   per kind this threw on the base versions before the modifier versions were
+   ever examined, so a corpus with three conflicting @ids reported one.
 
-   TAKES EVERY KIND AT ONCE for that same reason. Called once per kind it threw
-   on the base versions before the modifier versions were ever examined, so a
-   corpus with three conflicting @ids reported one. Naming them all was the
-   whole point of this function and calling it twice defeated it."
+   Byte-identical repeats are NOT a conflict. One version published in two
+   filings is one version, and it is deduplicated."
   [by-kind]
   (let [bad (into (sorted-map)
                   (keep (fn [[kind triples]]
@@ -133,12 +131,100 @@
                                      (for [[kind gs] bad, [id n] gs]
                                        (str (pr-str id) " (" kind ") in " n " document(s)")))
                            ". Two different things cannot share one identifier, and nothing "
-                           "in the documents says which is meant, so there is no choice to "
-                           "offer: the filings have to agree.")
+                           "in the documents says which is meant. Pass :repeated-ids "
+                           "urpx.arrangements/repeated-ids-union to merge them instead, "
+                           "which is what a corpus whose own gate validates a merged graph "
+                           "already assumes.")
                       {:reason  :urpx.arrangement/conflicting-version-id
                        :ids     (vec (mapcat (fn [[_ gs]] (map first gs)) bad))
                        :counts  (into {} (mapcat val bad))
-                       :by-kind (into {} (map (fn [[k gs]] [k (mapv first gs)])) bad)})))))
+                       :by-kind (into {} (map (fn [[k gs]] [k (mapv first gs)])) bad)}))))
+  (into {} (map (fn [[k ts]] [k (vec (distinct-by-node ts))])) by-kind))
+
+(defn- union-nodes
+  "Merge snapshot nodes sharing one @id, property by property.
+
+   Vector-valued properties union, preserving first-seen order. Vector rather
+   than collection: a Ref is a map and so a collection, but it is one VALUE, and
+   unioning two of them concatenates their entries into nonsense. Only a
+   property URPX models 0..N arrives as a vector. A property whose value is not
+   one and differs between occurrences cannot be merged at all: URPX gives many of those sh:maxCount 1, so two values would
+   be invalid rather than combined, and nothing says which is meant. That
+   refuses, with the property named."
+  [id nodes kind]
+  (let [ks (distinct (mapcat keys nodes))]
+    (into {}
+          (map (fn [k]
+                 (let [vs (distinct (keep #(get % k) nodes))]
+                   (cond
+                     (<= (count vs) 1) [k (first vs)]
+                     ;; SEQUENTIAL, not coll?. A Ref is a map and therefore a
+                     ;; collection, but it is one VALUE: unioning two of them
+                     ;; concatenates their entries into nonsense instead of
+                     ;; refusing. Only a property URPX models 0..N arrives as a
+                     ;; vector, which is exactly the set that can be merged.
+                     (every? sequential? vs) [k (vec (distinct (apply concat vs)))]
+                     :else
+                     (throw (ex-info (str "Cannot merge " (pr-str id) " (" kind "): its "
+                                          "occurrences disagree about " (pr-str k)
+                                          ", which is not a collection, so the values "
+                                          "cannot be combined and nothing says which "
+                                          "is meant. " (pr-str (vec vs)))
+                                     {:reason :urpx.arrangement/unmergeable-property
+                                      :id id :kind kind :property k
+                                      :values (vec vs)}))))))
+          ks)))
+
+(defn repeated-ids-union
+  "A policy that MERGES snapshots sharing one @id rather than refusing them.
+
+   The reading a corpus whose own SHACL gate validates a merged graph already
+   assumes: several documents describing one IRI contribute the union of their
+   statements, and absence of a property is not a negative assertion.
+
+   KNOWN COST, and it is not small. RDF MERGES TRIPLES, NOT MEANINGS. Merging a
+   copy that states urpx:applicableToRatePlanVersion with one that omits it
+   yields a node that HAS the property, which under `named-versions-narrow`
+   restricts the modifier to exactly those versions. The omitting copy meant the
+   opposite: no version restriction at all. So the union of the triples narrows
+   where the union of the meanings would widen. On the production corpus that
+   difference is 7 of 166 base/modifier pairs, all of one modifier losing one
+   plan. Pair this with `named-versions-add` if the widening reading is what you
+   want.
+
+   It also SILENTLY RECONCILES a case that is a defect on any reading: a version
+   @id whose option list differs between filings because the list is
+   time-varying and the @id is not. cpau:e-1-2025-07-01 offers [e-hra] in the
+   July filing and [e-hra, e-eec-1, e-nse-1] in the September one, and the two
+   additions are September versions that did not exist in July. The union
+   asserts that a version effective in July offered them. Merging makes that
+   enumerable; it does not make it true.
+
+   Refuses `:urpx.arrangement/unmergeable-property` when occurrences disagree
+   about a non-collection property, which cannot be combined."
+  [by-kind]
+  (into {}
+        (map (fn [[kind triples]]
+               [kind (vec (for [[id group] (group-by #(:jsonld/id (second %)) triples)
+                                :let [nodes (distinct (map second group))]]
+                            (if (= 1 (count nodes))
+                              (first group)
+                              ;; The merged node is in NO single document, so one
+                              ;; has to be bound. Prefer the document that IS the
+                              ;; identity this version points back at, which is
+                              ;; derivable from the graph: a bundled copy of a
+                              ;; modifier version lives inside some PLAN's filing,
+                              ;; so picking a source arbitrarily can bind a
+                              ;; urpx:RatePlan as a modifier. Falling back to a
+                              ;; content-ordered pick keeps it independent of the
+                              ;; order a caller walked its corpus, which is the
+                              ;; max-key tie-break this namespace already removed
+                              ;; once and would be no better here.
+                              (let [pid   (first (first group))
+                                    own   (first (filter #(= pid (:jsonld/id (nth % 2))) group))
+                                    [_ _ doc] (or own (first (sort-by #(pr-str (nth % 2)) group)))]
+                                [pid (union-nodes id nodes kind) doc]))))]))
+        by-kind))
 
 (defn- current-versions
   "For each identity, the version in force at `t`, as a vector of triples.
@@ -165,7 +251,7 @@
   [triples ^java.time.LocalDateTime t]
   (let [by-identity (group-by first triples)]
     (if (nil? t)
-      (into {} (map (fn [[pid ts]] [pid (vec (distinct-by-node ts))])) by-identity)
+      (into {} (map (fn [[pid ts]] [pid (vec ts)])) by-identity)
       (into {}
             (keep (fn [[pid ts]]
                     (let [live (filter #(price/version-covers? (second %) t) ts)]
@@ -313,8 +399,10 @@
   ([documents opts]
    (let [_       (coerce/check-coerced! documents "urpx.arrangements/plan-versions")
          t       (some-> ^ZonedDateTime (:at opts) (.toLocalDateTime))
-         triples (mapcat #(versions-in % "urpx:RatePlanVersion") documents)
-         _       (check-no-conflicting-ids! {"urpx:RatePlanVersion" triples})]
+         repeated (or (:repeated-ids opts) repeated-ids-refuse)
+         triples (-> {"urpx:RatePlanVersion"
+                      (mapcat #(versions-in % "urpx:RatePlanVersion") documents)}
+                     repeated (get "urpx:RatePlanVersion"))]
      (->> (current-versions triples t)
           vals
           (mapcat #(map second %))
@@ -356,6 +444,15 @@
 
    Options:
      :at             a ZonedDateTime. Restricts to modifier versions current then.
+     :repeated-ids  fn from {kind -> [[identity-id version document] ...]} to the
+               same, deciding what one @id naming several distinct snapshots
+               means. Defaults to `repeated-ids-refuse`; `repeated-ids-union`
+               merges them, which is what a corpus whose own SHACL gate
+               validates a merged graph already assumes. A THIRD POLICY for the
+               same reason as the other two: URPX does not say, and a client
+               reading one filing and a client merging a corpus want different
+               answers. Over the production corpus the default refuses and the
+               union yields 137 pairs, or 144 paired with `named-versions-add`.
      :compatibility  fn `[modifier-version base-version plan-id] -> boolean`.
                      Defaults to `named-versions-narrow`; `named-versions-add`
                      is the monotone alternative."
@@ -365,8 +462,10 @@
          t       (some-> ^ZonedDateTime (:at opts) (.toLocalDateTime))
          compat  (or (:compatibility opts) named-versions-narrow)
          plan-id (:jsonld/id (:urpx/forRatePlan base-version))
-         triples (mapcat #(versions-in % "urpx:RatePlanModifierVersion") documents)
-         _       (check-no-conflicting-ids! {"urpx:RatePlanModifierVersion" triples})]
+         repeated (or (:repeated-ids opts) repeated-ids-refuse)
+         triples (-> {"urpx:RatePlanModifierVersion"
+                      (mapcat #(versions-in % "urpx:RatePlanModifierVersion") documents)}
+                     repeated (get "urpx:RatePlanModifierVersion"))]
      (->> (current-versions triples t)
           vals
           (mapcat #(map second %))
@@ -480,13 +579,14 @@
    (let [_       (coerce/check-coerced! documents "urpx.arrangements/arrangements")
          combine (or (:combine opts) one-modifier-at-most)
          compat  (or (:compatibility opts) named-versions-narrow)
+         repeated (or (:repeated-ids opts) repeated-ids-refuse)
          t     (some-> ^ZonedDateTime (:at opts) (.toLocalDateTime))
          plans (mapcat #(versions-in % "urpx:RatePlanVersion") documents)
          mods  (mapcat #(versions-in % "urpx:RatePlanModifierVersion") documents)
-         _     (check-no-conflicting-ids! {"urpx:RatePlanVersion"         plans
-                                          "urpx:RatePlanModifierVersion" mods})
-         live-plans (current-versions plans t)
-         live-mods  (current-versions mods t)]
+         merged (repeated {"urpx:RatePlanVersion"         plans
+                           "urpx:RatePlanModifierVersion" mods})
+         live-plans (current-versions (get merged "urpx:RatePlanVersion") t)
+         live-mods  (current-versions (get merged "urpx:RatePlanModifierVersion") t)]
      ;; Base version and modifier versions are carried as [id version doc]
      ;; triples the whole way, so the document attached to an arrangement is
      ;; the one the snapshot was read out of rather than one looked up by @id.
@@ -503,9 +603,9 @@
                       ;; back to their triples is by NODE, not by @id: by @id is
                       ;; the lookup that bound 641 modifier snapshots to the
                       ;; wrong document. Nodes are distinct within this list -
-                      ;; `check-no-conflicting-ids!` refused one @id naming two
-                      ;; different nodes, and `distinct-by-node` dropped exact
-                      ;; duplicates - so the map is total and unambiguous.
+                      ;; the :repeated-ids policy has already refused or
+                      ;; merged one @id naming two different nodes, and
+                      ;; deduplicated exact repeats, so the map is total.
                       by-node (into {} (map (fn [tr] [(second tr) tr])) ctriples)]
                 mvs (combine (mapv second ctriples))
                 :let [mvs      (vec (sort-by :jsonld/id mvs))
@@ -522,6 +622,33 @@
              :urpx.arrangement/selections           sel})
           (sort-by arrangement-id)
           vec))))
+
+(defn arrangement-pairs
+  "Every (base version, modifier set) pair `documents` expresses, as a set:
+
+      #{[base-version-iri #{modifier-version-iri ...}] ...}
+
+   The enumeration collapsed to one row per composition, with any
+   ProfileAlternative choices NOT expanded. That is a coarser question than
+   `arrangements` answers and a deliberately different one: an arrangement with
+   an open dimension is several arrangements and one pair.
+
+   FOR COMPARING TWO IMPLEMENTATIONS. A consumer cross-checking an independent
+   enumerator against this one should compare pair SETS rather than arrangement
+   counts, because the two sides can legitimately disagree about whether a
+   pending choice is one row or several while agreeing completely about what
+   composes with what.
+
+   `opts` is what `arrangements` takes. PIN EVERY POLICY EXPLICITLY when the
+   result is an expected value in a gate: `:at`, `:combine`, `:compatibility`
+   and `:repeated-ids` each change the answer, and matching defaults across two
+   implementations is agreement by coincidence rather than by construction."
+  ([documents] (arrangement-pairs documents nil))
+  ([documents opts]
+   (into #{}
+         (map (juxt :urpx.arrangement/version-id
+                    (comp set :urpx.arrangement/modifier-version-ids)))
+         (arrangements documents opts))))
 
 (defn- bound-opts
   "The opts that bind `arrangement` to its own documents, merged under `opts`.

@@ -682,3 +682,91 @@
       (is (seq srcs) "the source tree was found, so an empty result means clean")
       (is (= [] (mapv #(.getPath ^java.io.File %) mentions))
           "no namespace in src/ may require urpx.arrangements"))))
+
+;; ---------------------------------------------------------------------------
+;; Repeated @ids, and the pair view
+;; ---------------------------------------------------------------------------
+
+(defn- twice
+  "The same version @id in two documents, differing only in `extra`."
+  [extra]
+  [(plan-doc "x:p" "x:p-v" (ldt 2026 1 1))
+   (plan-doc "x:p" "x:p-v" (ldt 2026 1 1) extra)])
+
+(deftest repeated-ids-union-merges-what-can-be-merged
+  (testing "the reading a corpus whose own SHACL gate validates a MERGED graph
+            already assumes: several documents describing one IRI contribute
+            the union of their statements. Collection-valued properties union;
+            byte-identical repeats were never a conflict either way.
+
+            Offered as a policy rather than wired in, for the same reason as
+            :combine and :compatibility: URPX does not say, and a client reading
+            one filing and a client merging a corpus want different answers."
+    (let [;; BOTH sides state the property, differently, so the union branch is
+          ;; actually exercised. An earlier version of this test had one side
+          ;; absent, which takes the single-value path and passes whether the
+          ;; code unions or picks the first.
+          docs [(plan-doc "x:p" "x:p-v" (ldt 2026 1 1)
+                          {:urpx/hasModifierOptions [{:jsonld/id "x:m1"}]})
+                (plan-doc "x:p" "x:p-v" (ldt 2026 1 1)
+                          {:urpx/hasModifierOptions [{:jsonld/id "x:m2"}]})]]
+      (is (= :urpx.arrangement/conflicting-version-id
+             (try (arr/arrangements docs) nil
+                  (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))
+          "the default still refuses")
+      (let [as (arr/arrangements docs {:repeated-ids arr/repeated-ids-union})]
+        (is (= 1 (count as)) "merged into one version, not two")
+        (is (= ["x:m1" "x:m2"]
+               (mapv :jsonld/id
+                     (:urpx/hasModifierOptions (:urpx.arrangement/version (first as)))))
+            "BOTH option lists survive: the union, not whichever came first")))
+    (testing "and a property only one occurrence states merges to that value,
+              because absence is not an assertion under RDF"
+      (let [as (arr/arrangements (twice {:urpx/hasModifierOptions [{:jsonld/id "x:m2"}]})
+                                 {:repeated-ids arr/repeated-ids-union})]
+        (is (= ["x:m2"] (mapv :jsonld/id
+                              (:urpx/hasModifierOptions (:urpx.arrangement/version (first as))))))))))
+
+(deftest a-merged-version-binds-to-its-own-identity-document
+  (testing "a merged node is in NO single document, so one has to be bound, and
+            picking a source arbitrarily is wrong in KIND rather than merely
+            arbitrary. A bundled copy of a modifier version lives inside some
+            PLAN's filing, so an arbitrary pick can bind a urpx:RatePlan as the
+            modifier document.
+
+            The right one is derivable from the graph: the document that IS the
+            identity the version points back at via urpx:forRatePlanModifier.
+            That is data, unlike a file-naming convention.
+
+            Constructed to mirror the production corpus, where
+            cpau:e-nse-1-2025-09-01 appears in its own modifier filing and again
+            bundled inside two different plan filings.
+
+            The plan is named so that it sorts BEFORE the modifier under any
+            content ordering, so a fallback that ignores the identity link picks
+            the wrong document and this fails."
+    (let [mv        (fn [extra] (merge {:jsonld/id "x:m-v" :jsonld/type "urpx:RatePlanModifierVersion"
+                                        :urpx/forRatePlanModifier {:jsonld/id "x:m"}
+                                        :urpx/effectiveDateTime (ldt 2026 1 1)
+                                        :urpx/applicableToRatePlan [{:jsonld/id "x:aaa-plan"}]}
+                                       extra))
+          own-doc   {:jsonld/id "x:m" :jsonld/type "urpx:RatePlanModifier"
+                     :urpx/hasRatePlanModifierVersion (mv nil)}
+          bundled   {:jsonld/id "x:aaa-plan" :jsonld/type "urpx:RatePlan"
+                     :urpx/hasRatePlanVersion {:jsonld/id "x:aaa-plan-v" :jsonld/type "urpx:RatePlanVersion"
+                                               :urpx/forRatePlan {:jsonld/id "x:aaa-plan"}
+                                               :urpx/effectiveDateTime (ldt 2026 1 1)}
+                     ;; the same modifier version, bundled, with an extra target
+                     :urpx/hasRatePlanModifier
+                     {:jsonld/id "x:m" :jsonld/type "urpx:RatePlanModifier"
+                      :urpx/hasRatePlanModifierVersion
+                      (mv {:urpx/applicableToRatePlan [{:jsonld/id "x:aaa-plan"} {:jsonld/id "x:q"}]})}}
+          bound     #(->> (arr/arrangements % {:repeated-ids arr/repeated-ids-union})
+                          (filter (comp seq :urpx.arrangement/modifier-version-ids))
+                          first :urpx.arrangement/modifiers first)]
+      (doseq [order [[own-doc bundled] [bundled own-doc]]]
+        (let [d (bound order)]
+          (is (= "urpx:RatePlanModifier" (:jsonld/type d))
+              "the bound document is a modifier, not the plan that bundled it")
+          (is (= "x:m" (:jsonld/id d))
+              "and it is the modifier's OWN filing, whichever order the documents came in"))))))

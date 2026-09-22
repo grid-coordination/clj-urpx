@@ -184,8 +184,8 @@
         ;; different snapshots, say), and the useful output then is the
         ;; refusal's own reason and the identifiers it names, not a stack
         ;; trace above a blank report.
-        all         (try (arr/arrangements docs)
-                         (catch clojure.lang.ExceptionInfo e e))
+        refusal     (fn [f] (try (f) (catch clojure.lang.ExceptionInfo e e)))
+        all         (refusal #(arr/arrangements docs))
         _           (when (instance? clojure.lang.ExceptionInfo all)
                       (println)
                       (println "REFUSED         :" (:reason (ex-data all)))
@@ -193,7 +193,16 @@
                       (doseq [[k v] (dissoc (ex-data all) :reason)]
                         (println "  " k v))
                       (System/exit 3))
-        cur         (arr/arrangements docs {:at now})
+        cur         (refusal #(arr/arrangements docs {:at now}))
+        ;; The instant-restricted call can refuse where the all-versions call
+        ;; did not: a tie on the latest effective instant is only reachable once
+        ;; currency has narrowed the candidates. The upstream test cases carry
+        ;; exactly that, which the production corpus does not.
+        _           (when (instance? clojure.lang.ExceptionInfo cur)
+                      (println)
+                      (println "REFUSED at" (str now) ":" (:reason (ex-data cur)))
+                      (println "  " (ex-message cur))
+                      (System/exit 3))
         pairs       (distinct (map (juxt :urpx.arrangement/version-id
                                          :urpx.arrangement/modifier-version-ids)
                                    cur))]
