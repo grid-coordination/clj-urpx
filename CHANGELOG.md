@@ -9,7 +9,7 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
-## [Unreleased]
+## [0.29.0] — 2026-09-22
 
 ### Added
 
@@ -66,6 +66,10 @@ All four were found by an adversarial audit of this namespace before its first r
 ### Changed
 
 - **`resolve-at` refuses `:version` and `:profile-alternatives` instead of merging them.** An arrangement determines both. Letting a caller's value win would restore the exact defect the function exists to prevent (an opt reaching, or failing to reach, the document it belongs to: both such defects are fixed in 0.28.0); letting the arrangement win silently would ignore an opt the caller meant. `ex-data` carries `:reason :urpx.arrangement/opt-determined-by-arrangement`. A caller who wants a different version or selection wants a different arrangement.
+
+**Upgrading:** additive. `urpx.arrangements` is new and optional, `urpx.price` and `urpx.coerce` gain public functions that were private, and no resolved number changes.
+
+Two things to know before pointing the enumerator at a corpus. It **refuses** rather than enumerates when one version `@id` names two snapshots that differ; the production corpus has three such identities today, so it refuses there. And the `:compatibility` reading is genuinely unsettled upstream: `named-versions-narrow` is the default because it is what the corpus and the reference implementation assume, not because it is known right, and the two readings can only disagree about a modifier that names some version *and* names a plan no named version belongs to.
 
 ## [0.28.0] — 2026-09-22
 
@@ -485,6 +489,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.29.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.29.0
 [0.28.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.28.0
 [0.27.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.27.0
 [0.26.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.26.0
