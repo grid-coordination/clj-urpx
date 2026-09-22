@@ -304,10 +304,24 @@
 ;; version of the only plan they name, so those agree too.
 ;;
 ;; That leaves exactly two, cpau:e-eec-1-2025-09-01 and cpau:e-nse-1-2025-09-01,
-;; and BOTH are among the three identities this namespace currently refuses as
+;; and BOTH are among the three identities this namespace refuses by default as
 ;; :conflicting-version-id. So on the corpus the library can enumerate today,
 ;; the two policies are INDISTINGUISHABLE: 1041 arrangements and 193 pairs
-;; either way. The 159-versus-166 difference reported elsewhere is measured on
+;; either way.
+;;
+;; CORROBORATED INDEPENDENTLY, and from the other end. The urpx-rate-plans
+;; reference enumerator resolves a repeated @id by AUTHORITY, the definition in
+;; the version's own filing, rather than by union, and it narrows. It reaches
+;; the same pair set because its narrowing never fires: of its 37
+;; authority-resolved modifier versions, 4 state applicableToRatePlanVersion and
+;; each names a version of the only plan it names. So under authority resolution
+;; the two readings cannot differ either, by a different route and on a
+;; different document set.
+;;
+;; Which means the choice is currently unfalsifiable against this corpus under
+;; EITHER resolution strategy. It is a question about data URPX may yet carry,
+;; not about data anyone holds, and that is why both are shipped rather than one
+;; being chosen on evidence that does not exist. The 159-versus-166 difference reported elsewhere is measured on
 ;; the union-merged graph that the corpus's own SHACL gate validates, which this
 ;; namespace refuses rather than merges.
 ;;

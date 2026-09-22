@@ -641,7 +641,7 @@ Nothing in URPX expresses exclusivity or combinability **between** modifiers, so
 | `named-versions-narrow` (default) | those versions and no others, overriding the plan list. Fits the ontology's "which **specific** versions", and is the only reading under which the property can express a restriction. Known cost: **non-monotonic**, so merging a document can *remove* compatibility |
 | `named-versions-add` | an addition to the plan list, never a removal. Sound under RDF merge. Known cost: the property can then only widen, and only to a version whose plan is not already named |
 
-The two are indistinguishable on most corpora. They can differ only about a modifier that names some version *and* names a plan no named version belongs to.
+The two are indistinguishable on most corpora. They can differ only about a modifier that names some version *and* names a plan no named version belongs to — and on the production corpus every such modifier is one that `:repeated-ids` resolves away first. An independent reference enumerator reaches the same conclusion by a different route: it resolves repeated `@id`s by authority rather than union, and narrows, but its narrowing never fires because every authority definition stating `applicableToRatePlanVersion` names a version of the only plan it names. The choice is currently unfalsifiable against real data under either strategy, which is why both ship.
 
 **What one `@id` naming several different snapshots means is a third policy**, `:repeated-ids`, because URPX does not say and a client reading one filing wants a different answer from a client merging a corpus.
 
