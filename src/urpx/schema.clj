@@ -239,6 +239,16 @@
   "urpx:ExclusionReasonValue, 4 members. New at v0.5.1."
   (enum-ref "pruned" "fullySuperseded" "voided" "outOfScope"))
 
+(def ScopeKind
+  "urpx:ScopeKindValue, 5 members, from urpx-shacl:ScopeKindValueShape's sh:in.
+
+   The kinds are what make a TemporalScope readable: the same date range means
+   different things depending on which clock it refers to. urpx:coverage is the
+   one a consumer asking \"does this verdict apply to my window?\" needs; the
+   others are about publication, the source's own lifecycle, when the facts
+   apply, and when something was observed."
+  (enum-ref "publication" "sourceLifecycle" "applicability" "observation" "coverage"))
+
 (def SourcePublicationType
   "urpx:SourcePublicationTypeValue, the shipped 8 members plus one legacy.
 
@@ -1083,6 +1093,43 @@
    [:urpx/exclusionReason ExclusionReason]
    [:urpx/description {:optional true} :string]])
 
+(def TemporalPeriod
+  "A named date range. urpx-shacl:TemporalPeriodShape is sh:closed with
+   rdfs:label, urpx:startDate and urpx:endDate, each sh:minCount 0 sh:maxCount 1,
+   so a conformant period may state none of them."
+  [:map
+   [:jsonld/type {:optional true} [:= "urpx:TemporalPeriod"]]
+   [:jsonld/id   {:optional true} :string]
+   [:rdfs/label  {:optional true} :string]
+   [:urpx/startDate {:optional true} Date]
+   [:urpx/endDate   {:optional true} Date]])
+
+(def TemporalScope
+  "A role-tagged time span: which clock a date range refers to.
+
+   Transcribed from urpx-shacl:TemporalScopeShape, which IS fully specified:
+   sh:closed, urpx:scopeKind sh:minCount 1 sh:maxCount 1 against
+   ScopeKindValueShape, and urpx:startDate, urpx:endDate, urpx:startDateTime,
+   urpx:endDateTime and urpx:hasTemporalPeriod each 0..1. scopeKind is the only
+   required field, so a scope may name its role and state no bounds at all.
+
+   WHAT IS NOT SPECIFIED IS THE EDGE TO IT. urpx:hasTemporalScope appears as
+   sh:path ZERO times in the shapes graph and in sh:ignoredProperties 79 times,
+   so every closed shape permits it and none constrains it: nothing says which
+   classes may carry a scope, how many, or of which kind. Modeling the node is
+   transcription; modeling the edge is a judgement, and it is made as 0..N
+   because that is what \"unconstrained\" means rather than because any filing
+   carries several."
+  [:map
+   [:jsonld/type {:optional true} [:= "urpx:TemporalScope"]]
+   [:jsonld/id   {:optional true} :string]
+   [:urpx/scopeKind ScopeKind]
+   [:urpx/startDate     {:optional true} Date]
+   [:urpx/endDate       {:optional true} Date]
+   [:urpx/startDateTime {:optional true} DateTime]
+   [:urpx/endDateTime   {:optional true} DateTime]
+   [:urpx/hasTemporalPeriod {:optional true} [:or TemporalPeriod ExclusiveRef]]])
+
 (def Evaluation
   "How a coverage claim was arrived at: who evaluated it, when, and of what
    kind. Reached from CoverageClaim via urpx:explainedBy."
@@ -1106,6 +1153,15 @@
    [:urpx/completenessResult CompletenessResult]
    [:urpx/confidence       {:optional true} Confidence]
    [:urpx/selfContained    {:optional true} :boolean]
+   ;; The skos:note on urpx:CoverageClaim says producers "should attach a
+   ;; TemporalScope with scopeKind coverage stating the window the verdict
+   ;; covers". Should, not must, and no shape enforces it: measured zero
+   ;; TemporalScope nodes of any kind across the production corpus and the
+   ;; vendored fixtures. A verdict that states no window is the normal case
+   ;; today, which is what makes reading one worth doing carefully.
+   [:urpx/hasTemporalScope
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or TemporalScope ExclusiveRef]]]
    [:urpx/stale            {:optional true} :boolean]
    [:urpx/fallbackSourced  {:optional true} :boolean]
    [:urpx/explainedBy

@@ -946,3 +946,56 @@
                         :urpx/modifierVersionNumber "1")]
           (is (m/validate s/RatePlanModifierVersion mv))
           (is (not (m/validate s/RatePlanModifierVersion (dissoc mv :urpx/serviceRole)))))))))
+
+(deftest temporal-scope-transcribes-its-shape
+  (testing "urpx-shacl:TemporalScopeShape IS fully specified, so modeling the
+            NODE is transcription rather than judgement: sh:closed, scopeKind
+            sh:minCount 1 sh:maxCount 1 against ScopeKindValueShape, and
+            startDate, endDate, startDateTime, endDateTime and hasTemporalPeriod
+            each 0..1.
+
+            scopeKind is the only required field, so a conformant scope may name
+            its role and state no bounds at all."
+    (let [scope {:jsonld/type "urpx:TemporalScope"
+                 :urpx/scopeKind {:jsonld/id "urpx:coverage"}}]
+      (is (m/validate s/TemporalScope scope) "a role and nothing else is valid")
+      (is (not (m/validate s/TemporalScope (dissoc scope :urpx/scopeKind)))
+          "but a scope with no role is not: which clock it refers to is the
+           whole content of the class")
+      (is (m/validate s/TemporalScope
+                      (assoc scope :urpx/startDateTime (java.time.LocalDateTime/of 2026 1 1 0 0)
+                             :urpx/endDateTime (java.time.LocalDateTime/of 2026 2 1 0 0))))
+      (is (m/validate s/TemporalScope
+                      (assoc scope :urpx/hasTemporalPeriod
+                             {:jsonld/type "urpx:TemporalPeriod"
+                              :urpx/startDate (java.time.LocalDate/of 2026 1 1)}))))))
+
+(deftest scope-kind-carries-exactly-the-five-members
+  (testing "transcribed from ScopeKindValueShape's sh:in and counted against it.
+            urpx:coverage is the one a consumer asking whether a verdict applies
+            to its window needs; the others are different clocks."
+    (doseq [k ["publication" "sourceLifecycle" "applicability" "observation" "coverage"]]
+      (is (m/validate s/TemporalScope {:urpx/scopeKind {:jsonld/id (str "urpx:" k)}})
+          (str "urpx:" k " is a member")))
+    (is (not (m/validate s/TemporalScope {:urpx/scopeKind {:jsonld/id "urpx:effectivity"}}))
+        "and a plausible non-member is rejected rather than passed through")))
+
+(deftest a-coverage-claim-may-carry-scopes-and-a-single-one-normalizes
+  (testing "urpx:hasTemporalScope appears as sh:path ZERO times in the shapes
+            graph and in sh:ignoredProperties 79 times, so every closed shape
+            permits it and none constrains it. Modeled 0..N because that is what
+            unconstrained means, not because any filing carries several: there
+            are zero TemporalScope nodes of any kind in the production corpus or
+            the vendored fixtures.
+
+            URPX writes a lone value as an object rather than a one-element
+            array, so the decoder normalizes."
+    (let [claim {:jsonld/type "urpx:CoverageClaim"
+                 :urpx/completenessResult {:jsonld/id "urpx:partial"}
+                 :urpx/hasTemporalScope {:jsonld/type "urpx:TemporalScope"
+                                         :urpx/scopeKind {:jsonld/id "urpx:coverage"}}}
+          coerced (coerce/coerce s/CoverageClaim claim)]
+      (is (vector? (:urpx/hasTemporalScope coerced))
+          "a single scope arrives as a vector of one")
+      (is (= "urpx:coverage" (-> coerced :urpx/hasTemporalScope first
+                                 :urpx/scopeKind :jsonld/id))))))

@@ -21,6 +21,12 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 - **`scan` makes the one silent drop assertable.** `coerce-doc` returns nil for an entity type this library does not model, so `document-xf` discards it without a word: 42 of 129 expanded entities over the production corpus, `urpx:ProgramEnrollment` 30, `urpx:SourcePublication` 8, `urpx:RateCase` 4. None is a version today, which is luck rather than design; the unlucky form of the same thing cost a whole rate plan in 0.29.0. A caller can now assert that no version type reached the discard list, which it could not before. "This library does not model it" and "it does not matter" are different statements, and the second cannot be judged while the first is invisible.
 
+- **`urpx:TemporalScope`, `urpx:TemporalPeriod` and the `ScopeKind` enum are modeled**, with `urpx.dsl/temporal-scope` and `temporal-period` builders. Groundwork for reading a coverage verdict's window.
+
+  The node was transcription, not judgement: `urpx-shacl:TemporalScopeShape` is fully specified, `sh:closed`, with `urpx:scopeKind` `sh:minCount 1 sh:maxCount 1` against `ScopeKindValueShape` and the four date bounds plus `hasTemporalPeriod` each 0..1. `scopeKind` is the only required field, so a conformant scope may name its role and state no bounds at all.
+
+  The EDGE is what nothing specifies. `urpx:hasTemporalScope` appears as `sh:path` **zero** times in the shapes graph and in `sh:ignoredProperties` **79** times, so every closed shape permits it and none constrains it: nothing says which classes may carry a scope, how many, or of which kind. It is modeled on `CoverageClaim` as 0..N because that is what unconstrained means, not because any filing carries several. There are zero `TemporalScope` nodes of any kind in the production corpus or the vendored fixtures.
+
 - **`corpus/`, worked examples of the half that is not the library's.** One walker per corpus layout, with `urpx-rate-plans` as the first. Not on the library `:paths`, never in the jar, nothing in `src/` requires it. They exist because a glob looks equivalent to a walk and is not: over urpx-rate-plans a naive `**/*.jsonld` yields 87 documents where the layout walker yields 84, and the extra three are not filings — one is deliberately non-conforming so that corpus's own gate has something to fail on. Nothing errors; the count is simply about something else.
 
 ### Fixed
