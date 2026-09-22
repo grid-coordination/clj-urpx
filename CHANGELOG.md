@@ -9,6 +9,32 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [0.27.0] — 2026-09-22
+
+Version windows on modifiers, and two schedule defects that made `price-schedule` disagree with `price-segments` about the same instant.
+
+### Fixed
+
+- **A superseded `urpx:RatePlanModifierVersion` kept applying its prices.** `version-covers?` had exactly one call site, in `resolve-prices`, so a modifier's validity window was read when choosing among several candidates and never when there was one — which every filing has. SCE Schedule D composed with a CARE modifier expired 2026-04-01 returned **`0.19804875`** at 2026-07-15, the full discount, three and a half months after the filing stopped describing anything. The base plan has refused the symmetric case since 0.22.0, so the answer depended on which side of a composition the superseded filing sat.
+
+  Marked, not dropped: every ledger a non-covering modifier produces carries `:urpx.resolved/outside-version-window`, and `marginal-unit-rate` refuses. Dropping a superseded discount would quietly raise a bill, and a caller reading tiers off a superseded filing deliberately is not blocked. Scoped to prices that would actually be summed, so an expired modifier contributing only non-energy or already-excluded prices costs nothing and does not refuse.
+
+  Reported by the urpx-rate-plans session, which had prepared end bounds for three modifier versions and found them inert in the consumer.
+
+- **`price-schedule` merged across a version boundary and reported one side's answer for the whole span.** `same-ledgers?` compares `:urpx.resolved/ledgers`, but a base plan's version-window mark sits on the *result*, so a boundary that changed nothing else was invisible. Both directions were wrong, and the false-refusal one was reachable on an unmodified vendored fixture with no mutation: `sce-d-2026-03-20` takes effect on the 20th, and a March window returned **one** interval carrying the not-yet-effective mark, so `marginal-unit-rate` refused for the whole month including the twelve days the filing covers, while `price-segments` split correctly and a direct resolve returned `0.31085`. A version expiring mid-window failed the other way, carrying the covered side's rate past the bound.
+
+  `same-ledgers?` now compares the mark as well. Measured across 43 corpus plans over two month-long windows, base and composed: exactly **1 of 86** schedules changes interval count, the intended boundary, and total intervals move `3206 → 3207`. No over-splitting.
+
+- **`price-segments` fragmented a window it should have merged.** The result-level mark carried `:at`, the instant resolved, and `price-segments` merges on the whole resolved value, so a base filing queried across a window it does not cover returned **31** segments over a month where it returns 1, each holding identical prices. Present since 0.22.0.
+
+### Changed
+
+- **Both version-window marks now carry the same three fields** — `:version-id`, `:effective`, `:expires` — and neither carries a per-instant field. Two marks with two shapes was two chances to reintroduce the same defect, and it had already happened once: the modifier mark was written by copying the result-level one, `:at` included, which made an hourly month over an out-of-window composition return **744** intervals where it returns 1. A test asserts the two key sets are equal rather than asserting each separately.
+
+- **The `:outside-version-window` refusal names every stale ledger, grouped by the version that made it stale.** Naming only the first cost a caller one refusal round per stale modifier to discover a set the library already had, and with two versions involved there was no single "the version used" to name. `ex-data` gains `:expires`, `:ledger-id` and `:stale`, so a consumer classifying programmatically is not worse off than one reading the prose.
+
+**Upgrading:** narrowly breaking. `(:at (ex-data e))` is gone from an `:outside-version-window` refusal and the message says "does not cover the instant resolved" rather than naming it — the instant is the caller's own, and `:effective`/`:expires` identify the window. `price-schedule` returns more intervals for a window straddling a version boundary, which is the fix rather than a side effect. Measured across the production corpus at 19 probe instants, **0 of 817** resolved cells change value.
+
 ## [0.26.0] — 2026-09-21
 
 ### Added
@@ -381,6 +407,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.27.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.27.0
 [0.26.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.26.0
 [0.25.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.25.0
 [0.24.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.24.0

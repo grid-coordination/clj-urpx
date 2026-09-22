@@ -51,8 +51,26 @@
          (take-while #(.isBefore ^ZonedDateTime % end-zdt)))))
 
 (defn- same-ledgers?
+  "True when two resolved values price the same way, so the steps that produced
+   them may merge into one interval.
+
+   Ledgers are the prices, and they are most of the answer. But
+   :urpx.resolved/outside-version-window sits on the RESULT for a base plan, not
+   on any ledger, and it is the difference between a rate and a refusal. Reading
+   ledgers alone merged straight across a version boundary and reported one
+   side's answer for the whole span, in both directions: the unmodified
+   sce-d-2026-03-20 fixture over March 2026 collapsed to ONE interval carrying
+   the not-yet-effective mark, so marginal-unit-rate refused for the twelve days
+   the filing does cover, while price-segments and a direct resolve both
+   answered 0.31085. A version expiring mid-window failed the other way, keeping
+   the covered side's rate for the half-month after it expired.
+
+   price-segments never had this because it merges on the whole resolved value.
+   The two APIs are supposed to agree about the same instant."
   [a b]
-  (= (:urpx.resolved/ledgers a) (:urpx.resolved/ledgers b)))
+  (and (= (:urpx.resolved/ledgers a) (:urpx.resolved/ledgers b))
+       (= (:urpx.resolved/outside-version-window a)
+          (:urpx.resolved/outside-version-window b))))
 
 (defn- merge-adjacent
   "Merge consecutive intervals whose resolved ledger structure matches.

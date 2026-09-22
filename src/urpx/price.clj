@@ -28,7 +28,8 @@
   Plans without a HolidayCalendar and called without `:holiday?` retain the
   pre-existing 'every date is a non-holiday' fallback — so brackets that
   opt out of non-holidays (urpx:includeNonHolidays = false) will never match."
-  (:require [urpx.holidays :as holidays]
+  (:require [clojure.string :as str]
+            [urpx.holidays :as holidays]
             [urpx.index :as index])
   (:import [java.time DayOfWeek LocalDate LocalDateTime LocalTime ZonedDateTime]))
 
@@ -1467,11 +1468,20 @@
       ;; for a filing queried outside its own window; marginal-unit-rate
       ;; refuses on the mark, because a PRICE from a version that does not
       ;; cover the instant is the confident wrong number this library refuses.
+      ;; No per-instant field, the same rule the modifier ledger mark follows.
+      ;; This map sits on the RESULT rather than on a ledger, so same-ledgers?
+      ;; never saw it and price-schedule was unaffected; price-segments merges
+      ;; on the whole resolved value and was not. A base filing queried across a
+      ;; window it does not cover returned 31 segments over a month where it
+      ;; returns 1, every one holding identical prices, from 0.22.0 until now.
+      ;; :version-id, :effective and :expires identify the window; the instant
+      ;; the caller asked about is the caller's own.
       (when-not (version-covers? version (.toLocalDateTime zdt))
         {:urpx.resolved/outside-version-window
          {:version-id (:jsonld/id version)
           :effective  (version-effective-at version)
-          :at         (.toLocalDateTime zdt)}})))))
+          :expires    (or (:urpx/expirationDateTime version)
+                          (some-> (:urpx/expirationDate version) (.atStartOfDay)))}})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Modifier resolution
@@ -1629,6 +1639,27 @@
                :urpx.resolved/ledger-name (:urpx/name ledger)
                :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
                :urpx.resolved/tiers       (vec tier-entries)}
+              ;; A modifier whose version does not describe this instant is
+              ;; marked, not dropped, exactly as the base plan is. Dropping
+              ;; would be a silent loss on a discount, where the bill quietly
+              ;; goes UP; refusing here would kill the tiers a caller may
+              ;; legitimately want to read from a superseded filing. The mark
+              ;; travels on every ledger because one composition can mix an
+              ;; expired modifier with live ones.
+              ;; NO :at here, deliberately, unlike the result-level mark. This
+              ;; map rides on a LEDGER, and urpx.schedule merges adjacent steps
+              ;; by comparing :urpx.resolved/ledgers by value. A field that
+              ;; changes every step makes every step distinct, so an hourly
+              ;; month over a composition with an out-of-window modifier
+              ;; returned 744 intervals where it returns 1. The instant the
+              ;; caller asked about is the caller's own, and :version-id,
+              ;; :effective and :expires identify the window without it.
+              (when-not (version-covers? version (.toLocalDateTime zdt))
+                {:urpx.resolved/outside-version-window
+                 {:version-id (:jsonld/id version)
+                  :effective  (version-effective-at version)
+                  :expires    (or (:urpx/expirationDateTime version)
+                                  (some-> (:urpx/expirationDate version) (.atStartOfDay)))}})
               (when-let [ids (seq (concat unselected-ids withheld))]
                 {:urpx.resolved/unselected-alternatives (vec ids)
                  :urpx.resolved/withheld-prices         withheld-prices})
@@ -1927,22 +1958,77 @@
         ;; Only tiers that would actually ENTER the sum: `marginal` is already
         ;; import-energy-only and already past exclude-tier?, so a gated export
         ;; price or a gated event charge is not in scope here.
-        gated      (filter :urpx.resolved/condition-gated marginal)]
+        gated      (filter :urpx.resolved/condition-gated marginal)
+        ;; Same question on the MODIFIER path, where the mark rides on the
+        ;; ledger rather than on the result: a composition can mix an expired
+        ;; modifier with live ones. Scoped to ledgers that actually contribute
+        ;; to this sum, so an expired modifier whose ledgers are all non-energy,
+        ;; or all excluded, costs the caller nothing and does not refuse.
+        stale      (filter #(and (:urpx.resolved/outside-version-window %)
+                                 (seq (-> (remove exclude-tier? (:urpx.resolved/tiers %))
+                                          (additive-plus-lowest-rung
+                                           :urpx.resolved/tier-number))))
+                           energy)]
     ;; A price from a version that does not describe this instant is the
     ;; confident wrong number this whole function exists to refuse. The
     ;; structural answers alongside it (season, TOU period) stay available on
     ;; the resolved map, which is why the mark is there rather than a throw
     ;; from resolve-prices.
-    (when-let [w (:urpx.resolved/outside-version-window resolved)]
-      (throw (ex-info (str "Cannot compute a marginal rate: the version used, "
-                           (pr-str (:version-id w)) ", does not cover " (:at w)
-                           (when-let [e (:effective w)] (str "; it takes effect " e))
+    (when-let [w (or (:urpx.resolved/outside-version-window resolved)
+                     (:urpx.resolved/outside-version-window (first stale)))]
+      (let [from-modifier? (and (seq stale)
+                                (not (:urpx.resolved/outside-version-window resolved)))]
+      (throw (ex-info (str "Cannot compute a marginal rate: "
+                           (if from-modifier?
+                             ;; Every stale ledger, grouped by the version that
+                             ;; made it stale. A caller who clears one and
+                             ;; re-runs should not meet a second refusal naming
+                             ;; a modifier the first never mentioned, and with
+                             ;; several versions involved there is no single
+                             ;; "the version used" to name.
+                             (str (count stale) " modifier ledger(s) come from "
+                                  (count (distinct (map #(:version-id
+                                                          (:urpx.resolved/outside-version-window %))
+                                                        stale)))
+                                  " version(s) that do not cover the instant resolved: "
+                                  (str/join "; "
+                                            (for [[v ls] (group-by
+                                                          #(:version-id
+                                                            (:urpx.resolved/outside-version-window %))
+                                                          stale)
+                                                  :let [w' (:urpx.resolved/outside-version-window
+                                                            (first ls))]]
+                                              (str (pr-str v)
+                                                   (when-let [e (:effective w')]
+                                                     (str ", which takes effect " e))
+                                                   (when-let [x (:expires w')]
+                                                     (str " and expires " x))
+                                                   ", on "
+                                                   (str/join ", "
+                                                             (map #(pr-str (:urpx.resolved/ledger-id %))
+                                                                  ls))))))
+                             (str "the version used, " (pr-str (:version-id w))
+                                  ", does not cover the instant resolved"
+                                  (when-let [e (:effective w)] (str "; it takes effect " e))
+                                  (when-let [x (:expires w)] (str "; it expires " x))))
                            ". Resolve at an instant the filing describes, or load "
                            "the version that does and pass :versions-by-plan.")
-                      {:reason :outside-version-window
-                       :version-id (:version-id w)
-                       :effective (:effective w)
-                       :at (:at w)})))
+                      ;; ex-data carries everything the message says, so a
+                      ;; consumer classifying programmatically is not worse off
+                      ;; than one reading prose. No :at on either mark: both
+                      ;; carry only fields that identify the WINDOW, because a
+                      ;; per-instant field makes every step of a horizon walk
+                      ;; distinct and nothing merges.
+                      (cond-> {:reason :outside-version-window
+                               :version-id (:version-id w)
+                               :effective (:effective w)}
+                        (:expires w) (assoc :expires (:expires w))
+                        from-modifier?
+                        (assoc :ledger-id (:urpx.resolved/ledger-id (first stale))
+                               :stale (mapv #(select-keys
+                                              % [:urpx.resolved/ledger-id
+                                                 :urpx.resolved/outside-version-window])
+                                            stale)))))))
     ;; No energy ledger at all is not an answer of zero, it is a malformed
     ;; question. A street lighting schedule prices per lamp per month; its
     ;; marginal unit is not a kWh. Returning 0M conflated that with a plan whose

@@ -16,13 +16,19 @@
   inferable only from the next version's start; the rule therefore needs a
   plan's whole candidate set rather than one snapshot."
   (:require [clojure.test :refer [deftest is testing]]
+            [clojure.walk]
             [urpx.index :as index]
             [urpx.price :as price]
+            [urpx.schedule :as schedule]
             [urpx.test-fixtures :as fixtures])
-  (:import [java.time ZonedDateTime ZoneId]))
+  (:import [java.time LocalDateTime ZonedDateTime ZoneId]))
 
 (def ^:private la (ZoneId/of "America/Los_Angeles"))
 (defn- at [y m d] (ZonedDateTime/of y m d 12 0 0 0 la))
+(defn- zdt [y m d h] (ZonedDateTime/of y m d h 0 0 0 la))
+(defn- ldt
+  ([y m d h mi] (LocalDateTime/of y m d h mi))
+  ([y m d h mi _s] (LocalDateTime/of y m d h mi)))
 
 (def ^:private older "sce-d-2025-11-15")
 (def ^:private newer "sce-d-2026-03-20")
@@ -196,3 +202,367 @@
                  bare when-
                  (with {:urpx/expirationDate (java.time.LocalDate/of 2026 4 1)}))]
           (is (some? r) "the older version is still in effect and is used"))))))
+
+;; ---------------------------------------------------------------------------
+;; The same question on the MODIFIER path
+;;
+;; version-covers? had exactly one call site, in resolve-prices, so a modifier
+;; version's window was read when CHOOSING among several candidates and never
+;; when there was only one. Every filing carries one, which is why it held.
+;; ---------------------------------------------------------------------------
+
+(defn- sce-d [] (fixtures/load-rate-plan "sce-d-2026-03-20"))
+(defn- care [] (fixtures/load-modifier "sce-care-2026-03-20"))
+(defn- fera [] (fixtures/load-modifier "sce-fera-2026-03-20"))
+(defn- summer [] (zdt 2026 7 15 17))
+
+(defn- bound-plan-version
+  "The same end bound, on a base plan's own version node."
+  [doc ^java.time.LocalDateTime ldt]
+  (clojure.walk/postwalk
+   (fn [n] (if (and (map? n) (= "urpx:RatePlanVersion" (:jsonld/type n)))
+             (assoc n :urpx/expirationDateTime ldt)
+             n))
+   doc))
+
+(defn- bound-version
+  "Put an end bound on the modifier's version node. urpx:expirationDateTime is
+   sh:minCount 0 / sh:maxCount 1 on RatePlanModifierVersionShape at v0.5.1, so
+   this is a conformant document, not a contrived one."
+  [doc ^java.time.LocalDateTime ldt]
+  (clojure.walk/postwalk
+   (fn [n] (if (and (map? n) (= "urpx:RatePlanModifierVersion" (:jsonld/type n)))
+             (assoc n :urpx/expirationDateTime ldt)
+             n))
+   doc))
+
+(defn- composed-reason [plan modifiers]
+  (try (price/marginal-unit-rate (price/resolve-prices-with-modifiers plan modifiers (summer)))
+       (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))
+
+(deftest a-superseded-modifier-no-longer-applies-silently
+  (testing "a RatePlanModifierVersion bound before the query instant kept
+            applying its prices. Composing SCE Schedule D with a CARE modifier
+            expired on 2026-04-01 returned 0.19804875 at 2026-07-15, the full
+            discount, three and a half months after the filing ceased to
+            describe anything. The base plan has refused the symmetric case
+            since 0.22.0, so the answer depended on which side of a composition
+            the superseded filing sat.
+
+            Marked rather than dropped, as the base plan is: dropping a
+            discount silently raises the bill, and a caller may legitimately
+            want to read tiers off a superseded filing."
+    (is (= 0.19804875M (composed-reason (sce-d) [(care)]))
+        "sanity: unbounded, the discount applies")
+    (is (= :outside-version-window
+           (composed-reason (sce-d) [(bound-version (care) (ldt 2026 4 1 0 0))]))
+        "and a version that ended in April does not price July")))
+
+(deftest the-modifier-window-is-half-open-like-the-base-plan
+  (testing "[effective, expiration), matching version-expired-by?'s
+            (not (.isAfter exp t)). An instant exactly at the bound is outside."
+    (is (= :outside-version-window
+           (composed-reason (sce-d) [(bound-version (care) (ldt 2026 7 15 16 59))]))
+        "a minute before the instant: outside")
+    (is (= :outside-version-window
+           (composed-reason (sce-d) [(bound-version (care) (ldt 2026 7 15 17 0))]))
+        "exactly at the instant: outside, because the interval is half-open")
+    (is (= 0.19804875M
+           (composed-reason (sce-d) [(bound-version (care) (ldt 2026 7 15 17 1))]))
+        "a minute after: inside, and the discount applies")))
+
+(deftest one-expired-modifier-refuses-a-composition-of-several
+  (testing "the mark rides on the ledger rather than the result, because a
+            composition can mix an expired modifier with live ones. One stale
+            contributor is enough to refuse the aggregate."
+    (is (= 0.14227575M (composed-reason (sce-d) [(care) (fera)]))
+        "sanity: both live")
+    (is (= :outside-version-window
+           (composed-reason (sce-d) [(bound-version (care) (ldt 2026 4 1 0 0)) (fera)]))
+        "CARE expired, FERA live: refused")))
+
+(deftest a-modifier-before-its-effective-instant-is-outside-its-window-too
+  (testing "the symmetric half, and the one the corpus exercises today. Every
+            SCE modifier takes effect 2026-03-20; composing at 2026-01-15 was
+            applying prices from a filing that would not exist for two months.
+
+            No corpus version carries an end bound, so expiry is not yet
+            reachable from real data; this case is, which is why it is pinned
+            against the vendored fixture rather than a constructed bound."
+    (let [r (price/resolve-prices-with-modifiers (sce-d) [(care)] (zdt 2026 1 15 17))
+          marked (filter :urpx.resolved/outside-version-window (:urpx.resolved/ledgers r))]
+      (is (seq marked) "the modifier's ledgers are marked as outside the window")
+      (is (= "sce:care-2026-03-20"
+             (:version-id (:urpx.resolved/outside-version-window (first marked)))))
+      (is (= :outside-version-window
+             (try (price/marginal-unit-rate r) nil
+                  (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))
+          "and the rate refuses, naming the version rather than the selection"))))
+
+(deftest reading-tiers-from-a-superseded-modifier-still-works
+  (testing "marking, not dropping. resolve-modifier-prices keeps every ledger
+            and every tier, and says on each that the version does not cover
+            the instant, so a caller reading a superseded filing deliberately
+            is not blocked."
+    (let [expired (bound-version (care) (ldt 2026 4 1 0 0))
+          r (price/resolve-modifier-prices expired (summer))
+          ls (:urpx.resolved/ledgers r)]
+      (is (= 3 (count ls)) "every ledger survives")
+      (is (= 5 (count (mapcat :urpx.resolved/tiers ls))) "and every tier")
+      (is (every? :urpx.resolved/outside-version-window ls)
+          "each carrying the mark")
+      (is (= (java.time.LocalDateTime/of 2026 4 1 0 0)
+             (:expires (:urpx.resolved/outside-version-window (first ls))))
+          "which reports the bound that was crossed"))))
+
+(deftest a-superseded-modifier-that-contributes-nothing-refuses-nothing
+  (testing "scoped to ledgers that actually reach the sum, like every other
+            guard in marginal-unit-rate. SMUD's CPP modifier carries one energy
+            price and it is event-driven, so a non-event marginal excludes it;
+            an expired version of that modifier withholds nothing from the
+            answer and must not refuse it.
+
+            The same document DOES refuse with :include-dynamic-pricing? true,
+            because that is precisely when its price would enter the sum. One
+            fixture, two opposite outcomes, decided by whether the stale price
+            is actually summed rather than by whether it exists."
+    (let [plan (fixtures/load-rate-plan "smud-tod-5-8pm-2026-01-01")
+          cpp  (fixtures/load-modifier "smud-cpp-2026-01-01")
+          expired (bound-version cpp (ldt 2026 4 1 0 0))
+          rate (fn [ms opts]
+                 (try (price/marginal-unit-rate
+                       (price/resolve-prices-with-modifiers plan ms (summer)) opts)
+                      (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))]
+      (is (= 0.3765M (rate [cpp] {})) "sanity: live, the event charge is excluded")
+      (is (= 0.3765M (rate [expired] {}))
+          "expired and contributing nothing: the baseline still answers")
+      (is (= :outside-version-window (rate [expired] {:include-dynamic-pricing? true}))
+          "expired and now contributing: refused")
+      (is (seq (filter :urpx.resolved/outside-version-window
+                       (:urpx.resolved/ledgers
+                        (price/resolve-prices-with-modifiers plan [expired] (summer)))))
+          "and the mark is present either way, so a consumer can always see it"))))
+
+(deftest the-ledger-mark-carries-nothing-that-varies-per-instant
+  (testing "urpx.schedule merges adjacent steps by comparing
+            :urpx.resolved/ledgers BY VALUE, so any field on a ledger that
+            changes every step makes every step distinct and nothing merges.
+
+            The first version of this mark carried :at, the instant resolved.
+            An hourly month over a composition with an out-of-window modifier
+            returned 744 intervals where 0.26.0 returns 1, and price-segments
+            returned 31 where it returns 1, with every resolved value identical
+            once :at was stripped. No price differed; the schedule was simply
+            shattered into one interval per step.
+
+            Neither mark carries a per-instant field now. The result-level one
+            did until this change, which same-ledgers? never saw but
+            price-segments did; both are one shape, pinned by
+            both-version-window-marks-have-the-same-shape. :version-id,
+            :effective and :expires identify the window, and the instant the
+            caller asked about is the caller's own."
+    (let [base (fixtures/load-rate-plan "sce-d-2025-11-15")
+          care (fixtures/load-modifier "sce-care-2026-03-20")
+          la   (java.time.ZoneId/of "America/Los_Angeles")
+          from (.toInstant (.atStartOfDay (java.time.LocalDate/of 2026 1 1) la))
+          to   (.toInstant (.atStartOfDay (java.time.LocalDate/of 2026 2 1) la))
+          ivs  (schedule/price-schedule-with-modifiers base [care] from to la)
+          segs (schedule/price-segments base [care] from to la)]
+      (is (seq (filter :urpx.resolved/outside-version-window
+                       (:urpx.resolved/ledgers
+                        (price/resolve-prices-with-modifiers base [care] (zdt 2026 1 15 17)))))
+          "sanity: the modifier really is out of window across this window,
+           so the merge path is actually exercised")
+      (is (= 1 (count ivs))
+          "a whole month of an unchanging composition is ONE interval")
+      (is (= 1 (count segs))
+          "and one segment")
+      (is (every? nil? (map :at (keep :urpx.resolved/outside-version-window
+                                      (mapcat :urpx.resolved/ledgers
+                                              (map :urpx.interval/resolved segs)))))
+          "because the mark carries no per-instant field"))))
+
+(deftest the-refusal-ex-data-carries-what-its-message-says
+  (testing "a consumer classifying on ex-data should not be worse off than one
+            reading the prose. The modifier-sourced refusal names the ledger
+            and the bound that was crossed. Neither form names an instant: both
+            marks carry only the window now, so the ledger clause is the whole
+            difference between them."
+    (let [modifier-data
+          (try (price/marginal-unit-rate
+                (price/resolve-prices-with-modifiers
+                 (sce-d) [(bound-version (care) (ldt 2026 4 1 0 0))] (summer)))
+               nil
+               (catch clojure.lang.ExceptionInfo e (ex-data e)))]
+      (is (= :outside-version-window (:reason modifier-data)))
+      (is (= "sce:care-2026-03-20" (:version-id modifier-data)))
+      (is (= (ldt 2026 4 1 0 0) (:expires modifier-data))
+          "the bound that was crossed, so a caller can see WHY without the filing")
+      (is (some? (:ledger-id modifier-data))
+          "and which ledger carried it, since a composition can have many")
+      (is (nil? (:at modifier-data))
+          "no instant, because neither mark carries a per-instant field"))))
+
+(deftest both-version-window-marks-have-the-same-shape
+  (testing "the result-level mark on the base plan and the ledger-level mark on
+            a modifier carry the same fields and neither carries the instant.
+
+            The result-level one carried :at from 0.22.0 until now. That never
+            reached same-ledgers?, so price-schedule was fine, but price-segments
+            merges on the WHOLE resolved value: a base filing queried across a
+            window it does not cover returned 31 segments over a month where it
+            returns 1, each holding identical prices. Two marks with two shapes
+            was also two chances to reintroduce the same defect, which is why
+            they are now one shape and one rule."
+    (let [base-mark (-> (price/resolve-prices
+                         (bound-plan-version (sce-d) (ldt 2026 4 1 0 0)) (summer))
+                        :urpx.resolved/outside-version-window)
+          led-mark  (->> (:urpx.resolved/ledgers
+                          (price/resolve-prices-with-modifiers
+                           (sce-d) [(bound-version (care) (ldt 2026 4 1 0 0))] (summer)))
+                         (keep :urpx.resolved/outside-version-window)
+                         first)]
+      (is (some? base-mark) "sanity: the base plan really is outside its window")
+      (is (some? led-mark)  "sanity: and the modifier really is too")
+      (is (= (set (keys base-mark)) (set (keys led-mark)))
+          "same keys on both")
+      (is (= #{:version-id :effective :expires} (set (keys base-mark))))
+      (is (not-any? #{:at} (keys base-mark)) "and no per-instant field"))))
+
+(deftest a-base-filing-outside-its-window-does-not-shatter-its-segments
+  (testing "price-segments merges on the full resolved value, so the mark it
+            carries must not vary per instant. Measured before this change: 31
+            segments across January for a filing effective 2026-03-20, each one
+            holding the same prices."
+    (let [la   (java.time.ZoneId/of "America/Los_Angeles")
+          from (.toInstant (.atStartOfDay (java.time.LocalDate/of 2026 1 1) la))
+          to   (.toInstant (.atStartOfDay (java.time.LocalDate/of 2026 2 1) la))
+          segs (schedule/price-segments (sce-d) [] from to la)]
+      (is (some? (:urpx.resolved/outside-version-window
+                  (price/resolve-prices (sce-d) (zdt 2026 1 15 17))))
+          "sanity: this filing really is outside its window in January")
+      (is (= 1 (count segs))
+          "one unchanging month is one segment"))))
+
+(deftest the-refusal-message-says-what-was-crossed-and-which-ledger
+  (testing "the message is prose a human reads when a sweep stops, and it was
+            the newest and least-tested code in this change: three separate
+            message-only mutations survived the whole suite. ex-data assertions
+            do not cover it, because nothing in the repo called ex-message on
+            this refusal at all. Neither path names an instant now: both marks
+            carry only the window, so both messages say the instant resolved
+            rather than naming it, and the ledger clause is the difference.
+
+            What the message has to carry: the version, the bound that was
+            actually crossed, and on a composition WHICH ledgers are stale,
+            since a caller may have passed several modifiers."
+    (let [msg (fn [ms]
+                (try (price/marginal-unit-rate
+                      (price/resolve-prices-with-modifiers (sce-d) ms (summer)))
+                     nil
+                     (catch clojure.lang.ExceptionInfo e (ex-message e))))
+          m (msg [(bound-version (care) (ldt 2026 4 1 0 0))])]
+      (is (string? m) "it refuses at all")
+      (is (re-find #"\"sce:care-2026-03-20\"" m)
+          "names the version")
+      (is (re-find #"\"sce:care-2026-03-20-ledger-energy-credits\"" m)
+          "and which ledgers carried it, so a composition of several is diagnosable")
+      (is (re-find #"\"sce:care-2026-03-20-ledger-bill-discount\"" m)
+          "ALL of them: naming only the first costs the caller one refusal
+           round per stale ledger to discover a set the library already had")
+      (is (re-find #"expires 2026-04-01T00:00" m)
+          "and the bound that was crossed, which is the whole reason it refused")
+      (is (re-find #"takes effect 2026-03-20T00:00" m)
+          "and the other end of the window")
+      (is (not (re-find #"does not cover ;" m))
+          "no dangling clause where an instant used to be")
+      (is (re-find #":versions-by-plan" m)
+          "and names an action"))))
+
+(deftest the-base-plan-refusal-message-is-well-formed-too
+  (testing "the same message serves both marks now that they are one shape, so
+            the base path must read correctly without the modifier clause."
+    (let [m (try (price/marginal-unit-rate
+                  (price/resolve-prices
+                   (bound-plan-version (sce-d) (ldt 2026 4 1 0 0)) (summer)))
+                 nil
+                 (catch clojure.lang.ExceptionInfo e (ex-message e)))]
+      (is (string? m))
+      (is (re-find #"\"sce:d-2026-03-20\"" m) "names the version")
+      (is (not (re-find #"modifier ledger" m))
+          "and does NOT claim a modifier ledger, because there is none")
+      (is (re-find #"expires 2026-04-01T00:00" m) "names the bound crossed")
+      (is (not (re-find #"does not cover ;" m)) "no dangling clause"))))
+
+(deftest price-schedule-splits-at-a-version-boundary
+  (testing "price-schedule merges adjacent steps on :urpx.resolved/ledgers, but
+            a base plan's version-window mark sits on the RESULT, so a boundary
+            that changes nothing else was invisible and the whole span collapsed
+            into one interval carrying whichever side the first step fell on.
+
+            Reachable on an unmodified vendored fixture with no mutation at all:
+            sce-d-2026-03-20 takes effect on the 20th, so a March window
+            straddles it. price-schedule returned ONE interval carrying the
+            not-yet-effective mark and marginal-unit-rate refused for the whole
+            month, including the twelve days the filing does cover, while
+            price-segments split correctly and a direct resolve at 2026-03-25
+            returned 0.31085. Two APIs disagreeing about one instant, with the
+            schedule giving the wrong answer.
+
+            An expiring version fails the other way: the covered side's RATE is
+            kept for the span after expiry, which is a wrong number rather than
+            a wrong refusal."
+    (let [la   (java.time.ZoneId/of "America/Los_Angeles")
+          from (.toInstant (.atStartOfDay (java.time.LocalDate/of 2026 3 1) la))
+          to   (.toInstant (.atStartOfDay (java.time.LocalDate/of 2026 4 1) la))
+          rate (fn [r] (try (price/marginal-unit-rate r)
+                            (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))
+          ivs  (schedule/price-schedule (sce-d) from to la)
+          segs (schedule/price-segments (sce-d) [] from to la)]
+      (is (= 2 (count ivs))
+          "the window splits at the effective instant, not collapsing to one")
+      (is (= [:outside-version-window 0.31085M]
+             (mapv #(rate (:urpx.interval/resolved %)) ivs))
+          "refusing before it takes effect, answering after")
+      (is (= (mapv #(rate (:urpx.interval/resolved %)) segs)
+             (mapv #(rate (:urpx.interval/resolved %)) ivs))
+          "and price-schedule agrees with price-segments about the same window,
+           which is the invariant that was broken")
+      (is (= 0.31085M (price/marginal-unit-rate
+                       (price/resolve-prices (sce-d) (zdt 2026 3 25 12))))
+          "matching a direct resolve inside the covered part"))))
+
+(deftest an-expiring-version-does-not-carry-its-rate-past-the-bound
+  (testing "the wrong-number direction of the same defect."
+    (let [la   (java.time.ZoneId/of "America/Los_Angeles")
+          from (.toInstant (.atStartOfDay (java.time.LocalDate/of 2026 7 1) la))
+          to   (.toInstant (.atStartOfDay (java.time.LocalDate/of 2026 8 1) la))
+          plan (bound-plan-version (sce-d) (ldt 2026 7 15 12 0))
+          rate (fn [r] (try (price/marginal-unit-rate r)
+                            (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))
+          ivs  (schedule/price-schedule plan from to la)]
+      (is (= 2 (count ivs)))
+      (is (= [0.31085M :outside-version-window]
+             (mapv #(rate (:urpx.interval/resolved %)) ivs))
+          "the rate stops at the bound rather than running to the end of the window"))))
+
+(deftest several-stale-modifiers-are-all-named-and-grouped-by-version
+  (testing "naming only the first costs the caller one refusal round per stale
+            modifier to discover a set the library already had. And with two
+            versions involved there is no single 'the version used' to name, so
+            the message groups ledgers under the version that made each stale."
+    (let [expire #(bound-version % (ldt 2026 4 1 0 0))
+          both   [(expire (care)) (expire (fera))]
+          e      (try (price/marginal-unit-rate
+                       (price/resolve-prices-with-modifiers (sce-d) both (summer)))
+                      nil
+                      (catch clojure.lang.ExceptionInfo ex ex))
+          m      (ex-message e)
+          d      (ex-data e)]
+      (is (= 3 (count (:stale d)))
+          "every stale ledger is in ex-data, not just the one the message leads with")
+      (is (re-find #"\"sce:care-2026-03-20\", which" m) "care's version named")
+      (is (re-find #"\"sce:fera-2026-03-20\", which" m) "fera's too")
+      (is (re-find #"2 version\(s\)" m) "and the count of versions involved")
+      (is (not (re-find #"the version used" m))
+          "no claim of a single version when several are stale"))))

@@ -347,7 +347,7 @@ Segments merge on the **full** resolved value, not only its ledgers: a change of
 
 ### Which version applies
 
-A filing holds one `urpx:RatePlanVersion`, and a plan accumulates several over time. Resolving one document needs no choice and makes none: a single candidate is used as-is, at any instant.
+A filing holds one `urpx:RatePlanVersion`, and a plan accumulates several over time. Resolving one document needs no choice and makes none: a single candidate is used as-is. Whether it *describes* the instant is reported separately, so the structural answers stay available for a filing queried outside its own window.
 
 Covering a **window** is different. A forecast client loads several versions of a plan and indexes them together, and then which one applies depends on the instant:
 
@@ -371,6 +371,16 @@ Three situations have no defensible answer and are refused rather than guessed, 
 | `:version-without-effective-instant` | a candidate states no effective instant, so it cannot be ordered against the others |
 
 Pass `:version` with a resolved snapshot to choose explicitly and bypass all of it. Candidates are deduplicated by value, so a nested snapshot and its own entry in the back-pointer index collapse to one; two genuinely different descriptions sharing an `@id` do not, and are refused rather than picked between.
+
+> **Do not pass `:version` to `resolve-prices-with-modifiers`.** The opt is not scoped per document, so a base plan's version is handed to every modifier as well; a modifier version node carries no `urpx:applicableToRatePlan`, so each modifier is then silently skipped. SCE Schedule D composed with CARE returns `0.19804875`, and the same call with `:version` returns `0.31085` — the full undiscounted rate, 57% high, with no mark and no refusal. Use `:versions-by-plan`, which *is* keyed per document. This predates 0.27.0 and is tracked separately.
+
+### A version window is checked on modifiers too
+
+`urpx:RatePlanModifierVersion` carries `urpx:effectiveDateTime` and `urpx:expirationDateTime` exactly as a plan version does, and both are read. A modifier whose version does not describe the instant has every ledger it produces marked with `:urpx.resolved/outside-version-window`, and `marginal-unit-rate` refuses rather than sum from it.
+
+Marked, not dropped. Dropping a superseded discount would quietly *raise* a bill, which is the direction nobody reports, and a caller reading tiers off a superseded filing deliberately is not blocked. The mark carries `:version-id`, `:effective` and `:expires`, and carries no instant: the caller knows which instant it asked about, and a per-instant field would make every step of a horizon walk distinct so that nothing merged.
+
+The refusal is scoped to prices that would actually enter the sum. An expired modifier whose ledgers are all non-energy, or whose only energy price is event-driven and therefore already excluded, costs the caller nothing and does not refuse — though ask for the during-event upper bound with `:include-dynamic-pricing? true` and the same document refuses, because that is when its price would be summed.
 
 ### Recurring charges
 
