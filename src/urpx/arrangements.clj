@@ -340,17 +340,45 @@
 ;; urpx:applicableToRatePlan had established would stop documents composing that
 ;; composed before, which is hard to call non-breaking or preserving.
 ;;
-;; FOR `named-versions-narrow`. The same Rationale says the new properties "avoid
-;; ambiguity where a modifier document is broadly applicable but only certain
-;; modifier versions are valid for a particular rate plan version". Broadly
-;; applicable, only certain valid, is narrowing described.
+;; AGAINST BOTH, AND AGAINST THIS DEFAULT IN PARTICULAR. The same Rationale says
+;; the new properties "avoid ambiguity where a modifier document is broadly
+;; applicable but only certain modifier versions are valid for a particular rate
+;; plan version". That was read here as arguing for narrowing, and it does not:
+;; the restriction runs over MODIFIER versions, scoped to one rate plan version.
+;; It describes version-to-version pairing and says nothing about whether naming
+;; a version of plan P withdraws the modifier from plans Q and R.
 ;;
-;; The honest reading is that "non-breaking" in a spec changelog usually means
-;; existing documents stay VALID, which adding an optional property cannot
-;; affect either way, rather than that their meaning is unchanged. So it is
-;; evidence and not a settlement, which is why both policies still ship and why
-;; the default is still the one the corpus and the reference implementation
-;; assume rather than the one this paragraph might be read to favour. The 159-versus-166 difference reported elsewhere is measured on
+;; WHICH MAKES THIS DEFAULT THE LEAST SUPPORTED OF THREE READINGS, not two:
+;;
+;;   (a) `named-versions-add`      naming a version retracts nothing.
+;;   (b) scope-their-plan          naming version(s) of plan P restricts to
+;;                                 those versions OF P, while plans named only
+;;                                 at plan level keep all of theirs. NOT
+;;                                 IMPLEMENTED; see below.
+;;   (c) `named-versions-narrow`   naming any version retracts everything
+;;                                 unnamed, other plans included. The default.
+;;
+;; Verified: with a modifier naming plans P and Q and one version of P,
+;; `named-versions-narrow` returns nothing for Q's version. That is retraction
+;; across plans, which is (c), and nothing in Decision #090 argues for it. The
+;; Rationale points nearer (b); "preserves the existing document-level properties
+;; for document-scoped relationships" argues against (c) specifically.
+;;
+;; (b) IS NOT SHIPPED because it cannot be, at this signature. A policy receives
+;; `[modifier-version base-version plan-id]`, so it holds the named version @ids
+;; as strings and no way to learn which plan each belongs to. Deciding "does any
+;; named version belong to THIS plan" needs the documents, which means a richer
+;; policy signature rather than another function. Filed rather than approximated.
+;;
+;; "Breaking Change: None" is also weaker than it looks: in a spec changelog that
+;; usually means existing documents stay VALID, which adding an optional property
+;; cannot affect either way. It is a conformance claim, not a semantic one. The
+;; line that IS about meaning is the preserves-document-level one.
+;;
+;; So: evidence, not settlement, and the default is unchanged only because
+;; changing it is a behaviour change nobody has asked for yet. It is the reading
+;; with the least support in the artifacts, which is recorded here rather than
+;; left for the next reader to rediscover. The 159-versus-166 difference reported elsewhere is measured on
 ;; the union-merged graph that the corpus's own SHACL gate validates, which this
 ;; namespace refuses rather than merges.
 ;;

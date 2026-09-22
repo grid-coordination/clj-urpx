@@ -770,3 +770,44 @@
               "the bound document is a modifier, not the plan that bundled it")
           (is (= "x:m" (:jsonld/id d))
               "and it is the modifier's OWN filing, whichever order the documents came in"))))))
+
+(deftest the-default-retracts-across-plans-which-is-worth-knowing
+  (testing "naming what the default actually does, because it turned out to be
+            the least supported of THREE readings rather than one of two, and
+            the difference is invisible until a modifier names more than one
+            plan.
+
+            A modifier naming plans P and Q, with a version of P only:
+
+              add     compatible with both, naming a version retracts nothing
+              narrow  compatible with NEITHER unless the version matches, so Q
+                      loses a modifier its own plan-level statement named
+
+            The middle reading, where naming a version of P restricts P and
+            leaves Q's plan-level statement standing, is what URPX Decision
+            #090's Rationale points nearest and is NOT implemented: a policy
+            receives version @ids as strings and cannot learn which plan each
+            belongs to without the documents. Filed rather than approximated."
+    (let [plan (fn [pid vid] {:jsonld/id pid :jsonld/type "urpx:RatePlan"
+                              :urpx/timezoneIdentifier "America/Los_Angeles"
+                              :urpx/hasRatePlanVersion
+                              {:jsonld/id vid :jsonld/type "urpx:RatePlanVersion"
+                               :urpx/forRatePlan {:jsonld/id pid}
+                               :urpx/effectiveDateTime (ldt 2026 1 1)}})
+          m    (modifier-doc "x:m" "x:m-v" (ldt 2026 1 1)
+                             {:urpx/applicableToRatePlan [{:jsonld/id "x:P"} {:jsonld/id "x:Q"}]
+                              :urpx/applicableToRatePlanVersion [{:jsonld/id "x:P-v"}]})
+          ask  (fn [p pol] (mapv :jsonld/id
+                                 (arr/applicable-modifiers [p m] (:urpx/hasRatePlanVersion p)
+                                                           {:compatibility pol})))
+          P    (plan "x:P" "x:P-v")
+          Q    (plan "x:Q" "x:Q-v")]
+      (is (= ["x:m-v"] (ask P arr/named-versions-narrow))
+          "P's named version matches, so the default applies it")
+      (is (= [] (ask Q arr/named-versions-narrow))
+          "but Q loses it, although the modifier names Q at plan level and names
+           no version of Q at all. That is retraction ACROSS plans, and nothing
+           in Decision #090 argues for it")
+      (is (= ["x:m-v"] (ask Q arr/named-versions-add))
+          "the monotone reading keeps Q, which is the behaviour the
+           preserves-document-level-properties line supports"))))
