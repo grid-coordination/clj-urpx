@@ -22,21 +22,37 @@
            [java.time.temporal ChronoUnit]
            [java.time.zone ZoneRules]))
 
-(defn- plan-zone
-  "Return the java.time.ZoneId declared by the rate plan's
-   urpx:timezoneIdentifier (an IANA zone string, e.g. \"America/Los_Angeles\"),
-   or nil when the plan does not declare one."
-  ^ZoneId [rate-plan]
-  (when-let [tz (:urpx/timezoneIdentifier rate-plan)]
-    (ZoneId/of tz)))
-
 (defn- resolve-zone
-  "Pick a zone for `rate-plan`: the explicit `zone` if non-nil, else the plan's
-   declared timezone. Throws when neither is available."
+  "THE ZONE THE WALK HAPPENS IN, which is the plan's own and not the caller's.
+
+   It used to be the explicit `zone` if given, falling back to the plan's. That
+   was coherent only while resolution was a pure function of the caller's wall
+   clock. It no longer is: urpx.price anchors every query in the plan's declared
+   zone, because that is the frame the document's bounds are written in.
+
+   So a walk in any other zone derives its candidate boundaries in one frame
+   while resolution happens in another, and the candidate set stops being a
+   superset of true transitions. Measured on PG&E E-TOU-C over one July day: an
+   explicit UTC walk put the peak boundary at 17:00 PT instead of 16:00 and lost
+   the 21:00 transition entirely, returning two segments where three are right.
+
+   An explicit `zone` that AGREES is accepted, so existing callers passing the
+   plan's own zone are unaffected. One that disagrees refuses rather than
+   silently returning the wrong boundaries."
   ^ZoneId [rate-plan ^ZoneId zone]
-  (or zone (plan-zone rate-plan)
-      (throw (ex-info "Cannot determine timezone: no :zone arg and rate plan has no urpx:timezoneIdentifier"
-                      {:plan-id (:jsonld/id rate-plan)}))))
+  (let [declared (price/require-zone rate-plan)]
+    (when (and zone (not= zone declared))
+      (throw (ex-info (str "Cannot walk " (pr-str (:jsonld/id rate-plan)) " in " zone
+                           ": it declares urpx:timezoneIdentifier " declared
+                           ", and urpx.price resolves every query in that zone. "
+                           "Walking in another derives boundaries in one frame "
+                           "while resolution happens in the other, which drops "
+                           "true transitions rather than failing.")
+                      {:reason :urpx.schedule/zone-disagrees-with-plan
+                       :plan-id (:jsonld/id rate-plan)
+                       :requested (str zone)
+                       :declared (str declared)})))
+    declared))
 
 (defn- hour-start
   ^ZonedDateTime [^ZonedDateTime zdt]

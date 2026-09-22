@@ -131,15 +131,20 @@
       (is (= explicit from-plan)))))
 
 (deftest schedule-throws-when-no-zone-and-plan-has-none
-  (testing "Plan without urpx:timezoneIdentifier and no explicit zone raises
-            a clear error rather than silently picking system default."
+  (testing "Plan without urpx:timezoneIdentifier raises rather than silently
+            picking a default. An explicit zone no longer rescues it: resolution
+            anchors every query in the PLAN's declared zone, so a plan that
+            declares none cannot be resolved in any."
     (let [plan-base (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
           plan      (dissoc plan-base :urpx/timezoneIdentifier)
           start     (start-of-day 2026 7 15)
           end       (start-of-day 2026 7 16)]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"Cannot determine timezone"
-                            (schedule/price-schedule plan start end))))))
+      (is (= :urpx.price/no-timezone
+             (try (schedule/price-schedule plan start end) nil
+                  (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))
+          "the refusal now comes from urpx.price, which needs the zone to
+           resolve at all rather than only to walk: a document stating none
+           states no moment"))))
 
 (deftest schedule-days-also-defaults-zone-from-plan
   (testing "price-schedule-days mirrors price-schedule's zone defaulting"

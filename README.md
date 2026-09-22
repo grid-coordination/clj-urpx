@@ -169,23 +169,23 @@ For block-tiered plans (e.g. PG&E E-1), each ledger's `:tiers` vector exposes ev
 
 The library uses `java.time.ZonedDateTime` end-to-end internally and at output boundaries — DST-correct under daylight transitions because every step of the walk preserves zone, no `Instant`-to-local-time conversions in the middle of the schedule.
 
+**Everything resolves in the plan's own zone.** A URPX document writes every bound — `urpx:effectiveDateTime`, `urpx:expirationDateTime`, every TOU bracket — as a naive wall-clock reading with no offset: all 89 in the production corpus carry none. They are wall-clock *in the zone the plan declares*, so reading them in any other zone reads a different moment. `resolve-prices` therefore anchors the query in `urpx:timezoneIdentifier` before comparing anything.
+
+That makes **one moment cost one price, however it is spelled**. It did not used to: until 0.31.0 the query was reduced with `.toLocalDateTime`, which kept whatever zone the caller happened to use, so the same instant written two ways gave two answers — on PG&E E-TOU-C, Peak `0.46886` asked in Pacific and Off-Peak `0.34586` asked in UTC, 36% apart, with no error and no mark.
+
 **Inputs and outputs:**
 
-- `resolve-prices` takes a `ZonedDateTime` directly — its zone always comes from the caller
-- `price-schedule` / `price-schedule-with-modifiers` take an `Instant`-shaped `[start, end)` window plus an optional `ZoneId` (the zone the walk is performed in)
-- The schedule output's `:tick/beginning` and `:tick/end` are `ZonedDateTime` in the resolved zone. Callers wanting a plain `java.time.Instant` invoke `.toInstant` themselves at the call site
-
-**Zone resolution order:**
-
-1. Explicit `ZoneId` arg passed to `price-schedule` / `price-schedule-days` / `price-schedule-with-modifiers` / `price-schedule-days-with-modifiers`
-2. Rate plan's `urpx:timezoneIdentifier` (an IANA string, e.g. `"America/Los_Angeles"`) — used when the zone arg is omitted
+- `resolve-prices` takes a `ZonedDateTime`. Its **zone is not used to interpret the document** — only the instant is. Pass whatever zone you have
+- `price-schedule` / `price-segments` and friends take an `Instant`-shaped `[start, end)` window plus an optional `ZoneId`, which must be the plan's own or is refused: candidates are derived in the zone resolution happens in, and a walk in another drops true transitions rather than failing
+- The schedule output's `:tick/beginning` and `:tick/end` are `ZonedDateTime` in that zone. Callers wanting a plain `java.time.Instant` invoke `.toInstant` themselves
 
 ```clojure
-(schedule/price-schedule-days plan start 1)            ; uses plan's declared zone
-(schedule/price-schedule-days plan start 1 la)         ; explicit override
+(schedule/price-schedule-days plan start 1)            ; the plan's declared zone
+(schedule/price-schedule-days plan start 1 la)         ; the same, stated
+(schedule/price-schedule-days plan start 1 utc)        ; refused: the plan is not in UTC
 ```
 
-When neither is available, an `ex-info` is thrown rather than silently falling back to the system default.
+**A plan declaring no `urpx:timezoneIdentifier` is refused**, with `:reason :urpx.price/no-timezone`. Its bounds anchor to no moment, so whether an instant falls inside one has no answer; falling back to the caller's zone or the system default is what this replaces.
 
 **Standing rule:** pass an IANA `ZoneId` like `(ZoneId/of "America/Los_Angeles")` — never a fixed offset, never the system default.
 

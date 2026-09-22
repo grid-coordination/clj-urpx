@@ -222,7 +222,7 @@
                     {:jsonld/type "urpx:BillingModel"
                      :urpx/hasPriceDefinition []}}
                    :urpx/hasPrices {:jsonld/type "urpx:Prices"}}
-          plan {:jsonld/type "urpx:RatePlan"
+          plan {:jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"
                 :urpx/ratePlanUniqueIdentifier "E-1"
                 :urpx/name "Residential Services"
                 :urpx/initialEffectiveDate (LocalDate/of 2026 3 1)
@@ -317,7 +317,7 @@
                     {:jsonld/type "urpx:BillingModel"
                      :urpx/hasPriceDefinition []}}
                    :urpx/hasPrices {:jsonld/type "urpx:Prices"}}
-          modifier {:jsonld/type "urpx:RatePlanModifier"
+          modifier {:jsonld/type "urpx:RatePlanModifier" :urpx/timezoneIdentifier "America/Los_Angeles"
                     :urpx/modifierUniqueIdentifier "E-1-VPCIA"
                     :urpx/name "Vintage PCIA"
                     :urpx/initialEffectiveDate (LocalDate/of 2009 1 1)
@@ -662,12 +662,12 @@
     (testing "the array form is what every shipped v0.5.1 test case uses, and it
               must validate on all four schemas that model @context"
       (doseq [[label schema base]
-              [["RatePlan" s/RatePlan {:jsonld/type "urpx:RatePlan"
+              [["RatePlan" s/RatePlan {:jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"
                                        :urpx/ratePlanUniqueIdentifier "P1"
                                        :urpx/name "Plan One"
                                        :urpx/initialEffectiveDate (LocalDate/of 2026 1 1)}]
                ["RatePlanModifier" s/RatePlanModifier
-                {:jsonld/type "urpx:RatePlanModifier"
+                {:jsonld/type "urpx:RatePlanModifier" :urpx/timezoneIdentifier "America/Los_Angeles"
                  :urpx/modifierUniqueIdentifier "M1"
                  :urpx/name "Mod One"
                  :urpx/initialEffectiveDate (LocalDate/of 2026 1 1)}]
@@ -724,7 +724,7 @@
       (is (m/validate s/SourcePublication (assoc base :jsonld/type "urpx:SourcePublication")))
       (is (m/validate s/SourcePublication (assoc base :jsonld/type "urpx:TariffPublication"))))
     (testing "an unrelated @type does not"
-      (is (not (m/validate s/SourcePublication (assoc base :jsonld/type "urpx:RatePlan")))))
+      (is (not (m/validate s/SourcePublication (assoc base :jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles")))))
     (testing "the v0.2.1-only paths v0.5.1 drops are still accepted, since the
               vendored fixtures carry them"
       (is (m/validate s/SourcePublication
@@ -872,7 +872,7 @@
                              (assoc minimal-version :urpx/hasIdentifier
                                     [{:jsonld/id "pge:rin-1" :skos/notation 42}])))))))
   (testing "the identity shell carries it too"
-    (let [plan {:jsonld/type "urpx:RatePlan"
+    (let [plan {:jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"
                 :urpx/ratePlanUniqueIdentifier "E-1"
                 :urpx/name "Residential"
                 :urpx/initialEffectiveDate (LocalDate/of 2026 1 1)

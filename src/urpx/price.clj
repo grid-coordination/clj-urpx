@@ -31,7 +31,7 @@
   (:require [clojure.string :as str]
             [urpx.holidays :as holidays]
             [urpx.index :as index])
-  (:import [java.time DayOfWeek LocalDate LocalDateTime LocalTime ZonedDateTime]))
+  (:import [java.time DayOfWeek LocalDate LocalDateTime LocalTime ZoneId ZonedDateTime]))
 
 ;; ---------------------------------------------------------------------------
 ;; Day-type matching
@@ -1073,9 +1073,48 @@
     (cond-> {:urpx.resolved/unit-price value}
       unvaluable (assoc :urpx.resolved/unvaluable unvaluable))))
 
+(defn plan-zone
+  "The ZoneId a plan or modifier declares as urpx:timezoneIdentifier, or nil.
+
+   THE ZONE EVERY BOUND IN A URPX DOCUMENT IS WRITTEN IN. urpx:effectiveDateTime,
+   urpx:expirationDateTime and every TOU bracket are naive wall-clock readings:
+   measured across the production corpus, all 89 carry no offset. They are
+   wall-clock IN THIS ZONE, so reading them in any other is reading a different
+   moment.
+
+   Present on all 72 production filings, on the urpx:RatePlan in 39 and the
+   urpx:RatePlanModifier in 41, so both halves of a composition can be zoned."
+  ^ZoneId [doc]
+  (when-let [tz (:urpx/timezoneIdentifier doc)]
+    (ZoneId/of tz)))
+
+(defn require-zone
+  "The plan's declared zone, or REFUSE.
+
+   A document that states no zone states no moment: its bounds are wall-clock
+   readings with nothing to anchor them, so whether an instant falls inside one
+   has no answer. Falling back to the caller's zone is what this replaces, and
+   it silently made the answer depend on how the caller spelled the instant."
+  ^ZoneId [doc]
+  (or (plan-zone doc)
+      (throw (ex-info (str "No urpx:timezoneIdentifier on " (pr-str (:jsonld/id doc))
+                           ", so its wall-clock bounds anchor to no moment and "
+                           "whether an instant falls inside them has no answer. "
+                           "Reading them in the caller's zone is what made the "
+                           "same instant resolve differently depending on how it "
+                           "was spelled.")
+                      {:reason :urpx.price/no-timezone
+                       :plan-id (:jsonld/id doc)}))))
+
 (defn version-effective-at
-  "The instant `version` takes effect, as a LocalDateTime, or nil if it does not
-   say. urpx:effectiveDateTime is preferred; urpx:effectiveDate is read as the
+  "The instant `version` takes effect, as a ZonedDateTime in `zone`, or nil if
+   it does not say.
+
+   ZONE REQUIRED, NOT OPTIONAL. The document states a naive wall-clock reading;
+   it names a moment only once anchored, and every zone anchors it to a
+   different one. An optional zone would make the unzoned call the easy one and
+   the wrong one, which is how this namespace came to compare a caller's wall
+   clock against a publisher's. urpx:effectiveDateTime is preferred; urpx:effectiveDate is read as the
    start of that day. Both are sh:minCount 0, so a conformant version may state
    neither, and this returns nil rather than inventing an epoch for it.
 
@@ -1083,12 +1122,28 @@
    re-derived this and got it subtly wrong, requiring urpx:effectiveDateTime and
    so silently dropping a conformant version that states only urpx:effectiveDate.
    Two namespaces disagreeing about the same date is the drift this prevents."
-  [version]
-  (or (:urpx/effectiveDateTime version)
-      (some-> (:urpx/effectiveDate version) (.atStartOfDay))))
+  [version ^ZoneId zone]
+  (some-> ^LocalDateTime (or (:urpx/effectiveDateTime version)
+                             (some-> ^LocalDate (:urpx/effectiveDate version) (.atStartOfDay)))
+          (.atZone zone)))
+
+(defn version-expires-at
+  "The instant `version` stops applying, as a ZonedDateTime in `zone`, or nil.
+
+   Named rather than inlined because it was re-derived at three call sites and
+   the resolved marks emitted it as a naive LocalDateTime while the comparison
+   used something else. One reader, one type."
+  [version ^ZoneId zone]
+  (some-> ^LocalDateTime (or (:urpx/expirationDateTime version)
+                             (some-> ^LocalDate (:urpx/expirationDate version) (.atStartOfDay)))
+          (.atZone zone)))
 
 (defn version-expired-by?
   "True if `version` states a hard expiration at or before `t`.
+
+   `t` is a ZonedDateTime and the bound is anchored in `zone` before comparing,
+   so the answer is about one MOMENT rather than about two wall clocks that may
+   be in different places.
 
    Public alongside `version-effective-at`, and for the same reason: it is the
    single reader of a version's end bound.
@@ -1099,10 +1154,9 @@
    than terminating anything, so a version past its expected end is still the
    one in force until a later version exists. Treating the two alike would
    silently drop a plan that outlived its own forecast."
-  [version ^LocalDateTime t]
-  (let [exp (or (:urpx/expirationDateTime version)
-                (some-> (:urpx/expirationDate version) (.atStartOfDay)))]
-    (boolean (and exp (not (.isAfter ^LocalDateTime exp t))))))
+  [version ^ZonedDateTime t ^ZoneId zone]
+  (let [exp (version-expires-at version zone)]
+    (boolean (and exp (not (.isAfter ^ZonedDateTime exp t))))))
 
 (defn- select-version-at
   "Choose among several candidate snapshots for one plan: the latest whose
@@ -1118,8 +1172,8 @@
    No version in the corpus carries an expiration, so a version's span is
    inferable only from the next version's start. That is exactly why the rule
    needs the full candidate set rather than one snapshot."
-  [candidates ^LocalDateTime t plan-id]
-  (let [undated (remove version-effective-at candidates)]
+  [candidates ^ZonedDateTime t ^ZoneId zone plan-id]
+  (let [undated (remove #(version-effective-at % zone) candidates)]
     (when (seq undated)
       (throw (ex-info (str "Cannot choose a version for " (pr-str plan-id) ": "
                            (count undated) " of " (count candidates) " candidate snapshot(s) "
@@ -1128,24 +1182,24 @@
                       {:reason :version-without-effective-instant
                        :plan-id plan-id
                        :ids (mapv :jsonld/id candidates)})))
-    (let [live (remove #(version-expired-by? % t) candidates)
-          eligible (filter #(not (.isAfter ^LocalDateTime (version-effective-at %) t)) live)]
+    (let [live (remove #(version-expired-by? % t zone) candidates)
+          eligible (filter #(not (.isAfter ^ZonedDateTime (version-effective-at % zone) t)) live)]
       (cond
         (empty? eligible)
         (throw (ex-info (str "Cannot choose a version for " (pr-str plan-id) ": none of the "
                              (count candidates) " candidate snapshot(s) is in effect at " t
                              ". The earliest takes effect at "
-                             (->> candidates (keep version-effective-at) sort first)
+                             (->> candidates (keep #(version-effective-at % zone)) sort first)
                              ". Resolving an instant before a plan existed is a question "
                              "about the caller's window, not about the plan.")
                         {:reason :no-version-in-effect
                          :plan-id plan-id
                          :at t
-                         :effective (mapv version-effective-at candidates)}))
+                         :effective (mapv #(version-effective-at % zone) candidates)}))
 
         :else
-        (let [latest (->> eligible (map version-effective-at) (sort) (last))
-              winners (filter #(= latest (version-effective-at %)) eligible)]
+        (let [latest (->> eligible (map #(version-effective-at % zone)) (sort) (last))
+              winners (filter #(= latest (version-effective-at % zone)) eligible)]
           (if (= 1 (count winners))
             (first winners)
             (throw (ex-info (str "Cannot choose a version for " (pr-str plan-id) ": "
@@ -1159,7 +1213,13 @@
 
 (defn version-covers?
   "True if `version` describes the instant `t`: in effect by then, and not
-   expired. `t` is a LocalDateTime.
+   expired.
+
+   `t` is a ZonedDateTime and the document's naive bounds are anchored in `zone`
+   first, so the comparison is between MOMENTS. Comparing wall clocks instead
+   answers a different question, and was how the same instant asked in two zones
+   resolved differently: an LA-midnight expiry covered 2025-12-31T20:00-08:00
+   and refused the identical 2026-01-01T04:00Z.
 
    Public as the single reader of a version window, so a caller asking whether
    a snapshot is current gets the same answer this namespace uses to resolve it.
@@ -1167,10 +1227,10 @@
    A version stating no effective instant covers everything. It cannot be
    ordered against anything and nothing says it has not started, so refusing
    it would reject a conformant document over a case the vocabulary permits."
-  [version ^LocalDateTime t]
-  (let [eff (version-effective-at version)]
-    (and (not (and eff (.isAfter ^LocalDateTime eff t)))
-         (not (version-expired-by? version t)))))
+  [version ^ZonedDateTime t ^ZoneId zone]
+  (let [eff (version-effective-at version zone)]
+    (and (not (and eff (.isAfter ^ZonedDateTime eff t)))
+         (not (version-expired-by? version t zone)))))
 
 (def ^:private version-back-pointer
   "Version @type -> the property naming the document it is a snapshot of.
@@ -1290,7 +1350,7 @@
           ;; TOU period an instant falls in, which are legitimate to ask of a
           ;; filing outside its own window.
           1 (first candidates)
-          (select-version-at candidates (.toLocalDateTime zdt) plan-id)))))
+          (select-version-at candidates zdt (.getZone zdt) plan-id)))))
 
 
 ;; ---------------------------------------------------------------------------
@@ -1418,7 +1478,17 @@
    by tier-number — the caller chooses based on cumulative billing-period usage."
   ([rate-plan zdt] (resolve-prices rate-plan zdt nil))
   ([rate-plan ^ZonedDateTime zdt opts]
-   (let [version       (plan-version rate-plan opts :urpx/hasRatePlanVersion zdt)
+   ;; PROJECT INTO THE PLAN'S ZONE, ONCE, HERE. Every bound in a URPX document
+   ;; is a naive wall-clock reading in the zone the plan declares, and every
+   ;; comparison downstream reduces the query with .toLocalDateTime. Reducing
+   ;; the CALLER's zone made the answer depend on how the instant was spelled:
+   ;; one moment asked as 2026-07-15T16:00-07:00 and as 2026-07-15T23:00Z gave
+   ;; Peak 0.46886 and Off-Peak 0.34586 on PG&E E-TOU-C, and a version window
+   ;; expiring at LA midnight covered the instant in LA and refused it in UTC.
+   ;; Projecting first makes every downstream reduction local IN THE PLAN'S
+   ;; ZONE, which is the frame those bounds were written in.
+   (let [^ZonedDateTime zdt (.withZoneSameInstant zdt (require-zone rate-plan))
+         version       (plan-version rate-plan opts :urpx/hasRatePlanVersion zdt)
          plan-elements (:urpx/hasPlanElements version)
          seasons       (:urpx/hasSeasons plan-elements)
          seasons-by-id (into {} (map (juxt :jsonld/id identity)) seasons)
@@ -1558,12 +1628,11 @@
       ;; returns 1, every one holding identical prices, from 0.22.0 until now.
       ;; :version-id, :effective and :expires identify the window; the instant
       ;; the caller asked about is the caller's own.
-      (when-not (version-covers? version (.toLocalDateTime zdt))
+      (when-not (version-covers? version zdt (.getZone zdt))
         {:urpx.resolved/outside-version-window
          {:version-id (:jsonld/id version)
-          :effective  (version-effective-at version)
-          :expires    (or (:urpx/expirationDateTime version)
-                          (some-> (:urpx/expirationDate version) (.atStartOfDay)))}})))))
+          :effective  (version-effective-at version (.getZone zdt))
+          :expires    (version-expires-at version (.getZone zdt))}})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Modifier resolution
@@ -1736,12 +1805,11 @@
               ;; returned 744 intervals where it returns 1. The instant the
               ;; caller asked about is the caller's own, and :version-id,
               ;; :effective and :expires identify the window without it.
-              (when-not (version-covers? version (.toLocalDateTime zdt))
+              (when-not (version-covers? version zdt (.getZone zdt))
                 {:urpx.resolved/outside-version-window
                  {:version-id (:jsonld/id version)
-                  :effective  (version-effective-at version)
-                  :expires    (or (:urpx/expirationDateTime version)
-                                  (some-> (:urpx/expirationDate version) (.atStartOfDay)))}})
+                  :effective  (version-effective-at version (.getZone zdt))
+                  :expires    (version-expires-at version (.getZone zdt))}})
               (when-let [ids (seq (concat unselected-ids withheld))]
                 {:urpx.resolved/unselected-alternatives (vec ids)
                  :urpx.resolved/withheld-prices         withheld-prices})
@@ -1764,7 +1832,12 @@
    way that's programmatically interpretable. Filter the returned :tiers
    vector on :urpx.resolved/price-id when needed."
   [modifier ^ZonedDateTime zdt]
-  {:urpx.resolved/ledgers (modifier-ledger-results modifier zdt nil nil)})
+  ;; The modifier's own declared zone: standing alone, it is the only frame its
+  ;; bounds are written in. In a composition `resolve-prices-with-modifiers`
+  ;; projects once against the BASE plan instead, so one query resolves in one
+  ;; zone rather than in as many as the documents happen to declare.
+  (let [^ZonedDateTime zdt (.withZoneSameInstant zdt (require-zone modifier))]
+    {:urpx.resolved/ledgers (modifier-ledger-results modifier zdt nil nil)}))
 
 (defn resolve-prices-with-modifiers
   "Resolve prices for `rate-plan` at `zdt` and append ledger results for
@@ -1776,7 +1849,13 @@
    by the modifier ledgers."
   ([rate-plan modifiers ^ZonedDateTime zdt] (resolve-prices-with-modifiers rate-plan modifiers zdt nil))
   ([rate-plan modifiers ^ZonedDateTime zdt opts]
-   (let [;; One @id index spanning the base plan and every modifier. This is
+   (let [;; ONE ZONE FOR THE WHOLE COMPOSITION, the base plan's. A modifier may
+         ;; declare its own, and 41 of the 72 production filings do, but a
+         ;; composition answers one question about one moment and resolving its
+         ;; halves in different frames would reintroduce the disagreement this
+         ;; projection exists to remove.
+         ^ZonedDateTime zdt (.withZoneSameInstant zdt (require-zone rate-plan))
+         ;; One @id index spanning the base plan and every modifier. This is
          ;; what lets a discount Price in a modifier dereference a
          ;; urpx:PriceSummary defined in the base plan filing: the caller has
          ;; already supplied both documents here, so no cross-file lookup is

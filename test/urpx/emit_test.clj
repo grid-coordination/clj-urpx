@@ -13,7 +13,7 @@
 ;; ---------------------------------------------------------------------------
 
 (def minimal-rate-plan
-  {:jsonld/type "urpx:RatePlan"
+  {:jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"
    :jsonld/id   "x:plan"
    :urpx/ratePlanUniqueIdentifier "P1"
    :urpx/name "Plan One"
@@ -47,7 +47,7 @@
           "LocalDate encoded back to ISO string"))))
 
 (deftest write-rate-plan-modifier-returns-valid-json
-  (let [modifier {:jsonld/type "urpx:RatePlanModifier"
+  (let [modifier {:jsonld/type "urpx:RatePlanModifier" :urpx/timezoneIdentifier "America/Los_Angeles"
                   :jsonld/id   "x:mod"
                   :urpx/modifierUniqueIdentifier "M1"
                   :urpx/name   "Modifier"

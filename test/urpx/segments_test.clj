@@ -20,27 +20,47 @@
 (def ^:private rules (.getRules la))
 (defn- zdt [y m d h mi] (ZonedDateTime/of y m d h mi 0 0 la))
 
-(deftest resolution-reads-only-local-time-projections
-  (testing "THE PREMISE THE WHOLE DESIGN RESTS ON. Candidate instants are
-            derived on the argument that resolution is a pure function of the
-            LOCAL date-time, so it can only change where a comparison against a
-            document literal changes. That holds only while urpx.price reads
-            the query instant through .toLocalDateTime, .toLocalDate,
-            .toLocalTime and .getDayOfWeek and nothing else.
+(deftest resolution-reads-the-query-only-through-the-plans-own-zone
+  (testing "THE PREMISE THE WHOLE DESIGN RESTS ON, restated after it changed.
 
-            A resolver that read .getOffset or .toInstant would make the
-            resolved value depend on the instant line directly, and every
-            boundary this namespace derives could then be wrong without a
-            single test here failing. So the premise is asserted where it can
-            be seen, not left as a comment."
+            Candidate instants are derived on the argument that resolution can
+            only change where a comparison against a document literal changes,
+            so the candidate set is a superset of true transitions. That used to
+            rest on resolution being a pure function of the CALLER's local time,
+            which was also the bug: the same moment asked in two zones gave two
+            answers, Peak 0.46886 against Off-Peak 0.34586 on this very plan.
+
+            It now rests on something stronger. urpx.price anchors the query in
+            the plan's declared zone before reading anything, so resolution is a
+            pure function of the INSTANT and the plan's zone, and urpx.schedule
+            derives candidates in that same zone because resolve-zone refuses
+            one that disagrees. The two frames cannot diverge, which is what a
+            superset argument needs.
+
+            Still no read of the offset or the instant line: a resolver doing
+            that could change value between two candidates without any literal
+            being crossed, and no test here would fail."
     (let [src   (slurp "src/urpx/price.clj")
           calls (set (map second (re-seq #"\(\.([a-zA-Z]+)\s+(?:\^ZonedDateTime\s+)?zdt\)" src)))]
-      (is (= #{"toLocalDateTime" "toLocalDate" "toLocalTime" "getDayOfWeek"} calls)
+      (is (= #{"toLocalDate" "toLocalTime" "getDayOfWeek" "getZone"} calls)
           (str "urpx.price now projects the query instant differently: " (pr-str calls)
-               ". If a projection onto the instant line was added, the segment "
-               "candidate rule in urpx.schedule is no longer a superset."))
-      (is (not (re-find #"\.toInstant|\.getOffset|\.getZone" src))
-          "price.clj must not read the instant, offset or zone"))))
+               ". Local field reads plus the plan's zone are the superset "
+               "argument; anything else and urpx.schedule's candidate rule has "
+               "to be re-derived."))
+      (is (not (re-find #"\.toInstant|\.getOffset" src))
+          "price.clj must not read the instant line or the offset")))
+  (testing "and the two zones are forced equal rather than merely expected to
+            agree: walking a plan in a zone it does not declare refuses."
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]
+      (is (= :urpx.schedule/zone-disagrees-with-plan
+             (try (schedule/price-segments plan [] (.toInstant (zdt 2026 7 15 0 0))
+                                           (.toInstant (zdt 2026 7 16 0 0))
+                                           (ZoneId/of "UTC") nil)
+                  nil
+                  (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))
+          "a UTC walk of an LA plan put the peak boundary an hour late and lost
+           the 21:00 transition entirely, returning two segments where three are
+           right, so it refuses rather than returning them"))))
 
 (deftest dst-gap-is-clamped-not-pushed-forward
   (testing "2026-03-08T02:30 does not exist in Los Angeles. ZonedDateTime/of

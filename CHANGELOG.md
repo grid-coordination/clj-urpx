@@ -9,6 +9,35 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Fixed
+
+- **The same instant, written in two zones, resolved to two different prices.** `urpx.price` reduced the caller's `ZonedDateTime` with `.toLocalDateTime` and compared those wall-clock fields against document bounds that are wall-clock in the **plan's** zone. Every bound in a URPX document is naive: all 89 in the production corpus carry no offset. So the answer depended on how the caller spelled the moment.
+
+  Measured on PG&E E-TOU-C, whose peak runs 16:00–21:00 Pacific. One instant:
+
+  | 2026-07-15, asked at | in Pacific | in UTC |
+  |---|---|---|
+  | 10:00 PT | Off-Peak `0.34586` | **Peak `0.46886`** |
+  | 16:00 / 17:00 / 20:00 PT | Peak `0.46886` | **Off-Peak `0.34586`** |
+
+  Up to **36% apart**, with no error and no mark. The version-window half was reported by a consumer: SCE Schedule D's `sce:d-2025-11-15` expires at LA midnight, and `2025-12-31T20:00-08:00` priced while the identical `2026-01-01T04:00Z` refused `:outside-version-window`. The TOU half was not reported and is worse, because it fires on most of the day rather than at one boundary.
+
+  `resolve-prices` now anchors the query in the plan's declared zone before reading anything, so resolution is a pure function of the **instant** and the plan's zone. `resolve-modifier-prices` anchors in the modifier's own; a composition anchors both halves in the base plan's, because one question about one moment should not resolve in two frames.
+
+- **`price-schedule` and `price-segments` refuse a walk zone the plan does not declare.** Candidates must be derived in the zone resolution happens in or the candidate set stops being a superset of true transitions. Measured: a UTC walk of that LA plan over one July day put the peak boundary at 17:00 Pacific instead of 16:00 and lost the 21:00 transition entirely, returning two segments where three are right. Passing the plan's own zone, or `nil`, is unchanged.
+
+### Changed
+
+- **A plan declaring no `urpx:timezoneIdentifier` is refused**, `:reason :urpx.price/no-timezone`. Its bounds anchor to no moment, so whether an instant falls inside one has no answer. Every filing in both corpora declares one.
+
+- **`version-effective-at`, `version-expired-by?` and `version-covers?` take a required `ZoneId`** and work in `ZonedDateTime`, as does the new `version-expires-at`. An optional zone would have made the unzoned call the easy one and the wrong one, which is how this namespace came to compare a caller's wall clock against a publisher's.
+
+- **`:effective` and `:expires` in `:outside-version-window` are `ZonedDateTime`** rather than `LocalDateTime`. A naive bound handed to a consumer invites exactly the comparison that caused this.
+
+**Upgrading:** this changes resolved values for any caller passing a `ZonedDateTime` in a zone other than the plan's — previously silently wrong, now correct. Callers already passing the plan's zone see no change. An explicit walk zone that disagrees with the plan now refuses rather than returning wrong boundaries, and a plan with no declared zone refuses rather than resolving against the caller's.
+
 ## [0.30.0] — 2026-09-22
 
 ### Added

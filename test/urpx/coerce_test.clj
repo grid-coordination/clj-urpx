@@ -174,7 +174,7 @@
    :urpx/targetURPXVersion
    "https://github.com/urpx-org/urpx/raw/v0.2.0/ontology/urpx-ontology.ttl"
    :urpx/hasRatePlan
-   {:jsonld/type "urpx:RatePlan" :jsonld/id "ex:plan"}})
+   {:jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles" :jsonld/id "ex:plan"}})
 
 (deftest urpx-document-validates-with-target-version
   (testing "URPX-1ii: a URPXDocument carrying urpx:targetURPXVersion validates"
@@ -216,7 +216,7 @@
    :urpx/targetURPXVersion
    "https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl"
    :urpx/packages
-   {:jsonld/type "urpx:RatePlan" :jsonld/id "ex:plan"}})
+   {:jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles" :jsonld/id "ex:plan"}})
 
 (deftest urpx-package-validates-with-target-version
   (testing "a URPXPackage carrying urpx:targetURPXVersion validates"

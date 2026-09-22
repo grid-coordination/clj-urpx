@@ -191,7 +191,7 @@
    merged into the version node, which is how these tests vary one field."
   ([id vid eff] (plan-doc id vid eff nil))
   ([id vid eff extra]
-   {:jsonld/id id :jsonld/type "urpx:RatePlan"
+   {:jsonld/id id :jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"
     :urpx/hasRatePlanVersion
     (merge {:jsonld/id vid :jsonld/type "urpx:RatePlanVersion"
             :urpx/forRatePlan {:jsonld/id id}
@@ -311,7 +311,7 @@
             The fix was to stop re-deriving: urpx.price/version-effective-at is
             now the single reader, and it prefers effectiveDateTime and falls
             back to effectiveDate at start of day."
-    (let [docs [{:jsonld/id "x:p" :jsonld/type "urpx:RatePlan"
+    (let [docs [{:jsonld/id "x:p" :jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"
                  :urpx/hasRatePlanVersion
                  {:jsonld/id "x:p-v" :jsonld/type "urpx:RatePlanVersion"
                   :urpx/forRatePlan {:jsonld/id "x:p"}
@@ -353,7 +353,7 @@
    `applic` is merged into the version node so each test states exactly the
    compatibility properties it is about."
   [id vid eff applic]
-  {:jsonld/id id :jsonld/type "urpx:RatePlanModifier"
+  {:jsonld/id id :jsonld/type "urpx:RatePlanModifier" :urpx/timezoneIdentifier "America/Los_Angeles"
    :urpx/hasRatePlanModifierVersion
    (merge {:jsonld/id vid :jsonld/type "urpx:RatePlanModifierVersion"
            :urpx/forRatePlanModifier {:jsonld/id id}
@@ -366,7 +366,7 @@
    (checked: not one of the 23 carries more than one RatePlanVersion), which is
    why the binding below was invisible to every test until now."
   []
-  {:jsonld/id "x:p" :jsonld/type "urpx:RatePlan"
+  {:jsonld/id "x:p" :jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"
    :urpx/hasRatePlanVersion
    [{:jsonld/id "x:p-v1" :jsonld/type "urpx:RatePlanVersion"
      :urpx/forRatePlan {:jsonld/id "x:p"}
@@ -463,7 +463,7 @@
             no-op left all 356 tests green. A modifier with a superseded
             version and a current one must offer only the current one."
     (let [plan (plan-doc "x:p" "x:p-v1" (ldt 2026 1 1))
-          old  {:jsonld/id "x:m" :jsonld/type "urpx:RatePlanModifier"
+          old  {:jsonld/id "x:m" :jsonld/type "urpx:RatePlanModifier" :urpx/timezoneIdentifier "America/Los_Angeles"
                 :urpx/hasRatePlanModifierVersion
                 [{:jsonld/id "x:m-old" :jsonld/type "urpx:RatePlanModifierVersion"
                   :urpx/forRatePlanModifier {:jsonld/id "x:m"}
@@ -750,15 +750,15 @@
                                         :urpx/effectiveDateTime (ldt 2026 1 1)
                                         :urpx/applicableToRatePlan [{:jsonld/id "x:aaa-plan"}]}
                                        extra))
-          own-doc   {:jsonld/id "x:m" :jsonld/type "urpx:RatePlanModifier"
+          own-doc   {:jsonld/id "x:m" :jsonld/type "urpx:RatePlanModifier" :urpx/timezoneIdentifier "America/Los_Angeles"
                      :urpx/hasRatePlanModifierVersion (mv nil)}
-          bundled   {:jsonld/id "x:aaa-plan" :jsonld/type "urpx:RatePlan"
+          bundled   {:jsonld/id "x:aaa-plan" :jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"
                      :urpx/hasRatePlanVersion {:jsonld/id "x:aaa-plan-v" :jsonld/type "urpx:RatePlanVersion"
                                                :urpx/forRatePlan {:jsonld/id "x:aaa-plan"}
                                                :urpx/effectiveDateTime (ldt 2026 1 1)}
                      ;; the same modifier version, bundled, with an extra target
                      :urpx/hasRatePlanModifier
-                     {:jsonld/id "x:m" :jsonld/type "urpx:RatePlanModifier"
+                     {:jsonld/id "x:m" :jsonld/type "urpx:RatePlanModifier" :urpx/timezoneIdentifier "America/Los_Angeles"
                       :urpx/hasRatePlanModifierVersion
                       (mv {:urpx/applicableToRatePlan [{:jsonld/id "x:aaa-plan"} {:jsonld/id "x:q"}]})}}
           bound     #(->> (arr/arrangements % {:repeated-ids arr/repeated-ids-union})

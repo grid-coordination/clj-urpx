@@ -380,7 +380,7 @@
   (testing "URPX-moq: keys->jsonld walks maps and sequences, converting every
             namespaced-keyword key back to its JSON-LD string form (leaves
             unchanged)"
-    (let [typed {:jsonld/type "urpx:RatePlan"
+    (let [typed {:jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"
                  :jsonld/id "x:plan"
                  :urpx/name "Plan One"
                  :urpx/hasRatePlanVersion

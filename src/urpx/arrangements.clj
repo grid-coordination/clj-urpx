@@ -248,18 +248,23 @@
    which has taken effect, is genuinely not offered then. urpx.price refuses
    there because it was asked for one plan's price; this was asked which
    arrangements exist, and the answer for that plan is none."
-  [triples ^java.time.LocalDateTime t]
+  [triples ^ZonedDateTime t]
   (let [by-identity (group-by first triples)]
     (if (nil? t)
       (into {} (map (fn [[pid ts]] [pid (vec ts)])) by-identity)
       (into {}
             (keep (fn [[pid ts]]
-                    (let [live (filter #(price/version-covers? (second %) t) ts)]
+                    ;; Each version is zoned by ITS OWN document, which the
+                    ;; triple carries. A corpus may span zones, and reading one
+                    ;; publisher's bounds in another's frame is the defect this
+                    ;; whole path was just fixed for.
+                    (let [zone-of (fn [tr] (price/require-zone (nth tr 2)))
+                          live (filter #(price/version-covers? (second %) t (zone-of %)) ts)]
                       (when (seq live)
-                        (let [latest  (->> live (map #(price/version-effective-at (second %)))
+                        (let [latest  (->> live (map #(price/version-effective-at (second %) (zone-of %)))
                                            (sort) (last))
                               winners (distinct-by-node
-                                       (filter #(= latest (price/version-effective-at (second %)))
+                                       (filter #(= latest (price/version-effective-at (second %) (zone-of %)))
                                                live))]
                           (when (> (count winners) 1)
                             (throw (ex-info (str "Cannot choose a version for " (pr-str pid) ": "
@@ -412,7 +417,7 @@
   ([documents] (plan-versions documents nil))
   ([documents opts]
    (let [_       (coerce/check-coerced! documents "urpx.arrangements/plan-versions")
-         t       (some-> ^ZonedDateTime (:at opts) (.toLocalDateTime))
+         t       (:at opts)
          repeated (or (:repeated-ids opts) repeated-ids-refuse)
          triples (-> {"urpx:RatePlanVersion"
                       (mapcat #(versions-in % "urpx:RatePlanVersion") documents)}
@@ -473,7 +478,7 @@
   ([documents base-version] (applicable-modifiers documents base-version nil))
   ([documents base-version opts]
    (let [_       (coerce/check-coerced! documents "urpx.arrangements/applicable-modifiers")
-         t       (some-> ^ZonedDateTime (:at opts) (.toLocalDateTime))
+         t       (:at opts)
          compat  (or (:compatibility opts) named-versions-narrow)
          plan-id (:jsonld/id (:urpx/forRatePlan base-version))
          repeated (or (:repeated-ids opts) repeated-ids-refuse)
@@ -594,7 +599,7 @@
          combine (or (:combine opts) one-modifier-at-most)
          compat  (or (:compatibility opts) named-versions-narrow)
          repeated (or (:repeated-ids opts) repeated-ids-refuse)
-         t     (some-> ^ZonedDateTime (:at opts) (.toLocalDateTime))
+         t     (:at opts)
          plans (mapcat #(versions-in % "urpx:RatePlanVersion") documents)
          mods  (mapcat #(versions-in % "urpx:RatePlanModifierVersion") documents)
          merged (repeated {"urpx:RatePlanVersion"         plans

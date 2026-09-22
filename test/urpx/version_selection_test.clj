@@ -311,9 +311,13 @@
       (is (= 5 (count (mapcat :urpx.resolved/tiers ls))) "and every tier")
       (is (every? :urpx.resolved/outside-version-window ls)
           "each carrying the mark")
-      (is (= (java.time.LocalDateTime/of 2026 4 1 0 0)
+      (is (= (java.time.ZonedDateTime/of 2026 4 1 0 0 0 0
+                                         (java.time.ZoneId/of "America/Los_Angeles"))
              (:expires (:urpx.resolved/outside-version-window (first ls))))
-          "which reports the bound that was crossed"))))
+          "which reports the bound that was crossed, ZONED. The document writes
+           it as a naive wall clock; it names a moment only once anchored in the
+           zone the plan declares, and handing back the naive form invited a
+           consumer to compare it against an instant in some other frame"))))
 
 (deftest a-superseded-modifier-that-contributes-nothing-refuses-nothing
   (testing "scoped to ledgers that actually reach the sum, like every other
@@ -396,8 +400,11 @@
                (catch clojure.lang.ExceptionInfo e (ex-data e)))]
       (is (= :outside-version-window (:reason modifier-data)))
       (is (= "sce:care-2026-03-20" (:version-id modifier-data)))
-      (is (= (ldt 2026 4 1 0 0) (:expires modifier-data))
-          "the bound that was crossed, so a caller can see WHY without the filing")
+      (is (= (java.time.ZonedDateTime/of 2026 4 1 0 0 0 0
+                                         (java.time.ZoneId/of "America/Los_Angeles"))
+             (:expires modifier-data))
+          "the bound that was crossed, so a caller can see WHY without the
+           filing, and ZONED so the comparison it invites is between moments")
       (is (some? (:ledger-id modifier-data))
           "and which ledger carried it, since a composition can have many")
       (is (nil? (:at modifier-data))

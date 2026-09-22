@@ -302,12 +302,17 @@
 ;; Issue #4: modifier PDs gated by their own hasTOUSchedule (touPeriodNumber)
 ;; ---------------------------------------------------------------------------
 
-(defn- own-tou-modifier-fixture
+(defn own-tou-modifier-fixture
   "Modifier with own urpx:hasTOUSchedule (one TOUPeriod, midnight-6am, allDays,
    touPeriodNumber=1) and a single PD/Price gated by touPeriodNumber=1.
-   Mirrors smud:pev-credit's shape."
+   Mirrors smud:pev-credit's shape.
+
+   Public because urpx.zone-test needs a modifier whose OWN schedule makes its
+   result zone-sensitive, and no fixture is: zero modifier versions in either
+   tree carry hasTOUSchedule. Duplicating sixty lines of document to avoid a
+   test-to-test reference would be the worse trade."
   []
-  {:jsonld/type "urpx:RatePlanModifier"
+  {:jsonld/type "urpx:RatePlanModifier" :urpx/timezoneIdentifier "America/Los_Angeles"
    :jsonld/id "test:overnight-credit"
    :urpx/name "Test overnight credit (midnight-6am)"
    :urpx/initialEffectiveDate (java.time.LocalDate/of 2026 1 1)
@@ -397,7 +402,7 @@
    tests don't care about base prices firing, only about
    :urpx.resolved/tou-period-number being set."
   []
-  {:jsonld/type "urpx:RatePlan"
+  {:jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"
    :jsonld/id "test:base-plan"
    :urpx/ratePlanUniqueIdentifier "TEST-BASE"
    :urpx/name "Test base plan"
@@ -454,7 +459,7 @@
    touPeriodNumber=2 — meant to fire only when the BASE plan resolves to
    period 2. Mirrors smud:cpp's Mid-Peak/Off-Peak discount shape."
   []
-  {:jsonld/type "urpx:RatePlanModifier"
+  {:jsonld/type "urpx:RatePlanModifier" :urpx/timezoneIdentifier "America/Los_Angeles"
    :jsonld/id "test:rides-base"
    :urpx/name "Test rides-base modifier"
    :urpx/initialEffectiveDate (java.time.LocalDate/of 2026 1 1)
@@ -537,7 +542,7 @@
    eventTriggeredUpdates, plus a PriceUpdateRule prose description.
    Mirrors smud:cpp's Event Charge shape and the urpx-org B6-PDP example."
   []
-  {:jsonld/type "urpx:RatePlanModifier"
+  {:jsonld/type "urpx:RatePlanModifier" :urpx/timezoneIdentifier "America/Los_Angeles"
    :jsonld/id "test:event-charge"
    :urpx/name "Test event-driven charge"
    :urpx/initialEffectiveDate (java.time.LocalDate/of 2026 1 1)
@@ -632,7 +637,7 @@
    :urpx/serviceTierNumber. Used to exercise the (PD, tier-number) keying
    in active-prices-by-pd independently of any vendored fixture's evolution."
   []
-  {:jsonld/type "urpx:RatePlan"
+  {:jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"
    :jsonld/id   "urpx:test-shared-pd"
    :urpx/ratePlanUniqueIdentifier "TEST-SHARED-PD"
    :urpx/name "Shared-PD tier-stratified test plan"
@@ -795,7 +800,7 @@
    PD.appliesInSeason → Season.month month-gating path independently of
    any vendored fixture's evolution."
   []
-  {:jsonld/type "urpx:RatePlan"
+  {:jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"
    :jsonld/id   "urpx:test-cpau-e-2"
    :urpx/ratePlanUniqueIdentifier "TEST-CPAU-E-2"
    :urpx/name "Non-TOU two-season test plan"
@@ -980,7 +985,7 @@
    Each alternative's hasPrice references the same PD with a different unit
    price."
   []
-  {:jsonld/type "urpx:RatePlan"
+  {:jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"
    :urpx/ratePlanUniqueIdentifier "TEST-BSC"
    :urpx/name "BSC income-tier alternatives test"
    :urpx/initialEffectiveDate (java.time.LocalDate/of 2026 1 1)

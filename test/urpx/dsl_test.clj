@@ -386,7 +386,8 @@
                                       {:jsonld/type "urpx:BillingModel"
                                        :urpx/hasPriceDefinition []}}
                                      :urpx/hasPrices {:jsonld/type "urpx:Prices"})
-          rp (dsl/rate-plan :urpx/ratePlanUniqueIdentifier "P1"
+          rp (dsl/rate-plan :urpx/timezoneIdentifier "America/Los_Angeles"
+                            :urpx/ratePlanUniqueIdentifier "P1"
                             :urpx/name "Plan One"
                             :urpx/initialEffectiveDate "2026-01-01"
                             :urpx/hasRatePlanVersion rpv)
@@ -480,6 +481,7 @@
                                 :unit-price unit
                                 :start-date "2025-07-01"))]
      (dsl/rate-plan
+      :timezone-identifier "America/Los_Angeles"
       :rate-plan-unique-identifier "TEST-CPAU-E-2"
       :name "Non-TOU two-season test plan"
       :initial-effective-date "2025-07-01"

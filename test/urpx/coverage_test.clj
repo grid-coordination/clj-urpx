@@ -297,13 +297,13 @@
             Constructed because the corpus records no claim by reference."
     (let [claim-node {:jsonld/id "x:cc-m" :jsonld/type "urpx:CoverageClaim"
                       :urpx/completenessResult {:jsonld/id "urpx:pending"}}
-          mod-doc {:jsonld/id "x:m" :jsonld/type "urpx:RatePlanModifier"
+          mod-doc {:jsonld/id "x:m" :jsonld/type "urpx:RatePlanModifier" :urpx/timezoneIdentifier "America/Los_Angeles"
                    :urpx/theClaim claim-node
                    :urpx/hasRatePlanModifierVersion
                    {:jsonld/id "x:m-v" :jsonld/type "urpx:RatePlanModifierVersion"
                     :urpx/hasCoverageClaim {:jsonld/id "x:cc-m"}}}
           arrangement {:urpx.arrangement/version {:jsonld/id "x:p-v" :jsonld/type "urpx:RatePlanVersion"}
-                       :urpx.arrangement/rate-plan {:jsonld/id "x:p" :jsonld/type "urpx:RatePlan"}
+                       :urpx.arrangement/rate-plan {:jsonld/id "x:p" :jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"}
                        :urpx.arrangement/modifier-versions [(:urpx/hasRatePlanModifierVersion mod-doc)]
                        :urpx.arrangement/modifiers [mod-doc]}
           r (cov/of-arrangement arrangement)]

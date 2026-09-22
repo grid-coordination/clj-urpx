@@ -64,7 +64,7 @@
   "Wrap a vector of Holiday maps into the minimum coerced-plan shape that
    `derive-predicate` walks: a RatePlan with PlanElements.hasHolidayCalendar."
   [holidays]
-  {:jsonld/type "urpx:RatePlan"
+  {:jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"
    :urpx/hasRatePlanVersion
    {:jsonld/type "urpx:RatePlanVersion"
     :urpx/changeReason {:jsonld/id "urpx:rateCase"}

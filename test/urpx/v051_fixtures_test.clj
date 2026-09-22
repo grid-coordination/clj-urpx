@@ -104,7 +104,7 @@
             The v0.2.x side below uses every key v0.5.1 moved or renamed:
             urpx:publishedBy rather than offeredBy, urpx:eiaId rather than the
             identity chain, and a nested version with no forRatePlan."
-    (let [v021 {:jsonld/type "urpx:RatePlan"
+    (let [v021 {:jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"
                 :jsonld/id "ex:legacy-plan"
                 :urpx/ratePlanUniqueIdentifier "L-1"
                 :urpx/name "Legacy Residential"
