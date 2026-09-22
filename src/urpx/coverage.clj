@@ -1,0 +1,282 @@
+(ns urpx.coverage
+  "Read what a version snapshot CLAIMS about its own coverage.
+
+  Every urpx:RatePlanVersion and urpx:RatePlanModifierVersion carries a
+  urpx:CoverageClaim: a verdict on what can be answered from that snapshot under
+  stated conditions. The verdict is the standard's own answer to \"what am I
+  holding?\", and this library modeled it and read it nowhere until now.
+
+  NOT A JUDGEMENT OF THIS LIBRARY'S. Per the ontology, CoverageClaim instances
+  \"are produced by an implementation or publishing workflow\", so a claim says
+  what the PUBLISHER asserts about a snapshot, not what clj-urpx found. Nothing
+  here re-derives a verdict or second-guesses one; reading is the whole job.
+
+  OPTIONAL BY CONSTRUCTION. This requires urpx.index and nothing else of the
+  library: not urpx.price, not urpx.arrangements. Nothing in src/ requires it,
+  which a test asserts over the whole source tree.
+
+  WHAT THE CORPUS ACTUALLY SAYS, measured at urpx-rate-plans 9deae4dbaa8b over
+  80 distinct version nodes, because it shapes how much a verdict is worth:
+
+    completenessResult   partial 76, complete 4; NOT ONE of the 40 base versions
+                         claims complete
+    selfContained        true on all 80, and VACUOUS: it is defined as \"false
+                         iff any PriceDefinitionReference is referenceInclusion
+                         retrievedElsewhere\", and there are zero
+                         PriceDefinitionReference nodes in the corpus or the
+                         fixtures, so the existential ranges over an empty set
+    confidence           absent on all 80
+    stale                absent on all 80
+    fallbackSourced      absent on all 80
+    explainedBy          present on 76 of 80
+    TemporalScope        ZERO, of any scopeKind, so no verdict anywhere states
+                         the window it covers
+
+  Two consequences worth carrying to a call site. `selfContained true` means
+  \"nothing here is fetched from elsewhere\", which is not \"complete\" and must
+  not be read as reassurance. And a verdict with no scope is the normal case, so
+  a consumer publishing a horizon cannot assume a verdict covers it.
+
+  The vendored fixtures are NOT representative on this axis: 6 of their 13 base
+  versions claim complete where 0 of the corpus's 40 do. A test written only
+  against fixtures shows a picture the production corpus never exhibits."
+  (:require [urpx.index :as index]))
+
+(def completeness-results
+  "The six urpx:CompletenessResultValue members, from
+   urpx-shacl:CompletenessResultValueShape's sh:in.
+
+   No ordering is stated among them and none is implied here. The absence is
+   meaningful rather than an oversight: the same ontology uses skos:broader
+   where it does mean a hierarchy. They are distinct KINDS, not degrees:
+   `partial` asserts a gap in the snapshot while what is present is usable,
+   `unsupported` that the source has it and the representation cannot express
+   it, `pending` that the source has not published it yet, `noCoverage` that it
+   was evaluated and nothing exists anywhere, and `unknown` that no evaluation
+   has run at all."
+  #{"urpx:complete" "urpx:partial" "urpx:pending"
+    "urpx:unsupported" "urpx:unknown" "urpx:noCoverage"})
+
+(defn- as-vec
+  [v]
+  (cond (nil? v) [] (sequential? v) (vec v) :else [v]))
+
+(defn- bare-ref?
+  "True if `v` is a reference and nothing else: an @id with no content of its
+   own. A node carrying properties is the thing itself, however it is nested."
+  [v]
+  (and (map? v) (:jsonld/id v) (nil? (:jsonld/type v)) (= 1 (count v))))
+
+(defn- deref-node
+  "Resolve `v` against `doc` when it is a bare reference, else return it. Yields
+   `::unresolved` when a reference cannot be followed, which callers distinguish
+   from an absent one."
+  [v doc]
+  (cond
+    (not (bare-ref? v)) v
+    (nil? doc)          ::unresolved
+    :else               (or (index/resolve-ref (index/build-index doc) v) ::unresolved)))
+
+(defn claim
+  "The urpx:CoverageClaim on `version`, or `::absent`.
+
+   `doc` is the document the version came from, needed only to follow a claim
+   recorded as a bare @id reference; the schema admits that arm
+   (`[:or CoverageClaim ExclusiveRef]`) though the corpus uses it nowhere.
+
+   REFUSES `:urpx.coverage/claim-ref-unresolved` when the claim IS a bare
+   reference and cannot be followed, because a reference that goes nowhere is
+   not the same as no claim: one is a document that says something this reader
+   cannot reach, the other a document that says nothing."
+  ([version] (claim version nil))
+  ([version doc]
+   (let [c (:urpx/hasCoverageClaim version)]
+     (cond
+       (nil? c) ::absent
+       :else
+       (let [node (deref-node c doc)]
+         (if (= ::unresolved node)
+           (throw (ex-info (str "Coverage claim on " (pr-str (:jsonld/id version))
+                                " is a reference to " (pr-str (:jsonld/id c))
+                                " that cannot be followed"
+                                (if doc " in the supplied document"
+                                    "; no document was supplied to resolve it against")
+                                ". A reference that goes nowhere is not the same as "
+                                "no claim, so this refuses rather than reporting "
+                                "the version as unclaimed.")
+                           {:reason  :urpx.coverage/claim-ref-unresolved
+                            :version-id (:jsonld/id version)
+                            :claim-ref  (:jsonld/id c)
+                            :document-supplied? (some? doc)}))
+           node))))))
+
+(defn- completeness-of
+  [c version-id]
+  (let [id (get-in c [:urpx/completenessResult :jsonld/id])]
+    (cond
+      (nil? id) nil
+      (completeness-results id) id
+      :else
+      (throw (ex-info (str "Coverage claim on " (pr-str version-id) " names a "
+                           "completeness result this reader does not know: "
+                           (pr-str id) ". Reporting nil would read as 'not "
+                           "complete', which is a guess about a verdict the "
+                           "document did state.")
+                      {:reason :urpx.coverage/unknown-completeness-result
+                       :version-id version-id
+                       :completeness-result id
+                       :known completeness-results})))))
+
+(defn- self-contained-of
+  "The urpx:selfContained verdict, its source, and whether the two places it may
+   appear disagree.
+
+   The ontology settles precedence rather than leaving it open: the property
+   \"may be materialized on the version itself for direct query; when both are
+   present they MUST agree, and the claim is authoritative\". So a disagreement
+   is reported and NOT refused: the standard says which wins. It is still a
+   violated MUST, which is urpx.validate's business rather than this reader's.
+
+   REFUSES `:urpx.coverage/self-contained-contradicts-references` for a
+   different case, where nothing states precedence: the claim asserts true while
+   the version carries a PriceDefinitionReference that is retrievedElsewhere.
+   selfContained is DERIVED as \"false iff any PriceDefinitionReference is
+   referenceInclusion retrievedElsewhere\", so the document contradicts its own
+   derivation and there is no rule saying whether the assertion or the
+   derivation wins."
+  [c version]
+  (let [claimed (:urpx/selfContained c)
+        on-ver  (:urpx/selfContained version)
+        elsewhere (filter #(= "urpx:retrievedElsewhere"
+                              (get-in % [:urpx/referenceInclusion :jsonld/id]))
+                          (as-vec (:urpx/hasPriceDefinitionReference version)))
+        value   (if (some? claimed) claimed on-ver)]
+    (when (and (true? claimed) (seq elsewhere))
+      (throw (ex-info (str "Coverage claim on " (pr-str (:jsonld/id version))
+                           " asserts selfContained true while the version carries "
+                           (count elsewhere) " PriceDefinitionReference(s) marked "
+                           "retrievedElsewhere. selfContained is derived as false "
+                           "iff any such reference exists, so the document "
+                           "contradicts itself and nothing states whether the "
+                           "assertion or the derivation wins.")
+                      {:reason :urpx.coverage/self-contained-contradicts-references
+                       :version-id (:jsonld/id version)
+                       :retrieved-elsewhere (count elsewhere)})))
+    {:urpx.coverage/self-contained value
+     :urpx.coverage/self-contained-source (cond (some? claimed) :claim
+                                                (some? on-ver)  :version)
+     :urpx.coverage/self-contained-disagrees?
+     (and (some? claimed) (some? on-ver) (not= claimed on-ver))}))
+
+(defn- evaluations-of
+  "The Evaluations a claim is explained by, flattened to what a reader wants.
+
+   An explainedBy reference that cannot be followed is NOT a refusal: the
+   VERDICT is still readable without its rationale. It is reported as
+   `{:unresolved-ref id}` so the gap is visible rather than silent. Refuse when
+   the verdict cannot be read; flag when only the reason for it cannot."
+  [c doc]
+  (mapv (fn [e]
+          (let [node (deref-node e doc)]
+            (if (= ::unresolved node)
+              {:unresolved-ref (:jsonld/id e)}
+              {:kind        (get-in node [:urpx/evaluationKind :jsonld/id])
+               :evaluated-on (:urpx/evaluatedOn node)
+               :description (:urpx/description node)})))
+        (as-vec (:urpx/explainedBy c))))
+
+(defn- coverage-window-of
+  "The TemporalScope whose scopeKind is urpx:coverage, or nil.
+
+   urpx:hasTemporalScope is unconstrained upstream: it appears as sh:path zero
+   times in the shapes graph and in sh:ignoredProperties 79 times, so a claim
+   may carry any number of scopes of any kind and nothing says otherwise.
+
+   REFUSES `:urpx.coverage/ambiguous-coverage-scope` when more than one names
+   urpx:coverage. Two windows for one verdict, and nothing says which is meant
+   or that they should be unioned; picking either would be the arbitrary choice
+   this library exists not to make."
+  [c doc version-id]
+  (let [covers (filter #(= "urpx:coverage" (get-in % [:urpx/scopeKind :jsonld/id]))
+                       (keep #(let [n (deref-node % doc)] (when-not (= ::unresolved n) n))
+                             (as-vec (:urpx/hasTemporalScope c))))]
+    (when (> (count covers) 1)
+      (throw (ex-info (str "Coverage claim on " (pr-str version-id) " carries "
+                           (count covers) " TemporalScopes with scopeKind "
+                           "urpx:coverage. A verdict covers one window, and "
+                           "nothing says which of these is meant or that they "
+                           "should be combined.")
+                      {:reason :urpx.coverage/ambiguous-coverage-scope
+                       :version-id version-id
+                       :count (count covers)})))
+    (first covers)))
+
+(defn of-version
+  "What `version` claims about its own coverage, as a report map.
+
+      :urpx.coverage/version-id      the snapshot's @id
+      :urpx.coverage/version-type    its @type
+      :urpx.coverage/stated?         whether it carries a CoverageClaim at all
+      :urpx.coverage/completeness    one of `completeness-results` as the IRI
+                                     STRING the document uses, or nil
+      :urpx.coverage/self-contained  true / false / nil
+      :urpx.coverage/self-contained-source        :claim, :version, or nil
+      :urpx.coverage/self-contained-disagrees?    the two places disagree
+      :urpx.coverage/confidence      IRI string or nil
+      :urpx.coverage/stale           true / false / nil
+      :urpx.coverage/fallback-sourced             true / false / nil
+      :urpx.coverage/scope-stated?   a urpx:coverage TemporalScope is present
+      :urpx.coverage/coverage-window that scope node, raw, or nil
+      :urpx.coverage/evaluations     [{:kind :evaluated-on :description}], or
+                                     {:unresolved-ref id} for one that cannot
+                                     be followed
+
+   ABSENT IS NOT UNKNOWN. A version with no claim reports `stated? false` and
+   `completeness nil`, never `\"urpx:unknown\"`. urpx:unknown is itself a
+   verdict, meaning evaluated-nowhere, and a document that asserts it has said
+   something a document that omits the claim has not. Conflating them would
+   invent a claim on the publisher's behalf.
+
+   A missing claim is NOT refused either: `urpx:hasCoverageClaim` is optional in
+   this library's schema for a recorded reason, that requiring it would reject
+   every v0.2.x document, and v0.2.x acceptance is a contract this library
+   advertises.
+
+   `completeness` is the IRI string as written, `\"urpx:partial\"`, rather than
+   a keyword of this library's invention. It maps 1:1 to what the document says
+   and needs no translation table to compare against one.
+
+   SCOPE-STATED IS NOT WINDOW-STATED. urpx:scopeKind is the only required field
+   on a TemporalScope, so a scope may name its role and give no bounds. A caller
+   deciding whether a verdict covers a window must read `coverage-window` rather
+   than trusting `scope-stated?`."
+  ([version] (of-version version nil))
+  ([version doc]
+   (let [vid (:jsonld/id version)
+         c   (claim version doc)]
+     (if (= ::absent c)
+       {:urpx.coverage/version-id vid
+        :urpx.coverage/version-type (:jsonld/type version)
+        :urpx.coverage/stated? false
+        :urpx.coverage/completeness nil
+        :urpx.coverage/self-contained (:urpx/selfContained version)
+        :urpx.coverage/self-contained-source (when (some? (:urpx/selfContained version)) :version)
+        :urpx.coverage/self-contained-disagrees? false
+        :urpx.coverage/confidence nil
+        :urpx.coverage/stale nil
+        :urpx.coverage/fallback-sourced nil
+        :urpx.coverage/scope-stated? false
+        :urpx.coverage/coverage-window nil
+        :urpx.coverage/evaluations []}
+       (let [window (coverage-window-of c doc vid)]
+         (merge {:urpx.coverage/version-id vid
+                 :urpx.coverage/version-type (:jsonld/type version)
+                 :urpx.coverage/stated? true
+                 :urpx.coverage/completeness (completeness-of c vid)
+                 :urpx.coverage/confidence (get-in c [:urpx/confidence :jsonld/id])
+                 :urpx.coverage/stale (:urpx/stale c)
+                 :urpx.coverage/fallback-sourced (:urpx/fallbackSourced c)
+                 :urpx.coverage/scope-stated? (some? window)
+                 :urpx.coverage/coverage-window window
+                 :urpx.coverage/evaluations (evaluations-of c doc)}
+                (self-contained-of c version)))))))

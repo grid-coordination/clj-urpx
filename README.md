@@ -659,6 +659,41 @@ They exist because a glob looks equivalent to a walk and is not. Over urpx-rate-
 
 `dev/corpus_sweep.clj` is a full worked example, and pins a corpus to an exact revision with [tools.gitlibs](https://github.com/clojure/tools.gitlibs) rather than to whatever a sibling checkout holds. `babashka/fs` and `tools.gitlibs` are `:dev` dependencies; the library itself does no filesystem traversal and fetches nothing.
 
+## What a snapshot claims about itself (optional)
+
+Every `urpx:RatePlanVersion` and `urpx:RatePlanModifierVersion` carries a `urpx:CoverageClaim`: a verdict on what can be answered from that snapshot. It is the standard's own answer to "what am I holding?", and `urpx.coverage` reads it.
+
+```clojure
+(require '[urpx.coverage :as cov])
+
+(cov/of-version version)        ; => a report map, keys under :urpx.coverage/
+(cov/of-version version doc)    ; doc only needed to follow a bare @id reference
+(cov/claim version)             ; => the raw CoverageClaim node, or ::absent
+```
+
+The verdict is **not this library's judgement**. Per the ontology, claims "are produced by an implementation or publishing workflow", so a claim says what the *publisher* asserts. Nothing here re-derives one or second-guesses one.
+
+`urpx.coverage` requires `urpx.index` and nothing else of the library: not `urpx.price`, not `urpx.arrangements`. Nothing in `src/` requires it.
+
+### Three things a caller should know
+
+**Absent is not `unknown`.** A version with no claim reports `:stated? false` and `:completeness nil`, never `"urpx:unknown"`. `urpx:unknown` is itself a verdict, meaning no evaluation has run, so a document asserting it has said something a document omitting the claim has not.
+
+**`selfContained true` is not "complete", and here it is vacuous.** It is derived as "false iff any `PriceDefinitionReference` is `retrievedElsewhere`", and there are zero such references in the production corpus or the vendored fixtures, so the existential ranges over an empty set. It is `true` on all 80 corpus version nodes and means only "nothing here is fetched from elsewhere".
+
+**A verdict states no window.** The `CoverageClaim` note says producers *should* attach a `TemporalScope` with `scopeKind urpx:coverage` saying what the verdict covers. Measured: **zero** `TemporalScope` nodes of any kind across the corpus and the fixtures. So a consumer publishing a horizon cannot assume a verdict covers it. `:scope-stated?` and `:coverage-window` are separate for the same reason: `scopeKind` is the only required field on a scope, so one can name its role and bound nothing.
+
+### What it refuses
+
+| `:reason` | When |
+|---|---|
+| `:urpx.coverage/unknown-completeness-result` | the claim names a member outside the six. Reporting `nil` would read as "not complete", a guess about a verdict the document did state |
+| `:urpx.coverage/claim-ref-unresolved` | the claim is a bare `@id` that cannot be followed. A reference going nowhere is not the same as no claim |
+| `:urpx.coverage/self-contained-contradicts-references` | the claim asserts `selfContained true` while a `PriceDefinitionReference` is `retrievedElsewhere`, contradicting the property's own derivation with no stated precedence |
+| `:urpx.coverage/ambiguous-coverage-scope` | more than one scope names `urpx:coverage`. A verdict covers one window and nothing says which is meant |
+
+Two things deliberately do **not** refuse. A missing claim is reported, not thrown: `hasCoverageClaim` is optional here because requiring it would reject every v0.2.x document. And claim-level and version-level `selfContained` disagreeing is reported with `:self-contained-disagrees? true` and the claim winning, because the ontology settles precedence ("when both are present they MUST agree, and the claim is authoritative"); it is a violated MUST, which is a validation concern rather than a reading one.
+
 ## Writing URPX JSON-LD
 
 The library also supports the inverse direction: emit URPX JSON-LD from a coerced Clojure entity. Useful for round-trip validation, programmatic generation of URPX documents, and authoring fixtures in idiomatic Clojure.
@@ -797,6 +832,7 @@ For a longer worked walkthrough that mirrors selected examples from the upstream
 |------------------|---------|
 | `urpx.core`          | JSON-LD parsing and loading (`parse-rate-plan`, `load-rate-plan`, `load-rate-plan-version`, `parse-graph`, `load-graph`, `expand-document-entities`) |
 | `urpx.schema`    | Malli schemas for the coerced URPX entity model |
+| `urpx.coverage`  | Optional reader for `urpx:CoverageClaim`: `of-version`, `claim`, `completeness-results`. Requires `urpx.index` only |
 | `urpx.load`      | `document-xf`, `documents`, `scan`: sources to coerced documents, with the discards reportable |
 | `urpx.coerce`    | Schema-driven coercion: strings → typed values; `coerce-doc` dispatches on `@type`; `validate`, `explain`; `uncoerced?` and `check-coerced!` tell a coerced document from a raw one |
 | `urpx.index`     | `build-index`, `resolve-ref`, `get-entity` for `@id` references; `versions-by-plan` for v0.5.1 back-pointers; `single` and `entities-of-type` |

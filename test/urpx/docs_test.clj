@@ -80,7 +80,7 @@
    "index" 'urpx.index "price" 'urpx.price "schedule" 'urpx.schedule
    "holidays" 'urpx.holidays "tz" 'urpx.tz-inference "emit" 'urpx.emit
    "dsl" 'urpx.dsl "validate" 'urpx.validate
-   "load" 'urpx.load "arr" 'urpx.arrangements})
+   "load" 'urpx.load "arr" 'urpx.arrangements "cov" 'urpx.coverage})
 
 (defn- referenced-symbols
   "Qualified symbols a doc's Clojure blocks mention, as [alias name] pairs.
