@@ -9,7 +9,7 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
-## [Unreleased]
+## [0.26.0] — 2026-09-21
 
 ### Added
 
@@ -29,7 +29,11 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
   Scoped to prices that would actually be summed. 100,640 of the corpus's 101,992 gated tiers are export prices in net-billing matrices where the gate is the lookup key; `urpx:flowDirection urpx:reverse` has kept those out of the marginal since 0.21.0 and they do not refuse it either.
 
-**Upgrading:** a composition that returned a number for SCE CCA-CRS, SCE DA-CRS, SCE TOU-D-PRIME-CPP or PG&E E-RSMART now refuses. Every one of those numbers was wrong. Where the gated set is mutually exclusive, the filing wants `urpx:ProfileAlternatives` and the refusal becomes a selection you can make; where the gate is a genuine predicate, `:assume-conditions-hold? true` restores the previous value explicitly.
+**Upgrading:** measured across the production corpus, **35 of 172 composed resolutions** change from a number to a refusal, on **five base plans**: PG&E E-ELEC, and SCE D, TOU-D-4-9PM, TOU-D-5-8PM and TOU-D-PRIME. Every one of those numbers was wrong, and the ones driven by CRS were wrong by more than half the base rate. The remaining 137 are unchanged.
+
+Discounts are **not** affected. A `urpx:PriceSummary` whose members carried a gated price would have propagated the refusal into every CARE and FERA composition; measured, none does, and SCE Schedule D still returns `0.19804875` with CARE and `0.2550770` with FERA, identical with and without `:assume-conditions-hold? true`. Flagged by the urpx-rate-plans session before release, and checked rather than assumed.
+
+Where the gated set is mutually exclusive, the filing wants `urpx:ProfileAlternatives` and the refusal becomes a selection you can make; where the gate is a genuine predicate, `:assume-conditions-hold? true` restores the previous value explicitly.
 
 ## [0.25.0] — 2026-09-21
 
@@ -377,6 +381,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.26.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.26.0
 [0.25.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.25.0
 [0.24.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.24.0
 [0.23.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.23.0
