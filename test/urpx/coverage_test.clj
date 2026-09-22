@@ -12,6 +12,7 @@
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [urpx.arrangements :as arr]
+            [tick.alpha.interval :as ti]
             [urpx.coverage :as cov]
             [urpx.test-fixtures :as fixtures]))
 
@@ -225,9 +226,13 @@
              :urpx.coverage/any-part-scope-stated?}
            (set (keys (cov/of-arrangement (sce-d+care)))))
         "exactly these keys: no verdict, no min, no fold")
-    (is (not-any? #(re-find #"verdict|weakest|overall|rollup" (name %))
+    (is (not-any? #(re-find #"weakest|overall|rollup|composite|combined|arrangement-verdict"
+                            (name %))
                   (keys (ns-publics 'urpx.coverage)))
-        "and no public var offers one under another name")))
+        "and no public var offers one under another name. Deliberately NOT
+         banning the word \"verdict\": verdict-applies? is a predicate about one
+         version's own scope, and an over-broad guard that fires on a correct
+         name teaches people to loosen guards.")))
 
 (deftest a-mixed-arrangement-keeps-both-verdicts
   (testing "SCE Schedule D claims complete and the CARE modifier claims partial,
@@ -300,3 +305,146 @@
       (is (= "sce:care-2026-03-20" (:version-id (first ds))))
       (is (< 100 (count (:description (first ds))))
           "and it is prose, not a label"))))
+
+;; ---------------------------------------------------------------------------
+;; Does a verdict cover a window?
+;; ---------------------------------------------------------------------------
+
+(defn- ldt [y m d] (java.time.LocalDateTime/of y m d 0 0))
+
+(defn- scoped
+  "A version whose claim carries one coverage scope with the given bounds."
+  [bounds]
+  (version {:urpx/completenessResult {:jsonld/id "urpx:partial"}
+            :urpx/hasTemporalScope
+            [(merge {:jsonld/type "urpx:TemporalScope"
+                     :urpx/scopeKind {:jsonld/id "urpx:coverage"}}
+                    bounds)]}))
+
+(defn- applies? [bounds from to]
+  (cov/verdict-applies? (cov/of-version (scoped bounds))
+                        {:tick/beginning from :tick/end to}))
+
+(deftest a-verdict-covers-a-window-or-it-does-not
+  (testing "the call a price server makes before trusting a verdict over the
+            horizon it is about to publish. The scope's window must CONTAIN the
+            query window: a verdict covering January says nothing useful about a
+            query that runs into February."
+    (let [jan-to-mar {:urpx/startDateTime (ldt 2026 1 1)
+                      :urpx/endDateTime   (ldt 2026 3 1)}]
+      (is (true?  (applies? jan-to-mar (ldt 2026 1 1) (ldt 2026 2 1))) "inside")
+      (is (true?  (applies? jan-to-mar (ldt 2026 1 1) (ldt 2026 3 1))) "exactly")
+      (is (false? (applies? jan-to-mar (ldt 2025 12 1) (ldt 2026 2 1))) "starts too early")
+      (is (false? (applies? jan-to-mar (ldt 2026 2 1) (ldt 2026 4 1))) "runs past the end")
+      (is (false? (applies? jan-to-mar (ldt 2026 4 1) (ldt 2026 5 1))) "wholly outside"))))
+
+(deftest the-window-is-start-inclusive-and-end-exclusive
+  (testing "matching urpx.price/version-covers? exactly, which treats a version
+            as covering [effective, expiration). URPX states no convention for a
+            TemporalScope's bounds, and two readings of a window inside one
+            library would be worse than either.
+
+            Asserted at the boundary instants themselves, which is where an
+            off-by-one lives: this library has already shipped one, an
+            expirationDate read at start of day."
+    (let [w {:urpx/startDateTime (ldt 2026 1 1) :urpx/endDateTime (ldt 2026 2 1)}]
+      (is (true?  (applies? w (ldt 2026 1 1) (ldt 2026 2 1)))
+          "a query starting exactly at the scope's start is covered")
+      (is (false? (applies? w (ldt 2026 1 1) (ldt 2026 2 2)))
+          "and one ending past the scope's end is not"))))
+
+(deftest a-missing-bound-is-unbounded-on-that-side
+  (testing "a scope stating only a start covers everything after it, the same
+            reading urpx.price gives a version with no expiration."
+    (is (true?  (applies? {:urpx/startDateTime (ldt 2026 1 1)} (ldt 2030 1 1) (ldt 2031 1 1))))
+    (is (false? (applies? {:urpx/startDateTime (ldt 2026 1 1)} (ldt 2025 1 1) (ldt 2026 6 1))))
+    (is (true?  (applies? {:urpx/endDateTime (ldt 2026 3 1)} (ldt 2020 1 1) (ldt 2026 3 1))))))
+
+(deftest a-date-bound-is-read-at-start-of-day
+  (testing "the same rule urpx.price/version-effective-at gives the version
+            shapes' own date-or-dateTime pair. A second reading of the same kind
+            of bound is the drift that put an effectiveDateTime-only filter into
+            urpx.arrangements."
+    (let [w {:urpx/startDate (java.time.LocalDate/of 2026 1 1)
+             :urpx/endDate   (java.time.LocalDate/of 2026 2 1)}]
+      (is (true?  (applies? w (ldt 2026 1 1) (ldt 2026 2 1))))
+      (is (false? (applies? w (ldt 2025 12 31) (ldt 2026 2 1))))
+      (testing "and a dateTime wins over a date when both are present"
+        (is (false? (applies? (assoc w :urpx/startDateTime (ldt 2026 1 15))
+                              (ldt 2026 1 1) (ldt 2026 2 1))))))))
+
+(deftest no-coverage-scope-refuses-rather-than-answering
+  (testing "THIS FIRES ON EVERY FILING IN THE PRODUCTION CORPUS, because zero
+            TemporalScope nodes of any kind exist there or in the fixtures. The
+            ontology says producers SHOULD attach one and no shape makes them.
+
+            False would claim the verdict does not cover the window, which the
+            document never said; true would be worse. The honest answer is that
+            the question has none, which is what a refusal says. A caller that
+            publishes anyway is choosing a policy, and catching a named reason
+            is how it says so."
+    (let [r (cov/of-version (version {:urpx/completenessResult {:jsonld/id "urpx:partial"}}))
+          e (is (thrown? clojure.lang.ExceptionInfo
+                         (cov/verdict-applies? r {:tick/beginning (ldt 2026 1 1) :tick/end (ldt 2026 2 1)})))]
+      (is (= :urpx.coverage/coverage-scope-absent (:reason (ex-data e)))))
+    (testing "and on a real filing, which is the case a consumer meets first"
+      (let [r (cov/of-version (:urpx/hasRatePlanVersion
+                               (fixtures/load-rate-plan "sce-d-2026-03-20")))]
+        (is (= :urpx.coverage/coverage-scope-absent
+               (try (cov/verdict-applies? r {:tick/beginning (ldt 2026 7 15) :tick/end (ldt 2026 7 18)}) nil
+                    (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))))))))
+
+(deftest a-scope-with-no-bounds-refuses-separately
+  (testing "urpx:scopeKind is the only required field, so a scope may name its
+            role and bound nothing. That asserts which clock the verdict refers
+            to without saying over what span, and it is conformant.
+
+            A distinct reason from the absent case, because the two call for
+            different things: one filing needs a scope added, the other needs
+            the scope it has given bounds."
+    (let [e (is (thrown? clojure.lang.ExceptionInfo (applies? {} (ldt 2026 1 1) (ldt 2026 2 1))))]
+      (is (= :urpx.coverage/coverage-scope-unbounded (:reason (ex-data e)))))))
+
+(deftest the-coverage-window-is-ticks-interval-shape
+  (testing "the same {:tick/beginning :tick/end} map urpx.schedule emits from
+            price-schedule and price-segments, so a caller holding segments and
+            a caller holding a coverage window hold the same kind of thing and
+            can hand either to tick.alpha.interval.
+
+            LOCAL, not zoned, which is the one place the two differ. A schedule
+            interval carries ZonedDateTimes in the plan's resolved zone; URPX
+            states a TemporalScope's bounds with no zone at all, so projecting
+            one into a zone here would be inventing it. A caller compares by
+            projecting the segment with .toLocalDateTime, the same reduction
+            urpx.price applies to every query instant."
+    (let [w (cov/coverage-interval
+             (cov/of-version (scoped {:urpx/startDateTime (ldt 2026 1 1)
+                                      :urpx/endDateTime   (ldt 2026 3 1)})))]
+      (is (= #{:tick/beginning :tick/end} (set (keys w))))
+      (is (= (ldt 2026 1 1) (:tick/beginning w)))
+      (is (every? #(instance? java.time.LocalDateTime %) (vals w))
+          "local, so nothing here invents a zone URPX did not state"))
+    (testing "and an unbounded side is nil rather than absent, so the shape is stable"
+      (is (= {:tick/beginning (ldt 2026 1 1) :tick/end nil}
+             (cov/coverage-interval
+              (cov/of-version (scoped {:urpx/startDateTime (ldt 2026 1 1)}))))))))
+
+(deftest the-window-is-a-tick-interval-in-fact-not-only-in-shape
+  (testing "tick's interval functions read any map carrying :tick/beginning and
+            :tick/end, so the shape choice buys real interop rather than a
+            resemblance. Pinned because the docstrings claim it.
+
+            On bounded windows verdict-applies? IS tick.alpha.interval/contains?.
+            It exists as a named predicate because the refusals are the
+            interesting part; a caller wanting Allen's richer relation should
+            reach for tick rather than for another function here."
+    (let [r   (cov/of-version (scoped {:urpx/startDateTime (ldt 2026 1 1)
+                                       :urpx/endDateTime   (ldt 2026 3 1)}))
+          win (cov/coverage-interval r)]
+      (is (= :equals (ti/relation win win)) "tick reads it as an interval")
+      (doseq [[rel iv] [[:during      {:tick/beginning (ldt 2026 1 15) :tick/end (ldt 2026 2 1)}]
+                        [:overlaps    {:tick/beginning (ldt 2025 12 1) :tick/end (ldt 2026 2 1)}]
+                        [:preceded-by {:tick/beginning (ldt 2026 4 1)  :tick/end (ldt 2026 5 1)}]]]
+        (is (= rel (ti/relation iv win)) (str "tick says " rel))
+        (is (= (ti/contains? win iv) (cov/verdict-applies? r iv))
+            (str "and contains? agrees with verdict-applies? for " rel))))))

@@ -563,6 +563,23 @@ Every derived boolean is named for the **parts** — `every-part-complete?`, nev
 
 What a caller does instead is decide its own publication policy over `completeness-counts` — and for that, `descriptions` is usually the thing to read rather than the verdict. A completeness result says *that* something is missing; the linked Evaluation says *what*, specifically enough to act on. One filing's prose names the five customer groups whose exemptions it does not represent and states plainly that a consumer applying it to any of them "will charge components the tariff exempts".
 
+### Does a verdict cover the window you are publishing?
+
+`coverage-interval` returns the window as `{:tick/beginning <LocalDateTime> :tick/end <LocalDateTime>}` — the same shape `price-schedule` and `price-segments` emit. `verdict-applies?` asks whether that window contains an interval, `[beginning, end)` with start inclusive and end exclusive, matching `urpx.price/version-covers?` exactly. URPX states no convention for a `TemporalScope`'s bounds, and two readings of a window inside one library would be worse than either.
+
+**These are tick intervals in fact, not only in shape.** `tick.alpha.interval`'s functions read any map carrying those two keys, so Allen's relations work on the value directly and `ti/contains?` agrees with `verdict-applies?` case for case:
+
+```clojure
+(ti/relation {:tick/beginning jan-15 :tick/end feb-1} window) ; => :during
+(ti/relation {:tick/beginning dec-1  :tick/end feb-1} window) ; => :overlaps
+```
+
+A caller wanting the richer relation should reach for tick rather than for another function here. This library requires tick nowhere.
+
+One difference from a schedule interval: a coverage window is **local, not zoned**. A schedule interval carries `ZonedDateTime`s in the plan's resolved zone; URPX states coverage bounds with no zone at all, so projecting one into a zone here would be inventing it. Project the segment with `.toLocalDateTime` — the same reduction `urpx.price` applies to every query instant.
+
+**`verdict-applies?` refuses on every real filing today.** Zero `TemporalScope` nodes of any kind exist in the production corpus or the fixtures, so `:coverage-scope-absent` is what a price server meets first. That is not a bug: returning `false` would claim the verdict does not cover the window, which no document said, and `true` would be worse. A caller that publishes anyway is choosing its own policy, and catching a named reason is how it says so.
+
 ### What it refuses
 
 Enumeration answers a question about a whole corpus, so a corpus that does not determine an answer gets a refusal rather than one of the answers it might have meant. Each carries a named `:reason` in `ex-data`.
@@ -684,6 +701,9 @@ Every `urpx:RatePlanVersion` and `urpx:RatePlanModifierVersion` carries a `urpx:
 
 (cov/of-arrangement arrangement)     ; => every part's report, plus counts
 (cov/descriptions arrangement-report) ; => the Evaluation prose, in part order
+
+(cov/coverage-interval report)       ; => {:tick/beginning .. :tick/end ..}
+(cov/verdict-applies? report interval) ; => does the verdict cover that window?
 ```
 
 The verdict is **not this library's judgement**. Per the ontology, claims "are produced by an implementation or publishing workflow", so a claim says what the *publisher* asserts. Nothing here re-derives one or second-guesses one.
@@ -706,6 +726,8 @@ The verdict is **not this library's judgement**. Per the ontology, claims "are p
 | `:urpx.coverage/claim-ref-unresolved` | the claim is a bare `@id` that cannot be followed. A reference going nowhere is not the same as no claim |
 | `:urpx.coverage/self-contained-contradicts-references` | the claim asserts `selfContained true` while a `PriceDefinitionReference` is `retrievedElsewhere`, contradicting the property's own derivation with no stated precedence |
 | `:urpx.coverage/ambiguous-coverage-scope` | more than one scope names `urpx:coverage`. A verdict covers one window and nothing says which is meant |
+| `:urpx.coverage/coverage-scope-absent` | `coverage-interval` or `verdict-applies?` asked about a claim with no `urpx:coverage` scope. Every filing in the corpus today |
+| `:urpx.coverage/coverage-scope-unbounded` | a coverage scope naming its role and no bounds, which `scopeKind` being the only required field permits. It asserts a role, not a window |
 
 Two things deliberately do **not** refuse. A missing claim is reported, not thrown: `hasCoverageClaim` is optional here because requiring it would reject every v0.2.x document. And claim-level and version-level `selfContained` disagreeing is reported with `:self-contained-disagrees? true` and the claim winning, because the ontology settles precedence ("when both are present they MUST agree, and the claim is authoritative"); it is a violated MUST, which is a validation concern rather than a reading one.
 
@@ -847,7 +869,7 @@ For a longer worked walkthrough that mirrors selected examples from the upstream
 |------------------|---------|
 | `urpx.core`          | JSON-LD parsing and loading (`parse-rate-plan`, `load-rate-plan`, `load-rate-plan-version`, `parse-graph`, `load-graph`, `expand-document-entities`) |
 | `urpx.schema`    | Malli schemas for the coerced URPX entity model |
-| `urpx.coverage`  | Optional reader for `urpx:CoverageClaim`: `of-version`, `of-arrangement`, `descriptions`, `claim`, `completeness-results`. Requires `urpx.index` only |
+| `urpx.coverage`  | Optional reader for `urpx:CoverageClaim`: `of-version`, `of-arrangement`, `descriptions`, `coverage-interval`, `verdict-applies?`, `claim`. Requires `urpx.index` only |
 | `urpx.load`      | `document-xf`, `documents`, `scan`: sources to coerced documents, with the discards reportable |
 | `urpx.coerce`    | Schema-driven coercion: strings → typed values; `coerce-doc` dispatches on `@type`; `validate`, `explain`; `uncoerced?` and `check-coerced!` tell a coerced document from a raw one |
 | `urpx.index`     | `build-index`, `resolve-ref`, `get-entity` for `@id` references; `versions-by-plan` for v0.5.1 back-pointers; `single` and `entities-of-type` |
