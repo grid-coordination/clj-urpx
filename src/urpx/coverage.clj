@@ -391,31 +391,51 @@
       (some-> ^java.time.LocalDate (get scope d-key) (.atStartOfDay))))
 
 (defn coverage-interval
-  "The window a verdict covers, as `{:tick/beginning <LocalDateTime>
-   :tick/end <LocalDateTime>}`, with either end nil when unbounded on that side.
+  "The window a verdict covers, as `{:tick/beginning <ZonedDateTime>
+   :tick/end <ZonedDateTime>}` in `zone`, with either end nil when unbounded on
+   that side.
 
-   TICK'S INTERVAL SHAPE, the one `urpx.schedule` already emits from
-   `price-schedule` and `price-segments`, so a caller holding segments and a
-   caller holding a coverage window are holding the same kind of thing and can
-   hand either to `tick.alpha.interval`.
+   ZONED, AND THE ZONE IS REQUIRED. URPX states a TemporalScope's bounds without
+   one, so a bare bound is a wall-clock reading that means nothing until a zone
+   is supplied. Returning it unzoned looked like the honest choice and was the
+   opposite: `urpx.schedule` emits `{:tick/beginning :tick/end}` carrying
+   ZonedDateTimes, so an unzoned window is the same map with the same keys and
+   an incompatible type, and the natural comparison does not fail loudly.
+   Measured: `tick.alpha.interval/relation` throws a ClassCastException on the
+   mixture, and `contains?` returns TRUE regardless of the values. A silently
+   wrong answer about whether a verdict covers a published horizon is the worst
+   thing this namespace could produce.
 
-   LOCAL, NOT ZONED, and that is the one place the two differ. A schedule
-   interval carries ZonedDateTimes in the plan's resolved zone; URPX states a
-   TemporalScope's bounds with no zone at all, so projecting one into a zone
-   here would be inventing the zone. A caller comparing a segment against a
-   coverage window projects the segment with `.toLocalDateTime`, which is the
-   same reduction `urpx.price` applies to every query instant.
+   `zone` is a java.time.ZoneId. A rate plan usually declares one as
+   `urpx:timezoneIdentifier`, which is what `urpx.schedule` resolves for the
+   same purpose; a caller that has already built a horizon has it in hand. This
+   namespace does not read it for you, because the plan carrying it is not
+   always the document a version came from and guessing which is the caller's
+   call rather than this reader's.
+
+   TICK INTERVALS IN FACT, not only in shape. `tick.alpha.interval`'s functions
+   read any map carrying those two keys, so `(ti/relation window segment)`
+   answers with Allen's relations directly and `(ti/contains? window interval)`
+   agrees with `verdict-applies?` case for case, with both sides now zoned. A
+   caller wanting the richer relation should reach for tick rather than for
+   another function here. This library requires tick nowhere.
 
    The dateTime form is preferred and the date form read at start of day, the
    rule `urpx.price/version-effective-at` already gives the version shapes' own
    date-or-dateTime pair.
 
    REFUSES `:urpx.coverage/coverage-scope-absent` and
-   `:urpx.coverage/coverage-scope-unbounded`; see `verdict-applies?`, which is
-   the predicate most callers want."
-  [version-report]
+   `:urpx.coverage/coverage-scope-unbounded`; see `verdict-applies?`."
+  [version-report ^java.time.ZoneId zone]
   (let [scope (:urpx.coverage/coverage-window version-report)
         vid   (:urpx.coverage/version-id version-report)]
+    (when-not zone
+      (throw (ex-info (str "A coverage window needs a zone: URPX states a "
+                           "TemporalScope's bounds as wall-clock readings with "
+                           "no zone, and an unzoned interval compares against a "
+                           "zoned schedule interval without failing loudly.")
+                      {:reason :urpx.coverage/zone-required
+                       :version-id vid})))
     (when-not scope
       (throw (ex-info (str "No coverage scope on " (pr-str vid) ", so what window "
                            "its verdict covers is a question the document does "
@@ -436,40 +456,43 @@
                              "unanswerable.")
                         {:reason :urpx.coverage/coverage-scope-unbounded
                          :version-id vid})))
-      {:tick/beginning beginning :tick/end end})))
+      {:tick/beginning (some-> ^java.time.LocalDateTime beginning (.atZone zone))
+       :tick/end       (some-> ^java.time.LocalDateTime end (.atZone zone))})))
 
 (defn verdict-applies?
   "True if the window `version-report`'s verdict covers CONTAINS `interval`.
 
-   `interval` is `{:tick/beginning <LocalDateTime> :tick/end <LocalDateTime>}`,
-   the shape `urpx.schedule` emits, so a caller can ask this of a segment it is
-   about to publish. On bounded windows this is exactly
-   `tick.alpha.interval/contains?`, which reads the same map; it exists as a
-   named predicate because the refusals below are the interesting part, not the
-   comparison. Project a zoned segment with `.toLocalDateTime` first: URPX
-   states coverage bounds without a zone, and `urpx.price` reduces every query
-   instant the same way.
+   `interval` is `{:tick/beginning <ZonedDateTime> :tick/end <ZonedDateTime>}`,
+   exactly what `urpx.schedule`'s `price-schedule` and `price-segments` emit and
+   what `urpx.arrangements/segments-for` hands back, so a caller asks this of a
+   segment it is about to publish without converting anything.
+
+   `zone` interprets the scope's own bounds, which URPX states without one. See
+   `coverage-interval` for why that is required rather than defaulted.
 
    THE WINDOW IS [beginning, end), start inclusive and end exclusive, matching
    `urpx.price/version-covers?` exactly. URPX states no convention for a
    TemporalScope's bounds, and two readings of a window inside one library would
-   be worse than either; this is at least the one already in use. An absent
-   bound is unbounded on that side, so a scope stating only a start covers
-   everything after it.
+   be worse than either. An absent bound is unbounded on that side, so a scope
+   stating only a start covers everything after it.
+
+   On bounded windows this is exactly `tick.alpha.interval/contains?`, which
+   reads the same map; it exists as a named predicate because the refusals are
+   the interesting part, not the comparison.
 
    REFUSES `:urpx.coverage/coverage-scope-absent`, which a price server meets on
    EVERY real filing today (zero TemporalScope nodes of any kind exist in the
-   production corpus or the vendored fixtures), and
+   production corpus or the vendored fixtures),
    `:urpx.coverage/coverage-scope-unbounded` for a scope that names its role and
-   bounds nothing.
+   bounds nothing, and `:urpx.coverage/zone-required`.
 
    False would claim the verdict does not cover the window, which the document
    never said; true would be worse. The honest answer is that the question has
    none, which is what a refusal says. A caller that publishes anyway is
    choosing its own policy, and catching a named reason is how it says so."
-  [version-report interval]
-  (let [{:tick/keys [beginning end]} (coverage-interval version-report)
-        ^java.time.LocalDateTime from (:tick/beginning interval)
-        ^java.time.LocalDateTime to   (:tick/end interval)]
-    (and (or (nil? beginning) (not (.isAfter ^java.time.LocalDateTime beginning from)))
-         (or (nil? end)       (not (.isAfter to ^java.time.LocalDateTime end))))))
+  [version-report ^java.time.ZoneId zone interval]
+  (let [{:tick/keys [beginning end]} (coverage-interval version-report zone)
+        ^java.time.ZonedDateTime from (:tick/beginning interval)
+        ^java.time.ZonedDateTime to   (:tick/end interval)]
+    (and (or (nil? beginning) (not (.isAfter ^java.time.ZonedDateTime beginning from)))
+         (or (nil? end)       (not (.isAfter to ^java.time.ZonedDateTime end))))))

@@ -310,6 +310,12 @@
 ;; Does a verdict cover a window?
 ;; ---------------------------------------------------------------------------
 
+(def ^:private la (java.time.ZoneId/of "America/Los_Angeles"))
+(defn- zdt
+  "A ZonedDateTime, because every boundary here is zoned. See the README's
+   \"Time and timezones\" and clj-price-server's standing rule."
+  [y m d]
+  (java.time.ZonedDateTime/of y m d 0 0 0 0 la))
 (defn- ldt [y m d] (java.time.LocalDateTime/of y m d 0 0))
 
 (defn- scoped
@@ -322,7 +328,7 @@
                     bounds)]}))
 
 (defn- applies? [bounds from to]
-  (cov/verdict-applies? (cov/of-version (scoped bounds))
+  (cov/verdict-applies? (cov/of-version (scoped bounds)) la
                         {:tick/beginning from :tick/end to}))
 
 (deftest a-verdict-covers-a-window-or-it-does-not
@@ -332,11 +338,11 @@
             query that runs into February."
     (let [jan-to-mar {:urpx/startDateTime (ldt 2026 1 1)
                       :urpx/endDateTime   (ldt 2026 3 1)}]
-      (is (true?  (applies? jan-to-mar (ldt 2026 1 1) (ldt 2026 2 1))) "inside")
-      (is (true?  (applies? jan-to-mar (ldt 2026 1 1) (ldt 2026 3 1))) "exactly")
-      (is (false? (applies? jan-to-mar (ldt 2025 12 1) (ldt 2026 2 1))) "starts too early")
-      (is (false? (applies? jan-to-mar (ldt 2026 2 1) (ldt 2026 4 1))) "runs past the end")
-      (is (false? (applies? jan-to-mar (ldt 2026 4 1) (ldt 2026 5 1))) "wholly outside"))))
+      (is (true?  (applies? jan-to-mar (zdt 2026 1 1) (zdt 2026 2 1))) "inside")
+      (is (true?  (applies? jan-to-mar (zdt 2026 1 1) (zdt 2026 3 1))) "exactly")
+      (is (false? (applies? jan-to-mar (zdt 2025 12 1) (zdt 2026 2 1))) "starts too early")
+      (is (false? (applies? jan-to-mar (zdt 2026 2 1) (zdt 2026 4 1))) "runs past the end")
+      (is (false? (applies? jan-to-mar (zdt 2026 4 1) (zdt 2026 5 1))) "wholly outside"))))
 
 (deftest the-window-is-start-inclusive-and-end-exclusive
   (testing "matching urpx.price/version-covers? exactly, which treats a version
@@ -348,17 +354,17 @@
             off-by-one lives: this library has already shipped one, an
             expirationDate read at start of day."
     (let [w {:urpx/startDateTime (ldt 2026 1 1) :urpx/endDateTime (ldt 2026 2 1)}]
-      (is (true?  (applies? w (ldt 2026 1 1) (ldt 2026 2 1)))
+      (is (true?  (applies? w (zdt 2026 1 1) (zdt 2026 2 1)))
           "a query starting exactly at the scope's start is covered")
-      (is (false? (applies? w (ldt 2026 1 1) (ldt 2026 2 2)))
+      (is (false? (applies? w (zdt 2026 1 1) (zdt 2026 2 2)))
           "and one ending past the scope's end is not"))))
 
 (deftest a-missing-bound-is-unbounded-on-that-side
   (testing "a scope stating only a start covers everything after it, the same
             reading urpx.price gives a version with no expiration."
-    (is (true?  (applies? {:urpx/startDateTime (ldt 2026 1 1)} (ldt 2030 1 1) (ldt 2031 1 1))))
-    (is (false? (applies? {:urpx/startDateTime (ldt 2026 1 1)} (ldt 2025 1 1) (ldt 2026 6 1))))
-    (is (true?  (applies? {:urpx/endDateTime (ldt 2026 3 1)} (ldt 2020 1 1) (ldt 2026 3 1))))))
+    (is (true?  (applies? {:urpx/startDateTime (ldt 2026 1 1)} (zdt 2030 1 1) (zdt 2031 1 1))))
+    (is (false? (applies? {:urpx/startDateTime (ldt 2026 1 1)} (zdt 2025 1 1) (zdt 2026 6 1))))
+    (is (true?  (applies? {:urpx/endDateTime (ldt 2026 3 1)} (zdt 2020 1 1) (zdt 2026 3 1))))))
 
 (deftest a-date-bound-is-read-at-start-of-day
   (testing "the same rule urpx.price/version-effective-at gives the version
@@ -367,11 +373,11 @@
             urpx.arrangements."
     (let [w {:urpx/startDate (java.time.LocalDate/of 2026 1 1)
              :urpx/endDate   (java.time.LocalDate/of 2026 2 1)}]
-      (is (true?  (applies? w (ldt 2026 1 1) (ldt 2026 2 1))))
-      (is (false? (applies? w (ldt 2025 12 31) (ldt 2026 2 1))))
+      (is (true?  (applies? w (zdt 2026 1 1) (zdt 2026 2 1))))
+      (is (false? (applies? w (zdt 2025 12 31) (zdt 2026 2 1))))
       (testing "and a dateTime wins over a date when both are present"
         (is (false? (applies? (assoc w :urpx/startDateTime (ldt 2026 1 15))
-                              (ldt 2026 1 1) (ldt 2026 2 1))))))))
+                              (zdt 2026 1 1) (zdt 2026 2 1))))))))
 
 (deftest no-coverage-scope-refuses-rather-than-answering
   (testing "THIS FIRES ON EVERY FILING IN THE PRODUCTION CORPUS, because zero
@@ -385,13 +391,13 @@
             is how it says so."
     (let [r (cov/of-version (version {:urpx/completenessResult {:jsonld/id "urpx:partial"}}))
           e (is (thrown? clojure.lang.ExceptionInfo
-                         (cov/verdict-applies? r {:tick/beginning (ldt 2026 1 1) :tick/end (ldt 2026 2 1)})))]
+                         (cov/verdict-applies? r la {:tick/beginning (zdt 2026 1 1) :tick/end (zdt 2026 2 1)})))]
       (is (= :urpx.coverage/coverage-scope-absent (:reason (ex-data e)))))
     (testing "and on a real filing, which is the case a consumer meets first"
       (let [r (cov/of-version (:urpx/hasRatePlanVersion
                                (fixtures/load-rate-plan "sce-d-2026-03-20")))]
         (is (= :urpx.coverage/coverage-scope-absent
-               (try (cov/verdict-applies? r {:tick/beginning (ldt 2026 7 15) :tick/end (ldt 2026 7 18)}) nil
+               (try (cov/verdict-applies? r la {:tick/beginning (zdt 2026 7 15) :tick/end (zdt 2026 7 18)}) nil
                     (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))))))))
 
 (deftest a-scope-with-no-bounds-refuses-separately
@@ -402,7 +408,7 @@
             A distinct reason from the absent case, because the two call for
             different things: one filing needs a scope added, the other needs
             the scope it has given bounds."
-    (let [e (is (thrown? clojure.lang.ExceptionInfo (applies? {} (ldt 2026 1 1) (ldt 2026 2 1))))]
+    (let [e (is (thrown? clojure.lang.ExceptionInfo (applies? {} (zdt 2026 1 1) (zdt 2026 2 1))))]
       (is (= :urpx.coverage/coverage-scope-unbounded (:reason (ex-data e)))))))
 
 (deftest the-coverage-window-is-ticks-interval-shape
@@ -419,15 +425,18 @@
             urpx.price applies to every query instant."
     (let [w (cov/coverage-interval
              (cov/of-version (scoped {:urpx/startDateTime (ldt 2026 1 1)
-                                      :urpx/endDateTime   (ldt 2026 3 1)})))]
+                                      :urpx/endDateTime   (ldt 2026 3 1)})) la)]
       (is (= #{:tick/beginning :tick/end} (set (keys w))))
-      (is (= (ldt 2026 1 1) (:tick/beginning w)))
-      (is (every? #(instance? java.time.LocalDateTime %) (vals w))
-          "local, so nothing here invents a zone URPX did not state"))
+      (is (= (zdt 2026 1 1) (:tick/beginning w)))
+      (is (every? #(instance? java.time.ZonedDateTime %) (vals w))
+          "ZONED, matching what urpx.schedule emits under the same keys. An
+           unzoned window compares against a zoned segment without failing
+           loudly: tick's relation throws, but contains? returns true
+           regardless of the values."))
     (testing "and an unbounded side is nil rather than absent, so the shape is stable"
-      (is (= {:tick/beginning (ldt 2026 1 1) :tick/end nil}
+      (is (= {:tick/beginning (zdt 2026 1 1) :tick/end nil}
              (cov/coverage-interval
-              (cov/of-version (scoped {:urpx/startDateTime (ldt 2026 1 1)}))))))))
+              (cov/of-version (scoped {:urpx/startDateTime (ldt 2026 1 1)})) la))))))
 
 (deftest the-window-is-a-tick-interval-in-fact-not-only-in-shape
   (testing "tick's interval functions read any map carrying :tick/beginning and
@@ -440,11 +449,60 @@
             reach for tick rather than for another function here."
     (let [r   (cov/of-version (scoped {:urpx/startDateTime (ldt 2026 1 1)
                                        :urpx/endDateTime   (ldt 2026 3 1)}))
-          win (cov/coverage-interval r)]
+          win (cov/coverage-interval r la)]
       (is (= :equals (ti/relation win win)) "tick reads it as an interval")
-      (doseq [[rel iv] [[:during      {:tick/beginning (ldt 2026 1 15) :tick/end (ldt 2026 2 1)}]
-                        [:overlaps    {:tick/beginning (ldt 2025 12 1) :tick/end (ldt 2026 2 1)}]
-                        [:preceded-by {:tick/beginning (ldt 2026 4 1)  :tick/end (ldt 2026 5 1)}]]]
+      (doseq [[rel iv] [[:during      {:tick/beginning (zdt 2026 1 15) :tick/end (zdt 2026 2 1)}]
+                        [:overlaps    {:tick/beginning (zdt 2025 12 1) :tick/end (zdt 2026 2 1)}]
+                        [:preceded-by {:tick/beginning (zdt 2026 4 1) :tick/end (zdt 2026 5 1)}]]]
         (is (= rel (ti/relation iv win)) (str "tick says " rel))
-        (is (= (ti/contains? win iv) (cov/verdict-applies? r iv))
+        (is (= (ti/contains? win iv) (cov/verdict-applies? r la iv))
             (str "and contains? agrees with verdict-applies? for " rel))))))
+
+(deftest a-coverage-window-compares-with-a-real-schedule-segment
+  (testing "THE ACTUAL USE CASE, and the reason the window is zoned. A price
+            server holds segments from urpx.arrangements/segments-for and asks
+            whether the verdict covers what it is about to publish. Both sides
+            carry ZonedDateTime under :tick/beginning and :tick/end, so they
+            compare with no conversion at the call site.
+
+            This was LocalDateTime for one commit, and the mixture does not fail
+            loudly: tick's relation throws a ClassCastException, but contains?
+            returns true regardless of the values. A confident wrong answer
+            about whether a verdict covers a published horizon is the worst
+            thing this namespace could produce, and it is what the repo's own
+            README already forbade: ZonedDateTime end-to-end at output
+            boundaries."
+    (let [a    (first (arr/arrangements [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
+          segs (arr/segments-for a (.toInstant (zdt 2026 7 15)) (.toInstant (zdt 2026 7 16)))
+          seg  (select-keys (first segs) [:tick/beginning :tick/end])
+          ;; a verdict covering all of July, stated as the publisher would
+          r    (cov/of-version (scoped {:urpx/startDateTime (ldt 2026 7 1)
+                                        :urpx/endDateTime   (ldt 2026 8 1)}))]
+      (is (every? #(instance? java.time.ZonedDateTime %) (vals seg))
+          "segments-for emits zoned, as the README says it does")
+      (is (every? #(instance? java.time.ZonedDateTime %)
+                  (vals (cov/coverage-interval r la)))
+          "and so does coverage-interval, under the same keys")
+      (is (= :during (ti/relation seg (cov/coverage-interval r la)))
+          "so tick relates them directly, with no projection at the call site")
+      (is (true? (cov/verdict-applies? r la seg))
+          "and the verdict covers the segment"))))
+
+(deftest a-coverage-window-refuses-without-a-zone
+  (testing "URPX states a TemporalScope's bounds as wall-clock readings with no
+            zone, so there is no honest default. Returning them unzoned was the
+            mistake this refusal replaces: it looked like the careful choice and
+            produced a map that compares against a zoned schedule interval
+            without failing loudly.
+
+            Required rather than defaulted, because any default would be a zone
+            this library picked. A rate plan usually declares one as
+            urpx:timezoneIdentifier, which is what a caller should pass."
+    (let [r (cov/of-version (scoped {:urpx/startDateTime (ldt 2026 1 1)
+                                     :urpx/endDateTime   (ldt 2026 3 1)}))]
+      (doseq [[nm f] [["coverage-interval" #(cov/coverage-interval r nil)]
+                      ["verdict-applies?"  #(cov/verdict-applies?
+                                             r nil {:tick/beginning (zdt 2026 1 1)
+                                                    :tick/end (zdt 2026 2 1)})]]]
+        (let [e (is (thrown? clojure.lang.ExceptionInfo (f)) nm)]
+          (is (= :urpx.coverage/zone-required (:reason (ex-data e))) nm))))))

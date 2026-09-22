@@ -565,7 +565,9 @@ What a caller does instead is decide its own publication policy over `completene
 
 ### Does a verdict cover the window you are publishing?
 
-`coverage-interval` returns the window as `{:tick/beginning <LocalDateTime> :tick/end <LocalDateTime>}` — the same shape `price-schedule` and `price-segments` emit. `verdict-applies?` asks whether that window contains an interval, `[beginning, end)` with start inclusive and end exclusive, matching `urpx.price/version-covers?` exactly. URPX states no convention for a `TemporalScope`'s bounds, and two readings of a window inside one library would be worse than either.
+`coverage-interval` returns the window as `{:tick/beginning <ZonedDateTime> :tick/end <ZonedDateTime>}` — the same shape *and the same types* `price-schedule` and `price-segments` emit, per this README's own rule that the library uses `ZonedDateTime` end-to-end at output boundaries. `verdict-applies?` asks whether that window contains an interval, `[beginning, end)` with start inclusive and end exclusive, matching `urpx.price/version-covers?` exactly. URPX states no convention for a `TemporalScope`'s bounds, and two readings of a window inside one library would be worse than either.
+
+**The zone is required, not defaulted.** URPX states a `TemporalScope`'s bounds as wall-clock readings with no zone, so there is no honest default and any default would be a zone this library picked. A rate plan usually declares one as `urpx:timezoneIdentifier`, which is what `urpx.schedule` resolves for the same purpose; pass that. Refuses `:urpx.coverage/zone-required` otherwise.
 
 **These are tick intervals in fact, not only in shape.** `tick.alpha.interval`'s functions read any map carrying those two keys, so Allen's relations work on the value directly and `ti/contains?` agrees with `verdict-applies?` case for case:
 
@@ -576,7 +578,11 @@ What a caller does instead is decide its own publication policy over `completene
 
 A caller wanting the richer relation should reach for tick rather than for another function here. This library requires tick nowhere.
 
-One difference from a schedule interval: a coverage window is **local, not zoned**. A schedule interval carries `ZonedDateTime`s in the plan's resolved zone; URPX states coverage bounds with no zone at all, so projecting one into a zone here would be inventing it. Project the segment with `.toLocalDateTime` — the same reduction `urpx.price` applies to every query instant.
+So a segment from `segments-for` and a coverage window compare with no conversion at the call site:
+
+```clojure
+(ti/relation segment (cov/coverage-interval report zone)) ; => :during
+```
 
 **`verdict-applies?` refuses on every real filing today.** Zero `TemporalScope` nodes of any kind exist in the production corpus or the fixtures, so `:coverage-scope-absent` is what a price server meets first. That is not a bug: returning `false` would claim the verdict does not cover the window, which no document said, and `true` would be worse. A caller that publishes anyway is choosing its own policy, and catching a named reason is how it says so.
 
@@ -702,8 +708,8 @@ Every `urpx:RatePlanVersion` and `urpx:RatePlanModifierVersion` carries a `urpx:
 (cov/of-arrangement arrangement)     ; => every part's report, plus counts
 (cov/descriptions arrangement-report) ; => the Evaluation prose, in part order
 
-(cov/coverage-interval report)       ; => {:tick/beginning .. :tick/end ..}
-(cov/verdict-applies? report interval) ; => does the verdict cover that window?
+(cov/coverage-interval report zone)        ; => {:tick/beginning .. :tick/end ..}
+(cov/verdict-applies? report zone interval) ; => does the verdict cover that window?
 ```
 
 The verdict is **not this library's judgement**. Per the ontology, claims "are produced by an implementation or publishing workflow", so a claim says what the *publisher* asserts. Nothing here re-derives one or second-guesses one.
@@ -728,6 +734,7 @@ The verdict is **not this library's judgement**. Per the ontology, claims "are p
 | `:urpx.coverage/ambiguous-coverage-scope` | more than one scope names `urpx:coverage`. A verdict covers one window and nothing says which is meant |
 | `:urpx.coverage/coverage-scope-absent` | `coverage-interval` or `verdict-applies?` asked about a claim with no `urpx:coverage` scope. Every filing in the corpus today |
 | `:urpx.coverage/coverage-scope-unbounded` | a coverage scope naming its role and no bounds, which `scopeKind` being the only required field permits. It asserts a role, not a window |
+| `:urpx.coverage/zone-required` | a coverage window was asked for with no `ZoneId`. URPX states the bounds without one and any default would be this library's invention |
 
 Two things deliberately do **not** refuse. A missing claim is reported, not thrown: `hasCoverageClaim` is optional here because requiring it would reject every v0.2.x document. And claim-level and version-level `selfContained` disagreeing is reported with `:self-contained-disagrees? true` and the claim winning, because the ontology settles precedence ("when both are present they MUST agree, and the claim is authoritative"); it is a violated MUST, which is a validation concern rather than a reading one.
 
