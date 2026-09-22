@@ -724,6 +724,18 @@ The verdict is **not this library's judgement**. Per the ontology, claims "are p
 
 **A verdict states no window.** The `CoverageClaim` note says producers *should* attach a `TemporalScope` with `scopeKind urpx:coverage` saying what the verdict covers. Measured: **zero** `TemporalScope` nodes of any kind across the corpus and the fixtures. So a consumer publishing a horizon cannot assume a verdict covers it. `:scope-stated?` and `:coverage-window` are separate for the same reason: `scopeKind` is the only required field on a scope, so one can name its role and bound nothing.
 
+### Conformance, as distinct from validity
+
+`urpx.validate` reports two rules the standard states that this library's schemas deliberately do not enforce, so a document can be schema-valid and still violate one. They print as `NONCONFORMANT` and count toward the exit code.
+
+| Rule | Why it is not a schema constraint |
+|---|---|
+| `:missing-coverage-claim` | `urpx:CoverageClaim` is `sh:minCount 1` on both version shapes from v0.5.0, but requiring it here would reject every v0.2.x document, and v0.2.x acceptance is a contract. So it is checked against what the document says it targets |
+| `:self-contained-disagrees` | `urpx:selfContained` may appear on the claim and the version and "MUST agree". `urpx.coverage` reads such a document without refusing, because the same note settles which wins; the violated MUST is the validator's business |
+| `:unparseable-target-version` | a document names a target this cannot read, so whether the claim rule applies is unknown. Said out loud rather than skipped |
+
+`urpx:targetURPXVersion` is found by a **deep** walk: it sits on the `urpx:URPXPackage` wrapper in most filings and on a node inside the `@graph` in the rest. Every filing in the production corpus and every vendored fixture declares it, all `v0.5.1`.
+
 ### What it refuses
 
 | `:reason` | When |

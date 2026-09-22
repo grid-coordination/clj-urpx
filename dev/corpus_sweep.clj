@@ -32,6 +32,7 @@
             [clojure.string :as str]
             [clojure.tools.gitlibs :as gitlibs]
             [urpx.arrangements :as arr]
+            [urpx.coverage :as coverage]
             [urpx.load :as load])
   (:import [java.time ZoneId ZonedDateTime]))
 
@@ -116,6 +117,39 @@
         ((resolve (symbol layout "sources")) root))
       (map fs/file (fs/glob root "**/*.jsonld"))))))
 
+(defn coverage-census
+  "What the corpus claims about its own coverage, counted.
+
+   Printed before the enumeration because it is about DOCUMENTS and holds even
+   when the enumeration refuses. A verdict is what a publisher asserts about a
+   snapshot, so this is the corpus describing itself rather than this library
+   judging it.
+
+   The two figures that matter to a consumer: what the verdicts are, and how
+   many claims say what window they cover. The second has been zero everywhere
+   since the machinery existed, which is why it is printed rather than assumed."
+  [docs]
+  (let [versions (distinct (for [d docs
+                                 v (tree-seq coll? seq d)
+                                 :when (and (map? v)
+                                            (#{"urpx:RatePlanVersion" "urpx:RatePlanModifierVersion"}
+                                             (:jsonld/type v)))]
+                             [v d]))
+        reports  (map (fn [[v d]] (assoc (coverage/of-version v d)
+                                         :urpx.coverage/kind (:jsonld/type v)))
+                      versions)]
+    (println "coverage        :" (count reports) "version nodes")
+    (doseq [[kind rs] (sort-by key (group-by :urpx.coverage/kind reports))]
+      (println (format "  %-28s %s" kind
+                       (into (sorted-map)
+                             (frequencies (map #(or (:urpx.coverage/completeness %) :unstated) rs))))))
+    (println "  with a coverage window     :"
+             (count (filter :urpx.coverage/scope-stated? reports)) "of" (count reports))
+    (println "  with an Evaluation         :"
+             (count (filter #(seq (:urpx.coverage/evaluations %)) reports)))
+    (println "  selfContained disagreements:"
+             (count (filter :urpx.coverage/self-contained-disagrees? reports)))))
+
 (defn -main
   [& [locator rev & more]]
   (when-not locator
@@ -143,6 +177,7 @@
                                                dropped))]
                       (println "  !! VERSION TYPES DISCARDED:"
                                (frequencies (map :jsonld/type vs))))
+        _           (coverage-census docs)
         now         (ZonedDateTime/of 2026 7 15 17 0 0 0 (ZoneId/of "America/Los_Angeles"))
         ;; A REFUSAL IS A RESULT, not a crash. This corpus can legitimately
         ;; carry an ambiguity no reader can resolve (one @id naming two

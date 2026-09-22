@@ -39,6 +39,14 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
   **No arrangement-level verdict, and the absence is pinned as an exact key set** so that adding one fails a test. The six completeness members carry no ordering, and the absence is meaningful rather than an oversight: the same ontology uses `skos:broader` where it does mean a hierarchy. They are distinct kinds, not degrees. More decisively, every definition is relative to "the claimed scope" and no snapshot states one, so composition is undefined at the domain level rather than merely unranked.
 
+- **`urpx.validate` reports conformance findings, distinct from schema errors.** Two rules the standard states that this library's schemas deliberately do not enforce, so a document can be schema-valid and still violate one: `:missing-coverage-claim` (checked against what the document says it targets, since requiring it unconditionally would reject every v0.2.x document) and `:self-contained-disagrees` (a violated MUST that `urpx.coverage` reads without refusing, because the ontology settles which value wins). A third, `:unparseable-target-version`, says so when a target version cannot be read rather than skipping the rule quietly.
+
+  **They count toward the exit code.** They did not at first, and were therefore decoration: a file every schema accepted and the standard rejected exited 0 with the violation printed above it.
+
+  `urpx:targetURPXVersion` is found by a deep walk. It sits on the `urpx:URPXPackage` wrapper in 67 of the 73 production filings and on a node inside the `@graph` in the other 6; a top-level read finds it in some documents and not others. Every filing in the corpus and every vendored fixture declares it, all v0.5.1.
+
+- **`dev/corpus_sweep.clj` prints a coverage census**, before the enumeration because it is about documents and holds even when the enumeration refuses: verdicts by version type, how many claims state a coverage window (zero, everywhere, since the machinery existed), how many carry an Evaluation, and any `selfContained` disagreements.
+
 - **`urpx:TemporalScope`, `urpx:TemporalPeriod` and the `ScopeKind` enum are modeled**, with `urpx.dsl/temporal-scope` and `temporal-period` builders. Groundwork for reading a coverage verdict's window.
 
   The node was transcription, not judgement: `urpx-shacl:TemporalScopeShape` is fully specified, `sh:closed`, with `urpx:scopeKind` `sh:minCount 1 sh:maxCount 1` against `ScopeKindValueShape` and the four date bounds plus `hasTemporalPeriod` each 0..1. `scopeKind` is the only required field, so a conformant scope may name its role and state no bounds at all.

@@ -164,29 +164,48 @@
           "confidence, stale, fallbackSourced and any coverage window are absent
            on every filing in both trees"))))
 
+(defn- transitive-requires
+  "Every urpx.* namespace `root` reaches, read from the ns forms on disk.
+
+   From disk rather than at runtime because ns-refers sees :refer only and
+   ns-aliases sees :as only, so a bare (:require [urpx.coverage]) would pass
+   both, and because by the time this suite runs everything is loaded anyway."
+  [root]
+  (let [file-of #(io/file (str "src/" (str/replace (str/replace (name %) "." "/") "-" "_") ".clj"))
+        direct  (fn [ns-sym]
+                  (let [f (file-of ns-sym)]
+                    (when (.exists ^java.io.File f)
+                      (with-open [r (java.io.PushbackReader. (io/reader f))]
+                        (->> (read r) (tree-seq coll? seq)
+                             (filter #(and (symbol? %) (str/starts-with? (name %) "urpx.")))
+                             set)))))]
+    (loop [seen #{} todo #{root}]
+      (if-let [n (first todo)]
+        (recur (conj seen n) (into (disj todo n) (remove seen (direct n))))
+        (disj seen root)))))
+
 (deftest optional-by-construction
-  (testing "the same discipline urpx.arrangements is held to, asserted the same
-            way: by reading the ns forms on disk rather than at runtime, because
-            ns-refers sees :refer only and ns-aliases sees :as only, so a bare
-            (:require [urpx.coverage]) would pass both.
+  (testing "a consumer resolving prices must not pay for this namespace, which
+            is what 'optional' has to mean to be worth claiming.
+
+            Asserted over the RESOLUTION PATH rather than over all of src/. The
+            blunt version, 'nothing in src/ requires it', reads stronger and is
+            the wrong claim: urpx.validate is a CLI entry point that no
+            price-resolving consumer loads, and forbidding it there would push
+            the validator into re-deriving checks this namespace already
+            implements, which is the duplication that put an
+            effectiveDateTime-only filter into urpx.arrangements.
 
             urpx.coverage must also not reach for the pricing side. A verdict is
-            what a publisher asserts about a snapshot; needing urpx.price to read
-            one would mean the reading depended on resolution."
-    (let [ns-form (fn [f] (with-open [r (java.io.PushbackReader. (io/reader f))]
-                            (read r)))
-          mentions? (fn [f sym] (some #(= sym %) (tree-seq coll? seq (ns-form f))))
-          srcs (->> (file-seq (io/file "src"))
-                    (filter #(.isFile ^java.io.File %))
-                    (filter #(str/ends-with? (.getName ^java.io.File %) ".clj")))]
-      (is (= [] (->> srcs
-                     (remove #(= "coverage.clj" (.getName ^java.io.File %)))
-                     (filter #(mentions? % 'urpx.coverage))
-                     (mapv #(.getPath ^java.io.File %))))
-          "no namespace in src/ may require urpx.coverage")
-      (let [f (io/file "src/urpx/coverage.clj")]
-        (is (not (mentions? f 'urpx.price)) "and it must not require urpx.price")
-        (is (not (mentions? f 'urpx.arrangements)) "nor urpx.arrangements")))))
+            what a publisher asserts about a snapshot; needing urpx.price to
+            read one would mean the reading depended on resolution."
+    (doseq [root ['urpx.price 'urpx.schedule 'urpx.arrangements 'urpx.emit 'urpx.dsl]]
+      (is (not (contains? (transitive-requires root) 'urpx.coverage))
+          (str root " must not reach urpx.coverage, directly or transitively")))
+    (let [reached (transitive-requires 'urpx.coverage)]
+      (is (contains? reached 'urpx.index) "sanity: the walk does find real requires")
+      (is (not (contains? reached 'urpx.price)) "and it must not require urpx.price")
+      (is (not (contains? reached 'urpx.arrangements)) "nor urpx.arrangements"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Arrangements
