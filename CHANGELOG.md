@@ -9,7 +9,7 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
-## [Unreleased]
+## [0.30.0] — 2026-09-22
 
 ### Added
 
@@ -70,6 +70,10 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 ### Fixed
 
 - **The README symbol check had stopped covering new namespaces, silently.** `docs_test` verifies that every project function a documentation block names still resolves, but it recognised aliases from a hardcoded set that was a second copy of the alias map, and unknown aliases were dropped by a `keep`. So `urpx.arrangements` shipped in 0.29.0 with a README section full of `arr/` calls that the suite never looked at. The set is now derived from the map, and a new test fails until every `urpx.*` namespace on disk is registered, because an unregistered namespace is the only way these checks can go quiet.
+
+**Upgrading:** additive. Three new namespaces (`urpx.load`, `urpx.coverage`, and the `corpus/` walkers, which are not in the jar), a third caller policy, and no resolved number changes. Nothing existing changes behavior.
+
+One thing to know if you enumerate a corpus: `:repeated-ids` defaults to `repeated-ids-refuse`, which is what 0.29.0 did unconditionally. A corpus where one version `@id` names several distinct snapshots still refuses; pass `repeated-ids-union` to merge instead. And `urpx.validate` now exits 1 on a conformance finding as well as a schema error, so a document that passed before and violates a stated MUST will now fail.
 
 ## [0.29.0] — 2026-09-22
 
@@ -551,6 +555,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.30.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.30.0
 [0.29.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.29.0
 [0.28.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.28.0
 [0.27.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.27.0
