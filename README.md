@@ -608,35 +608,56 @@ Nothing in URPX expresses exclusivity or combinability **between** modifiers, so
 
 The two are indistinguishable on most corpora. They can differ only about a modifier that names some version *and* names a plan no named version belongs to.
 
-### Traversing a corpus
+### Loading documents, and who walks the corpus
 
-The library does no directory traversal and has no filesystem dependency: `arrangements` takes documents that are already loaded. A directory layout is a corpus convention, not a URPX one, so walking one is the caller's job, and `urpx.core/load-graph` takes anything `clojure.java.io/reader` coerces (a `File`, `URL`, `Reader`, `InputStream`, or path string). With [babashka/fs](https://github.com/babashka/fs):
+The library takes documents. **It never walks a corpus**, and that is a division of labour rather than an omission: a corpus repository is a one-off, there will never be a layout everyone adopts, so finding filings is client-specific while turning what you find into documents is not.
+
+`urpx.load` names the second half:
 
 ```clojure
-(require '[babashka.fs :as fs] '[urpx.core :as core] '[urpx.coerce :as coerce])
+(require '[urpx.load :as load])
 
-(def docs (->> (fs/glob "corpus" "**/*.jsonld")
-               (mapcat (comp core/load-graph fs/file))
-               (mapcat core/expand-document-entities)
-               (keep coerce/coerce-doc)))
+(load/documents sources)                    ; => [<coerced document> ...]
+(into [] load/document-xf sources)          ; the same, composable
+(eduction load/document-xf sources)         ; realises nothing until pulled
 ```
 
-Three things there are load-bearing:
+A **source** is anything `clojure.java.io/reader` coerces: a `File`, `URL`, `Reader`, `InputStream`, or path string. Where they come from is yours.
 
-- **`load-graph`, not `load-rate-plan`.** The latter throws on a file carrying only a modifier. Dropping those silently makes every composition vacuous.
+`document-xf` is three steps, and each is a way to be wrong by hand:
+
+- **`mapcat`, not `map`, over `load-graph`.** One source can carry several top-level entities. Mapping yields a collection per source, and a collection survives a `tree-seq` walk, so getting this wrong returns an answer rather than an error.
 - **`expand-document-entities`** descends a `urpx:URPXPackage` wrapper. Without it a wrapped filing contributes nothing.
-- **`coerce/coerce-doc`** is not optional. `load-graph` returns parsed but untyped entities, so `urpx:effectiveDateTime` is still a string and every version-window comparison fails. `coerce-doc` dispatches on `@type` and returns `nil` for types this library does not model, so `keep` drops them.
+- **`coerce-doc`** turns strings into `java.time` values. Without it `urpx:effectiveDateTime` is still a string: anything comparing dates throws from deep inside, and anything that does *not* compare them quietly answers a different question.
 
-`dev/corpus_sweep.clj` is a worked example. It takes the corpus as an argument and names none itself, since privileging one corpus in a library that reads a standard would make every other consumer's corpus the special case:
+That list is not hypothetical. A consumer composing these by hand from an earlier version of this section used `mapv` for `mapcat` and omitted the coercion step, and got a plausible count instead of a refusal. The pipeline is named so that composition is unavailable to make rather than documented against.
 
-```text
-clojure -M:dev -m corpus-sweep ../some-corpus
-clojure -M:dev -m corpus-sweep git@github.com:org/some-corpus.git main
+### What gets discarded, and how to notice
+
+`coerce-doc` returns `nil` for an entity type this library does not model, so `document-xf` drops it **silently**. Over the production corpus that is 42 of 129 expanded entities: `urpx:ProgramEnrollment` 30, `urpx:SourcePublication` 8, `urpx:RateCase` 4.
+
+None is a version today, which is luck rather than design. `scan` does the same work in one pass and reports the discards, so a caller can assert what it could not before:
+
+```clojure
+(let [{:urpx.load/keys [documents uncoercible]} (load/scan sources)]
+  (assert (empty? (filter #(str/ends-with? (str (:jsonld/type %)) "Version")
+                          uncoercible)))
+  documents)
 ```
 
-A git URL is resolved and procured with [tools.gitlibs](https://github.com/clojure/tools.gitlibs), which caches under `~/.gitlibs` and writes nothing into the repo, so a count is pinned to a SHA and can be re-derived later. A path is not pinned that way, and a clone may be legitimately ahead of its remote, so the path form reports the tree's SHA, how far ahead of upstream it is, and how many files are dirty rather than letting a reader assume the two forms agree.
+"This library does not model it" and "it does not matter" are different statements. `ProgramEnrollment` is 30 of the 42 and is modeled nowhere here; whether that matters is yours to decide, and it cannot be decided while the discard is invisible.
 
-`babashka/fs` and `tools.gitlibs` are dev dependencies under the `:dev` alias, never runtime dependencies of the library.
+### Example walkers
+
+`corpus/` holds worked examples of the first half, one per corpus layout, with [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) as the first. None of it is library code: `corpus/` is not on the library's `:paths`, nothing in `src/` requires it, and none of it ships in the jar.
+
+```bash
+clojure -M:dev:corpus -m corpus-sweep <path-to-corpus> --layout urpx-rate-plans
+```
+
+They exist because a glob looks equivalent to a walk and is not. Over urpx-rate-plans a naive `**/*.jsonld` yields **87** documents where the layout walker yields **84**: the extra three live in `dev/fixtures/`, are not filings, and one is deliberately non-conforming so that corpus's own gate has something to fail on. Nothing errors; the count is simply about something other than the corpus.
+
+`dev/corpus_sweep.clj` is a full worked example, and pins a corpus to an exact revision with [tools.gitlibs](https://github.com/clojure/tools.gitlibs) rather than to whatever a sibling checkout holds. `babashka/fs` and `tools.gitlibs` are `:dev` dependencies; the library itself does no filesystem traversal and fetches nothing.
 
 ## Writing URPX JSON-LD
 
@@ -776,6 +797,7 @@ For a longer worked walkthrough that mirrors selected examples from the upstream
 |------------------|---------|
 | `urpx.core`          | JSON-LD parsing and loading (`parse-rate-plan`, `load-rate-plan`, `load-rate-plan-version`, `parse-graph`, `load-graph`, `expand-document-entities`) |
 | `urpx.schema`    | Malli schemas for the coerced URPX entity model |
+| `urpx.load`      | `document-xf`, `documents`, `scan`: sources to coerced documents, with the discards reportable |
 | `urpx.coerce`    | Schema-driven coercion: strings → typed values; `coerce-doc` dispatches on `@type`; `validate`, `explain`; `uncoerced?` and `check-coerced!` tell a coerced document from a raw one |
 | `urpx.index`     | `build-index`, `resolve-ref`, `get-entity` for `@id` references; `versions-by-plan` for v0.5.1 back-pointers; `single` and `entities-of-type` |
 | `urpx.price`         | `resolve-prices`, `resolve-modifier-prices`, `resolve-prices-with-modifiers`, `marginal-unit-rate`, `measurement-kinds`, `has-energy-ledger?`; `version-effective-at`, `version-expired-by?` and `version-covers?` are the single readers of a version window |

@@ -32,8 +32,7 @@
             [clojure.string :as str]
             [clojure.tools.gitlibs :as gitlibs]
             [urpx.arrangements :as arr]
-            [urpx.coerce :as coerce]
-            [urpx.core :as core])
+            [urpx.load :as load])
   (:import [java.time ZoneId ZonedDateTime]))
 
 (defn git-url?
@@ -99,36 +98,51 @@
                       " the remote does not have what was measured")))))
 
 (defn load-corpus
-  "Every coerced RatePlan and RatePlanModifier under `root`.
+  "Every coerced RatePlan and RatePlanModifier under `root`, and whatever was
+   discarded getting there.
 
-   `load-graph` rather than `load-rate-plan`: the latter throws on a file that
-   carries only a modifier, and dropping those silently makes every composition
-   vacuous, which is exactly how an earlier sweep came back empty.
-   `expand-document-entities` descends a urpx:URPXPackage wrapper, without which
-   a wrapped filing contributes nothing. `coerce-doc` is not optional either:
-   `load-graph` returns parsed but untyped entities, so urpx:effectiveDateTime
-   is still a string and every version-window comparison fails. It returns nil
-   for a type this library does not model, so `keep` drops those unnamed."
-  [root]
-  (->> (fs/glob root "**/*.jsonld")
-       (mapcat (comp core/load-graph fs/file))
-       (mapcat core/expand-document-entities)
-       (keep coerce/coerce-doc)
-       vec))
+   The pipeline itself is `urpx.load/scan`; this only supplies the sources,
+   which is the whole division of labour. A corpus layout is a one-off and
+   there will never be one everyone adopts, so walking a tree is this script's
+   job and turning what it finds into documents is the library's."
+  ([root] (load-corpus root nil))
+  ([root layout]
+   (load/scan
+    (if layout
+      ;; A layout walker knows what a glob cannot: which subtrees hold filings
+      ;; and which hold something else. See corpus/README.md.
+      (let [ns-sym (symbol layout)]
+        (require ns-sym)
+        ((resolve (symbol layout "sources")) root))
+      (map fs/file (fs/glob root "**/*.jsonld"))))))
 
 (defn -main
-  [& [locator rev]]
+  [& [locator rev & more]]
   (when-not locator
     (binding [*out* *err*]
       (println "REFUSED: no corpus given. Pass a path or a git URL:")
       (println "  clojure -M:dev -m corpus-sweep ../some-corpus")
       (println "  clojure -M:dev -m corpus-sweep git@github.com:org/some-corpus.git [rev]"))
     (System/exit 2))
-  (let [[root prov] (corpus-root locator (or rev "main"))
-        docs        (load-corpus root)
+  (let [layout      (second (drop-while #(not= "--layout" %) (cons rev more)))
+        rev         (when (and rev (not= "--layout" rev)) rev)
+        [root prov] (corpus-root locator (or rev "main"))
+        scanned     (load-corpus root layout)
+        _           (println "layout          :" (or layout "(naive glob of **/*.jsonld)"))
+        docs        (:urpx.load/documents scanned)
+        dropped     (:urpx.load/uncoercible scanned)
         _           (println "corpus          :" (provenance-line root prov))
         _           (println "coerced docs    :" (count docs)
                              (frequencies (map :jsonld/type docs)))
+        ;; Printed rather than left implicit. "This library does not model it"
+        ;; and "it does not matter" are different statements, and a version type
+        ;; reaching this line is a real problem rather than noise.
+        _           (println "discarded       :" (count dropped)
+                             (frequencies (map :jsonld/type dropped)))
+        _           (when-let [vs (seq (filter #(str/ends-with? (str (:jsonld/type %)) "Version")
+                                               dropped))]
+                      (println "  !! VERSION TYPES DISCARDED:"
+                               (frequencies (map :jsonld/type vs))))
         now         (ZonedDateTime/of 2026 7 15 17 0 0 0 (ZoneId/of "America/Los_Angeles"))
         ;; A REFUSAL IS A RESULT, not a crash. This corpus can legitimately
         ;; carry an ambiguity no reader can resolve (one @id naming two

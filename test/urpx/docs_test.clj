@@ -70,23 +70,48 @@
                          (str (.getSimpleName (class t)) ": " (.getMessage t)))))))))
           (finally (remove-ns ns-sym)))))))
 
+(def ^:private alias->ns
+  "The alias each doc uses for a namespace of this project.
+
+   THE ONLY SOURCE. `referenced-symbols` derives what it recognises from these
+   keys rather than carrying a second copy; the two were separate lists once and
+   drifted the moment a namespace was added, which is the whole failure below."
+  {"core" 'urpx.core "schema" 'urpx.schema "coerce" 'urpx.coerce
+   "index" 'urpx.index "price" 'urpx.price "schedule" 'urpx.schedule
+   "holidays" 'urpx.holidays "tz" 'urpx.tz-inference "emit" 'urpx.emit
+   "dsl" 'urpx.dsl "validate" 'urpx.validate
+   "load" 'urpx.load "arr" 'urpx.arrangements})
+
 (defn- referenced-symbols
   "Qualified symbols a doc's Clojure blocks mention, as [alias name] pairs.
    Only aliases this project owns; clojure.core and java interop are ignored."
   [md]
-  (let [owned #{"core" "schema" "coerce" "index" "price" "schedule" "holidays"
-                "tz" "emit" "dsl" "validate"}]
+  (let [owned (set (keys alias->ns))]
     (->> (fenced-blocks md "clojure")
          (mapcat #(re-seq #"\(([a-z-]+)/([a-zA-Z][a-zA-Z0-9*?<>=+-]*)" %))
          (keep (fn [[_ alias nm]] (when (owned alias) [alias nm])))
          distinct
          sort)))
 
-(def ^:private alias->ns
-  {"core" 'urpx.core "schema" 'urpx.schema "coerce" 'urpx.coerce
-   "index" 'urpx.index "price" 'urpx.price "schedule" 'urpx.schedule
-   "holidays" 'urpx.holidays "tz" 'urpx.tz-inference "emit" 'urpx.emit
-   "dsl" 'urpx.dsl "validate" 'urpx.validate})
+(deftest every-namespace-is-registered-for-the-doc-checks
+  (testing "the symbol checks below recognise only the aliases in alias->ns and
+            drop the rest SILENTLY, so a namespace nobody registered is a
+            namespace whose documented function names are never verified. That
+            is not hypothetical: urpx.arrangements shipped in 0.29.0 with a
+            README section full of arr/ calls that this suite never looked at,
+            because `owned` was a second hand-maintained copy of these keys.
+
+            So adding a namespace to src/ now fails here until it is registered.
+            An unregistered namespace is the only way the checks can go quiet."
+    (let [on-disk (->> (file-seq (io/file "src/urpx"))
+                       (filter #(str/ends-with? (.getName ^java.io.File %) ".clj"))
+                       (map #(symbol (str "urpx." (str/replace
+                                                   (str/replace (.getName ^java.io.File %) #"\.clj$" "")
+                                                   "_" "-"))))
+                       set)]
+      (is (seq on-disk) "the source tree was found")
+      (is (= #{} (set/difference on-disk (set (vals alias->ns))))
+          "every urpx.* namespace must have an alias registered in alias->ns"))))
 
 (deftest readme-references-only-symbols-that-exist
   (testing "README blocks are illustrative snippets, so running them is not

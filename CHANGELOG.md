@@ -9,6 +9,24 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Added
+
+- **`urpx.load`, naming the pipeline from sources to documents.** `document-xf` is a transducer, `documents` realises it, and `scan` does the same work in one pass while reporting what it discarded. A source is anything `clojure.java.io/reader` coerces; where sources come from is the caller's business and deliberately not this library's, because a corpus repository is a one-off and there will never be a layout everyone adopts.
+
+  Nothing here is new behavior. It is the same three functions in the one order that is correct, and it exists because the previous arrangement — a four-step form in the README that every consumer composed by hand — produced exactly the failure it describes. A consumer following it used `mapv` where `mapcat` belongs and omitted the coercion step, and got a plausible count rather than an error. Naming the composition makes the wrong one unavailable to make rather than documented against.
+
+  It is its own namespace because it cannot live in either it spans: `urpx.core` requires only data.json, java.io and string, `urpx.coerce` only malli and `urpx.schema`, and neither requires the other. Core would drag Malli into the parse layer; coerce would make a coercion-only consumer pull in the parser.
+
+- **`scan` makes the one silent drop assertable.** `coerce-doc` returns nil for an entity type this library does not model, so `document-xf` discards it without a word: 42 of 129 expanded entities over the production corpus, `urpx:ProgramEnrollment` 30, `urpx:SourcePublication` 8, `urpx:RateCase` 4. None is a version today, which is luck rather than design; the unlucky form of the same thing cost a whole rate plan in 0.29.0. A caller can now assert that no version type reached the discard list, which it could not before. "This library does not model it" and "it does not matter" are different statements, and the second cannot be judged while the first is invisible.
+
+- **`corpus/`, worked examples of the half that is not the library's.** One walker per corpus layout, with `urpx-rate-plans` as the first. Not on the library `:paths`, never in the jar, nothing in `src/` requires it. They exist because a glob looks equivalent to a walk and is not: over urpx-rate-plans a naive `**/*.jsonld` yields 87 documents where the layout walker yields 84, and the extra three are not filings — one is deliberately non-conforming so that corpus's own gate has something to fail on. Nothing errors; the count is simply about something else.
+
+### Fixed
+
+- **The README symbol check had stopped covering new namespaces, silently.** `docs_test` verifies that every project function a documentation block names still resolves, but it recognised aliases from a hardcoded set that was a second copy of the alias map, and unknown aliases were dropped by a `keep`. So `urpx.arrangements` shipped in 0.29.0 with a README section full of `arr/` calls that the suite never looked at. The set is now derived from the map, and a new test fails until every `urpx.*` namespace on disk is registered, because an unregistered namespace is the only way these checks can go quiet.
+
 ## [0.29.0] — 2026-09-22
 
 ### Added
