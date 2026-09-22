@@ -566,3 +566,152 @@
       (is (re-find #"2 version\(s\)" m) "and the count of versions involved")
       (is (not (re-find #"the version used" m))
           "no claim of a single version when several are stale"))))
+
+;; ---------------------------------------------------------------------------
+;; :version is scoped to the document it is a snapshot of
+;; ---------------------------------------------------------------------------
+
+(deftest a-base-plan-version-opt-does-not-drop-the-modifiers
+  (testing "plan-version short-circuited on (:version opts) before anything
+            looked at WHICH document was being resolved, and
+            resolve-prices-with-modifiers threads one opts map to the base plan
+            and to every modifier. So the base plan's snapshot was handed to
+            each modifier as its version; that node carries no
+            urpx:applicableToRatePlan, modifier-applies-to? therefore said no,
+            and every modifier was dropped with no mark and no refusal.
+
+            SCE Schedule D composed with CARE returned 0.31085 instead of
+            0.19804875, the full undiscounted rate, 57% high, on a call the
+            library's own refusals tell callers to make: :ambiguous-version and
+            :version-without-effective-instant both end 'Pass :version to
+            choose explicitly'.
+
+            A version now applies only to the document it is a snapshot of, and
+            is ignored elsewhere. Ignoring is not the silent failure it
+            replaces: the other document resolves by its own rules, which is
+            correct, where before it was discarded entirely."
+    (let [plan (sce-d)
+          care (care)
+          pv   (:urpx/hasRatePlanVersion plan)
+          mv   (:urpx/hasRatePlanModifierVersion care)
+          rate (fn [opts] (price/marginal-unit-rate
+                           (price/resolve-prices-with-modifiers plan [care] (summer) opts)))
+          ledgers (fn [opts] (count (:urpx.resolved/ledgers
+                                     (price/resolve-prices-with-modifiers
+                                      plan [care] (summer) opts))))]
+      (is (= 0.19804875M (rate nil)) "sanity: the discount applies with no opts")
+      (is (= 8 (ledgers nil)))
+      (is (= 0.19804875M (rate {:version pv}))
+          "pinning the BASE version leaves the modifier alone")
+      (is (= 8 (ledgers {:version pv}))
+          "all eight ledgers survive; the defect left five")
+      (is (= 0.19804875M (rate {:version mv}))
+          "and pinning the MODIFIER version leaves the base plan alone"))))
+
+(deftest a-version-opt-can-be-scoped-by-document-id
+  (testing "the explicit form, like :versions-by-plan. A document the map does
+            not name resolves normally rather than being pinned to someone
+            else's snapshot."
+    (let [plan (sce-d)
+          care (care)
+          scoped {(:jsonld/id plan) (:urpx/hasRatePlanVersion plan)
+                  (:jsonld/id care) (:urpx/hasRatePlanModifierVersion care)}]
+      (is (= 0.19804875M
+             (price/marginal-unit-rate
+              (price/resolve-prices-with-modifiers plan [care] (summer) {:version scoped}))))
+      (is (= 0.19804875M
+             (price/marginal-unit-rate
+              (price/resolve-prices-with-modifiers
+               plan [care] (summer)
+               {:version {(:jsonld/id plan) (:urpx/hasRatePlanVersion plan)}})))
+          "naming only the base plan leaves the modifier to resolve itself")
+      (testing "and the map form is load-bearing: on a document that cannot
+                choose for itself, only the map can settle it, so a caller who
+                needs the scoped form has no other way through. Exercised on
+                resolve-prices rather than a composition, because a composition
+                also calls holidays/derive-predicate, which reads the nested
+                version independently and does not honor :version at all."
+        (let [pv  (:urpx/hasRatePlanVersion plan)
+              two (assoc plan :urpx/hasRatePlanVersion
+                         [pv (assoc pv :jsonld/id "x:other")])]
+          (is (thrown? clojure.lang.ExceptionInfo (price/resolve-prices two (summer)))
+              "sanity: two nested snapshots refuse without help")
+          (is (= 0.31085M
+                 (price/marginal-unit-rate
+                  (price/resolve-prices two (summer) {:version {(:jsonld/id two) pv}})))
+              "and the scoped map settles it, where the bare form would too but
+               a caller composing several documents needs the scoped one"))))))
+
+(deftest a-version-opt-that-is-not-a-version-is-refused
+  (testing "passing something that is neither a snapshot nor a map from @id to
+            one has no document it could apply to, so reading on would silently
+            ignore what the caller asked for."
+    (is (= :version-opt-not-a-version
+           (try (price/resolve-prices (sce-d) (summer) {:version (sce-d)}) nil
+                (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))
+        "a RatePlan is not a RatePlanVersion")))
+
+(deftest a-version-opt-still-resolves-the-ambiguity-it-exists-for
+  (testing "the case :version was added for: a document nesting two snapshots
+            refuses :ambiguous-version or the multiple-nested refusal, and
+            passing one explicitly settles it. version-belongs-to? must not
+            call nested-version unguarded, because that is the very lookup that
+            throws here."
+    (let [plan (sce-d)
+          pv   (:urpx/hasRatePlanVersion plan)
+          two  (assoc plan :urpx/hasRatePlanVersion [pv (assoc pv :jsonld/id "x:other")])]
+      (is (thrown? clojure.lang.ExceptionInfo (price/resolve-prices two (summer)))
+          "sanity: two nested snapshots refuse without help")
+      (is (= 0.31085M (price/marginal-unit-rate
+                       (price/resolve-prices two (summer) {:version pv})))
+          "and an explicit snapshot settles it")
+      (testing "including when the snapshot carries NO back pointer, which is
+                the branch that has to fall back to nesting. v0.5.1 makes
+                urpx:forRatePlan sh:minCount 1, but a v0.2.x snapshot has none,
+                and that fallback is the one lookup that throws on a document
+                nesting several. Unguarded it would refuse exactly the call
+                :version exists to rescue."
+        (let [bare (dissoc pv :urpx/forRatePlan)
+              two' (assoc plan :urpx/hasRatePlanVersion
+                          [bare (assoc bare :jsonld/id "x:other")])]
+          (is (nil? (:urpx/forRatePlan bare)) "sanity: no back pointer")
+          (is (= 0.31085M (price/marginal-unit-rate
+                           (price/resolve-prices two' (summer) {:version bare})))
+              "settled through the nesting fallback rather than the pointer"))))))
+
+(deftest the-holiday-calendar-comes-from-the-resolved-version-on-both-paths
+  (testing "urpx.holidays/derive-predicate has a 2-arity taking the resolved
+            snapshot, and resolve-prices has passed it since v0.5.1 un-nesting.
+            resolve-prices-with-modifiers called the 1-arity, which re-derives
+            the snapshot by reading the nested one. That ignores a caller's
+            :version and REFUSES outright on a document nesting several, which
+            is exactly the document :version exists to settle: the composed
+            call threw from the holiday path after :version had already chosen,
+            while the same call through resolve-prices succeeded.
+
+            The snapshot is in hand at that call site. Re-deriving it was the
+            whole defect.
+
+            The THROW is the only observable effect I could demonstrate. The
+            predicate built there does not set the composed result's season or
+            TOU: that comes from the nested resolve-prices call, which derives
+            its own. It is handed only to modifier-ledger-results, and no
+            fixture or constructed document produced a different tier count
+            under the real calendar, (constantly true) or (constantly false).
+            A test asserting TOU on the composed result was written first and
+            deleted, because it passed with the predicate replaced by
+            (constantly false) — it was measuring the other one."
+    (let [plan (sce-d)
+          pv   (:urpx/hasRatePlanVersion plan)
+          two  (assoc plan :urpx/hasRatePlanVersion [pv (assoc pv :jsonld/id "x:other")])]
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (price/resolve-prices-with-modifiers two [(care)] (summer)))
+          "sanity: without :version the document still cannot choose")
+      (is (= 0.31085M (price/marginal-unit-rate
+                       (price/resolve-prices two (summer) {:version pv})))
+          "resolve-prices settled it before this fix and still does")
+      (is (= 0.19804875M
+             (price/marginal-unit-rate
+              (price/resolve-prices-with-modifiers two [(care)] (summer) {:version pv})))
+          "and the composed path now settles it too, rather than throwing from
+           the holiday lookup"))))

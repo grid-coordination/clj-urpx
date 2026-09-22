@@ -341,6 +341,8 @@ This is a deliberate over-approximation. An extra candidate costs one resolution
 
 **DST is handled at the instant level.** A local time inside the spring-forward gap never occurs and is clamped to the transition instant, where the obvious `ZonedDateTime/of` would instead land past it by the gap's width. A local time in the fall-back overlap occurs twice and yields **both** instants, so the repeated hour is priced twice rather than merged away. Ask for "the next 72 hours" with a `Duration` and you get 72 elapsed hours, which across a transition is 71 or 73 hours of clock face.
 
+`price-segments` additionally refuses `:uncoerced-document` when handed a document that was never run through `urpx.coerce`: it harvests candidate instants from `java.time` values, and an uncoerced document carries date-shaped *strings* instead, which would silently narrow the candidate set to midnights.
+
 **Refusals become segments.** If resolution throws partway through a horizon (most plausibly `:no-version-in-effect` at an instant before the plan existed), that stretch is reported as a segment carrying `:urpx.interval/refused` rather than aborting the window. Equal refusals merge, so an uncovered stretch is one segment and not one per candidate.
 
 Segments merge on the **full** resolved value, not only its ledgers: a change of TOU period or season with identical prices is still a real boundary.
@@ -372,7 +374,15 @@ Three situations have no defensible answer and are refused rather than guessed, 
 
 Pass `:version` with a resolved snapshot to choose explicitly and bypass all of it. Candidates are deduplicated by value, so a nested snapshot and its own entry in the back-pointer index collapse to one; two genuinely different descriptions sharing an `@id` do not, and are refused rather than picked between.
 
-> **Do not pass `:version` to `resolve-prices-with-modifiers`.** The opt is not scoped per document, so a base plan's version is handed to every modifier as well; a modifier version node carries no `urpx:applicableToRatePlan`, so each modifier is then silently skipped. SCE Schedule D composed with CARE returns `0.19804875`, and the same call with `:version` returns `0.31085` — the full undiscounted rate, 57% high, with no mark and no refusal. Use `:versions-by-plan`, which *is* keyed per document. This predates 0.27.0 and is tracked separately.
+`:version` applies **only to the document it is a snapshot of**, identified by `urpx:forRatePlan` / `urpx:forRatePlanModifier` or by the document nesting it, and is ignored for any other. So on a composition, pinning the base plan's version leaves each modifier to resolve by its own rules rather than being handed a snapshot that is not its own. Pass a map from document `@id` to snapshot when you want to pin several explicitly:
+
+```clojure
+(price/resolve-prices-with-modifiers plan [modifier] zdt
+  {:version {"sce:d"    base-snapshot
+             "sce:care" modifier-snapshot}})
+```
+
+A `:version` that is neither a snapshot nor such a map refuses with `:version-opt-not-a-version`, rather than being quietly ignored.
 
 ### A version window is checked on modifiers too
 
@@ -425,7 +435,7 @@ Ask first when sweeping a corpus, so the refusal is not a tax on every caller:
 
 Every refusal `marginal-unit-rate` makes carries a `:reason` in its `ex-data`, so a sweeping consumer can classify instead of catching everything: `:no-energy-ledger`, `:unvaluable-marginal-tier`, `:unselected-alternatives`, `:condition-gated-tier`, `:all-energy-tiers-excluded`, and `:outside-version-window`.
 
-`resolve-prices` itself carries a `:reason` on six further refusals, all of them a refusal to guess rather than a failure to parse. (It can also propagate a throw from indexing or from holiday-rule derivation; those are malformed-document errors and carry no `:reason`, so classify on the key's presence rather than assuming it.) Three concern versions: `:no-version-in-effect`, `:ambiguous-version` and `:version-without-effective-instant`, when several snapshots cannot be ordered or none covers the instant. Three concern alternatives, and all three are cases where reading on would return a confident wrong number rather than fail:
+`resolve-prices` itself carries a `:reason` on seven further refusals, all of them a refusal to guess rather than a failure to parse. (It can also propagate a throw from indexing or from holiday-rule derivation; those are malformed-document errors and carry no `:reason`, so classify on the key's presence rather than assuming it.) Four concern versions: `:no-version-in-effect`, `:ambiguous-version` and `:version-without-effective-instant`, when several snapshots cannot be ordered or none covers the instant; and `:version-opt-not-a-version`, when the `:version` opt is neither a snapshot nor a map from document `@id` to one, so there is no document it could apply to. Three concern alternatives, and all three are cases where reading on would return a confident wrong number rather than fail:
 
 | reason | when |
 |---|---|

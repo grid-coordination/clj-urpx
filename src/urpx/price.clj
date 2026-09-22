@@ -1161,6 +1161,77 @@
     (and (not (and eff (.isAfter ^LocalDateTime eff t)))
          (not (version-expired-by? version t)))))
 
+(def ^:private version-back-pointer
+  "Version @type -> the property naming the document it is a snapshot of.
+   Mirrors urpx.index's own map; both are owl:inverseOf the nesting property
+   and sh:minCount 1 on their version shapes at v0.5.1."
+  {"urpx:RatePlanVersion"         :urpx/forRatePlan
+   "urpx:RatePlanModifierVersion" :urpx/forRatePlanModifier})
+
+(defn- version-belongs-to?
+  "True if `version` is a snapshot OF `plan`.
+
+   Two ways to tell, because URPX states the link in either direction: the
+   document nests this exact node, or the node points back at the document's
+   @id through urpx:forRatePlan / urpx:forRatePlanModifier."
+  [version plan nested-key]
+  (let [k   (version-back-pointer (:jsonld/type version))
+        ptr (when k (:jsonld/id (get version k)))]
+    (if ptr
+      ;; Authoritative when present, and sh:minCount 1 on both version shapes
+      ;; at v0.5.1 means it usually is.
+      (= ptr (:jsonld/id plan))
+      ;; No back pointer, so fall back to nesting, by MEMBERSHIP rather than
+      ;; by equality with "the one" nested snapshot. index/nested-version
+      ;; refuses when a document nests several, which is precisely the case a
+      ;; caller passes :version to resolve, so asking it here would make the
+      ;; opt useless exactly where it is needed. Membership answers the
+      ;; question that is actually being asked, is it one of this document's,
+      ;; and it answers it for one snapshot and for several alike.
+      (let [nested (get plan nested-key)]
+        (boolean (some #(= version %)
+                       (if (sequential? nested) nested [nested])))))))
+
+(defn- version-opt-for
+  "The caller's `:version` for THIS document, or nil to resolve normally.
+
+   `:version` used to short-circuit before anything looked at which document
+   was being resolved, and `resolve-prices-with-modifiers` threads one opts map
+   to the base plan and to every modifier. So a base plan's snapshot was handed
+   to each modifier as its version; that node carries no
+   urpx:applicableToRatePlan, `modifier-applies-to?` therefore said no, and
+   every modifier was dropped with no mark and no refusal. SCE Schedule D
+   composed with CARE returned 0.31085 instead of 0.19804875, the full
+   undiscounted rate, 57% high. A variant double-counted the base plan's
+   ledgers at 0.68538.
+
+   Two accepted shapes:
+
+     a version node   applies to the document it is a snapshot of, and is
+                      IGNORED for any other. Ignoring is not the silent failure
+                      it replaces: the other document then resolves by its own
+                      rules, which is correct, where before it was discarded.
+     {@id version}    scoped explicitly, like :versions-by-plan. A document the
+                      map does not name resolves normally.
+
+   A node that is neither a version snapshot nor such a map is a caller error
+   and refuses, because reading on would silently ignore what they asked for."
+  [plan opts nested-key]
+  (when-let [v (:version opts)]
+    (cond
+      (version-back-pointer (:jsonld/type v))
+      (when (version-belongs-to? v plan nested-key) v)
+
+      (and (map? v) (not (:jsonld/type v)))
+      (get v (:jsonld/id plan))
+
+      :else
+      (throw (ex-info (str ":version must be a resolved version snapshot, or a map from "
+                           "document @id to one. Got " (pr-str (:jsonld/type v))
+                           ", which is neither, so there is no document it could apply to.")
+                      {:reason :version-opt-not-a-version
+                       :type (:jsonld/type v)})))))
+
 (defn- plan-version
   "Resolve the version snapshot to read plan content from, at `zdt`.
 
@@ -1183,7 +1254,7 @@
    SCE plans in the corpus already carry two. A forecast client loading several
    versions to cover a window is the case it was silently wrong for."
   [plan opts nested-key ^ZonedDateTime zdt]
-  (or (:version opts)
+  (or (version-opt-for plan opts nested-key)
       (let [nested (index/nested-version plan nested-key)
             plan-id (:jsonld/id plan)
             indexed (when-let [by-plan (:versions-by-plan opts)] (get by-plan plan-id))
@@ -1756,7 +1827,17 @@
                                            (get-in base-version [:urpx/hasPlanElements :urpx/hasSeasons]))
                                      #(pd-alternative-status
                                        % (:profile-alternatives opts) (:alt-index opts)))))
-         holiday?        (or (:holiday? opts) (holidays/derive-predicate rate-plan))
+         ;; base-version, not rate-plan alone. The 1-arity re-derives the
+         ;; snapshot from the document by reading the nested one, which ignores
+         ;; a caller's :version and REFUSES outright on a document nesting
+         ;; several — exactly the document :version exists to settle. So a
+         ;; composition threw from the holiday path even after :version had
+         ;; already chosen, while the same call through resolve-prices
+         ;; succeeded, because that path has passed its resolved version since
+         ;; v0.5.1 un-nesting. The snapshot is in hand here; re-deriving it was
+         ;; the whole defect.
+         holiday?        (or (:holiday? opts)
+                             (holidays/derive-predicate rate-plan base-version))
          ;; opts, not the 2-arity: without it plan-version can only follow the
          ;; nested down-pointer, so a v0.5.1 modifier that states the link only
          ;; through its urpx:forRatePlanModifier back-pointer resolved to a nil

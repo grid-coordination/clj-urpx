@@ -9,6 +9,26 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [0.28.0] — 2026-09-22
+
+### Fixed
+
+- **A `:version` opt for the base plan silently dropped every modifier.** `plan-version` short-circuited on `(:version opts)` before anything looked at *which* document was being resolved, and `resolve-prices-with-modifiers` threads one opts map to the base plan and to every modifier. So the base plan's snapshot was handed to each modifier as its version; that node carries no `urpx:applicableToRatePlan`, `modifier-applies-to?` therefore said no, and every modifier was dropped with no mark and no refusal.
+
+  SCE Schedule D composed with CARE returned **`0.31085`** instead of `0.19804875` — the full undiscounted rate, **57% high**, over five ledgers instead of eight. A variant where the plan node carries no `@id` double-counted the base plan's ledgers instead, at `0.68538`. The library's own refusals routed callers straight into it: `:ambiguous-version` and `:version-without-effective-instant` both end "Pass `:version` to choose explicitly".
+
+  A version now applies only to the document it is a snapshot of, identified by `urpx:forRatePlan` / `urpx:forRatePlanModifier` or by the document nesting it, and is ignored elsewhere. Ignoring is not the silent failure it replaces: the other document then resolves by its own rules, which is correct, where before it was discarded. Present since 0.11.0.
+
+- **The holiday calendar on a composition comes from the resolved version.** `resolve-prices-with-modifiers` called `holidays/derive-predicate`'s 1-arity, which re-derives the snapshot by reading the nested one; that ignores a caller's `:version` and refuses outright on a document nesting several, which is exactly the document `:version` exists to settle. So a composed call threw from the holiday path after `:version` had already chosen, while the same call through `resolve-prices` succeeded. The snapshot is in hand at that call site. No resolved number changes: the predicate built there does not set the composed result's season or TOU, and no fixture or constructed document produced a different tier count under the real calendar, `(constantly true)` or `(constantly false)`.
+
+### Added
+
+- **`:version` accepts a map from document `@id` to snapshot**, scoped the way `:versions-by-plan` already is, so a composition can pin several documents explicitly. A document the map does not name resolves normally.
+
+- **`:version-opt-not-a-version`**, refused when `:version` is neither a snapshot nor such a map. There is no document it could apply to, so reading on would silently ignore what the caller asked for.
+
+**Upgrading:** no resolved number changes unless you pass `:version`. If you do, and you pass it to `resolve-prices-with-modifiers`, you were getting the base plan's rate with every modifier silently dropped; you now get the composed rate. `marginal-unit-rate` still carries six `:reason` values; `resolve-prices` now carries seven, the new one being `:version-opt-not-a-version`.
+
 ## [0.27.0] — 2026-09-22
 
 Version windows on modifiers, and two schedule defects that made `price-schedule` disagree with `price-segments` about the same instant.
@@ -407,6 +427,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.28.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.28.0
 [0.27.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.27.0
 [0.26.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.26.0
 [0.25.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.25.0
