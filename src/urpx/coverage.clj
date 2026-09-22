@@ -280,3 +280,97 @@
                  :urpx.coverage/coverage-window window
                  :urpx.coverage/evaluations (evaluations-of c doc)}
                 (self-contained-of c version)))))))
+
+;; ---------------------------------------------------------------------------
+;; Arrangements
+;;
+;; An arrangement is several versions, each with its own verdict. Reporting ONE
+;; verdict for the whole would presume the verdicts compose, and they do not.
+;; See `of-arrangement`.
+;;
+;; These read the `:urpx.arrangement/` keys of a map without requiring
+;; urpx.arrangements. That is a data contract rather than a code dependency, and
+;; it is what keeps both namespaces optional: a consumer can use either, both,
+;; or neither.
+;; ---------------------------------------------------------------------------
+
+(defn of-arrangement
+  "What each part of `arrangement` claims about its own coverage.
+
+      :urpx.coverage/parts        [<of-version report> ...] in arrangement
+                                  order, base first, each carrying
+                                  :urpx.coverage/role of :base or :modifier
+      :urpx.coverage/completeness-counts  {\"urpx:partial\" 2, ...}
+      :urpx.coverage/unstated-count       parts carrying no claim
+      :urpx.coverage/every-part-stated?
+      :urpx.coverage/every-part-complete?
+      :urpx.coverage/every-part-self-contained?
+      :urpx.coverage/any-part-scope-stated?
+
+   THERE IS NO ARRANGEMENT-LEVEL VERDICT, and the absence is the design rather
+   than an omission. A test pins the key set so that adding one fails.
+
+   Two reasons, the second decisive. No ordering is stated among the six
+   completeness members, and the absence is meaningful: the same ontology uses
+   skos:broader where it does mean a hierarchy. And every definition is relative
+   to \"the claimed scope\" of its own snapshot, while no snapshot states one, so
+   composing would require knowing each part's scope and that their union equals
+   the arrangement's. Neither is known. Composition is undefined at the DOMAIN
+   level, not merely unranked, and would stay undefined even if URPX later
+   imposed an order.
+
+   A minimum would also be positively wrong in a case the vocabulary allows: a
+   modifier claiming urpx:noCoverage contributes nothing to the composition, so
+   a complete base with a noCoverage modifier is not a noCoverage arrangement.
+
+   EVERY DERIVED BOOLEAN NAMES THE PARTS, never the arrangement. A conjunction
+   of per-part facts needs no ordering; a verdict does, and the naming is what
+   keeps the two from being confused at a call site. Note that
+   `every-part-complete?` still does NOT mean the arrangement is complete: each
+   claim covers its own snapshot's required elements, and nothing claims the
+   elements a composition needs and neither part carries.
+
+   Each part is read against ITS OWN document, the one the arrangement bound to
+   it, so a claim recorded as a bare reference resolves correctly rather than
+   against whichever document happened to be at hand."
+  [arrangement]
+  (let [parts (into [(assoc (of-version (:urpx.arrangement/version arrangement)
+                                        (:urpx.arrangement/rate-plan arrangement))
+                            :urpx.coverage/role :base)]
+                    (map (fn [v d] (assoc (of-version v d) :urpx.coverage/role :modifier))
+                         (:urpx.arrangement/modifier-versions arrangement)
+                         (:urpx.arrangement/modifiers arrangement)))
+        stated (filter :urpx.coverage/stated? parts)]
+    {:urpx.coverage/parts parts
+     :urpx.coverage/completeness-counts (frequencies (keep :urpx.coverage/completeness parts))
+     :urpx.coverage/unstated-count (- (count parts) (count stated))
+     :urpx.coverage/every-part-stated? (= (count parts) (count stated))
+     :urpx.coverage/every-part-complete?
+     (every? #(= "urpx:complete" (:urpx.coverage/completeness %)) parts)
+     :urpx.coverage/every-part-self-contained?
+     (every? #(true? (:urpx.coverage/self-contained %)) parts)
+     :urpx.coverage/any-part-scope-stated?
+     (boolean (some :urpx.coverage/scope-stated? parts))}))
+
+(defn descriptions
+  "The Evaluation prose from an `of-arrangement` report, in part order, as
+   `[{:role :version-id :description} ...]`.
+
+   THE PROSE IS THE ONLY PLACE A GAP IS NAMED. A completeness result says THAT
+   something is missing; the linked Evaluation says WHAT, and in this corpus it
+   is specific enough to act on. One filing's description names the five
+   customer groups whose component exemptions it does not represent and states
+   plainly that \"a consumer applying this filing to any of those customers will
+   charge components the tariff exempts\".
+
+   So a consumer deciding whether a `partial` snapshot is publishable is reading
+   this, not the verdict keyword. Entries with no description are dropped;
+   `explainedBy` is present on 76 of 80 corpus version nodes, not all."
+  [arrangement-report]
+  (into []
+        (for [p (:urpx.coverage/parts arrangement-report)
+              e (:urpx.coverage/evaluations p)
+              :when (:description e)]
+          {:role (:urpx.coverage/role p)
+           :version-id (:urpx.coverage/version-id p)
+           :description (:description e)})))

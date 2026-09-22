@@ -29,7 +29,9 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
   Four refusals: `:unknown-completeness-result`, `:claim-ref-unresolved`, `:self-contained-contradicts-references`, `:ambiguous-coverage-scope`. Two deliberate non-refusals: a missing claim (v0.2.x acceptance is a contract) and claim-versus-version `selfContained` disagreement, which the ontology settles by making the claim authoritative. Every guard carries a mutation proof; most cannot fire on real data, which is why they are constructed.
 
-  **No arrangement-level verdict is planned or possible.** The six completeness members carry no ordering, and the absence is meaningful rather than an oversight: the same ontology uses `skos:broader` where it does mean a hierarchy. They are distinct kinds, not degrees. More decisively, every definition is relative to "the claimed scope" and no snapshot states one, so composition is undefined at the domain level rather than merely unranked.
+  `of-arrangement` returns every part's report in arrangement order, base first, plus `completeness-counts` and conjunction predicates; `descriptions` returns the Evaluation prose. Each part is read against ITS OWN document, the one the arrangement bound to it, so a claim recorded as a bare reference resolves in the right graph.
+
+  **No arrangement-level verdict, and the absence is pinned as an exact key set** so that adding one fails a test. The six completeness members carry no ordering, and the absence is meaningful rather than an oversight: the same ontology uses `skos:broader` where it does mean a hierarchy. They are distinct kinds, not degrees. More decisively, every definition is relative to "the claimed scope" and no snapshot states one, so composition is undefined at the domain level rather than merely unranked.
 
 - **`urpx:TemporalScope`, `urpx:TemporalPeriod` and the `ScopeKind` enum are modeled**, with `urpx.dsl/temporal-scope` and `temporal-period` builders. Groundwork for reading a coverage verdict's window.
 

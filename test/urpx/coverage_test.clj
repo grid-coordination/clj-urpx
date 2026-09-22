@@ -11,6 +11,7 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [urpx.arrangements :as arr]
             [urpx.coverage :as cov]
             [urpx.test-fixtures :as fixtures]))
 
@@ -185,3 +186,117 @@
       (let [f (io/file "src/urpx/coverage.clj")]
         (is (not (mentions? f 'urpx.price)) "and it must not require urpx.price")
         (is (not (mentions? f 'urpx.arrangements)) "nor urpx.arrangements")))))
+
+;; ---------------------------------------------------------------------------
+;; Arrangements
+;; ---------------------------------------------------------------------------
+
+(defn- sce-d+care []
+  (first (filter #(seq (:urpx.arrangement/modifier-version-ids %))
+                 (arr/arrangements [(fixtures/load-rate-plan "sce-d-2026-03-20")
+                                    (fixtures/load-modifier "sce-care-2026-03-20")]))))
+
+(deftest there-is-no-arrangement-level-verdict
+  (testing "THE ABSENCE IS THE DESIGN, so it is pinned as an exact key set
+            rather than left as a comment. Adding a rolled-up
+            :urpx.coverage/completeness fails here, which is the only durable
+            guard against the pressure to add one: every caller who wants a
+            single field will ask, and the answer has to survive them.
+
+            Why there is none. No ordering is stated among the six completeness
+            members and the absence is meaningful, since the same ontology uses
+            skos:broader where it does mean a hierarchy. More decisively, every
+            definition is relative to 'the claimed scope' of its own snapshot
+            and no snapshot states one, so composing would need each part's
+            scope and their union to equal the arrangement's. Neither is known,
+            which makes composition undefined at the domain level rather than
+            merely unranked.
+
+            And a minimum would be positively wrong in a case the vocabulary
+            allows: a modifier claiming urpx:noCoverage contributes nothing, so
+            a complete base with a noCoverage modifier is not a noCoverage
+            arrangement."
+    (is (= #{:urpx.coverage/parts
+             :urpx.coverage/completeness-counts
+             :urpx.coverage/unstated-count
+             :urpx.coverage/every-part-stated?
+             :urpx.coverage/every-part-complete?
+             :urpx.coverage/every-part-self-contained?
+             :urpx.coverage/any-part-scope-stated?}
+           (set (keys (cov/of-arrangement (sce-d+care)))))
+        "exactly these keys: no verdict, no min, no fold")
+    (is (not-any? #(re-find #"verdict|weakest|overall|rollup" (name %))
+                  (keys (ns-publics 'urpx.coverage)))
+        "and no public var offers one under another name")))
+
+(deftest a-mixed-arrangement-keeps-both-verdicts
+  (testing "SCE Schedule D claims complete and the CARE modifier claims partial,
+            so the report has to carry two distinct values. Any fold to one
+            loses the thing a caller needs to decide with."
+    (let [r (cov/of-arrangement (sce-d+care))]
+      (is (= {"urpx:complete" 1 "urpx:partial" 1}
+             (:urpx.coverage/completeness-counts r)))
+      (is (false? (:urpx.coverage/every-part-complete? r)))
+      (is (true? (:urpx.coverage/every-part-stated? r))))))
+
+(deftest every-part-complete-is-reachable-so-the-gate-is-not-constant-false
+  (testing "a conjunction that can never be true is not a gate. SCE Schedule D
+            alone claims complete, so the base-only arrangement satisfies it.
+
+            NOTE what it still does not mean: each claim covers its own
+            snapshot's required elements, so every part claiming complete says
+            nothing about elements a composition needs and neither part carries."
+    (let [base-only (first (filter #(empty? (:urpx.arrangement/modifier-version-ids %))
+                                   (arr/arrangements [(fixtures/load-rate-plan "sce-d-2026-03-20")])))]
+      (is (true? (:urpx.coverage/every-part-complete? (cov/of-arrangement base-only)))))))
+
+(deftest parts-come-in-arrangement-order-with-their-roles
+  (testing "base first, then modifiers in the order the arrangement holds them,
+            each tagged. A caller correlating a verdict with the document it
+            came from needs the order to be the arrangement's, not this
+            namespace's."
+    (let [a (sce-d+care)
+          r (cov/of-arrangement a)]
+      (is (= [:base :modifier] (mapv :urpx.coverage/role (:urpx.coverage/parts r))))
+      (is (= (into [(:urpx.arrangement/version-id a)]
+                   (:urpx.arrangement/modifier-version-ids a))
+             (mapv :urpx.coverage/version-id (:urpx.coverage/parts r)))
+          "and the ids line up index for index with the arrangement's own"))))
+
+(deftest each-part-is-read-against-its-own-document
+  (testing "the arrangement already binds each version to the document it came
+            from, so a claim recorded as a bare @id resolves against the right
+            graph rather than whichever document was at hand. Reading the
+            modifier's claim against the base plan's document would refuse
+            :claim-ref-unresolved, so this passing IS the assertion.
+
+            Constructed because the corpus records no claim by reference."
+    (let [claim-node {:jsonld/id "x:cc-m" :jsonld/type "urpx:CoverageClaim"
+                      :urpx/completenessResult {:jsonld/id "urpx:pending"}}
+          mod-doc {:jsonld/id "x:m" :jsonld/type "urpx:RatePlanModifier"
+                   :urpx/theClaim claim-node
+                   :urpx/hasRatePlanModifierVersion
+                   {:jsonld/id "x:m-v" :jsonld/type "urpx:RatePlanModifierVersion"
+                    :urpx/hasCoverageClaim {:jsonld/id "x:cc-m"}}}
+          arrangement {:urpx.arrangement/version {:jsonld/id "x:p-v" :jsonld/type "urpx:RatePlanVersion"}
+                       :urpx.arrangement/rate-plan {:jsonld/id "x:p" :jsonld/type "urpx:RatePlan"}
+                       :urpx.arrangement/modifier-versions [(:urpx/hasRatePlanModifierVersion mod-doc)]
+                       :urpx.arrangement/modifiers [mod-doc]}
+          r (cov/of-arrangement arrangement)]
+      (is (= [nil "urpx:pending"]
+             (mapv :urpx.coverage/completeness (:urpx.coverage/parts r)))
+          "the modifier's by-reference claim resolved in its OWN document")
+      (is (= 1 (:urpx.coverage/unstated-count r))
+          "and the base, which genuinely has no claim, is unstated rather than refused"))))
+
+(deftest descriptions-carry-the-prose-that-names-the-gap
+  (testing "a completeness result says THAT something is missing; the linked
+            Evaluation says WHAT. In this corpus the prose is specific enough to
+            act on, which makes it the thing a consumer deciding whether to
+            publish a partial snapshot actually reads."
+    (let [ds (cov/descriptions (cov/of-arrangement (sce-d+care)))]
+      (is (= 1 (count ds)) "one part carries prose")
+      (is (= :modifier (:role (first ds))))
+      (is (= "sce:care-2026-03-20" (:version-id (first ds))))
+      (is (< 100 (count (:description (first ds))))
+          "and it is prose, not a label"))))

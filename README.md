@@ -551,6 +551,18 @@ A **service arrangement** is one `urpx:RatePlanVersion`, plus the compatible `ur
 
 `resolve-at` binds each document to its own version and passes the arrangement's selections through as `:profile-alternatives`, so an opt cannot reach a document it does not belong to. Those two keys are **refused** rather than merged if a caller passes them: a caller who wants a different version or a different selection wants a different arrangement.
 
+### An arrangement has no verdict of its own
+
+`of-arrangement` returns every part's report, a frequency map of the verdicts, and conjunction predicates. It returns **no rolled-up `completeness`**, and the absence is the design rather than an omission — a test pins the exact key set so that adding one fails.
+
+Two reasons, the second decisive. No ordering is stated among the six completeness members, and that absence is meaningful: the same ontology uses `skos:broader` where it *does* mean a hierarchy. More decisively, every definition is relative to "the claimed scope" of its own snapshot, and no snapshot states one, so composing would require knowing each part's scope and that their union equals the arrangement's. Neither is known. Composition is undefined at the *domain* level, not merely unranked, and would stay so even if URPX later imposed an order.
+
+A minimum would also be positively wrong in a case the vocabulary allows: a modifier claiming `urpx:noCoverage` contributes nothing, so a `complete` base with a `noCoverage` modifier is not a `noCoverage` arrangement.
+
+Every derived boolean is named for the **parts** — `every-part-complete?`, never `complete?`. A conjunction of per-part facts needs no ordering; a verdict does. Note `every-part-complete?` still does not mean the arrangement is complete: each claim covers its own snapshot's required elements, and nothing claims the elements a composition needs and neither part carries.
+
+What a caller does instead is decide its own publication policy over `completeness-counts` — and for that, `descriptions` is usually the thing to read rather than the verdict. A completeness result says *that* something is missing; the linked Evaluation says *what*, specifically enough to act on. One filing's prose names the five customer groups whose exemptions it does not represent and states plainly that a consumer applying it to any of them "will charge components the tariff exempts".
+
 ### What it refuses
 
 Enumeration answers a question about a whole corpus, so a corpus that does not determine an answer gets a refusal rather than one of the answers it might have meant. Each carries a named `:reason` in `ex-data`.
@@ -669,6 +681,9 @@ Every `urpx:RatePlanVersion` and `urpx:RatePlanModifierVersion` carries a `urpx:
 (cov/of-version version)        ; => a report map, keys under :urpx.coverage/
 (cov/of-version version doc)    ; doc only needed to follow a bare @id reference
 (cov/claim version)             ; => the raw CoverageClaim node, or ::absent
+
+(cov/of-arrangement arrangement)     ; => every part's report, plus counts
+(cov/descriptions arrangement-report) ; => the Evaluation prose, in part order
 ```
 
 The verdict is **not this library's judgement**. Per the ontology, claims "are produced by an implementation or publishing workflow", so a claim says what the *publisher* asserts. Nothing here re-derives one or second-guesses one.
@@ -832,7 +847,7 @@ For a longer worked walkthrough that mirrors selected examples from the upstream
 |------------------|---------|
 | `urpx.core`          | JSON-LD parsing and loading (`parse-rate-plan`, `load-rate-plan`, `load-rate-plan-version`, `parse-graph`, `load-graph`, `expand-document-entities`) |
 | `urpx.schema`    | Malli schemas for the coerced URPX entity model |
-| `urpx.coverage`  | Optional reader for `urpx:CoverageClaim`: `of-version`, `claim`, `completeness-results`. Requires `urpx.index` only |
+| `urpx.coverage`  | Optional reader for `urpx:CoverageClaim`: `of-version`, `of-arrangement`, `descriptions`, `claim`, `completeness-results`. Requires `urpx.index` only |
 | `urpx.load`      | `document-xf`, `documents`, `scan`: sources to coerced documents, with the discards reportable |
 | `urpx.coerce`    | Schema-driven coercion: strings → typed values; `coerce-doc` dispatches on `@type`; `validate`, `explain`; `uncoerced?` and `check-coerced!` tell a coerced document from a raw one |
 | `urpx.index`     | `build-index`, `resolve-ref`, `get-entity` for `@id` references; `versions-by-plan` for v0.5.1 back-pointers; `single` and `entities-of-type` |
