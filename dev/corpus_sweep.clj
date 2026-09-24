@@ -13,8 +13,8 @@
   and there is no default: this library reads a standard, so privileging one
   corpus in its own source would make every other consumer's corpus the special
   case. A git URL is resolved and procured by `clojure.tools.gitlibs`, which
-  caches under ~/.gitlibs and writes nothing into this repo, the same convention
-  scripts/sync-urpx-fixtures.sh follows by taking a checkout it does not own.
+  caches under ~/.gitlibs and writes nothing into this repo: a corpus is
+  something this library is pointed at, never something it vendors or tracks.
 
       clojure -M:dev -m corpus-sweep ../some-corpus
       clojure -M:dev -m corpus-sweep git@github.com:org/some-corpus.git main

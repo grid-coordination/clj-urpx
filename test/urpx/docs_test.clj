@@ -185,33 +185,39 @@
                          (str (.getSimpleName (class t)) ": " (.getMessage t)))))))))
           (finally (remove-ns ns-sym)))))))
 
-(deftest fixtures-md-lists-every-vendored-fixture
-  (testing "FIXTURES.md is the audit trail for what is vendored and at which
-            upstream commit, so a fixture missing from its table is a
-            provenance gap rather than a formatting one. It drifted twice while
-            fixtures were being added by hand, which is why this is a test."
-    (let [md      (doc "test/resources/urpx-fixtures/FIXTURES.md")
-          on-disk (->> (.listFiles (io/file "test/resources/urpx-fixtures"))
-                       (map #(.getName %))
-                       (filter #(str/ends-with? % ".jsonld"))
-                       set)
-          listed  (->> (re-seq #"\| `([^`]+\.jsonld)`" (or md ""))
-                       (map second)
-                       set)]
-      (is (some? md))
+(deftest every-vendored-fixture-records-its-provenance
+  (testing "a specimen whose origin is unrecorded is a provenance gap, and this
+            drifted twice while fixtures were added by hand, which is why it is
+            a test rather than a convention.
+
+            Provenance lives in each fixture's own .license sidecar: the
+            upstream repository, the commit the bytes came from, and the path.
+            It used to live in a table in FIXTURES.md, which made it a pin to
+            keep current rather than a fact about a frozen file, and tracking
+            that table is what coupled this library's suite to one client's
+            editing schedule."
+    (let [dir      (io/file "test/resources/urpx-fixtures")
+          on-disk  (->> (.listFiles dir)
+                        (map #(.getName %))
+                        (filter #(str/ends-with? % ".jsonld"))
+                        set)
+          sidecars (->> (.listFiles dir)
+                        (map #(.getName %))
+                        (filter #(str/ends-with? % ".jsonld.license"))
+                        (map #(subs % 0 (- (count %) 8)))
+                        set)]
       (is (seq on-disk) "sanity: there are vendored fixtures to check")
-      (is (empty? (set/difference on-disk listed))
-          (str "vendored but absent from the FIXTURES.md table: "
-               (pr-str (sort (set/difference on-disk listed)))))
-      (is (empty? (set/difference listed on-disk))
-          (str "listed in FIXTURES.md but not vendored: "
-               (pr-str (sort (set/difference listed on-disk)))))
-      (testing "and every fixture has its SPDX sidecar"
-        (let [sidecars (->> (.listFiles (io/file "test/resources/urpx-fixtures"))
-                            (map #(.getName %))
-                            (filter #(str/ends-with? % ".jsonld.license"))
-                            (map #(subs % 0 (- (count %) 8)))
-                            set)]
-          (is (empty? (set/difference on-disk sidecars))
-              (str "missing .license sidecar: "
-                   (pr-str (sort (set/difference on-disk sidecars))))))))))
+      (is (empty? (set/difference on-disk sidecars))
+          (str "missing .license sidecar: "
+               (pr-str (sort (set/difference on-disk sidecars)))))
+      (doseq [f (sort on-disk)]
+        (let [side (slurp (io/file dir (str f ".license")))]
+          (is (re-find #"SPDX-License-Identifier:" side) (str f ": no SPDX licence"))
+          (is (re-find #"Derived from https://" side) (str f ": no upstream repository"))
+          (is (re-find #"(?m)^at [0-9a-f]{7,40}, path \S+" side)
+              (str f ": no upstream commit and path"))))
+      (testing "and FIXTURES.md no longer carries a pin table to drift"
+        (let [md (doc "test/resources/urpx-fixtures/FIXTURES.md")]
+          (is (some? md))
+          (is (not (re-find #"\| `[^`]+\.jsonld`" md))
+              "FIXTURES.md lists fixtures in a table again; provenance belongs in the sidecars"))))))

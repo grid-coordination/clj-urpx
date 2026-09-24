@@ -10,7 +10,7 @@ JSON-LD rate-plan documents so that the clj-urpx test suite is hermetic —
 `clojure -M:test` works on a fresh clone with no sibling checkouts, no
 environment setup, no submodule dance.
 
-All twenty-three fixtures are **URPX v0.5.1**. They were mixed until migration wave 6 finished and took the whole corpus to v0.5.1; the PG&E four were re-vendored at `1e4ad46` when wave 4 brought them over. Because no vendored fixture carries the v0.2.x shape any more, the dual-acceptance claim is now covered by a synthetic v0.2.x document in `urpx.v051-fixtures-test` rather than by a fixture. That is a deliberate trade: the corpus is the better source of truth, and it has moved on. Between them the fixtures exercise `urpx:URPXPackage` wrappers, `forRatePlan` back-links alongside the nested pointer, `hasCoverageClaim`, `offeredBy` in place of `publishedBy`, the flattened `DataSourceReference`, and the Organization identity chain that replaced `urpx:eiaId`.
+All twenty-three fixtures are **URPX v0.5.1**. They were mixed until migration wave 6 finished and took the whole corpus to v0.5.1; the PG&E four come from `1e4ad46`, the revision at which wave 4 brought them to v0.5.1. Because no vendored fixture carries the v0.2.x shape any more, the dual-acceptance claim is now covered by a synthetic v0.2.x document in `urpx.v051-fixtures-test` rather than by a fixture. That is a deliberate trade: the corpus is the better source of truth, and it has moved on. Between them the fixtures exercise `urpx:URPXPackage` wrappers, `forRatePlan` back-links alongside the nested pointer, `hasCoverageClaim`, `offeredBy` in place of `publishedBy`, the flattened `DataSourceReference`, and the Organization identity chain that replaced `urpx:eiaId`.
 
 Three of the five LADWP filings are `urpx:RatePlanModifier`s, and `nem` is export-direction rather than a discount, so it is not redundant with `ez-save` and `lifeline`. Note their `@context` is the inline object form, not the array: upstream uses an array whose first element is a remote IRI that does not yet resolve, so the corpus deliberately inlines until `urpx.org/ns/context` serves.
 
@@ -20,15 +20,17 @@ Unlike the PG&E `@graph` bundles, each of these base plans is a **separate filin
 
 The PG&E four changed structurally at wave 4, not just in prefixes: a `urpx:URPXPackage` was INSERTED INTO their existing `@graph` as a sibling rather than wrapping it, because `URPXPackageShape` is `sh:closed` and admits neither `urpx:ProgramEnrollment` nor `urpx:RateCase`, which these filings carry. The plan and its modifier are embedded inside that package, so `load-graph` alone no longer reaches them and the wrapper has to be descended. `urpx:TariffPublication` became `urpx:SourcePublication`, and two `urpx:supersedes` links were dropped because the v0.5.1 version shapes are closed and do not admit the property. The library targets v0.5.1 and accepts v0.2.x in full; because no vendored fixture carries the v0.2.x shape any more, that half is exercised by a synthetic v0.2.x document in `urpx.v051-fixtures-test` rather than by a fixture.
 
-## Why the pins differ, and why some are deliberately old
+## Why each specimen was chosen, and why some look old
 
-A pin is not staleness to be cleaned up on a schedule. A stale pin can preserve coverage the corpus no longer has, or hide the shape real filings actually use, and this set contains one of each. Re-sync fixture by fixture, and record the reason here.
+These are frozen specimens, not a mirror of the upstream corpus. Each one is here because it carries a shape the library must handle, and each is left alone unless there is a stated reason to replace it. Where a specimen is older than upstream, that is usually the point: the shape it carries may be one the corpus has since stopped using, and that is exactly the coverage a current copy would lose.
 
-**`sdge-ev-tou-2026-04-01` stays at `28390dc` on purpose.** At that commit it carries twelve `urpx:Price` nodes with `urpx:touPeriodNumber`; at current corpus HEAD it carries none, because the corpus collapsed them onto the PriceDefinition. That property's mishandling overstated SDG&E's CARE discount 3.09x, fixed in 0.22.0, and this is the only place the shape survives. Re-pinning would leave `urpx.price-test/a-price-carries-its-own-tou-period` green while testing nothing, which is why its own guard assertion counts the twelve. If the pin ever has to move, replace the case with a synthetic document first, the way the v0.2.x acceptance case was replaced.
+**`sdge-ev-tou-2026-04-01` carries twelve `urpx:Price` nodes with `urpx:touPeriodNumber`**, a shape upstream has since collapsed onto the PriceDefinition. Mishandling that property overstated SDG&E's CARE discount 3.09x, fixed in 0.22.0, and this specimen is the only place the shape survives. `urpx.price-test/a-price-carries-its-own-tou-period` counts the twelve in its own guard assertion, so replacing this specimen with a current copy would leave that test green while testing nothing. If it is ever replaced, write the synthetic document first.
 
-**`sce-d-2026-03-20` moved to `26e0acb` for the opposite reason.** It was pinned at `384ffb1`, which carries `urpx:serviceTierNumber` on the Price; 69 of 73 filings carry it on the PriceDefinition, and that staleness is exactly why the 0.22.0 summary tier fix passed here and did nothing on the corpus, needing 0.23.0. The fixture now carries the house idiom, `urpx.care-fera-test` derives the minority form from it rather than the other way round, and re-pinning immediately exposed that the test's own `subtotal` helper still had the same narrow read.
+**`sce-d-2026-03-20` carries the house idiom**, `urpx:serviceTierNumber` on the PriceDefinition rather than on the Price. An earlier specimen of this filing carried the minority form, and that is precisely why the 0.22.0 summary tier fix passed here and did nothing on real filings, needing 0.23.0. `urpx.care-fera-test` now derives the minority form from this one rather than the reverse.
 
-**`pge-e-1-2026-03-01` and `pge-e-tou-c-2026-03-01` stay at `1e4ad46`.** The corpus has since re-scoped every subordinate `@id` to its owning version and named its blank nodes. Measured: no `@type` count changes, no URPX property is added or removed, no literal value differs, and no resolved number moves at any instant. The change is identity only, so re-pinning buys nothing and costs about seventy IRI-string updates across five test namespaces and the README. It is also hazardous rather than merely tedious: `pge:pa-vintage-2020` exists in both fixtures and maps to two different scoped IRIs, and within one fixture three nodes share the suffix (`pa-`, `cn-pa-`, `cx-pa-`). Move these when there is a substantive reason, not to make the pins match.
+**Two halves of one filing must come from one upstream commit.** `pge-e-tou-c-2026-03-01` and its `pge-e-tou-c-baseline-tier-2026-03-01` overlay were once taken from different upstream moments, so the overlay named `pge:e-tou-c-2026-03-01-season-{summer,winter}` while its base plan declared `pge:season-{summer,winter}`. Each was self-consistent where it came from; the mismatch existed only here. Nothing read those refs, so it stayed invisible until URPX-sr4 wired the modifier path and it became a refusal. An inconsistent pair is not a URPX document set any consumer would ever see.
+
+**Beware ids that share a suffix** if you ever add a specimen from a newer upstream revision. `pge:pa-vintage-2020` appears in two PG&E filings and scopes differently in each, and within one filing three nodes share the `pa-` suffix (`pa-`, `cn-pa-`, `cx-pa-`), so a substitution by suffix hits the wrong node.
 
 ## Source and license
 
@@ -40,57 +42,20 @@ headers consistent with the URPX project's
 public regulatory filings (CPUC advice letters); the URPX serializations are
 the work of the urpx-rate-plans contributors.
 
-## Pinned upstream commits
+## Adding a specimen
 
-Fixtures are snapshots, pinned to a specific upstream commit on the
-`main` branch of urpx-rate-plans.
+Provenance lives in each fixture's `.license` sidecar, which records the upstream repository, the commit the bytes came from, and the path. That is a historical fact about a frozen file, so it never needs updating.
 
-| Fixture                              | Upstream branch        | Pinned commit |
-|--------------------------------------|------------------------|---------------|
-| `pge-e-1-2026-03-01.jsonld`          | `main`               | `1e4ad46`     |
-| `pge-e-tou-c-2026-03-01.jsonld`      | `main`               | `1e4ad46`     |
-| `pge-e-tou-d-2026-03-27.jsonld`      | `main`               | `26e0acb`     |
-| `pge-ev2-2026-03-27.jsonld`          | `main`               | `26e0acb`     |
-| `ladwp-r-1a-2026-04-01.jsonld`       | `main`               | `26e0acb`     |
-| `ladwp-r-1b-2026-04-01.jsonld`       | `main`               | `26e0acb`     |
-| `ladwp-ez-save-2008-09-01.jsonld`    | `main`               | `26e0acb`     |
-| `ladwp-lifeline-2008-09-01.jsonld`   | `main`               | `26e0acb`     |
-| `ladwp-nem-2008-09-01.jsonld`        | `main`               | `26e0acb`     |
-| `sce-d-2026-03-20.jsonld`            | `main`               | `26e0acb`     |
-| `sce-care-2026-03-20.jsonld`         | `main`               | `384ffb1`     |
-| `sce-fera-2026-03-20.jsonld`         | `main`               | `384ffb1`     |
-| `sdge-dr-2026-04-01.jsonld`          | `main`               | `384ffb1`     |
-| `sdge-care-2025-10-01.jsonld`        | `main`               | `384ffb1`     |
-| `sdge-fera-2026-04-01.jsonld`        | `main`               | `384ffb1`     |
-| `cpau-e-14-2025-07-01.jsonld`        | `main`               | `28390dc`     |
-| `sce-d-2025-11-15.jsonld`            | `main`               | `26e0acb`     |
-| `smud-tod-5-8pm-2026-01-01.jsonld`   | `main`               | `28390dc`     |
-| `smud-cpp-2026-01-01.jsonld`         | `main`               | `28390dc`     |
-| `sce-tou-d-prime-2026-03-20.jsonld`  | `main`               | `28390dc`     |
-| `sce-tou-d-prime-cpp-2026-03-20.jsonld` | `main`            | `28390dc`     |
-| `sdge-ev-tou-2026-04-01.jsonld`      | `main`               | `28390dc`     |
-| `pge-e-tou-c-baseline-tier-2026-03-01.jsonld` | `main`      | `28390dc`     |
+There is deliberately no bulk re-sync. Tracking a moving corpus is what this directory used to do, and it cost more than it gave: the suite broke when a client edited their filings for reasons internal to them, and taking two halves of one filing from two moments manufactured an inconsistency no consumer would see. clj-urpx is a general-purpose URPX library, and one corpus is one client of it.
 
-Each fixture is a JSON-LD `@graph` document bundling a `urpx:RatePlan` with
-its sibling `urpx:RatePlanModifier`(s) plus surrounding metadata
-(`urpx:TariffPublication`, `urpx:ProgramEnrollment`).
-
-The `177a761` re-vendor moved the upstream paths from `ca/<class>/<utility>/` to `us/ca/<utility>/electricity/`; the regulator-class split (`iou`/`pou`) was dropped upstream, not merely reordered. Three content changes came with it, and all three were verified rather than assumed: the `org:` and `pge:` prefix bindings moved from `example.com` to `rate-plans.grid-coordination.energy`; the unused `schema:` prefix binding was dropped (zero `schema:`-prefixed terms appear in any fixture, and its removal changes no triple); and a repo-name reference inside one `urpx:description` literal in `pge-e-1` and `pge-ev2` tracks the upstream rename. Under the IRI substitution, `pge-e-tou-c` and `pge-e-tou-d` are graph-isomorphic to their previous content, and `pge-e-1` and `pge-ev2` differ by exactly the one description triple each, at identical triple counts.
-
-## Re-syncing from upstream
-
-Use `scripts/sync-urpx-fixtures.sh` to refresh from a local urpx-rate-plans
-checkout:
+To add a specimen, copy the file out of a checkout at one commit and record that commit in its sidecar:
 
 ```bash
-./scripts/sync-urpx-fixtures.sh /path/to/urpx-rate-plans
+git -C /path/to/urpx-rate-plans show <commit>:<path> \
+  > test/resources/urpx-fixtures/<name>.jsonld
 ```
 
-The script copies each pinned file from the appropriate branch (via
-`git show <commit>:<path>`) into this directory and reports any drift.
-
-When you bump the pinned commits, update the table above so the audit trail
-stays accurate.
+Then write `<name>.jsonld.license` with the SPDX headers and the provenance lines, say in this file what shape the specimen covers and why the suite needs it, and take every document of one filing from the same commit.
 
 ## Loading fixtures from tests
 

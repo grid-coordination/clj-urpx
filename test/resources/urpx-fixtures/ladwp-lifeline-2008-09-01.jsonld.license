@@ -1,2 +1,7 @@
 SPDX-FileCopyrightText: 2026 urpx-rate-plans contributors
 SPDX-License-Identifier: CC0-1.0
+
+Derived from https://github.com/grid-coordination/urpx-rate-plans
+at 26e0acb, path us/ca/ladwp/electricity/lifeline/versions/2008-09-01/rate-plan-modifier_ladwp_lifeline_2008-09-01.jsonld
+Vendored as a frozen specimen. This records where the bytes came from;
+it is not a pin to be kept current.

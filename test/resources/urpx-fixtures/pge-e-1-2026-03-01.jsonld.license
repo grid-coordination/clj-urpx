@@ -1,2 +1,7 @@
 SPDX-FileCopyrightText: 2026 urpx-rate-plans contributors
 SPDX-License-Identifier: CC0-1.0
+
+Derived from https://github.com/grid-coordination/urpx-rate-plans
+at 1e4ad46, path us/ca/pge/electricity/e-1/versions/2026-03-01/rate-plan_pge_e-1_2026-03-01.jsonld
+Vendored as a frozen specimen. This records where the bytes came from;
+it is not a pin to be kept current.

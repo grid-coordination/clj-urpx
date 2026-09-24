@@ -1,2 +1,7 @@
 SPDX-FileCopyrightText: 2026 urpx-rate-plans contributors
 SPDX-License-Identifier: CC0-1.0
+
+Derived from https://github.com/grid-coordination/urpx-rate-plans
+at 28390dc, path us/ca/sce/electricity/tou-d-prime-cpp/versions/2026-03-20/rate-plan-modifier_sce_tou-d-prime-cpp_2026-03-20.jsonld
+Vendored as a frozen specimen. This records where the bytes came from;
+it is not a pin to be kept current.

@@ -69,7 +69,7 @@ Deliberate divergence goes in [`dev/drift-baseline.edn`](dev/drift-baseline.edn)
 
 If you are about to propose generating the schemas from the shapes instead, read [SHACL and Malli](doc/shacl-and-malli.md) first. A generator was built, it worked, and the note records the measured reasons it is not what ships.
 
-The vendored fixtures under `test/resources/urpx-fixtures/` are pinned snapshots of corpus filings from [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans). See [`test/resources/urpx-fixtures/FIXTURES.md`](test/resources/urpx-fixtures/FIXTURES.md) for the table of pinned commits and the re-sync workflow (`scripts/sync-urpx-fixtures.sh <path-to-urpx-rate-plans-checkout>`). When the upstream corpus exposes a new shape that clj-urpx should handle, add the fixture there with provenance and bump the pin.
+The vendored fixtures under `test/resources/urpx-fixtures/` are frozen specimens of real URPX filings, taken from [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) and left alone. Each one records where its bytes came from in its own `.license` sidecar. There is no re-sync: clj-urpx is a general-purpose URPX library and one corpus is one client of it, so tracking that corpus's edits made the suite fail for reasons that were never about this library. See [`test/resources/urpx-fixtures/FIXTURES.md`](test/resources/urpx-fixtures/FIXTURES.md) for what shape each specimen covers and how to add one. When a real filing exposes a shape clj-urpx should handle and no specimen carries it, add one; otherwise prefer a synthetic document, which can state one shape per test where a filing states many at once.
 
 ## Code of conduct
 
