@@ -104,14 +104,20 @@
 (defn- ->long [v] (if (string? v) (Long/parseLong v) v))
 
 (defn- single-or-vec->vec
-  "URPX allows certain has-* fields to hold a single map or a vector of maps;
-   normalize to a vector so downstream consumers see one shape."
+  "URPX allows a 0..N field to hold one value or a vector of them; normalize to
+   a vector so downstream consumers see one shape.
+
+   The last arm is `[v]`, not `(vec v)`. Sequential values are already handled
+   above, so anything reaching it is a scalar: `(vec \"urpx:foo\")` shredded a
+   compact string @id into eight characters, and `(vec 6)` threw outright. No
+   vendored fixture writes either shape, so both were latent, but a decoder
+   whose failure mode is silent mangling is worse than one that passes a value
+   through for the value schema to reject."
   [v]
   (cond
-    (nil? v)    v
-    (vector? v) v
-    (map? v)    [v]
-    :else (vec v)))
+    (nil? v)        v
+    (sequential? v) (vec v)
+    :else           [v]))
 
 ;; ---------------------------------------------------------------------------
 ;; Primitive predicates
@@ -287,7 +293,7 @@
    [:jsonld/type [:= "urpx:Season"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/seasonName :string]
-   [:urpx/month {:optional true} [:vector MonthNumber]]
+   [:urpx/month {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector MonthNumber]]
    [:urpx/yearlyRecurrence {:optional true} :boolean]])
 
 (def MetricSpecification
@@ -307,8 +313,7 @@
    [:urpx/metricInputType Ref]
    ;; 0..N upstream (no sh:maxCount). Accepted as one or many; price.clj reads
    ;; one through urpx.index/single, which refuses rather than guessing.
-   [:urpx/hasMetricSpecification {:optional true}
-    [:or MetricSpecification [:vector MetricSpecification]]]
+   [:urpx/hasMetricSpecification {:optional true} [:or MetricSpecification [:vector MetricSpecification]]]
    ;; In v0.2.0 profileMetricProperty is a Ref to a vocabulary IRI
    ;; (e.g. urpx:meterCount, urpx:departureVintage).
    [:urpx/profileMetricProperty  {:optional true} Ref]])
@@ -321,7 +326,7 @@
    ;; v0.2.0 SHACL: dayType is required (was optional in v0.1.x).
    [:urpx/dayType Ref]
    ;; 0..N upstream. TOU matching in price.clj reads one via index/single.
-   [:urpx/appliesInSeason     {:optional true} [:or Ref [:vector Ref]]]
+   [:urpx/appliesInSeason     {:optional true :decode/urpx-jsonld single-or-vec->vec} [:or Ref [:vector Ref]]]
    [:urpx/includeHolidays     {:optional true} :boolean]
    [:urpx/includeNonHolidays  {:optional true} :boolean]])
 
@@ -334,7 +339,7 @@
    [:urpx/priority   {:optional true} Int]
    [:urpx/startDate  {:optional true} Date]
    [:urpx/endDate    {:optional true} Date]
-   [:urpx/hasTimeBracket [:vector TimeBracket]]])
+   [:urpx/hasTimeBracket {:decode/urpx-jsonld single-or-vec->vec} [:vector TimeBracket]]])
 
 (def TOUTier
   [:map
@@ -342,7 +347,7 @@
    [:urpx/tierSourceName {:optional true} :string]
    [:urpx/touTierStandardName {:optional true} Ref]
    [:urpx/touTierNumber Int]
-   [:urpx/hasTOUPeriod [:vector TOUPeriod]]])
+   [:urpx/hasTOUPeriod {:decode/urpx-jsonld single-or-vec->vec} [:vector TOUPeriod]]])
 
 (def TOUSchedule
   [:map
@@ -354,7 +359,7 @@
     {:decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
    [:urpx/hasCalendar {:optional true} Ref]
-   [:urpx/hasTOUTier [:vector TOUTier]]])
+   [:urpx/hasTOUTier {:decode/urpx-jsonld single-or-vec->vec} [:vector TOUTier]]])
 
 (def CalculationMethod
   [:map
@@ -524,7 +529,7 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
    [:urpx/referencesProfileAlternative {:optional true} Ref]
-   [:urpx/hasServiceTier [:vector ServiceTier]]])
+   [:urpx/hasServiceTier {:decode/urpx-jsonld single-or-vec->vec} [:vector ServiceTier]]])
 
 (def BillingModel
   "v0.2.0: hasPriceDefinition is required (min 1) and lives at this level
@@ -769,13 +774,12 @@
    selection that determines which alternative's prices apply."
   [:map
    [:jsonld/type [:= "urpx:PlanElements"]]
-   [:urpx/hasSeasons         {:optional true} [:vector Season]]
-   [:urpx/hasMetricInput     [:vector MetricInput]]
+   [:urpx/hasSeasons         {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Season]]
+   [:urpx/hasMetricInput     {:decode/urpx-jsonld single-or-vec->vec} [:vector MetricInput]]
    ;; 0..N upstream. holidays.clj reads one via index/single. Merging several
    ;; calendars into one holiday set looks obvious but is a semantic decision
    ;; the vocabulary does not state, so it refuses instead.
-   [:urpx/hasHolidayCalendar {:optional true}
-    [:or HolidayCalendar [:vector HolidayCalendar]]]
+   [:urpx/hasHolidayCalendar {:optional true} [:or HolidayCalendar [:vector HolidayCalendar]]]
    [:urpx/hasProfileAlternatives
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector ProfileAlternatives]]
@@ -798,7 +802,7 @@
    [:jsonld/type [:= "urpx:ApplicabilityRule"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/name {:optional true} :string]
-   [:urpx/month {:optional true} [:vector MonthNumber]]
+   [:urpx/month {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector MonthNumber]]
    [:urpx/hasConditionExpression {:optional true} ConditionExpression]])
 
 ;; ---------------------------------------------------------------------------
@@ -974,7 +978,7 @@
    [:urpx/hasPriceSummary
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector [:or PriceSummary ExclusiveRef]]]
-   [:urpx/hasPrice [:vector Price]]])
+   [:urpx/hasPrice {:decode/urpx-jsonld single-or-vec->vec} [:vector Price]]])
 
 ;; Prices is defined further down — its hasPriceSetAlternatives entry
 ;; depends on PriceSetAlternatives, which depends on DataSourceReference
@@ -1286,8 +1290,7 @@
     [:vector DataSourceReference]]
    ;; 0..N upstream (no sh:maxCount). Accepted as one or many; price.clj reads
    ;; one through urpx.index/single, which refuses rather than guessing.
-   [:urpx/hasMetricSpecification {:optional true}
-    [:or MetricSpecification [:vector MetricSpecification]]]
+   [:urpx/hasMetricSpecification {:optional true} [:or MetricSpecification [:vector MetricSpecification]]]
    ;; 0..N upstream, same as on PriceSet: an alternative carries its own
    ;; subtotals, since which line items a summary names depends on which
    ;; alternative was selected.
@@ -1320,8 +1323,8 @@
    exposes one PriceSetAlternative per ProfileAlternative."
   [:map
    [:jsonld/type [:= "urpx:Prices"]]
-   [:urpx/hasPrice    {:optional true} [:vector Price]]
-   [:urpx/hasPriceSet {:optional true} [:vector PriceSet]]
+   [:urpx/hasPrice    {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Price]]
+   [:urpx/hasPriceSet {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector PriceSet]]
    [:urpx/hasPriceSetAlternatives
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector PriceSetAlternatives]]])
@@ -1466,8 +1469,7 @@
    ;; change the coerced shape every consumer already reads. Readers go through
    ;; `urpx.index/nested-version`, which refuses to guess when there is more
    ;; than one rather than silently resolving against an arbitrary snapshot.
-   [:urpx/hasRatePlanVersion {:optional true}
-    [:or RatePlanVersion [:vector RatePlanVersion]]]])
+   [:urpx/hasRatePlanVersion {:optional true} [:or RatePlanVersion [:vector RatePlanVersion]]]])
 
 ;; ---------------------------------------------------------------------------
 ;; Modifier — augments / overrides parts of an existing RatePlan
@@ -1575,8 +1577,7 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
    ;; 0..N upstream, same as RatePlan/hasRatePlanVersion above.
-   [:urpx/hasRatePlanModifierVersion {:optional true}
-    [:or RatePlanModifierVersion [:vector RatePlanModifierVersion]]]])
+   [:urpx/hasRatePlanModifierVersion {:optional true} [:or RatePlanModifierVersion [:vector RatePlanModifierVersion]]]])
 
 ;; ---------------------------------------------------------------------------
 ;; Top-level wrappers carrying ontology-version metadata
