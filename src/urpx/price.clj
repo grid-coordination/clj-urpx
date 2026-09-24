@@ -1996,15 +1996,34 @@
                                (index-with-price-set-alternatives prices)))
          _             (validate-selection! (:profile-alternatives opts) alt-index)
          alt-status    #(pd-alternative-status % (:profile-alternatives opts) alt-index)
-         member-status (or (:member-status opts)
-                          ;; resolved on its own, a modifier has only its own
-                          ;; context to judge by; composing supplies the base
-                          ;; plan's, which is the one that matters.
-                           (make-member-status by-id base-period-num (.toLocalDate zdt)
-                                               {} {} alt-status))
          own-schedules (:urpx/hasTOUSchedule billing)
          own-seasons   (:urpx/hasSeasons plan-elts)
          query-date    (.toLocalDate zdt)
+         own-rules     (or (:rules-by-id opts)
+                           (index/entities-of-type version "urpx:ApplicabilityRule"))
+         ;; A Season a modifier's PriceDefinition names may be declared by the
+         ;; BASE plan: PG&E's E-TOU-C baseline-tier modifier declares none of
+         ;; its own. So the modifier's seasons first, then by-id type-checked,
+         ;; which is composition-wide when composing and modifier-only when
+         ;; standing alone. Passed as a lookup FUNCTION rather than a map, which
+         ;; the season predicates accept unchanged because they only call it.
+         resolve-season
+         (let [own (into {} (map (juxt :jsonld/id identity)) own-seasons)]
+           (fn [sid]
+             (or (get own sid)
+                 (let [n (get by-id sid)]
+                   (when (= "urpx:Season" (:jsonld/type n)) n)))))
+         member-status (or (:member-status opts)
+                           ;; Resolved on its own, a modifier has only its own
+                           ;; context to judge by; composing supplies the base
+                           ;; plan's, which is the one that matters. Standing
+                           ;; alone this passed EMPTY rule and season indexes, so
+                           ;; pd-active-in-season? found no Season for any ref
+                           ;; and a member carrying urpx:appliesInSeason was
+                           ;; always inactive: silently dropped from the subtotal
+                           ;; rather than gated by it.
+                           (make-member-status by-id base-period-num query-date
+                                               own-rules resolve-season alt-status))
          own-period-num
          (when (seq own-schedules)
            (let [season-id  (:jsonld/id (season-of own-seasons query-date))
@@ -2035,8 +2054,20 @@
          mi-index    (mi-by-id plan-elts)]
      (vec
       (for [ledger ledgers
-            :let [scoped-pds (cond->> (pds-by-ledger (:jsonld/id ledger))
-                               gate? (filter #(pd-active-at-tou? % gate-period)))
+            ;; The base path gates a PriceDefinition on three things
+            ;; (pd-active-at-tou?, pd-active-in-month?, pd-active-in-season?).
+            ;; This path gated on one, so a modifier discriminating two cells by
+            ;; month applicability rule or by urpx:appliesInSeason surfaced BOTH
+            ;; at every instant: SMUD's NEM1 export credit over smud:fixed is
+            ;; that shape, and only its touPeriodNumber-discriminated cells were
+            ;; buildable. TOU stays conditional on gate?, since without a
+            ;; schedule or a base period there is no period to compare; month
+            ;; and season need neither and so apply unconditionally.
+            :let [scoped-pds (->> (pds-by-ledger (:jsonld/id ledger))
+                                  (filter #(and (or (not gate?)
+                                                    (pd-active-at-tou? % gate-period))
+                                                (pd-active-in-month? % query-date own-rules)
+                                                (pd-active-in-season? % resolve-season query-date))))
                   by-alt     (group-by alt-status scoped-pds)
                   ledger-pds (concat (:unconstrained by-alt) (:selected by-alt))
                   alt-withheld (map :jsonld/id (:unselected by-alt))
