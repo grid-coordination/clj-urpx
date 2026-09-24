@@ -10,14 +10,13 @@
   bounds in December, and two containers declaring one serviceTierNumber
   last-won on map insertion order.
 
-  Every case here is constructed, and that is the point rather than a
-  shortcoming. No vendored fixture exercises either scope: the 18 tiers across
-  the five tiered base plans carry exactly one unqualified bracket each, and
-  the one filing that does qualify its brackets, the PG&E E-TOU-C baseline-tier
-  modifier with 120 of them, is a urpx:RatePlanModifier whose tiers the
-  modifier path never reaches (URPX-sr4). The slot has to work before a filing
-  can be written against it, and `urpx.price-test` holds the companion claim
-  that the corpus does not move."
+  Every case here is constructed, which was the only option when this landed:
+  the tiered base-plan fixtures carry one unqualified bracket per tier, and the
+  one filing that qualifies its brackets, PG&E's E-TOU-C baseline-tier overlay
+  with 120 of them, is a urpx:RatePlanModifier whose tiers nothing read until
+  URPX-sr4 wired `tier-info` into that path. `urpx.modifier-gating-test` now
+  holds the real-filing case; these stay constructed because a synthetic
+  document can state one shape per test where a filing states many at once."
   (:require [clojure.test :refer [deftest is testing]]
             [urpx.price :as price]
             [urpx.test-fixtures :as fixtures])
@@ -575,9 +574,10 @@
             composition that index spans the base plan and every modifier,
             which is how a base-plan bracket reaches a Season a modifier
             document declares; resolving alone it covers only this document, so
-            the fallback is then a no-op. This is a urpx:RatePlan, not a
-            modifier: a modifier's own brackets are never gated at all, since
-            tier-info has one call site and it is on the base-plan path."
+            the fallback is then a no-op. The widening runs both ways: a
+            modifier's bracket naming the base plan's Season resolves in a
+            composition too, which is how PG&E's baseline-tier overlay is
+            evaluable at all."
     (let [p (update-in (plan [(container "test:c" [(bracket "test:b" 13.5M
                                                             :season "other:season-summer")])])
                        [:urpx/hasRatePlanVersion :urpx/hasPlanElements]

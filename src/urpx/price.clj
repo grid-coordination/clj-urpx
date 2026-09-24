@@ -1091,11 +1091,11 @@
      not have been through it.
 
    `resolve-season` is a function of @id, not the seasons index itself, so a
-   composition can widen what a ref reaches. Only a urpx:RatePlan's brackets are
-   ever gated: `tier-info` has one call site, on the base-plan path, and
-   `modifier-ledger-results` does not call it (URPX-sr4). So the widening serves
-   a BASE plan's bracket naming a urpx:Season that a modifier document
-   declares, which is the direction a composition's index actually runs."
+   composition can widen what a ref reaches, and it runs in both directions: a
+   base plan's bracket can name a urpx:Season a modifier declares, and a
+   modifier's bracket can name one the base plan declares. PG&E's E-TOU-C
+   baseline-tier overlay is the second case and declares no Season of its own,
+   so composing is what makes its 120 brackets evaluable at all."
   [node resolve-season seasons-declared? ^java.time.LocalDate date]
   (let [refs (season-refs node)]
     (if (empty? refs)
@@ -2085,6 +2085,16 @@
          ;; its own. make-season-status reads by-id after the modifier's own
          ;; seasons, and by-id is composition-wide when composing.
          season-status (make-season-status own-seasons by-id query-date)
+         ;; A modifier may carry its own urpx:ServiceTiers, and its tiers were
+         ;; surfaced UNTIERED: this path never called tier-info, so no entry got
+         ;; a :urpx.resolved/tier-number or any bound however the tiers were
+         ;; shaped. marginal-unit-rate reduces a ladder by that number, so a
+         ;; modifier's own block ladder was summed as additive components
+         ;; instead. Selection needs nothing new here: the container and bracket
+         ;; qualifiers read the same alt-status and season-status the
+         ;; PriceDefinition gate above already uses.
+         tier-cands    (service-tier-candidates billing)
+         tier-ctx      {:alt-status alt-status :season-status season-status}
          member-status (or (:member-status opts)
                            ;; Resolved on its own, a modifier has only its own
                            ;; context to judge by; composing supplies the base
@@ -2146,27 +2156,24 @@
                   tier-entries
                   (->> ledger-pds
                        (mapcat (fn [pd]
-                                ;; The interval is read here as well as on the
-                                ;; base path. Without it a recurring modifier
-                                ;; price could never be excluded from a per-unit
-                                ;; sum, and the withheld view of that same price
-                                ;; disagreed with the present view about whether
-                                ;; it counts.
-                                 (let [interval (recurring-interval pd)]
-                                   (for [[price _] (pd->prices (:jsonld/id pd))
-                                         :let [gates (condition-gates price pd by-id)]]
-                                     (cond-> (merge
-                                              {:urpx.resolved/price-definition-id (:jsonld/id pd)
-                                               :urpx.resolved/price-id            (:jsonld/id price)
-                                               :urpx.resolved/price-name          (:urpx/name price)}
-                                              (price-fields price by-id member-status))
-                                       interval
-                                       (assoc :urpx.resolved/interval-duration interval)
-                                       (:urpx/hasDynamicPricing price)
-                                       (assoc :urpx.resolved/dynamic-pricing
-                                              (:urpx/hasDynamicPricing price))
-                                       gates
-                                       (assoc :urpx.resolved/condition-gated gates))))))
+                                 (for [[price _] (pd->prices (:jsonld/id pd))
+                                       :let [gates (condition-gates price pd by-id)]]
+                                   ;; tier-info, as on the base path. It carries
+                                   ;; the recurring interval, without which a
+                                   ;; recurring modifier price could never be
+                                   ;; excluded from a per-unit sum, AND the tier
+                                   ;; number and bounds this path used to drop.
+                                   (cond-> (merge
+                                            {:urpx.resolved/price-definition-id (:jsonld/id pd)
+                                             :urpx.resolved/price-id            (:jsonld/id price)
+                                             :urpx.resolved/price-name          (:urpx/name price)}
+                                            (price-fields price by-id member-status)
+                                            (tier-info pd price tier-cands tier-ctx))
+                                     (:urpx/hasDynamicPricing price)
+                                     (assoc :urpx.resolved/dynamic-pricing
+                                            (:urpx/hasDynamicPricing price))
+                                     gates
+                                     (assoc :urpx.resolved/condition-gated gates)))))
                       ;; Sorted like the base path. marginal-unit-rate documents
                       ;; itself as taking the LOWEST tier and implements that as
                       ;; `first`, which only holds if the vector is ordered by

@@ -9,6 +9,20 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Fixed
+
+- **A urpx:RatePlanModifier's own block tiers surfaced untiered.** `modifier-ledger-results` built its entries from `price-fields` alone and never called `tier-info`, so no entry from a modifier carried `:urpx.resolved/tier-number` or any bound, however its `urpx:ServiceTiers` were shaped. That made it a wrong NUMBER rather than a missing field: `marginal-unit-rate` reduces a block ladder to its marginal rung by that number and sums everything without one, so a modifier's three-rung ladder was added together instead of reduced. Bracket and container selection now reach that path too, reading the same season and alternative context the PriceDefinition gate there already used.
+
+  The case it was for: PG&E's E-TOU-C baseline-tier overlay carries 120 `urpx:ServiceBracket` nodes, one per (baselineTerritory, baselineCode, season) cell, and every one of them was read by nothing. Composed with its base plan and given a baseline cell, Territory P Code B now states 0 to 13.5 and 13.5 to 54.0 kWh per day in summer and 0 to 11.0 and 11.0 to 44.0 in winter, matching PG&E's Sheet 4. With no cell named all four rungs surface with their numbers and unit prices and an `:alternative-unselected` mark, so a caller learns the ladder exists and that its bounds are the caller's to determine.
+
+  One asymmetry recorded rather than worked around: `resolve-modifier-prices` takes no opts, so a cell selection cannot reach a modifier resolved alone and its cell-scoped bounds are always withheld there. Composing is the way to select. `resolve-prices` has taken opts all along.
+
+### Changed
+
+- **The `pge-e-tou-c-baseline-tier-2026-03-01` fixture is re-vendored from the same upstream commit as its base plan.** The two halves of one filing had been taken from different upstream moments, so the modifier named `pge:e-tou-c-2026-03-01-season-*` while its base plan declared `pge:season-*`. Nothing read those refs before, so the mismatch was invisible; wiring the modifier path made it a refusal. An inconsistent pair is not a URPX document set any consumer would see, and it was an artifact of vendoring rather than anything upstream ever published.
+
 ## [0.33.0] — 2026-09-23
 
 ### Fixed

@@ -44,7 +44,7 @@
   "A coerced urpx:RatePlanModifier carrying `pds` and one Price per definition.
   `seasons` lets a test omit them, which is how a modifier that names the base
   plan's Seasons rather than declaring its own is built."
-  [pds & {:keys [seasons] :or {seasons [summer winter]}}]
+  [pds & {:keys [seasons tiers tier-numbers] :or {seasons [summer winter]}}]
   {:jsonld/type "urpx:RatePlanModifier"
    :jsonld/id   "test:mod"
    :urpx/timezoneIdentifier "America/Los_Angeles"
@@ -72,16 +72,20 @@
                                 :urpx/ledgerType {:jsonld/id "urpx:bundledLedger"}
                                 :urpx/referencesMetricInput [{:jsonld/id "test:mi-energy"}]}]
               :urpx/hasPriceDefinition pds}}
-      (seq seasons) (assoc :urpx/hasSeasons seasons))
+      (seq seasons) (assoc :urpx/hasSeasons seasons)
+      (seq tiers)   (assoc-in [:urpx/hasBillingModel :urpx/hasServiceTiers] tiers))
     :urpx/hasPrices
     {:jsonld/type "urpx:Prices"
      :urpx/hasPrice
      (vec (map-indexed (fn [i pd]
-                         {:jsonld/type "urpx:Price"
+                         (merge
+                          {:jsonld/type "urpx:Price"
                           :jsonld/id   (str (:jsonld/id pd) "-price")
                           :urpx/name   (:urpx/name pd)
                           :urpx/unitPrice (BigDecimal. (str "0.0" (inc i)))
-                          :urpx/referencesPriceDefinition {:jsonld/id (:jsonld/id pd)}})
+                          :urpx/referencesPriceDefinition {:jsonld/id (:jsonld/id pd)}}
+                         (when-let [n (get tier-numbers i)]
+                           {:urpx/serviceTierNumber n})))
                        pds))}}})
 
 (defn- base-plan
@@ -277,3 +281,152 @@
           "December: the winter member only")
       (is (nil? (:urpx.resolved/unvaluable (value (at 2026 7 15))))
           "and it is valued rather than refused"))))
+
+;; ---------------------------------------------------------------------------
+;; A modifier's OWN urpx:ServiceTiers, which this path used to drop entirely
+;; ---------------------------------------------------------------------------
+
+(defn- bracket
+  [id upper & {:keys [season alternative]}]
+  (cond-> {:jsonld/type "urpx:ServiceBracket" :jsonld/id id
+           :urpx/lowerBound 0M
+           :urpx/lowerBoundOperator {:jsonld/id "urpx:greaterThanOrEqualOperator"}
+           :urpx/upperBound upper
+           :urpx/upperBoundOperator {:jsonld/id "urpx:lessThanOrEqualOperator"}}
+    season      (assoc :urpx/appliesInSeason [{:jsonld/id season}])
+    alternative (assoc :urpx/referencesProfileAlternative {:jsonld/id alternative})))
+
+(defn- container
+  "One urpx:ServiceTiers holding one tier numbered 1."
+  [id brackets]
+  {:jsonld/type "urpx:ServiceTiers" :jsonld/id id
+   :urpx/referencesMetricInput [{:jsonld/id "test:mi-energy"}]
+   :urpx/hasServiceTier
+   [{:jsonld/type "urpx:ServiceTier" :jsonld/id (str id "-t1")
+     :urpx/serviceTierNumber 1 :urpx/name "Tier 1"
+     :urpx/hasServiceBracket brackets}]})
+
+(defn- tier-1
+  "The resolved tier-1 entry from the modifier, standalone.
+
+  No opts: `resolve-modifier-prices` takes only the modifier and the instant,
+  where `resolve-prices` takes opts. So a cell selection cannot reach a modifier
+  resolved alone, which is why the ProfileAlternative case below goes through
+  the composition."
+  [m inst]
+  (->> (:urpx.resolved/ledgers (price/resolve-modifier-prices m inst))
+       (mapcat :urpx.resolved/tiers)
+       (filter :urpx.resolved/tier-number)
+       first))
+
+(defn- composed-tier-1
+  "The modifier's resolved tier-1 entry in a composition, where opts reach it."
+  [plan m inst & [opts]]
+  (->> (:urpx.resolved/ledgers (price/resolve-prices-with-modifiers plan [m] inst opts))
+       (mapcat :urpx.resolved/tiers)
+       (filter #(and (:urpx.resolved/tier-number %)
+                     (re-find #"test:adj" (str (:urpx.resolved/price-definition-id %)))))
+       first))
+
+(deftest a-modifiers-own-tiers-carry-their-number-and-bounds
+  (testing "URPX-sr4. This path built its entries from price-fields alone and
+            never called tier-info, so a modifier holding its own
+            urpx:ServiceTiers surfaced its rungs UNTIERED: no
+            :urpx.resolved/tier-number and no bounds, however the tiers were
+            shaped. PG&E's E-TOU-C baseline-allowance overlay is that shape, and
+            so is any filing that puts its ladder in a modifier."
+    (let [m (modifier [(pd "test:adj-t1" "Tier 1 adjustment")]
+                      :tiers [(container "test:c" [(bracket "test:b" 13.5M)])]
+                      :tier-numbers {0 1})
+          t (tier-1 m (at 2026 7 15))]
+      (is (= 1 (:urpx.resolved/tier-number t)))
+      (is (= 0M (:urpx.resolved/tier-lower-bound t)))
+      (is (= 13.5M (:urpx.resolved/tier-upper-bound t)))
+      (is (= "Tier 1" (:urpx.resolved/tier-name t))))))
+
+(deftest a-modifiers-block-ladder-is-reduced-not-summed
+  (testing "why the missing tier number was a wrong NUMBER rather than a missing
+            field. marginal-unit-rate reduces a block ladder to its marginal
+            rung by :urpx.resolved/tier-number and sums everything without one,
+            so a modifier's three-rung ladder was added together: 0.01 plus 0.02
+            plus 0.03. With the numbers present only the lowest rung counts."
+    (let [tiers [{:jsonld/type "urpx:ServiceTiers" :jsonld/id "test:c"
+                  :urpx/referencesMetricInput [{:jsonld/id "test:mi-energy"}]
+                  :urpx/hasServiceTier
+                  (vec (for [n [1 2 3]]
+                         {:jsonld/type "urpx:ServiceTier" :jsonld/id (str "test:c-t" n)
+                          :urpx/serviceTierNumber n :urpx/name (str "Tier " n)
+                          :urpx/hasServiceBracket
+                          [(bracket (str "test:b" n) (* 100M n))]}))}]
+          m (modifier [(pd "test:adj-t1" "Rung 1")
+                       (pd "test:adj-t2" "Rung 2")
+                       (pd "test:adj-t3" "Rung 3")]
+                      :tiers tiers :tier-numbers {0 1, 1 2, 2 3})
+          r (price/resolve-modifier-prices m (at 2026 7 15))
+          ts (->> (:urpx.resolved/ledgers r) (mapcat :urpx.resolved/tiers)
+                  (filter :urpx.resolved/tier-number))]
+      (is (= [1 2 3] (sort (map :urpx.resolved/tier-number ts))))
+      (is (= [100M 200M 300M] (sort (map :urpx.resolved/tier-upper-bound ts))))
+      (testing "and the ledger is bundled rather than energy-measured here, so
+                the reduction is asserted on the tiers themselves rather than
+                through a per-kWh rate this ledger does not carry"
+        (is (= 1 (count (filter #(= 1 (:urpx.resolved/tier-number %)) ts))))))))
+
+(deftest a-modifiers-brackets-select-by-season
+  (testing "bracket selection reaches a modifier now, so a tier carrying a
+            summer bracket and a winter bracket states different bounds in each.
+            The modifier declares its own Seasons here; one naming the base
+            plan's resolves through the composition index instead."
+    (let [m (modifier [(pd "test:adj-t1" "Tier 1 adjustment")]
+                      :tiers [(container "test:c"
+                                         [(bracket "test:b-s" 13.5M :season "test:season-summer")
+                                          (bracket "test:b-w" 11.0M :season "test:season-winter")])]
+                      :tier-numbers {0 1})]
+      (is (= 13.5M (:urpx.resolved/tier-upper-bound (tier-1 m (at 2026 7 15)))))
+      (is (= 11.0M (:urpx.resolved/tier-upper-bound (tier-1 m (at 2026 12 15))))))))
+
+(deftest a-modifiers-brackets-withhold-when-no-cell-is-named
+  (testing "the overlay shape: brackets scoped to cells of a ProfileAlternatives
+            dimension. With no cell named the bounds are withheld and marked,
+            and the rung keeps its number and unit price, so a caller learns the
+            ladder exists and that its bounds are its own to determine."
+    (let [m (-> (modifier [(pd "test:adj-t1" "Tier 1 adjustment")]
+                          :tiers [(container "test:c"
+                                             [(bracket "test:b-care" 13.5M :alternative "test:pa-care")
+                                              (bracket "test:b-std" 11.0M :alternative "test:pa-std")])]
+                          :tier-numbers {0 1})
+                (update-in [:urpx/hasRatePlanModifierVersion :urpx/hasPlanElements]
+                           assoc :urpx/hasProfileAlternatives
+                           [{:jsonld/type "urpx:ProfileAlternatives" :jsonld/id "test:pas"
+                             :urpx/hasProfileAlternative
+                             [{:jsonld/type "urpx:ProfileAlternative" :jsonld/id "test:pa-care"}
+                              {:jsonld/type "urpx:ProfileAlternative" :jsonld/id "test:pa-std"}]}]))
+          none (composed-tier-1 (base-plan) m (at 2026 7 15))
+          care (composed-tier-1 (base-plan) m (at 2026 7 15)
+                                {:profile-alternatives {"test:pas" "test:pa-care"}})]
+      (is (= 1 (:urpx.resolved/tier-number none)))
+      (is (nil? (:urpx.resolved/tier-upper-bound none)))
+      (is (= :alternative-unselected
+             (:reason (:urpx.resolved/tier-bounds-unresolved none))))
+      (is (= 13.5M (:urpx.resolved/tier-upper-bound care)))
+      (is (nil? (:urpx.resolved/tier-bounds-unresolved care)))
+      (testing "and standalone the bounds can NEVER be determined, because
+                resolve-modifier-prices accepts no opts for the selection to
+                arrive in. Recorded rather than worked around: it is an
+                asymmetry with resolve-prices, not a property of selection."
+        (is (= :alternative-unselected
+               (:reason (:urpx.resolved/tier-bounds-unresolved
+                         (tier-1 m (at 2026 7 15))))))))))
+
+(deftest a-modifier-without-tiers-is-unchanged
+  (testing "every vendored modifier, none of which carries its own
+            urpx:ServiceTiers. tier-info returns the interval and nothing else
+            when the Price names no tier number, which is what this path
+            produced before sr4 and must still produce."
+    (let [m (modifier [(pd "test:adj-flat" "Flat adjustment")])
+          t (->> (:urpx.resolved/ledgers (price/resolve-modifier-prices m (at 2026 7 15)))
+                 (mapcat :urpx.resolved/tiers) first)]
+      (is (= "test:adj-flat" (:urpx.resolved/price-definition-id t)))
+      (is (nil? (:urpx.resolved/tier-number t)))
+      (is (nil? (:urpx.resolved/tier-upper-bound t)))
+      (is (nil? (:urpx.resolved/tier-bounds-unresolved t))))))

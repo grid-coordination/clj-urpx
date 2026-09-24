@@ -509,10 +509,11 @@
    20 (territory, code) x 2 season matrix per urpx:ServiceBracket.
 
    Both qualifiers are read at resolution time, on this container and on
-   urpx:ServiceBracket alike, by `urpx.price/select-tier-bracket`
-   For a urpx:RatePlan's tiers only: `urpx.price/tier-info`
-   has one call site, on the base-plan path, so a urpx:RatePlanModifier's
-   brackets are read by nothing (URPX-sr4). The 120 above are that case."
+   urpx:ServiceBracket alike, by `urpx.price/select-tier-bracket`, and on a
+   urpx:RatePlanModifier's tiers as well as a urpx:RatePlan's. The 120 above
+   are the case that made it matter: composed with their base plan and given a
+   baseline cell, they state 0 to 13.5 and 13.5 to 54.0 kWh per day in summer
+   and 0 to 11.0 and 11.0 to 44.0 in winter."
   [:map
    [:jsonld/type [:= "urpx:ServiceTiers"]]
    [:jsonld/id {:optional true} :string]
