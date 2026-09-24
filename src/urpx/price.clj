@@ -1045,7 +1045,21 @@
 (defn- node-season-status
   "Whether `node`'s urpx:appliesInSeason refs admit `date`'s month-of-year. One
    of :unqualified (the node names no season), :in-season, :out-of-season, or
-   :not-evaluable. Throws when a ref resolves to no urpx:Season.
+   :not-evaluable.
+
+   An unresolvable ref divides on `seasons-declared?`, which says whether the
+   documents passed to this call declare any urpx:Season at all. If they do, a
+   ref matching none of them is a typo and this REFUSES. If they declare none,
+   the document that would have declared it was simply not passed, so the
+   answer is unknown and this reports :not-evaluable. PG&E's E-TOU-C
+   baseline-tier modifier is the second case: it declares no Season of its own
+   and names the base plan's, so resolving it alone cannot evaluate the gate
+   and resolving it composed can.
+
+   That is the same line `pd-alternative-status` already draws for an
+   alternative declared by no container in this document, and for the same
+   stated reason: a composition whose other half lives in another document
+   should withhold rather than hard-fail.
 
    Disjunctive across refs, which is what the shapes state: appliesInSeason is
    sh:minCount 0 with no sh:maxCount on ServiceBracketShape and on
@@ -1074,7 +1088,7 @@
    `modifier-ledger-results` does not call it (URPX-sr4). So the widening serves
    a BASE plan's bracket naming a urpx:Season that a modifier document
    declares, which is the direction a composition's index actually runs."
-  [node resolve-season ^java.time.LocalDate date]
+  [node resolve-season seasons-declared? ^java.time.LocalDate date]
   (let [raw  (:urpx/appliesInSeason node)
         refs (cond (nil? raw) nil (sequential? raw) raw :else [raw])]
     (if (empty? refs)
@@ -1083,13 +1097,24 @@
             seasons (mapv (fn [ref]
                             (let [sid (:jsonld/id ref)]
                               (or (resolve-season sid)
+                                  ;; Nothing here declares ANY Season, so the
+                                  ;; ref is not a typo: the document that
+                                  ;; declares it was not passed to this call.
+                                  ;; Unknown, and the caller clears it by
+                                  ;; composing or by supplying :by-id. This is
+                                  ;; the line pd-alternative-status already
+                                  ;; draws for an alternative no container in
+                                  ;; this document declares.
+                                  (when-not seasons-declared?
+                                    {::absent true})
                                   (throw (ex-info
                                           (str "urpx:appliesInSeason on "
                                                (pr-str (:jsonld/id node)) " names urpx:Season "
-                                               (pr-str sid) ", which this document declares "
-                                               "nowhere. Season selection cannot be evaluated, "
-                                               "and reading the ref as out-of-season would "
-                                               "leave the rung with no bounds at all, which a "
+                                               (pr-str sid) ", which is declared nowhere in the "
+                                               "documents passed to this call, though others "
+                                               "are. Season selection cannot be evaluated, and "
+                                               "reading the ref as out-of-season would leave "
+                                               "the rung with no bounds at all, which a "
                                                "consumer reads as unbounded.")
                                           {:reason    :unresolvable-season-ref
                                            :season-id sid
@@ -1100,8 +1125,9 @@
           (some (fn [s] (some #{m} (:urpx/month s))) seasons) :in-season
           ;; A monthless Season among the refs leaves the gate unevaluated, so
           ;; the answer is unknown rather than no, even when a sibling ref
-          ;; carries months that exclude this one.
-          (some (fn [s] (empty? (:urpx/month s))) seasons)    :not-evaluable
+          ;; carries months that exclude this one. An absent declaration is
+          ;; unknown for the same reason and reports the same way.
+          (some (fn [s] (or (::absent s) (empty? (:urpx/month s)))) seasons) :not-evaluable
           :else                                               :out-of-season)))))
 
 (defn- additive-plus-lowest-rung
@@ -1836,6 +1862,12 @@
          ;; and every modifier, so the fallback is what lets THIS plan's
          ;; bracket name a urpx:Season a modifier document declares. It covers
          ;; only this document when resolving alone, so it is then a no-op.
+         ;; Whether ANY urpx:Season is reachable, which is what separates a typo
+         ;; from a document that was not passed. The plan's own first, so the
+         ;; by-id scan happens only for a document declaring none.
+         seasons-declared?
+         (boolean (or (seq seasons)
+                      (some #(= "urpx:Season" (:jsonld/type %)) (vals by-id))))
          tier-ctx      {:alt-status alt-status
                         :season-status
                         #(node-season-status
@@ -1844,6 +1876,7 @@
                             (or (seasons-by-id sid)
                                 (let [n (get by-id sid)]
                                   (when (= "urpx:Season" (:jsonld/type n)) n))))
+                          seasons-declared?
                           date)}
          ;; Ledger-independent, so it is built once rather than per ledger, and
          ;; it is the ONLY view that sees Prices nested under an alternatives

@@ -582,13 +582,48 @@
                                                             :season "other:season-summer")])])
                        [:urpx/hasRatePlanVersion :urpx/hasPlanElements]
                        dissoc :urpx/hasSeasons)]
-      (is (= :unresolvable-season-ref (:reason (refusal #(tier-1 p (at 2026 7 15))))))
       (is (= 13.5M (:urpx.resolved/tier-upper-bound
                     (tier-1 p (at 2026 7 15)
                             {:by-id {"other:season-summer"
                                      {:jsonld/type "urpx:Season"
                                       :jsonld/id   "other:season-summer"
-                                      :urpx/month  [6 7 8 9]}}})))))))
+                                      :urpx/month  [6 7 8 9]}}}))))
+      (testing "and with the Season supplied by nothing, this document declares
+                none at all, so the ref is not a typo: the document that
+                declares it was not passed. Unknown, cleared by composing or by
+                supplying :by-id, which is the line pd-alternative-status
+                already draws for an alternative no container here declares."
+        (let [t (tier-1 p (at 2026 7 15))]
+          (is (nil? (refusal #(tier-1 p (at 2026 7 15)))) "it does not refuse")
+          (is (= :season-not-evaluable
+                 (:reason (:urpx.resolved/tier-bounds-unresolved t))))
+          (is (nil? (:urpx.resolved/tier-upper-bound t))))))))
+
+(deftest a-season-ref-matching-none-of-the-declared-seasons-refuses
+  (testing "the other half of that split. Here the document DOES declare
+            Seasons and the ref matches none of them, so it is a typo rather
+            than an absent document and the refusal stands. Without this
+            distinction the two cases are indistinguishable and one of them has
+            to be answered wrongly."
+    (let [p (plan [(container "test:c" [(bracket "test:b" 13.5M
+                                                 :season "test:season-typo")])])
+          d (refusal #(tier-1 p (at 2026 7 15)))]
+      (is (= :unresolvable-season-ref (:reason d)))
+      (is (= "test:season-typo" (:season-id d))))
+
+    (testing "and a ref that misses while a SIBLING document supplies seasons is
+              still a typo, because something was reachable to match against"
+      (let [p (update-in (plan [(container "test:c" [(bracket "test:b" 13.5M
+                                                              :season "test:season-typo")])])
+                         [:urpx/hasRatePlanVersion :urpx/hasPlanElements]
+                         dissoc :urpx/hasSeasons)]
+        (is (= :unresolvable-season-ref
+               (:reason (refusal
+                         #(tier-1 p (at 2026 7 15)
+                                  {:by-id {"other:season-summer"
+                                           {:jsonld/type "urpx:Season"
+                                            :jsonld/id   "other:season-summer"
+                                            :urpx/month  [6 7 8 9]}}})))))))))
 
 (deftest pge-e-1-tier-bounds-are-instant-independent
   (testing "URPX-rng does not narrow PG&E E-1 to one season, and must not be
