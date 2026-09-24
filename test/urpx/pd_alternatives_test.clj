@@ -122,9 +122,17 @@
                             #"scopes to ONE alternative"
                             (resolved (scope-pd plan [(first alts) (second alts)])
                                       {dim (first alts)})))
-      (is (= :multiple-profile-alternatives
-             (try (resolved (scope-pd plan [(first alts) (second alts)]) {dim (first alts)}) nil
-                  (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))))))
+      (let [d (try (resolved (scope-pd plan [(first alts) (second alts)]) {dim (first alts)}) nil
+                   (catch clojure.lang.ExceptionInfo e (ex-data e)))]
+        (is (= :multiple-profile-alternatives (:reason d)))
+        (testing "and it names the node by type, not as a PriceDefinition by
+                  assumption. Bracket selection hands pd-alternative-status
+                  urpx:ServiceTiers containers and urpx:ServiceBracket nodes as
+                  well, so :price-definition-id named the wrong thing for two
+                  of the three and became :node-id plus :node-type."
+          (is (= "urpx:PriceDefinition" (:node-type d)))
+          (is (some? (:node-id d)))
+          (is (not (contains? d :price-definition-id))))))))
 
 (deftest an-unscoped-definition-is-unaffected
   (testing "every filing in the corpus today, since none uses the slot"
@@ -723,7 +731,7 @@
                       doc))]
       (is (= :ambiguous-profile-alternative
              (pair-rate plan (retarget with-dim (:jsonld/id (base-fixture))) sel))
-             "control: pointed at this plan, the modifier IS indexed and the
+          "control: pointed at this plan, the modifier IS indexed and the
               collision between its container and the plan's is caught")
       (is (= 0.46886M (pair-rate plan (retarget with-dim "x:other-plan") sel))
           "pointed at a different plan, it contributes no prices and its

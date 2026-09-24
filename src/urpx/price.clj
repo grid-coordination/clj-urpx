@@ -5,9 +5,12 @@
   ZonedDateTime, `resolve-prices` returns the season, the matched TOU period
   (if any), and one entry per active per-energy ledger (commodity, distribution,
   public benefits, etc.). Each ledger entry carries a `:tiers` vector — for
-  block-tiered ledgers (CPAU E-1) every tier's bound and unit-price is
-  surfaced so the caller can pick the active one based on cumulative usage;
-  for non-tiered ledgers the vector has a single entry.
+  block-tiered ledgers (CPAU E-1) every tier is surfaced with its unit-price
+  and, where the applicable `urpx:ServiceBracket` is determined, its bounds, so
+  the caller can pick the active one based on cumulative usage; a tier whose
+  bounds selection cannot determine says so under
+  `:urpx.resolved/tier-bounds-unresolved` instead of carrying them. For
+  non-tiered ledgers the vector has a single entry.
 
   Skipped:
     - PriceDefinitions whose own `:urpx/hasCalculationMethod` is set
@@ -426,17 +429,216 @@
       interval
       (assoc :urpx.resolved/interval-duration interval))))
 
-(defn- service-tiers-by-number
-  "Index ServiceTier entities (across every ServiceTiers container at
-   BillingModel.hasServiceTiers, walking each container's :urpx/hasServiceTier
-   list) by :urpx/serviceTierNumber. Empty map when the plan is not
-   block-tiered. hasServiceTiers is a vector: single
-   ServiceTiers fixtures (CPAU E-1, PG&E E-1) coexist with
-   matrix-of-ServiceTiers patterns (PG&E E-TOU-C baseline-tier modifier:
-   one ServiceTiers per (territory, code) cell)."
+(defn- service-tier-candidates
+  "Every (ServiceTiers container, ServiceTier, ServiceBracket) triple under
+   BillingModel.hasServiceTiers, grouped by :urpx/serviceTierNumber in document
+   order. Empty map when the plan is not block-tiered.
+
+   The container travels beside its tier because BOTH scopes qualify bounds:
+   urpx:appliesInSeason and urpx:referencesProfileAlternative sit on
+   urpx:ServiceTiers (schema.clj:508, 514) and on urpx:ServiceBracket
+   (schema.clj:465, 468) alike. A mapcat over hasServiceTier loses the
+   container a tier came from, and with it half the question.
+
+   Grouping, where this was a map from number to ONE tier: two containers
+   declaring the same number last-won on insertion order, which is the silent
+   pick urpx.index/single exists to prevent. They accumulate now, and
+   `select-tier-bracket` refuses when the survivors disagree.
+
+   :bracket is nil for a tier whose :urpx/hasServiceBracket is empty or absent.
+   ServiceTierShape forbids that (sh:minCount 1), but the Malli schema types it
+   as a plain vector (schema.clj:481-483) and so does `urpx.validate`, so a
+   document that never met SHACL reaches here.
+
+   hasServiceTiers is a vector, though every tiered fixture carries exactly one
+   container. A filing stating a per-season or per-cell container is the case
+   this grouping is for."
   [billing-model]
-  (into {} (map (juxt :urpx/serviceTierNumber identity))
-        (mapcat :urpx/hasServiceTier (:urpx/hasServiceTiers billing-model))))
+  (->> (for [container (:urpx/hasServiceTiers billing-model)
+             tier      (:urpx/hasServiceTier container)
+             bracket   (or (seq (:urpx/hasServiceBracket tier)) [nil])]
+         {:container container :tier tier :bracket bracket})
+       (group-by #(:urpx/serviceTierNumber (:tier %)))))
+
+(defn- qualified-tier-node?
+  "True if `node`, a urpx:ServiceTiers or a urpx:ServiceBracket, carries either
+   qualifier, so whether it applies depends on the instant or on the caller's
+   selection.
+
+   Worth naming because the unqualified case is everything that reaches here:
+   the 18 tiers across the five tiered base-plan filings carry neither
+   property, on the container or on the bracket. `select-tier-bracket`
+   short-circuits them without reading the date or the selection at all, so
+   what those filings resolve to cannot depend on any of this. The corpus is
+   not all unqualified: PG&E's E-TOU-C baseline-tier modifier carries 120
+   brackets with both properties, and no modifier's tiers reach this path.
+
+   A single ref written as a bare map rather than a vector counts as qualified:
+   `seq` on a non-empty map is truthy, which is what sends it to the
+   normalizing gate instead of the short-circuit."
+  [node]
+  (boolean (or (seq (:urpx/appliesInSeason node))
+               (:urpx/referencesProfileAlternative node))))
+
+(defn- bracket-bounds-key
+  "The four values a urpx:ServiceBracket states, in a form two brackets can be
+   compared by.
+
+   Bounds go through .stripTrailingZeros because = on BigDecimal is
+   scale-sensitive: 0M and 0.0M are not =, so two brackets spelling one bound
+   differently would read as a contradiction and refuse a document that states
+   the same ladder twice. Operators compare by :jsonld/id alone, since a Ref
+   carrying any other key would do the same.
+
+   For comparison only. A winning bracket's bounds are emitted verbatim."
+  [bracket]
+  [(some-> ^java.math.BigDecimal (:urpx/lowerBound bracket) .stripTrailingZeros)
+   (some-> ^java.math.BigDecimal (:urpx/upperBound bracket) .stripTrailingZeros)
+   (:jsonld/id (:urpx/lowerBoundOperator bracket))
+   (:jsonld/id (:urpx/upperBoundOperator bracket))])
+
+(defn- select-tier-bracket
+  "Which urpx:ServiceBracket states this tier's bounds at this instant, given
+   every (container, tier, bracket) candidate carrying its serviceTierNumber.
+
+   Both scopes qualify a candidate and they compose. The two properties on the
+   urpx:ServiceTiers container decide whether that container's tiers are in
+   effect at all; the same two on the urpx:ServiceBracket decide which of a
+   tier's brackets states the bounds. Reading one and not the other leaves the
+   other a silent no-op, which is what both were until now.
+
+   Returns nil when the number names no tier, {:tier-name s :bracket b} when
+   one set of bounds is determined, {:tier-name s :mark m} when it is not and
+   the caller is told why, or throws.
+
+   REFUSES rather than picking, three ways. A season ref resolving to no
+   urpx:Season is a typo, and reading it as out-of-season leaves a rung with no
+   bounds, which a consumer reads as unbounded. Two brackets that both apply
+   and disagree, or two containers declaring one number with different bounds,
+   are documents contradicting themselves: `first` of a set the document does
+   not order is exactly what urpx.index/single refuses to take.
+
+   WITHHOLDS instead, with a named mark, where the answer is unknown rather
+   than contradictory. An unselected alternative is cleared by naming the cell;
+   bounds nobody filed for this instant are not cleared by anything.
+
+   Called only for a number a Price or PriceDefinition actually names, so a
+   defect in a container whose tiers are never priced does not refuse the
+   document."
+  [candidates {:keys [season-status alt-status]}]
+  (when (seq candidates)
+    (let [one (first candidates)]
+      (if (and (= 1 (count candidates))
+               (not (qualified-tier-node? (:container one)))
+               (not (qualified-tier-node? (:bracket one))))
+        (cond-> {}
+          (:urpx/name (:tier one)) (assoc :tier-name (:urpx/name (:tier one)))
+          (:bracket one)           (assoc :bracket (:bracket one)))
+        (let [;; Both gates run on both nodes of every candidate BEFORE any
+              ;; filtering. A dangling season ref is a property of the
+              ;; document, not of the query, and one that refused only for the
+              ;; caller who happened to name the broken cell could be found by
+              ;; no validator and no sweep.
+              node-status
+              (fn [node]
+                (let [a (alt-status node)
+                      s (season-status node)]
+                  (cond
+                    (or (= :not-selected a) (= :out-of-season s))  :drop
+                    (or (= :unselected a)   (= :not-evaluable s))  :unknown
+                    :else                                          :pass)))
+              tagged     (mapv (fn [c]
+                                 (assoc c
+                                        :container-status (node-status (:container c))
+                                        :bracket-status   (node-status (:bracket c))))
+                               candidates)
+              status     (fn [c] (let [a (:container-status c)
+                                       b (:bracket-status c)]
+                                   (cond
+                                     (or (= :drop a) (= :drop b))       :drop
+                                     (or (= :unknown a) (= :unknown b)) :unknown
+                                     :else                              :pass)))
+              applying   (filterv #(= :pass (status %)) tagged)
+              unknown    (filterv #(= :unknown (status %)) tagged)
+              ;; A container in effect means the bounds are the open question;
+              ;; no container in effect means the tier itself is.
+              scope      (if (some #(= :pass (:container-status %)) tagged)
+                           :service-bracket
+                           :service-tiers)
+              ;; Every node at that scope, not the survivors, so the mark does
+              ;; not vary with the instant and urpx.schedule can still collapse
+              ;; equal intervals.
+              ids        (into [] (comp (keep (if (= :service-bracket scope)
+                                                #(:jsonld/id (:bracket %))
+                                                #(:jsonld/id (:container %))))
+                                        (distinct))
+                               candidates)
+              ;; Containers may name one rung differently, so a name is
+              ;; reported only where the candidates still in play agree.
+              considered (or (seq (concat applying unknown)) tagged)
+              tier-name  (let [names (distinct (keep #(:urpx/name (:tier %)) considered))]
+                           (when (= 1 (count names)) (first names)))
+              named      (fn [m] (cond-> m tier-name (assoc :tier-name tier-name)))
+              unselected (into [] (comp (mapcat (juxt :container :bracket))
+                                        (filter #(= :unselected (alt-status %)))
+                                        (keep #(:jsonld/id (:urpx/referencesProfileAlternative %)))
+                                        (distinct))
+                               unknown)]
+          (cond
+            ;; An unqualified bracket beside a cell-scoped one is NOT a
+            ;; default: URPX orders nothing between them, so reading the
+            ;; unqualified one as the fallback would invent a specificity rule.
+            ;; A withheld bound is cleared by naming the cell; a wrong bound
+            ;; already reported is not.
+            (seq unknown)
+            (named {:mark (cond-> {:reason (if (seq unselected)
+                                             :alternative-unselected
+                                             :season-not-evaluable)
+                                   :scope  scope
+                                   :ids    ids}
+                            (seq unselected) (assoc :alternatives unselected))})
+
+            (empty? applying)
+            (named {:mark {:reason :no-applicable-bounds :scope scope :ids ids}})
+
+            (= 1 (count (distinct (map #(bracket-bounds-key (:bracket %)) applying))))
+            (named (cond-> {} (:bracket (first applying))
+                           (assoc :bracket (:bracket (first applying)))))
+
+            (< 1 (count (distinct (map :container applying))))
+            (throw (ex-info
+                    (str "urpx:serviceTierNumber " (pr-str (:urpx/serviceTierNumber (:tier one)))
+                         " is declared with different bounds by " (count (distinct (map :container applying)))
+                         " urpx:ServiceTiers containers that are all in effect here: "
+                         (pr-str (mapv #(:jsonld/id (:container %)) applying))
+                         ". Which ladder this rung belongs to is not stated. Scope the "
+                         "containers with urpx:appliesInSeason or "
+                         "urpx:referencesProfileAlternative so that one applies at a time.")
+                    {:reason        :ambiguous-service-tier
+                     :tier-number   (:urpx/serviceTierNumber (:tier one))
+                     ;; Every container declaring this number, not the
+                     ;; survivors, so the refusal is instant-independent and
+                     ;; urpx.schedule can still collapse equal intervals. Read
+                     ;; off the candidates rather than from `ids`, which is the
+                     ;; bracket-scoped list whenever a container is in effect.
+                     :container-ids (into [] (comp (keep #(:jsonld/id (:container %)))
+                                                   (distinct))
+                                          candidates)
+                     :count         (count applying)}))
+
+            :else
+            (throw (ex-info
+                    (str "urpx:serviceTierNumber " (pr-str (:urpx/serviceTierNumber (:tier one)))
+                         " has " (count applying) " urpx:ServiceBrackets in effect here stating "
+                         "different bounds: " (pr-str (mapv #(:jsonld/id (:bracket %)) applying))
+                         ". urpx:hasServiceBracket is a set, not an ordered list, so there is no "
+                         "first bracket to take. Scope them with urpx:appliesInSeason or "
+                         "urpx:referencesProfileAlternative so that one applies at a time.")
+                    {:reason          :ambiguous-service-bracket
+                     :tier-number     (:urpx/serviceTierNumber (:tier one))
+                     :service-tier-id (:jsonld/id (:tier one))
+                     :bracket-ids     ids
+                     :count           (count applying)}))))))))
 
 (defn- tier-info
   "Pull tier metadata for a (PD, Price) pair into the resolved-entry shape.
@@ -446,32 +648,43 @@
    isn't block-tiered.
 
    Per upstream urpx commit 423e83f (Decision #111), bounds live on
-   urpx:ServiceBracket(s) attached via ServiceTier.hasServiceBracket. We
-   read bounds from the first attached bracket — Path A (mechanical wrap)
-   gives every ServiceTier exactly one ServiceBracket. Per-season /
-   per-ProfileAlternative bracket selection across multiple brackets per
-   tier is a future-day concern."
-  [pd price tiers-by-num]
-  (let [tier-num     (or (:urpx/serviceTierNumber price) (:urpx/serviceTierNumber pd))
-        service-tier (when tier-num (tiers-by-num tier-num))
-        bracket      (first (:urpx/hasServiceBracket service-tier))
+   urpx:ServiceBracket(s) attached via ServiceTier.hasServiceBracket.
+   `select-tier-bracket` chooses among them and among the urpx:ServiceTiers
+   containers declaring this number, honoring urpx:appliesInSeason and
+   urpx:referencesProfileAlternative at both scopes. It may instead return a
+   mark saying the bounds are not determined, or throw.
+
+   :urpx.resolved/tier-number is assoc'd from the Price or the PriceDefinition
+   BEFORE any container or bracket is read. On the WITHHELD path that is the
+   whole guarantee: the bounds are then the only thing selection changed, so
+   every entry still surfaces, in the same order, and marginal-unit-rate still
+   reduces the ladder by number exactly as before. A REFUSAL is not scoped that
+   way. Nothing here catches it, so it leaves no entry and no ledger at all,
+   which is the point of refusing rather than marking."
+  [pd price tier-candidates tier-ctx]
+  (let [tier-num   (or (:urpx/serviceTierNumber price) (:urpx/serviceTierNumber pd))
+        selected   (when tier-num
+                     (select-tier-bracket (tier-candidates tier-num) tier-ctx))
+        bracket    (:bracket selected)
         ;; A recurring charge's unit price is per INTERVAL, not per unit of
         ;; consumption: SCE's base services charge is 0.794 per P1D, and its
         ;; ledger's metric input is a meter count carrying no measurement kind
         ;; or unit. Surfacing the number without the interval would hand a
         ;; consumer a figure nothing in the result explains, which is how a
         ;; $10-per-month charge becomes a wrong per-day rate.
-        interval     (recurring-interval pd)]
+        interval   (recurring-interval pd)]
     (cond-> {}
       interval
       (assoc :urpx.resolved/interval-duration interval)
       tier-num
       (assoc :urpx.resolved/tier-number tier-num)
 
-      service-tier
+      selected
       (merge (cond-> {}
-               (:urpx/name service-tier)
-               (assoc :urpx.resolved/tier-name (:urpx/name service-tier))
+               (:tier-name selected)
+               (assoc :urpx.resolved/tier-name (:tier-name selected))
+               (:mark selected)
+               (assoc :urpx.resolved/tier-bounds-unresolved (:mark selected))
                (:urpx/lowerBound bracket)
                (assoc :urpx.resolved/tier-lower-bound (:urpx/lowerBound bracket))
                (:urpx/upperBound bracket)
@@ -527,7 +740,15 @@
 
 (defn- pd-alternative-status
   "How `pd`'s urpx:referencesProfileAlternative stands against the caller's
-   selection. One of:
+   selection.
+
+   Named for the PriceDefinition it was written for, but it reads only
+   urpx:referencesProfileAlternative off whatever node it is handed, and
+   `select-tier-bracket` hands it urpx:ServiceTiers containers and
+   urpx:ServiceBracket nodes, which carry the same property (schema.clj:468,
+   514). Its two refusals report :node-id and :node-type for that reason.
+
+   One of:
 
      :unconstrained  the definition references no alternative
      :selected       the caller chose exactly the alternative it references
@@ -563,13 +784,15 @@
       (< 1 (count refs))
       (throw (ex-info (str "urpx:referencesProfileAlternative names " (count refs)
                            " alternatives on " (pr-str (:jsonld/id pd))
-                           ". A PriceDefinition scopes to ONE alternative, the cell; a "
+                           ". A " (or (:jsonld/type pd) "node")
+                           " scopes to ONE alternative, the cell; a "
                            "multi-dimensional choice is expressed as one ProfileAlternatives "
                            "whose AlternativeDimensions holds several dimensions and whose "
                            "alternatives enumerate the cells. There is no rule here for "
                            "combining several, and picking one would be arbitrary.")
-                      {:reason :multiple-profile-alternatives
-                       :price-definition-id (:jsonld/id pd)
+                      {:reason    :multiple-profile-alternatives
+                       :node-id   (:jsonld/id pd)
+                       :node-type (:jsonld/type pd)
                        :ids (mapv :jsonld/id refs)}))
 
       :else
@@ -581,8 +804,9 @@
                                " urpx:ProfileAlternatives containers: " (pr-str (vec dims))
                                ". The selection is keyed by container, so there is no one "
                                "dimension to read the caller's choice from.")
-                          {:reason :ambiguous-profile-alternative
-                           :price-definition-id (:jsonld/id pd)
+                          {:reason        :ambiguous-profile-alternative
+                           :node-id       (:jsonld/id pd)
+                           :node-type     (:jsonld/type pd)
                            :alternative-id aid
                            :containers (vec dims)})))
         (let [dim    (first dims)
@@ -817,6 +1041,68 @@
                    (when-let [season (seasons-by-id (:jsonld/id ref))]
                      (some #{m} (:urpx/month season))))
                  refs))))))
+
+(defn- node-season-status
+  "Whether `node`'s urpx:appliesInSeason refs admit `date`'s month-of-year. One
+   of :unqualified (the node names no season), :in-season, :out-of-season, or
+   :not-evaluable. Throws when a ref resolves to no urpx:Season.
+
+   Disjunctive across refs, which is what the shapes state: appliesInSeason is
+   sh:minCount 0 with no sh:maxCount on ServiceBracketShape and on
+   ServiceTiersShape alike, so one admitting season is enough. That is what
+   lets one bracket serve two filings whose seasons are declared separately.
+
+   Three things separate this from `pd-active-in-season?`, which gates
+   PriceDefinitions and keeps its present behavior:
+
+   - :not-evaluable is not :out-of-season. SeasonShape sets urpx:month
+     sh:minCount 0 and offers startDate/endDate instead, so a Season carrying
+     no month is valid and this library's month-only gate cannot read it.
+     Reporting it as out of season would be a confident answer to a question
+     never asked.
+   - An unresolvable ref refuses instead of failing to match. A bracket is
+     SELECTED by this answer, so a typo would silently reduce a rung to one
+     with no bounds, which a consumer reads as unbounded; a PriceDefinition
+     that fails to match merely does not apply.
+   - A single ref written as a bare map is normalized. The coercion decoder
+     produces a vector (schema.clj:465), but a document assembled in code need
+     not have been through it.
+
+   `resolve-season` is a function of @id, not the seasons index itself, so a
+   composition can widen what a ref reaches. Only a urpx:RatePlan's brackets are
+   ever gated: `tier-info` has one call site, on the base-plan path, and
+   `modifier-ledger-results` does not call it (URPX-sr4). So the widening serves
+   a BASE plan's bracket naming a urpx:Season that a modifier document
+   declares, which is the direction a composition's index actually runs."
+  [node resolve-season ^java.time.LocalDate date]
+  (let [raw  (:urpx/appliesInSeason node)
+        refs (cond (nil? raw) nil (sequential? raw) raw :else [raw])]
+    (if (empty? refs)
+      :unqualified
+      (let [m       (.getMonthValue date)
+            seasons (mapv (fn [ref]
+                            (let [sid (:jsonld/id ref)]
+                              (or (resolve-season sid)
+                                  (throw (ex-info
+                                          (str "urpx:appliesInSeason on "
+                                               (pr-str (:jsonld/id node)) " names urpx:Season "
+                                               (pr-str sid) ", which this document declares "
+                                               "nowhere. Season selection cannot be evaluated, "
+                                               "and reading the ref as out-of-season would "
+                                               "leave the rung with no bounds at all, which a "
+                                               "consumer reads as unbounded.")
+                                          {:reason    :unresolvable-season-ref
+                                           :season-id sid
+                                           :node-id   (:jsonld/id node)
+                                           :node-type (:jsonld/type node)})))))
+                          refs)]
+        (cond
+          (some (fn [s] (some #{m} (:urpx/month s))) seasons) :in-season
+          ;; A monthless Season among the refs leaves the gate unevaluated, so
+          ;; the answer is unknown rather than no, even when a sibling ref
+          ;; carries months that exclude this one.
+          (some (fn [s] (empty? (:urpx/month s))) seasons)    :not-evaluable
+          :else                                               :out-of-season)))))
 
 (defn- additive-plus-lowest-rung
   "The members of `xs` that contribute together: every untiered one, plus the
@@ -1449,6 +1735,17 @@
       :urpx.resolved/tier-upper-bound     BigDecimal
       :urpx.resolved/tier-lower-bound-operator Ref
       :urpx.resolved/tier-upper-bound-operator Ref
+      :urpx.resolved/tier-bounds-unresolved Map    (present INSTEAD of the four
+                                                    bound keys, when which
+                                                    urpx:ServiceBracket applies
+                                                    is not determined here:
+                                                    {:reason :scope :ids} plus
+                                                    :alternatives when a cell
+                                                    the caller has not chosen
+                                                    is what decides it. The
+                                                    tier number and unit price
+                                                    are unaffected, so a
+                                                    marginal sum is not short)
       :urpx.resolved/dynamic-pricing      Map      (present iff the source Price
                                                     carries urpx:hasDynamicPricing
                                                     — a CPP Event Charge, RTP
@@ -1494,7 +1791,7 @@
          billing       (:urpx/hasBillingModel plan-elements)
          ledgers       (:urpx/hasLedger billing)
          tou-schedules (:urpx/hasTOUSchedule billing)
-         tiers-by-num  (service-tiers-by-number billing)
+         tier-cands    (service-tier-candidates billing)
          prices        (:urpx/hasPrices version)
          holiday?      (or (:holiday? opts)
                            (holidays/derive-predicate rate-plan version))
@@ -1533,6 +1830,21 @@
                                (index-with-price-set-alternatives prices)))
          _             (validate-selection! (:profile-alternatives opts) alt-index)
          alt-status    #(pd-alternative-status % (:profile-alternatives opts) alt-index)
+         ;; What a ServiceBracket or ServiceTiers qualifier is read against.
+         ;; The version's own hasSeasons first; then :by-id, type-checked.
+         ;; :by-id is composition-wide when composing, spanning the base plan
+         ;; and every modifier, so the fallback is what lets THIS plan's
+         ;; bracket name a urpx:Season a modifier document declares. It covers
+         ;; only this document when resolving alone, so it is then a no-op.
+         tier-ctx      {:alt-status alt-status
+                        :season-status
+                        #(node-season-status
+                          %
+                          (fn [sid]
+                            (or (seasons-by-id sid)
+                                (let [n (get by-id sid)]
+                                  (when (= "urpx:Season" (:jsonld/type n)) n))))
+                          date)}
          ;; Ledger-independent, so it is built once rather than per ledger, and
          ;; it is the ONLY view that sees Prices nested under an alternatives
          ;; set the caller did not select: the base path's price lookup skips
@@ -1571,7 +1883,7 @@
                                                  :urpx.resolved/price-id            (:jsonld/id price)
                                                  :urpx.resolved/price-name          (:urpx/name price)}
                                                 (price-fields price by-id member-status)
-                                                (tier-info pd price tiers-by-num))
+                                                (tier-info pd price tier-cands tier-ctx))
                                          (:urpx/hasDynamicPricing price)
                                          (assoc :urpx.resolved/dynamic-pricing
                                                 (:urpx/hasDynamicPricing price))

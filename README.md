@@ -163,7 +163,9 @@ That covers the consume side end-to-end. For emit and authoring, jump to [Writin
 ;;  {... 21:00–24:00 "Summer Off-Peak Period" ...}]
 ```
 
-For block-tiered plans (e.g. PG&E E-1), each ledger's `:tiers` vector exposes every tier with its `:tier-lower-bound`, `:tier-upper-bound`, and `:unit-price` — the caller selects the active tier from cumulative billing-period usage.
+For block-tiered plans (e.g. PG&E E-1), each ledger's `:tiers` vector exposes every tier with its `:tier-lower-bound`, `:tier-upper-bound`, and `:unit-price`; the caller selects the active tier from cumulative billing-period usage.
+
+Which `urpx:ServiceBracket` states those bounds is selected per `urpx:serviceTierNumber`, honoring `urpx:appliesInSeason` and `urpx:referencesProfileAlternative` on the `urpx:ServiceTiers` container and on the bracket alike. A tier whose single candidate carries neither property short-circuits, so neither the instant nor `:profile-alternatives` is read: that is all 18 tiers of the five tiered base-plan fixtures. Bounds that selection cannot determine are withheld under `:urpx.resolved/tier-bounds-unresolved` rather than guessed, a `{:reason :scope :ids}` map whose reason is `:alternative-unselected`, `:season-not-evaluable` (a `urpx:Season` carrying no `urpx:month`, so the month gate was never evaluated) or `:no-applicable-bounds`; the entry keeps its tier number and its unit price. Two brackets, or two containers declaring one tier number, that both apply and state different bounds refuse.
 
 ### Time and timezones
 
@@ -435,13 +437,16 @@ Ask first when sweeping a corpus, so the refusal is not a tax on every caller:
 
 Every refusal `marginal-unit-rate` makes carries a `:reason` in its `ex-data`, so a sweeping consumer can classify instead of catching everything: `:no-energy-ledger`, `:unvaluable-marginal-tier`, `:unselected-alternatives`, `:condition-gated-tier`, `:all-energy-tiers-excluded`, and `:outside-version-window`.
 
-`resolve-prices` itself carries a `:reason` on seven further refusals, all of them a refusal to guess rather than a failure to parse. (It can also propagate a throw from indexing or from holiday-rule derivation; those are malformed-document errors and carry no `:reason`, so classify on the key's presence rather than assuming it.) Four concern versions: `:no-version-in-effect`, `:ambiguous-version` and `:version-without-effective-instant`, when several snapshots cannot be ordered or none covers the instant; and `:version-opt-not-a-version`, when the `:version` opt is neither a snapshot nor a map from document `@id` to one, so there is no document it could apply to. Three concern alternatives, and all three are cases where reading on would return a confident wrong number rather than fail:
+`resolve-prices` itself carries a `:reason` on ten further refusals, all of them a refusal to guess rather than a failure to parse. (It can also propagate a throw from indexing or from holiday-rule derivation; those are malformed-document errors and carry no `:reason`, so classify on the key's presence rather than assuming it.) Four concern versions: `:no-version-in-effect`, `:ambiguous-version` and `:version-without-effective-instant`, when several snapshots cannot be ordered or none covers the instant; and `:version-opt-not-a-version`, when the `:version` opt is neither a snapshot nor a map from document `@id` to one, so there is no document it could apply to. Three concern alternatives and three concern which `urpx:ServiceBracket` states a tier's bounds; all six are cases where reading on would return a confident wrong number rather than fail:
 
 | reason | when |
 |---|---|
-| `:multiple-profile-alternatives` | a `PriceDefinition` names more than one alternative |
-| `:ambiguous-profile-alternative` | the alternative a definition names is listed by two `ProfileAlternatives`, so there is no one dimension to read the caller's choice from |
+| `:multiple-profile-alternatives` | a `PriceDefinition`, `ServiceTiers` or `ServiceBracket` names more than one alternative. `:node-type` says which |
+| `:ambiguous-profile-alternative` | the alternative such a node names is listed by two `ProfileAlternatives`, so there is no one dimension to read the caller's choice from |
 | `:unknown-profile-alternative` | `:profile-alternatives` chooses a value the container it is keyed under does not list, usually a typo or a stale id. Compared for equality it would read as a deliberate choice of a sibling cell and silently drop every definition in that dimension |
+| `:unresolvable-season-ref` | a `urpx:appliesInSeason` ref on a `ServiceTiers` or a `ServiceBracket` names a `urpx:Season` the document declares nowhere, so the gate that selects bounds cannot be evaluated. Read as out-of-season it would leave the rung with no bounds, which a consumer reads as unbounded |
+| `:ambiguous-service-bracket` | two `urpx:ServiceBracket`s on one tier both apply and state different bounds. `urpx:hasServiceBracket` is a set, so there is no first one to take |
+| `:ambiguous-service-tier` | two `urpx:ServiceTiers` containers declare one `urpx:serviceTierNumber` with different bounds and both apply |
 
 ### What the resolver needs that SHACL does not require
 
@@ -477,7 +482,7 @@ Programmatic evaluation of each alternative's `urpx:ConditionExpression` against
 
 ### Scoping a PriceDefinition to an alternative
 
-`urpx:referencesProfileAlternative` is read on a `urpx:PriceDefinition` as well as on a `PriceSetAlternative`, on the base plan and on modifiers alike. Five shapes carry the property upstream (those two plus `TOUSchedule`, `ServiceTiers` and `ServiceBracket`); these are the two this library reads, and the definition-level one is where a multi-dimensional choice lands: one `ProfileAlternatives` container, whose single `AlternativeDimensions` wraps several `AlternativeDimension`, whose alternatives enumerate the **cells** of the cross product, with one PriceDefinition scoped to each cell.
+`urpx:referencesProfileAlternative` is read on a `urpx:PriceDefinition` as well as on a `PriceSetAlternative`, on the base plan and on modifiers alike. Five shapes carry the property upstream: those two, plus `ServiceTiers` and `ServiceBracket`, which are read where they select a tier's bounds, and `TOUSchedule`, which is not read. The definition-level one is where a multi-dimensional choice lands: one `ProfileAlternatives` container, whose single `AlternativeDimensions` wraps several `AlternativeDimension`, whose alternatives enumerate the **cells** of the cross product, with one PriceDefinition scoped to each cell.
 
 Four outcomes, given the caller's `:profile-alternatives`. That map is keyed by *container*, while a definition references an *alternative*; `urpx:hasProfileAlternative` bridges the two, so no new vocabulary is needed.
 
@@ -487,6 +492,8 @@ Four outcomes, given the caller's `:profile-alternatives`. That map is keyed by 
 | references the chosen one | applies |
 | references a **different** one in that dimension | filtered out silently: it genuinely does not apply, exactly as an out-of-season definition does not |
 | references one in a dimension nothing was chosen for | prices **withheld**, and the ledger says so |
+
+The same four outcomes decide a `ServiceTiers` container or a `ServiceBracket`, but the fourth one withholds a different thing: the tier's **bounds**, under `:urpx.resolved/tier-bounds-unresolved` with `:reason :alternative-unselected`, rather than prices on the ledger. The tier still surfaces with its number and unit price.
 
 Naming **several** alternatives on one definition refuses with `:multiple-profile-alternatives`. The shapes permit it (`sh:minCount 0`, no `sh:maxCount`) and no filing uses it; a matrix does not need it, because the conjunction already lives inside the cell. Defining a rule for a shape nothing has is how an arbitrary pick gets built in.
 
@@ -956,16 +963,19 @@ Currently covered:
 - TOU period resolution: seasons, ontology day-types (`urpx:allDays`, `urpx:weekdayDays`, `urpx:weekendDays`, `urpx:customDays`), `urpx:includeHolidays` / `urpx:includeNonHolidays` bracket gates, time-bracket containment with midnight wrap. Multiple `urpx:TOUSchedule`s per BillingModel are supported (one per MetricInput, e.g. separate energy + demand schedules)
 - Non-TOU seasonal gating via `PriceDefinition.appliesInSeason → Season.month`, alongside the existing `hasApplicabilityRule.month` path — handles filings whose seasonal partition isn't carried by a TOUPeriod indirection (CPAU E-2 shape)
 - `RatePlanVersion` surfaces `urpx:hasModifierOptions` and `urpx:hasModifierVersionOptions` pointers (Decisions #084 + #090) for cross-version modifier wiring
-- Block-tier surfacing via the `urpx:ServiceTiers` container — every tier surfaces with its bounds and bound operators
+- Block-tier surfacing via the `urpx:ServiceTiers` container: every tier surfaces with its bounds and bound operators, selected among the containers and `urpx:ServiceBracket`s declaring that tier number by `urpx:appliesInSeason` and `urpx:referencesProfileAlternative`, or withheld under `:urpx.resolved/tier-bounds-unresolved`
 - Active-price selection by latest `startDate ≤ query-date`, reading `urpx:startDateTime` in preference to `urpx:startDate`, drawing from flat top-level prices, `PriceSet`-scoped prices and alternatives. A Price with no derivable date carries no start constraint rather than being discarded
 - Modifier resolution alongside the base plan (vintage-PCIA pattern: many Prices share one PD, discriminated by `urpx:PriceSetAlternatives` / `urpx:referencesProfileAlternative`, and selected with `:profile-alternatives`)
-- `urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives`, the selection layer for declarative customer-or-configuration choices (income tier CARE/FERA/Standard, voltage configuration, vintage-PCIA departure year). Coerce + validate full schemas; resolve-prices selects the active alternative via an explicit `:profile-alternatives` opt; emit round-trips cleanly. `urpx:referencesProfileAlternative` is read on `PriceSetAlternative` and on `PriceDefinition`; the shapes also carry it on `TOUSchedule`, `ServiceTiers` and `ServiceBracket`, which are not read. Programmatic `ConditionExpression` evaluation against a customer profile is a future enhancement
+- `urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives`, the selection layer for declarative customer-or-configuration choices (income tier CARE/FERA/Standard, voltage configuration, vintage-PCIA departure year). Coerce + validate full schemas; resolve-prices selects the active alternative via an explicit `:profile-alternatives` opt; emit round-trips cleanly. `urpx:referencesProfileAlternative` is read on `PriceSetAlternative`, on `PriceDefinition`, and on `ServiceTiers` and `ServiceBracket` when a tier's bounds are selected; the shapes also carry it on `TOUSchedule`, which is not read. Programmatic `ConditionExpression` evaluation against a customer profile is a future enhancement
 - Configurable schedule step (hourly default; sub-hour available via `:step`)
 - Symmetric write-side: `urpx.emit` emits JSON-LD from any coerced `RatePlan` / `RatePlanModifier` / `URPXDocument`; the vendored-fixture round-trip suite verifies `parse → coerce → emit → re-parse → re-coerce` is a fixed point for every PG&E filing × {RatePlan, Modifier} plus a URPXDocument-wrapped E-ELEC test case
 - Authoring DSL (`urpx.dsl`): named builders for every entity-type schema, kebab-case kwarg aliases, auto-coercion of raw inputs (numbers → BigDecimal, ISO strings → java.time, `--MM` → int month), validation-on-construct, and local-symbol refs scoped via `dsl-scope`
 
 Known gaps:
 
+- Tier bounds on the modifier path: a `urpx:RatePlanModifier`'s `urpx:ServiceTiers` is read by nothing, so its tiers surface with no tier number and no bounds. The corpus's only bracket-qualified filing is that shape, PG&E's E-TOU-C baseline-tier modifier: one container of three tiers, each holding 40 brackets, one per cell of its 20 (`baselineTerritory` x `baselineCode`) x 2 seasons matrix
+- `urpx:referencesServiceBracket` on `Price`, `PriceDefinition`, `PriceSet` and `PriceSetAlternative` is modeled and round-trips, but is read by no resolver: a Price naming one bracket directly while tier selection picks a different one will disagree, with nothing in the result to say so
+- A container-level `urpx:referencesMetricInput` does not narrow a tier-number clash: two `urpx:ServiceTiers` declaring one `urpx:serviceTierNumber` with different bounds refuse even when each is scoped to a different metric
 - Programmatic interpretation of `urpx:ConditionExpression` for active-tier selection in matrix-style modifiers — currently the caller picks the active value by `price-id` after walking the condition tree itself
 - A handful of SHACL classes that appear as references but aren't deeply modeled — `urpx:TariffPublication`, `urpx:ProgramEnrollment`, `urpx:ServicePointProfile`, plus the non-RatePlan URPXDocument subclasses (`urpx:TariffStatementDocument`, `urpx:DERExportsDocument`, `urpx:HighlyDynamicPricesDocument`, `urpx:SupplyChargesDocument`). They round-trip correctly as opaque maps via `:map`-typed payload pointers; deeper modeling (named builders, validation) lands as consumers need it.
 

@@ -9,6 +9,24 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Fixed
+
+- **A tier's bounds came from whichever `urpx:ServiceBracket` happened to be written first.** `tier-info` took `(first (:urpx/hasServiceBracket tier))` and indexed one `urpx:ServiceTiers` container per `urpx:serviceTierNumber`, so `urpx:appliesInSeason` and `urpx:referencesProfileAlternative` were silent no-ops at both scopes: a tier stating summer bounds and winter bounds reported the summer ones in December, and a second container declaring the same number last-won on map insertion order. Bounds are now selected among every (container, tier, bracket) candidate for that number, gated by both properties on the container and on the bracket alike. Measured on a constructed two-bracket tier: upper bound `13.5` in July and `11.0` in December, where both months read `13.5` before.
+
+  Three refusals rather than a pick: `:ambiguous-service-bracket` (two brackets in effect stating different bounds, and `urpx:hasServiceBracket` is a set, so there is no first one to take), `:ambiguous-service-tier` (two containers declaring one number with different bounds), and `:unresolvable-season-ref` (a ref naming a `urpx:Season` the document declares nowhere), the last evaluated eagerly so it fires whichever cell the caller chose. Brackets stating the same bounds do not refuse: comparison goes through `.stripTrailingZeros`, so `0M` and `0.0M` agree. `resolve-prices` now carries ten `:reason` values.
+
+  **No vendored fixture moves**: every one of the 423 tests that predate this change still passes, with no assertion altered and three added to pin the ex-data rename below; the bracket-selection namespace takes the suite to 450 tests, 0 failures. (Assertion totals are not quoted because `urpx.provenance-test` runs six more of them when a local build has populated `resources/`, which `deps.edn` puts on the classpath and `.gitignore` excludes.) The 18 tiered rungs across the five tiered base filings carry exactly one bracket each, and neither it nor its container carries either property, so a single unqualified candidate short-circuits before the date or the selection is read. The only qualified brackets in the corpus are the 120 on PG&E's E-TOU-C baseline-tier modifier, and `tier-info` has one call site, on the base-plan path.
+
+### Added
+
+- **`:urpx.resolved/tier-bounds-unresolved`**, on a tier whose bounds selection cannot determine. A bound read off a bracket that does not apply is a number a consumer bills against, so it is withheld instead. Three reasons: `:alternative-unselected` when the caller named no cell in that dimension, `:season-not-evaluable` when a `urpx:Season` carries no `urpx:month` so the month gate was never evaluated, and `:no-applicable-bounds` when nothing is in effect at this instant. The mark carries `:scope` and `:ids`, plus `:alternatives` where an alternative is involved. The entry keeps its `:urpx.resolved/tier-number` and its unit price, so `marginal-unit-rate` still reduces the ladder by number and still answers: `0.20M` on a tier whose bounds are withheld.
+
+### Changed
+
+- **`:multiple-profile-alternatives` and `:ambiguous-profile-alternative` report `:node-id` and `:node-type` where they reported `:price-definition-id`.** Bracket selection hands `pd-alternative-status` `urpx:ServiceTiers` containers and `urpx:ServiceBracket`s as well as `PriceDefinition`s, so the old key named the wrong thing for two of the three node types.
+
 ## [0.31.0] — 2026-09-22
 
 ### Fixed

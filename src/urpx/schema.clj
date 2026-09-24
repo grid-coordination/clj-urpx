@@ -489,13 +489,21 @@
 
    :urpx/appliesInSeason allows seasonal grouping — a single
    ProfileAlternative-keyed ServiceTiers can be split into per-season
-   containers (e.g., baseline-tier summer/winter pair) without nesting
-   season into serviceTierNumber.
+   containers without nesting season into serviceTierNumber.
 
    :urpx/referencesProfileAlternative wires a per-cell ServiceTiers to one
-   ProfileAlternative within a matrix-style hasServiceTiers vector
-   (e.g., territory × code combinations for the PG&E E-TOU-C baseline-tier
-   modifier)."
+   ProfileAlternative within a matrix-style hasServiceTiers vector.
+
+   No ServiceTiers in the vendored corpus carries either qualifier. The PG&E
+   E-TOU-C baseline-tier modifier is not the per-cell shape: it carries one
+   container of three tiers, 40 brackets each, and states its
+   20 (territory, code) x 2 season matrix per urpx:ServiceBracket.
+
+   Both qualifiers are read at resolution time, on this container and on
+   urpx:ServiceBracket alike, by `urpx.price/select-tier-bracket`
+   (price.clj:495). For a urpx:RatePlan's tiers only: `urpx.price/tier-info`
+   has one call site, on the base-plan path, so a urpx:RatePlanModifier's
+   brackets are read by nothing (URPX-sr4). The 120 above are that case."
   [:map
    [:jsonld/type [:= "urpx:ServiceTiers"]]
    [:jsonld/id {:optional true} :string]
@@ -520,10 +528,11 @@
 
      - hasTOUSchedule is a vector for filings that TOU-zone multiple
        metric inputs (CPAU E-4 TOU: separate energy + demand schedules).
-     - hasServiceTiers is a vector for filings with a baseline-allowance
-       matrix — one ServiceTiers per (territory, code) cell — driven by
-       ProfileAlternatives selection (PG&E E-TOU-C baseline-tier modifier,
-       per upstream Una guidance on matrix handling)."
+     - hasServiceTiers is a vector for a filing that splits its tiers into
+       per-season or per-cell containers. No fixture does: the PG&E E-TOU-C
+       baseline-tier modifier carries one ServiceTiers of three tiers and
+       states its 20 (territory, code) x 2 season matrix per
+       urpx:ServiceBracket, 40 brackets per tier."
   [:map
    [:jsonld/type [:= "urpx:BillingModel"]]
    [:urpx/prorationMethod {:optional true} :string]

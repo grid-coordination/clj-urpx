@@ -88,8 +88,11 @@
         (is (= 6 (count tiers))
             "PG&E E-1 has 6 service tiers (Summer/Winter × Tier 1/2/2C)")
         ;; Per upstream urpx 423e83f, bounds live on ServiceBracket(s)
-        ;; attached via ServiceTier.hasServiceBracket. Path A wrap: each
-        ;; tier carries exactly one bracket.
+        ;; attached via ServiceTier.hasServiceBracket. (first ...) reads the
+        ;; bound because each of this fixture's tiers carries exactly one
+        ;; bracket: a property of pge-e-1, not of the corpus (one fixture's
+        ;; tiers carry 40 brackets each) and not of the resolver, where
+        ;; select-tier-bracket does the choosing.
         (is (every? #(instance? BigDecimal
                                 (:urpx/lowerBound (first (:urpx/hasServiceBracket %))))
                     tiers))))

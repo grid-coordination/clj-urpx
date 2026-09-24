@@ -460,11 +460,13 @@
       (is (m/validate s/Prices prices)))))
 
 (deftest billing-model-accepts-multiple-service-tiers
-  (testing "URPX-6hf: BillingModel.hasServiceTiers is a vector — supports
-            matrix-of-ServiceTiers patterns (one ServiceTiers per (territory,
-            code) cell of a baseline-allowance matrix, e.g. PG&E E-TOU-C
-            baseline-tier modifier with 20 ServiceTiers under one BillingModel).
-            single-or-vec→vec keeps single-ServiceTiers fixtures compatible."
+  (testing "URPX-6hf: BillingModel.hasServiceTiers is a vector, one per cell of
+            a baseline-allowance matrix for instance. This test constructs
+            three; no vendored fixture carries more than one, and
+            single-or-vec→vec is what keeps those compatible. All three state
+            identical brackets for tier 1, so it is also a shape
+            select-tier-bracket accepts (src/urpx/price.clj:604) rather than
+            refusing, though nothing here reaches resolution to check that."
     (let [tier {:jsonld/type "urpx:ServiceTier"
                 :urpx/serviceTierNumber 1
                 :urpx/hasServiceBracket
