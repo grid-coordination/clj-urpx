@@ -9,6 +9,20 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Fixed
+
+- **Three readers of `urpx:appliesInSeason` answered different questions depending on which node carried the property.** `pd-active-in-season?` skipped an unresolvable ref silently and read a `urpx:Season` carrying no `urpx:month` as excluding the month. `find-tou-period` put a `TimeBracket`'s refs through `urpx.index/single`, which refuses on several, so a legal filing naming two Seasons on one bracket was unresolvable. `node-season-status`, added in 0.32.0 for tier selection, did neither. There is now one shape normalizer (`season-refs`), one reader (`node-season-status`) and one constructor (`make-season-status`), shared by tier selection, PriceDefinition gating and `urpx:PriceSummary` member gating.
+
+  Multiplicity is disjunctive everywhere, which is what `sh:minCount 0` with no `sh:maxCount` states on every shape carrying the property. A gate that could NOT be evaluated no longer excludes a PriceDefinition: reading a monthless Season as out-of-season made a price silently missing from the sum, and excluding on an unreachable Season would have reinstated the defect 0.32.0 fixed for summary members through another route, since a modifier resolved without the base plan that declares its Seasons would drop every seasonal definition. A `urpx:PriceSummary` member keeps the stricter treatment, because a subtotal has a third state for an unknown member and a boolean filter does not: such a member is now `:unknown` and the derived Price reports `:summary-member-unselected` rather than carrying a number.
+
+  No vendored fixture moves, and none could: measured across all 23, no `TimeBracket` names more than one Season, no `PriceDefinition`, `Price` or `PriceSet` carries `urpx:appliesInSeason` at all, and no Season lacking `urpx:month` is referenced. That is why the three readers could disagree unnoticed, and why every case is constructed. Reverting the unification fails 12 assertions across the new namespace and two existing ones.
+
+### Changed
+
+- **`urpx:ServiceTiers.referencesMetricInput` is documented as naming the quantity a tier's BOUNDS are stated in**, which is not the quantity the ledger's charge is stated in. The two are meant to differ: LADWP R-1A's Power Access Charge is 2.30, 7.90 and 22.70 per `P1M` per meter with bounds in kWh, so its container names `mi-energy` while its ledger names `mi-meter-count`. Reading the property as a pointer to a container's ledger would strip the bounds off a monthly fixed charge tiered by consumption. No behavior change; the question was raised by 0.32.0's tier selection and is settled against it.
+
 ## [0.32.0] — 2026-09-23
 
 ### Fixed

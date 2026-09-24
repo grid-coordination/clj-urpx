@@ -494,6 +494,15 @@
    :urpx/referencesProfileAlternative wires a per-cell ServiceTiers to one
    ProfileAlternative within a matrix-style hasServiceTiers vector.
 
+   :urpx/referencesMetricInput names the quantity a tier's BOUNDS are stated
+   in, which is NOT the same as the quantity the ledger's charge is stated in.
+   The two are meant to differ: LADWP R-1A's Power Access Charge is 2.30, 7.90
+   and 22.70 per P1M per meter, with bounds in kWh, so its container names
+   mi-energy while its ledger names mi-meter-count. Reading this property as a
+   pointer to the ledger a container belongs to would therefore strip the
+   bounds off a monthly fixed charge tiered by consumption, which is a real
+   filing shape rather than a modeling error (URPX-c0d).
+
    No ServiceTiers in the vendored corpus carries either qualifier. The PG&E
    E-TOU-C baseline-tier modifier is not the per-cell shape: it carries one
    container of three tiers, 40 brackets each, and states its

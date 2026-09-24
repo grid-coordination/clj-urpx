@@ -172,16 +172,28 @@
 
 (deftest a-modifier-definition-naming-the-base-plans-season-resolves-composed
   (testing "PG&E's E-TOU-C baseline-tier modifier declares no urpx:Season of its
-            own and names the base plan's. Standing alone there is nothing to
-            resolve the ref against, so the definition cannot be shown to apply
-            and is held; composed, by-id spans both documents and it resolves."
+            own and names the base plan's. Composed, by-id spans both documents
+            and the gate evaluates. Standing alone no Season is reachable at
+            all, so the gate is UNEVALUATED rather than failed, and the
+            definition surfaces.
+
+            Surfacing it is the deliberate choice (URPX-8yp). Excluding it would
+            silently drop every seasonal definition from a modifier resolved
+            without its base plan, which is precisely the defect URPX-2a6 fixed
+            for summary members when this path passed empty season indexes.
+            Reinstating it by a different route would be worse than a price the
+            caller can see and reject, and standalone modifier resolution is
+            already documented as surfacing every applicable price for the
+            caller to select from."
     (let [m (modifier [(pd "test:adj-summer" "Summer adjustment" :season "test:season-summer")]
                       :seasons [])]
-      (is (= [] (pd-ids m (at 2026 7 15)))
-          "standalone: the Season is in the other document, so it cannot apply here")
+      (is (= ["test:adj-summer"] (pd-ids m (at 2026 7 15)))
+          "standalone in season: surfaces, gate unevaluated")
+      (is (= ["test:adj-summer"] (pd-ids m (at 2026 12 15)))
+          "standalone OUT of season: also surfaces, because nothing could say so")
       (is (= ["test:adj-summer"] (composed-pd-ids (base-plan) m (at 2026 7 15))))
       (is (= [] (composed-pd-ids (base-plan) m (at 2026 12 15)))
-          "composed and out of season: gated, not surfaced"))))
+          "composed and out of season: now evaluable, so gated and not surfaced"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Month applicability rules

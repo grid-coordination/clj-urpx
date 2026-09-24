@@ -109,6 +109,18 @@
   (let [m (.getMonthValue date)]
     (some (fn [s] (when (some #{m} (:urpx/month s)) s)) seasons)))
 
+(defn- season-refs
+  "`node`'s urpx:appliesInSeason refs as a sequence, empty when it names none.
+
+   One normalizer for every reader of the property, because they used to
+   disagree about its shape as well as its strictness. The coercion decoder
+   produces a vector, but a document assembled in code need not have been
+   through it, and reading a bare map as a collection yields MapEntries that
+   match no @id."
+  [node]
+  (let [raw (:urpx/appliesInSeason node)]
+    (cond (nil? raw) nil (sequential? raw) raw :else [raw])))
+
 (defn- find-tou-period
   "Find the TOUPeriod whose TimeBracket matches the given season, date,
    day-of-week, and local-time across every TOUSchedule in `tou-schedules`.
@@ -124,8 +136,24 @@
      (fn [period]
        (when (some
               (fn [bracket]
-                (and (= season-id (:jsonld/id (index/single (:urpx/appliesInSeason bracket)
-                                                            "appliesInSeason refs on one TimeBracket")))
+                ;; Disjunctive across refs, matching every other reader of
+                ;; urpx:appliesInSeason. This went through urpx.index/single,
+                ;; which refuses on several, and that was the odd one out: the
+                ;; property is sh:minCount 0 with no sh:maxCount on
+                ;; TimeBracketShape as on the rest, so a bracket naming two
+                ;; Seasons applies in either. No fixture names more than one,
+                ;; so this widens acceptance and changes no resolved number.
+                ;; Unlike the other readers this compares IDENTITY against the
+                ;; season `season-of` already resolved, rather than evaluating
+                ;; months itself, so multiplicity was the only divergence here.
+                ;; A bracket naming NO season keeps its old meaning exactly:
+                ;; index/single returned nil for it, which matched only a nil
+                ;; season-id, so an unseasoned schedule still works only on a
+                ;; plan that declares no season.
+                (and (let [refs (season-refs bracket)]
+                       (if (empty? refs)
+                         (nil? season-id)
+                         (boolean (some #(= season-id (:jsonld/id %)) refs))))
                      (bracket-matches-day? bracket date dow holiday?)
                      (time-in-bracket? t bracket)))
               (:urpx/hasTimeBracket period))
@@ -1021,27 +1049,6 @@
                   (:urpx/name rule)   (assoc :urpx.resolved/gate-name (:urpx/name rule))))]
     (seq (vec (distinct gates)))))
 
-(defn- pd-active-in-season?
-  "True if `pd`'s urpx:appliesInSeason refs (if any) admit the query date's
-   month-of-year. Each ref is resolved via `seasons-by-id` to a Season; the
-   Season's urpx:month list is the gate. Multiple refs are disjunctive (any
-   admitting season is enough). PDs without urpx:appliesInSeason are always
-   season-active.
-
-   This complements `pd-active-in-month?` to support non-TOU seasonal pricing,
-   where the seasonal partition isn't carried by a TOUPeriod indirection (no
-   TOU schedule), so the only month-gating signal is the PD → Season pointer
-   plus Season.month."
-  [pd seasons-by-id ^java.time.LocalDate date]
-  (let [refs (:urpx/appliesInSeason pd)]
-    (or (empty? refs)
-        (let [m (.getMonthValue date)]
-          (boolean
-           (some (fn [ref]
-                   (when-let [season (seasons-by-id (:jsonld/id ref))]
-                     (some #{m} (:urpx/month season))))
-                 refs))))))
-
 (defn- node-season-status
   "Whether `node`'s urpx:appliesInSeason refs admit `date`'s month-of-year. One
    of :unqualified (the node names no season), :in-season, :out-of-season, or
@@ -1089,8 +1096,7 @@
    a BASE plan's bracket naming a urpx:Season that a modifier document
    declares, which is the direction a composition's index actually runs."
   [node resolve-season seasons-declared? ^java.time.LocalDate date]
-  (let [raw  (:urpx/appliesInSeason node)
-        refs (cond (nil? raw) nil (sequential? raw) raw :else [raw])]
+  (let [refs (season-refs node)]
     (if (empty? refs)
       :unqualified
       (let [m       (.getMonthValue date)
@@ -1129,6 +1135,50 @@
           ;; unknown for the same reason and reports the same way.
           (some (fn [s] (or (::absent s) (empty? (:urpx/month s)))) seasons) :not-evaluable
           :else                                               :out-of-season)))))
+
+(defn- make-season-status
+  "The single urpx:appliesInSeason reader, closed over every urpx:Season
+   reachable from the documents in scope and over one query date.
+
+   There were three readers of this property and they disagreed about more than
+   strictness (URPX-8yp): one skipped an unresolvable ref silently, one refused
+   on several refs, and one distinguished a Season carrying no urpx:month from a
+   Season that excludes the month. Tier selection, PriceDefinition gating and
+   urpx:PriceSummary member gating now ask the same question here.
+
+   Whether ANY Season is reachable is computed once, because it is what
+   separates a typo from a document that was not passed, and a per-ref guess at
+   it would answer differently depending on which ref failed first. `by-id`
+   spans every document in a composition, so a plan's node can name a Season a
+   modifier declares."
+  [seasons by-id ^java.time.LocalDate date]
+  (let [own       (into {} (map (juxt :jsonld/id identity)) seasons)
+        resolve-season (fn [sid]
+                         (or (get own sid)
+                             (let [n (get by-id sid)]
+                               (when (= "urpx:Season" (:jsonld/type n)) n))))
+        declared? (boolean (or (seq own)
+                               (some #(= "urpx:Season" (:jsonld/type %)) (vals by-id))))]
+    (fn [node] (node-season-status node resolve-season declared? date))))
+
+(defn- pd-active-in-season?
+  "Whether `pd`'s urpx:appliesInSeason gate admits this instant, given the
+   `season-status` reader from `make-season-status`.
+
+   Only :out-of-season excludes. A PriceDefinition naming no season applies, one
+   in season applies, and one whose gate could NOT be evaluated also applies:
+   this used to drop it instead, which turned a Season carrying no urpx:month
+   into a price silently missing from the sum. That is the failure this library
+   spends its refusals on, and the same reasoning `condition-gates` documents
+   for a predicate nothing here evaluates. An unresolvable ref does not reach
+   this at all, because `node-season-status` refuses it where a Season was
+   reachable to match against.
+
+   urpx:PriceSummary members do NOT go through this: `make-member-status` reads
+   the status directly, because a subtotal has a third state for a member whose
+   applicability is unknown and a boolean filter does not."
+  [pd season-status]
+  (not= :out-of-season (season-status pd)))
 
 (defn- additive-plus-lowest-rung
   "The members of `xs` that contribute together: every untiered one, plus the
@@ -1189,7 +1239,7 @@
    the CARE discount at -0.10070125 against a correct -0.06247800, and the
    marginal rate came back 0.08043875 against 0.11866200, a third low with
    nothing in the result to say so."
-  [by-id period-num ^LocalDate date rules-by-id seasons-by-id alt-status]
+  [by-id period-num ^LocalDate date rules-by-id season-status alt-status]
   (fn [member]
     (let [pd (get by-id (get-in member [:urpx/referencesPriceDefinition :jsonld/id]))]
       ;; The member's OWN urpx:touPeriodNumber gates first, and independently of
@@ -1203,10 +1253,17 @@
                   (or (nil? pd)
                       (and (pd-active-at-tou? pd period-num)
                            (pd-active-in-month? pd date rules-by-id)
-                           (pd-active-in-season? pd seasons-by-id date)))))
+                           (not= :out-of-season (season-status pd))))))
         :inactive
 
         (nil? pd) :active
+
+        ;; A season gate that could not be evaluated leaves this member's
+        ;; applicability UNKNOWN, and a subtotal has a state for that where a
+        ;; boolean filter does not. Excluding it understates the subtotal and
+        ;; including it overstates it, which is the same reasoning the
+        ;; unselected-alternative case below already follows.
+        (= :not-evaluable (season-status pd)) :unknown
 
         :else
         (case (alt-status pd)
@@ -1813,7 +1870,6 @@
          version       (plan-version rate-plan opts :urpx/hasRatePlanVersion zdt)
          plan-elements (:urpx/hasPlanElements version)
          seasons       (:urpx/hasSeasons plan-elements)
-         seasons-by-id (into {} (map (juxt :jsonld/id identity)) seasons)
          billing       (:urpx/hasBillingModel plan-elements)
          ledgers       (:urpx/hasLedger billing)
          tou-schedules (:urpx/hasTOUSchedule billing)
@@ -1862,22 +1918,11 @@
          ;; and every modifier, so the fallback is what lets THIS plan's
          ;; bracket name a urpx:Season a modifier document declares. It covers
          ;; only this document when resolving alone, so it is then a no-op.
-         ;; Whether ANY urpx:Season is reachable, which is what separates a typo
-         ;; from a document that was not passed. The plan's own first, so the
-         ;; by-id scan happens only for a document declaring none.
-         seasons-declared?
-         (boolean (or (seq seasons)
-                      (some #(= "urpx:Season" (:jsonld/type %)) (vals by-id))))
-         tier-ctx      {:alt-status alt-status
-                        :season-status
-                        #(node-season-status
-                          %
-                          (fn [sid]
-                            (or (seasons-by-id sid)
-                                (let [n (get by-id sid)]
-                                  (when (= "urpx:Season" (:jsonld/type n)) n))))
-                          seasons-declared?
-                          date)}
+         ;; ONE season reader for this instant, shared by tier selection, the
+         ;; PriceDefinition filter and the summary-member gate. Three readers
+         ;; disagreeing about one property is what URPX-8yp was.
+         season-status (make-season-status seasons by-id date)
+         tier-ctx      {:alt-status alt-status :season-status season-status}
          ;; Ledger-independent, so it is built once rather than per ledger, and
          ;; it is the ONLY view that sees Prices nested under an alternatives
          ;; set the caller did not select: the base path's price lookup skips
@@ -1888,7 +1933,7 @@
          psa-prices    (withheld-prices-by-pd prices (:profile-alternatives opts))
          member-status (or (:member-status opts)
                            (make-member-status by-id period-num date
-                                               rules-by-id seasons-by-id alt-status))
+                                               rules-by-id season-status alt-status))
 
          ledger-results
          (vec
@@ -1896,7 +1941,7 @@
                 :let [scoped-pds (->> (pds-by-ledger (:jsonld/id ledger))
                                       (filter #(and (pd-active-at-tou? % period-num)
                                                     (pd-active-in-month? % date rules-by-id)
-                                                    (pd-active-in-season? % seasons-by-id date))))
+                                                    (pd-active-in-season? % season-status))))
                       ;; A definition scoped to a urpx:ProfileAlternative applies
                       ;; only when the caller chose that alternative. Choosing a
                       ;; different one in the same dimension filters it out
@@ -2036,16 +2081,9 @@
                            (index/entities-of-type version "urpx:ApplicabilityRule"))
          ;; A Season a modifier's PriceDefinition names may be declared by the
          ;; BASE plan: PG&E's E-TOU-C baseline-tier modifier declares none of
-         ;; its own. So the modifier's seasons first, then by-id type-checked,
-         ;; which is composition-wide when composing and modifier-only when
-         ;; standing alone. Passed as a lookup FUNCTION rather than a map, which
-         ;; the season predicates accept unchanged because they only call it.
-         resolve-season
-         (let [own (into {} (map (juxt :jsonld/id identity)) own-seasons)]
-           (fn [sid]
-             (or (get own sid)
-                 (let [n (get by-id sid)]
-                   (when (= "urpx:Season" (:jsonld/type n)) n)))))
+         ;; its own. make-season-status reads by-id after the modifier's own
+         ;; seasons, and by-id is composition-wide when composing.
+         season-status (make-season-status own-seasons by-id query-date)
          member-status (or (:member-status opts)
                            ;; Resolved on its own, a modifier has only its own
                            ;; context to judge by; composing supplies the base
@@ -2056,7 +2094,7 @@
                            ;; always inactive: silently dropped from the subtotal
                            ;; rather than gated by it.
                            (make-member-status by-id base-period-num query-date
-                                               own-rules resolve-season alt-status))
+                                               own-rules season-status alt-status))
          own-period-num
          (when (seq own-schedules)
            (let [season-id  (:jsonld/id (season-of own-seasons query-date))
@@ -2100,7 +2138,7 @@
                                   (filter #(and (or (not gate?)
                                                     (pd-active-at-tou? % gate-period))
                                                 (pd-active-in-month? % query-date own-rules)
-                                                (pd-active-in-season? % resolve-season query-date))))
+                                                (pd-active-in-season? % season-status))))
                   by-alt     (group-by alt-status scoped-pds)
                   ledger-pds (concat (:unconstrained by-alt) (:selected by-alt))
                   alt-withheld (map :jsonld/id (:unselected by-alt))
@@ -2288,8 +2326,10 @@
                                      (.toLocalDate zdt)
                                      (or (:rules-by-id opts)
                                          (index/entities-of-type base-version "urpx:ApplicabilityRule"))
-                                     (into {} (map (juxt :jsonld/id identity))
-                                           (get-in base-version [:urpx/hasPlanElements :urpx/hasSeasons]))
+                                     (make-season-status
+                                      (get-in base-version [:urpx/hasPlanElements :urpx/hasSeasons])
+                                      (:by-id opts)
+                                      (.toLocalDate zdt))
                                      #(pd-alternative-status
                                        % (:profile-alternatives opts) (:alt-index opts)))))
          ;; base-version, not rate-plan alone. The 1-arity re-derives the
