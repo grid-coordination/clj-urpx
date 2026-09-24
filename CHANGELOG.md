@@ -9,7 +9,7 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
-## [Unreleased]
+## [0.32.0] — 2026-09-23
 
 ### Fixed
 
@@ -23,7 +23,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
   Three refusals rather than a pick: `:ambiguous-service-bracket` (two brackets in effect stating different bounds, and `urpx:hasServiceBracket` is a set, so there is no first one to take), `:ambiguous-service-tier` (two containers declaring one number with different bounds), and `:unresolvable-season-ref` (a ref naming a `urpx:Season` that matches none of the ones reachable here, evaluated eagerly so it fires whichever cell the caller chose). That last one divides on whether any `urpx:Season` is reachable at all: if some are, a ref matching none is a typo and refuses; if none are, the document that declares it was simply not passed, so the bounds are withheld with `:season-not-evaluable` and composing or supplying `:by-id` clears it. That is the line `pd-alternative-status` already draws for an alternative no container in this document declares. Brackets stating the same bounds do not refuse: comparison goes through `.stripTrailingZeros`, so `0M` and `0.0M` agree. `resolve-prices` now carries ten `:reason` values.
 
-  **No vendored fixture moves**: every one of the 423 tests that predate this change still passes, with no assertion altered and three added to pin the ex-data rename below; the bracket-selection namespace takes the suite to 450 tests, 0 failures. (Assertion totals are not quoted because `urpx.provenance-test` runs six more of them when a local build has populated `resources/`, which `deps.edn` puts on the classpath and `.gitignore` excludes.) The 18 tiered rungs across the five tiered base filings carry exactly one bracket each, and neither it nor its container carries either property, so a single unqualified candidate short-circuits before the date or the selection is read. The only qualified brackets in the corpus are the 120 on PG&E's E-TOU-C baseline-tier modifier, and `tier-info` has one call site, on the base-plan path.
+  **No vendored fixture moves**: every one of the 423 tests that predate this change still passes, with no assertion altered and three added to pin the ex-data rename below; the bracket-selection namespace takes the suite to 450 tests, 0 failures. (Assertion totals are not quoted because `urpx.provenance-test` reads `target/classes/META-INF/.../build-provenance.edn` off the filesystem and asserts seven fields when a build has populated it, one trivially when it has not. `target/` is gitignored, so a fresh checkout counts six fewer than a tree that has run `ci`.) The 18 tiered rungs across the five tiered base filings carry exactly one bracket each, and neither it nor its container carries either property, so a single unqualified candidate short-circuits before the date or the selection is read. The only qualified brackets in the corpus are the 120 on PG&E's E-TOU-C baseline-tier modifier, and `tier-info` has one call site, on the base-plan path.
 
 ### Added
 
@@ -608,6 +608,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.32.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.32.0
 [0.31.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.31.0
 [0.30.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.30.0
 [0.29.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.29.0
