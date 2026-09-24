@@ -19,6 +19,10 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
   One asymmetry recorded rather than worked around: `resolve-modifier-prices` takes no opts, so a cell selection cannot reach a modifier resolved alone and its cell-scoped bounds are always withheld there. Composing is the way to select. `resolve-prices` has taken opts all along.
 
+- **A modifier resolved on its own ignored four caller inputs, and one of them made it answer wrongly.** `resolve-modifier-prices` was the only public resolution entry point with no opts arity, though the private function it delegates to already took one and `resolve-prices-with-modifiers` passed it. Worst was `:holiday?`: this path defaults it to `(constantly false)`, so a modifier carrying its own `urpx:TOUSchedule` with holiday-sensitive `urpx:TimeBracket`s resolved the non-holiday period on a holiday and said nothing about it. Every other gap on that path withholds or refuses; that one returned a confident wrong period. It now takes `opts` on a new 3-arity, with the 2-arity delegating unchanged.
+
+  The other three withheld rather than lied, and are now reachable: `:profile-alternatives`, without which a cell-scoped `urpx:ServiceBracket`'s bounds could never be determined standalone; `:by-id`, which supplies a `urpx:Season` a modifier names but does not declare, as PG&E's E-TOU-C overlay does; and `:version`, for a document carrying several snapshots.
+
 ### Changed
 
 - **The `pge-e-tou-c-baseline-tier-2026-03-01` fixture is re-vendored from the same upstream commit as its base plan.** The two halves of one filing had been taken from different upstream moments, so the modifier named `pge:e-tou-c-2026-03-01-season-*` while its base plan declared `pge:season-*`. Nothing read those refs before, so the mismatch was invisible; wiring the modifier path made it a refusal. An inconsistent pair is not a URPX document set any consumer would see, and it was an artifact of vendoring rather than anything upstream ever published.

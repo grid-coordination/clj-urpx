@@ -309,10 +309,9 @@
 (defn- tier-1
   "The resolved tier-1 entry from the modifier, standalone.
 
-  No opts: `resolve-modifier-prices` takes only the modifier and the instant,
-  where `resolve-prices` takes opts. So a cell selection cannot reach a modifier
-  resolved alone, which is why the ProfileAlternative case below goes through
-  the composition."
+  Deliberately calls the 2-arity, so these cases resolve with no caller input at
+  all. The 3-arity that takes opts is exercised separately, in the URPX-crk
+  cases at the end of this namespace."
   [m inst]
   (->> (:urpx.resolved/ledgers (price/resolve-modifier-prices m inst))
        (mapcat :urpx.resolved/tiers)
@@ -410,10 +409,10 @@
              (:reason (:urpx.resolved/tier-bounds-unresolved none))))
       (is (= 13.5M (:urpx.resolved/tier-upper-bound care)))
       (is (nil? (:urpx.resolved/tier-bounds-unresolved care)))
-      (testing "and standalone the bounds can NEVER be determined, because
-                resolve-modifier-prices accepts no opts for the selection to
-                arrive in. Recorded rather than worked around: it is an
-                asymmetry with resolve-prices, not a property of selection."
+      (testing "and standalone with no selection the bounds are withheld the same
+                way. They are determinable there since URPX-crk gave
+                resolve-modifier-prices an opts arity; the case that a selection
+                reaches it is a-cell-selection-reaches-a-modifier-resolved-alone."
         (is (= :alternative-unselected
                (:reason (:urpx.resolved/tier-bounds-unresolved
                          (tier-1 m (at 2026 7 15))))))))))
@@ -430,3 +429,124 @@
       (is (nil? (:urpx.resolved/tier-number t)))
       (is (nil? (:urpx.resolved/tier-upper-bound t)))
       (is (nil? (:urpx.resolved/tier-bounds-unresolved t))))))
+
+;; ---------------------------------------------------------------------------
+;; Caller inputs reaching a modifier resolved on its own (URPX-crk)
+;; ---------------------------------------------------------------------------
+
+(defn- tou-modifier
+  "A modifier carrying its own urpx:TOUSchedule whose peak bracket applies on
+  NON-holidays only, plus an off-peak bracket for holidays. One PriceDefinition
+  per period, so which one surfaces says which period resolved."
+  []
+  (-> (modifier [(assoc (pd "test:adj-peak" "Peak") :urpx/touPeriodNumber 1)
+                 (assoc (pd "test:adj-offpeak" "Off-peak") :urpx/touPeriodNumber 2)])
+      (assoc-in [:urpx/hasRatePlanModifierVersion :urpx/hasPlanElements
+                 :urpx/hasBillingModel :urpx/hasTOUSchedule]
+                [{:jsonld/type "urpx:TOUSchedule" :jsonld/id "test:tou"
+                  :urpx/name "Own schedule"
+                  :urpx/referencesMetricInput [{:jsonld/id "test:mi-energy"}]
+                  :urpx/hasTOUTier
+                  [{:jsonld/type "urpx:TOUTier" :urpx/touTierNumber 1
+                    :urpx/hasTOUPeriod
+                    [{:jsonld/type "urpx:TOUPeriod" :jsonld/id "test:p-peak"
+                      :urpx/name "Peak" :urpx/touPeriodNumber 1
+                      :urpx/hasTimeBracket
+                      [{:jsonld/type "urpx:TimeBracket"
+                        :urpx/appliesInSeason [{:jsonld/id "test:season-summer"}]
+                        :urpx/dayType {:jsonld/id "urpx:allDays"}
+                        :urpx/includeHolidays false
+                        :urpx/includeNonHolidays true
+                        :urpx/startTime (java.time.LocalTime/of 16 0)
+                        :urpx/endTime   (java.time.LocalTime/of 21 0)}]}
+                     {:jsonld/type "urpx:TOUPeriod" :jsonld/id "test:p-off"
+                      :urpx/name "Off-peak" :urpx/touPeriodNumber 2
+                      :urpx/hasTimeBracket
+                      [{:jsonld/type "urpx:TimeBracket"
+                        :urpx/appliesInSeason [{:jsonld/id "test:season-summer"}]
+                        :urpx/dayType {:jsonld/id "urpx:allDays"}
+                        :urpx/includeHolidays true
+                        :urpx/includeNonHolidays false
+                        :urpx/startTime (java.time.LocalTime/of 16 0)
+                        :urpx/endTime   (java.time.LocalTime/of 21 0)}]}]}]}])))
+
+(deftest a-holiday-predicate-reaches-a-modifier-resolved-alone
+  (testing "URPX-crk, and the half that was a WRONG number rather than a
+            withheld one. This path defaults the holiday predicate to
+            (constantly false), so a modifier carrying its own TOUSchedule with
+            holiday-sensitive brackets resolved the non-holiday period on a
+            holiday and said nothing about it. Every other gap on this path
+            withholds or refuses; this one answered incorrectly."
+    (let [m (tou-modifier)
+          inst (at 2026 7 15)
+          ids (fn [opts] (->> (:urpx.resolved/ledgers
+                               (price/resolve-modifier-prices m inst opts))
+                              (mapcat :urpx.resolved/tiers)
+                              (map :urpx.resolved/price-definition-id)
+                              sort vec))]
+      (is (= ["test:adj-peak"] (ids nil))
+          "no predicate: the non-holiday bracket, which is the old behavior")
+      (is (= ["test:adj-peak"] (ids {:holiday? (constantly false)}))
+          "told it is not a holiday: the same, so the default was not wrong here")
+      (is (= ["test:adj-offpeak"] (ids {:holiday? (constantly true)}))
+          "told it IS a holiday: the holiday bracket, which no caller could reach before"))))
+
+(deftest a-cell-selection-reaches-a-modifier-resolved-alone
+  (testing "URPX-crk. A cell-scoped urpx:ServiceBracket's bounds could not be
+            determined standalone at all, because no selection could arrive, so
+            they were always withheld. Now they can."
+    (let [m (-> (modifier [(pd "test:adj-t1" "Tier 1 adjustment")]
+                          :tiers [(container "test:c"
+                                             [(bracket "test:b-care" 13.5M :alternative "test:pa-care")
+                                              (bracket "test:b-std" 11.0M :alternative "test:pa-std")])]
+                          :tier-numbers {0 1})
+                (update-in [:urpx/hasRatePlanModifierVersion :urpx/hasPlanElements]
+                           assoc :urpx/hasProfileAlternatives
+                           [{:jsonld/type "urpx:ProfileAlternatives" :jsonld/id "test:pas"
+                             :urpx/hasProfileAlternative
+                             [{:jsonld/type "urpx:ProfileAlternative" :jsonld/id "test:pa-care"}
+                              {:jsonld/type "urpx:ProfileAlternative" :jsonld/id "test:pa-std"}]}]))
+          tier (fn [opts] (->> (:urpx.resolved/ledgers
+                                (price/resolve-modifier-prices m (at 2026 7 15) opts))
+                               (mapcat :urpx.resolved/tiers)
+                               (filter :urpx.resolved/tier-number)
+                               first))]
+      (is (= :alternative-unselected
+             (:reason (:urpx.resolved/tier-bounds-unresolved (tier nil))))
+          "no selection: withheld, as before")
+      (is (= 13.5M (:urpx.resolved/tier-upper-bound
+                    (tier {:profile-alternatives {"test:pas" "test:pa-care"}}))))
+      (is (= 11.0M (:urpx.resolved/tier-upper-bound
+                    (tier {:profile-alternatives {"test:pas" "test:pa-std"}})))))))
+
+(deftest a-season-supplied-by-the-caller-reaches-a-modifier-resolved-alone
+  (testing "URPX-crk. PG&E's E-TOU-C overlay declares no urpx:Season and names
+            its base plan's, so standalone the gate is unevaluable and every
+            season-qualified bracket's bounds are withheld. :by-id lets a caller
+            supply the Season without composing the whole base plan."
+    (let [m (modifier [(pd "test:adj-t1" "Tier 1 adjustment")]
+                      :seasons []
+                      :tiers [(container "test:c" [(bracket "test:b-s" 13.5M
+                                                            :season "other:season-summer")])]
+                      :tier-numbers {0 1})
+          tier (fn [opts] (->> (:urpx.resolved/ledgers
+                                (price/resolve-modifier-prices m (at 2026 7 15) opts))
+                               (mapcat :urpx.resolved/tiers)
+                               (filter :urpx.resolved/tier-number)
+                               first))]
+      (is (= :season-not-evaluable
+             (:reason (:urpx.resolved/tier-bounds-unresolved (tier nil))))
+          "nothing declares the Season, so the gate was never evaluated")
+      (is (= 13.5M (:urpx.resolved/tier-upper-bound
+                    (tier {:by-id {"other:season-summer"
+                                   {:jsonld/type "urpx:Season"
+                                    :jsonld/id   "other:season-summer"
+                                    :urpx/month  [6 7 8 9]}}})))))))
+
+(deftest the-two-arity-still-behaves-as-it-did
+  (testing "the 2-arity is what every existing caller uses and must not move.
+            It now delegates to the 3-arity with nil opts, which is the same
+            thing it used to do inline."
+    (let [m (modifier [(pd "test:adj-flat" "Flat adjustment")])]
+      (is (= (price/resolve-modifier-prices m (at 2026 7 15))
+             (price/resolve-modifier-prices m (at 2026 7 15) nil))))))

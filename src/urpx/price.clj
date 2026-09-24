@@ -2251,14 +2251,34 @@
    caller can select the active value, since the URPX condition
    vocabulary (operator + label conditionValue) is not yet specified in a
    way that's programmatically interpretable. Filter the returned :tiers
-   vector on :urpx.resolved/price-id when needed."
-  [modifier ^ZonedDateTime zdt]
-  ;; The modifier's own declared zone: standing alone, it is the only frame its
-  ;; bounds are written in. In a composition `resolve-prices-with-modifiers`
-  ;; projects once against the BASE plan instead, so one query resolves in one
-  ;; zone rather than in as many as the documents happen to declare.
-  (let [^ZonedDateTime zdt (.withZoneSameInstant zdt (require-zone modifier))]
-    {:urpx.resolved/ledgers (modifier-ledger-results modifier zdt nil nil)}))
+   vector on :urpx.resolved/price-id when needed.
+
+   `opts` takes the same keys as `resolve-prices`, and four of them change an
+   answer here rather than only saving work. :holiday? is the one that used to
+   be a WRONG number rather than a withheld one: this path defaults it to
+   (constantly false), so a modifier carrying its own urpx:TOUSchedule with
+   holiday-sensitive TimeBrackets resolved the weekday period on a holiday and
+   said nothing. :profile-alternatives lets a cell-scoped urpx:ServiceBracket's
+   bounds be determined at all, which no caller could do here before.
+   :by-id supplies a urpx:Season the modifier names but does not declare, which
+   is otherwise unevaluable. :version chooses among several snapshots.
+
+   The caller-picks contract above is unchanged and is NOT in tension with
+   :profile-alternatives: surfacing every applicable Price is about prices whose
+   applicability rests on urpx:ConditionExpression predicates nothing here
+   evaluates, while :profile-alternatives is the declared selection layer. Where
+   a definition or bracket is scoped to an alternative, the selection decides
+   it; where applicability rests on an unevaluated predicate, the caller still
+   filters the result."
+  ([modifier ^ZonedDateTime zdt] (resolve-modifier-prices modifier zdt nil))
+  ([modifier ^ZonedDateTime zdt opts]
+   ;; The modifier's own declared zone: standing alone, it is the only frame its
+   ;; bounds are written in. In a composition `resolve-prices-with-modifiers`
+   ;; projects once against the BASE plan instead, so one query resolves in one
+   ;; zone rather than in as many as the documents happen to declare.
+   (let [^ZonedDateTime zdt (.withZoneSameInstant zdt (require-zone modifier))]
+     {:urpx.resolved/ledgers
+      (modifier-ledger-results modifier zdt nil (:holiday? opts) opts)})))
 
 (defn resolve-prices-with-modifiers
   "Resolve prices for `rate-plan` at `zdt` and append ledger results for
