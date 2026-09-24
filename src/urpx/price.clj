@@ -277,25 +277,25 @@
    returned vector has a single entry."
   ([prices ^LocalDate query-date opts] (active-prices-by-pd prices query-date opts nil))
   ([prices ^LocalDate query-date opts resolved-period-num]
-  (let [latest-per-key
-        (reduce (fn [acc [price sd]]
+   (let [latest-per-key
+         (reduce (fn [acc [price sd]]
                   ;; Keyed on the TOU period too. Without it, six TOU variants
                   ;; of one charge sharing a PriceDefinition collide and five
                   ;; are discarded; the Price-level gate above removes the
                   ;; non-matching ones first, and this keeps them separable if
                   ;; there is no resolved period to gate against.
-                  (let [k [(get-in price [:urpx/referencesPriceDefinition :jsonld/id])
-                           (:urpx/serviceTierNumber price)
-                           (:urpx/touPeriodNumber price)]
-                        [_ existing-sd] (acc k)]
-                    (if (or (nil? existing-sd) (.isAfter sd existing-sd))
-                      (assoc acc k [price sd])
-                      acc)))
-                {} (filter #(price-active-at-tou? (first %) resolved-period-num)
-                           (scoped-prices prices query-date opts)))]
-    (reduce-kv (fn [acc [pd-id _ _] pair]
-                 (update acc pd-id (fnil conj []) pair))
-               {} latest-per-key))))
+                   (let [k [(get-in price [:urpx/referencesPriceDefinition :jsonld/id])
+                            (:urpx/serviceTierNumber price)
+                            (:urpx/touPeriodNumber price)]
+                         [_ existing-sd] (acc k)]
+                     (if (or (nil? existing-sd) (.isAfter sd existing-sd))
+                       (assoc acc k [price sd])
+                       acc)))
+                 {} (filter #(price-active-at-tou? (first %) resolved-period-num)
+                            (scoped-prices prices query-date opts)))]
+     (reduce-kv (fn [acc [pd-id _ _] pair]
+                  (update acc pd-id (fnil conj []) pair))
+                {} latest-per-key))))
 
 (defn- all-prices-from-alternatives
   "Walk Prices.hasPriceSetAlternatives and return [price start-date] pairs
@@ -1352,7 +1352,6 @@
           1 (first candidates)
           (select-version-at candidates zdt (.getZone zdt) plan-id)))))
 
-
 ;; ---------------------------------------------------------------------------
 ;; Public API
 ;; ---------------------------------------------------------------------------
@@ -1584,9 +1583,9 @@
                       ;; set marks a ledger only when nothing else populated it.
                       psa-marked (when (empty? tier-entries) psa-prices)
                       withheld (seq (concat
-                                      alt-withheld
-                                      (filter (or psa-marked {})
-                                              (map :jsonld/id ledger-pds))))
+                                     alt-withheld
+                                     (filter (or psa-marked {})
+                                             (map :jsonld/id ledger-pds))))
                       ;; The EVIDENCE is unconditional and covers both routes a
                       ;; withheld definition's prices can reach it.
                       withheld-prices
@@ -1645,10 +1644,10 @@
    are not blocked."
   ([modifier plan-id ^ZonedDateTime zdt] (modifier-applies-to? modifier plan-id nil zdt))
   ([modifier plan-id opts ^ZonedDateTime zdt]
-  (or (nil? plan-id)
-      (let [version (plan-version modifier opts :urpx/hasRatePlanModifierVersion zdt)
-            refs    (:urpx/applicableToRatePlan version)]
-        (boolean (some #(= plan-id (:jsonld/id %)) refs))))))
+   (or (nil? plan-id)
+       (let [version (plan-version modifier opts :urpx/hasRatePlanModifierVersion zdt)
+             refs    (:urpx/applicableToRatePlan version)]
+         (boolean (some #(= plan-id (:jsonld/id %)) refs))))))
 
 (defn- modifier-ledger-results
   "Build a vector of LedgerResult entries for `modifier` at `zdt`.
@@ -1668,108 +1667,108 @@
   ([modifier zdt base-period-num holiday?]
    (modifier-ledger-results modifier zdt base-period-num holiday? nil))
   ([modifier ^ZonedDateTime zdt base-period-num holiday? opts]
-  (let [version       (plan-version modifier opts :urpx/hasRatePlanModifierVersion zdt)
+   (let [version       (plan-version modifier opts :urpx/hasRatePlanModifierVersion zdt)
         ;; @id index for urpx:basedOnPrice. Supplied by
         ;; resolve-prices-with-modifiers spanning the base plan AND every
         ;; modifier, which is what makes a discount Price in a modifier able to
         ;; reach a urpx:PriceSummary defined in the base plan filing. Resolving
         ;; a modifier alone falls back to the modifier's own document, and a
         ;; reference out of it is reported unvaluable rather than valued wrong.
-        by-id         (or (:by-id opts) (index/build-index version))
-        plan-elts     (:urpx/hasPlanElements version)
-        billing       (:urpx/hasBillingModel plan-elts)
-        ledgers       (:urpx/hasLedger billing)
-        prices        (:urpx/hasPrices version)
-        alt-index     (or (:alt-index opts)
-                          (-> (profile-alternative-index plan-elts)
-                              (index-with-price-set-alternatives prices)))
-        _             (validate-selection! (:profile-alternatives opts) alt-index)
-        alt-status    #(pd-alternative-status % (:profile-alternatives opts) alt-index)
-        member-status (or (:member-status opts)
+         by-id         (or (:by-id opts) (index/build-index version))
+         plan-elts     (:urpx/hasPlanElements version)
+         billing       (:urpx/hasBillingModel plan-elts)
+         ledgers       (:urpx/hasLedger billing)
+         prices        (:urpx/hasPrices version)
+         alt-index     (or (:alt-index opts)
+                           (-> (profile-alternative-index plan-elts)
+                               (index-with-price-set-alternatives prices)))
+         _             (validate-selection! (:profile-alternatives opts) alt-index)
+         alt-status    #(pd-alternative-status % (:profile-alternatives opts) alt-index)
+         member-status (or (:member-status opts)
                           ;; resolved on its own, a modifier has only its own
                           ;; context to judge by; composing supplies the base
                           ;; plan's, which is the one that matters.
-                          (make-member-status by-id base-period-num (.toLocalDate zdt)
-                                              {} {} alt-status))
-        own-schedules (:urpx/hasTOUSchedule billing)
-        own-seasons   (:urpx/hasSeasons plan-elts)
-        query-date    (.toLocalDate zdt)
-        own-period-num
-        (when (seq own-schedules)
-          (let [season-id  (:jsonld/id (season-of own-seasons query-date))
-                local-time (.toLocalTime zdt)
-                dow        (.getDayOfWeek zdt)
-                hol?       (or holiday? (constantly false))]
-            (:urpx/touPeriodNumber
+                           (make-member-status by-id base-period-num (.toLocalDate zdt)
+                                               {} {} alt-status))
+         own-schedules (:urpx/hasTOUSchedule billing)
+         own-seasons   (:urpx/hasSeasons plan-elts)
+         query-date    (.toLocalDate zdt)
+         own-period-num
+         (when (seq own-schedules)
+           (let [season-id  (:jsonld/id (season-of own-seasons query-date))
+                 local-time (.toLocalTime zdt)
+                 dow        (.getDayOfWeek zdt)
+                 hol?       (or holiday? (constantly false))]
+             (:urpx/touPeriodNumber
              ;; hol?, not (hol? query-date): find-tou-period takes the PREDICATE
              ;; and applies it per bracket. Passing the boolean made
              ;; holiday-status-matches? call `true` as a function, which threw
              ;; ClassCastException once a bracket actually reached the holiday
              ;; check (it needs the modifier to carry its own seasons as well as
              ;; its own schedule, which is why no fixture caught it).
-             (find-tou-period own-schedules season-id query-date local-time dow hol?))))
-        gate-period (if (seq own-schedules) own-period-num base-period-num)
-        gate?       (or (seq own-schedules) (some? base-period-num))
-        pd->prices  (all-active-prices-by-pd prices query-date opts gate-period)
-        unselected  (unselected-alternative-ids prices (:profile-alternatives opts))
-        pds         (:urpx/hasPriceDefinition billing)
-        pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
+              (find-tou-period own-schedules season-id query-date local-time dow hol?))))
+         gate-period (if (seq own-schedules) own-period-num base-period-num)
+         gate?       (or (seq own-schedules) (some? base-period-num))
+         pd->prices  (all-active-prices-by-pd prices query-date opts gate-period)
+         unselected  (unselected-alternative-ids prices (:profile-alternatives opts))
+         pds         (:urpx/hasPriceDefinition billing)
+         pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
         ;; A modifier's PriceDefinitions are scoped by urpx:referencesProfileAlternative
         ;; exactly as the base plan's are (alt-status, above). This path ignored
         ;; the property, which made the whole feature a no-op where it is most
         ;; needed: a matrix of mutually-exclusive cells is a modifier shape, so
         ;; a definition scoped to a cell the caller did not choose was summed
         ;; anyway, unmarked.
-        psa-prices  (withheld-prices-by-pd prices (:profile-alternatives opts))
-        mi-index    (mi-by-id plan-elts)]
-    (vec
-     (for [ledger ledgers
-           :let [scoped-pds (cond->> (pds-by-ledger (:jsonld/id ledger))
-                              gate? (filter #(pd-active-at-tou? % gate-period)))
-                 by-alt     (group-by alt-status scoped-pds)
-                 ledger-pds (concat (:unconstrained by-alt) (:selected by-alt))
-                 alt-withheld (map :jsonld/id (:unselected by-alt))
-                 tier-entries
-                 (->> ledger-pds
-                      (mapcat (fn [pd]
+         psa-prices  (withheld-prices-by-pd prices (:profile-alternatives opts))
+         mi-index    (mi-by-id plan-elts)]
+     (vec
+      (for [ledger ledgers
+            :let [scoped-pds (cond->> (pds-by-ledger (:jsonld/id ledger))
+                               gate? (filter #(pd-active-at-tou? % gate-period)))
+                  by-alt     (group-by alt-status scoped-pds)
+                  ledger-pds (concat (:unconstrained by-alt) (:selected by-alt))
+                  alt-withheld (map :jsonld/id (:unselected by-alt))
+                  tier-entries
+                  (->> ledger-pds
+                       (mapcat (fn [pd]
                                 ;; The interval is read here as well as on the
                                 ;; base path. Without it a recurring modifier
                                 ;; price could never be excluded from a per-unit
                                 ;; sum, and the withheld view of that same price
                                 ;; disagreed with the present view about whether
                                 ;; it counts.
-                                (let [interval (recurring-interval pd)]
-                                  (for [[price _] (pd->prices (:jsonld/id pd))
-                                        :let [gates (condition-gates price pd by-id)]]
-                                    (cond-> (merge
-                                             {:urpx.resolved/price-definition-id (:jsonld/id pd)
-                                              :urpx.resolved/price-id            (:jsonld/id price)
-                                              :urpx.resolved/price-name          (:urpx/name price)}
-                                             (price-fields price by-id member-status))
-                                      interval
-                                      (assoc :urpx.resolved/interval-duration interval)
-                                      (:urpx/hasDynamicPricing price)
-                                      (assoc :urpx.resolved/dynamic-pricing
-                                             (:urpx/hasDynamicPricing price))
-                                      gates
-                                      (assoc :urpx.resolved/condition-gated gates))))))
+                                 (let [interval (recurring-interval pd)]
+                                   (for [[price _] (pd->prices (:jsonld/id pd))
+                                         :let [gates (condition-gates price pd by-id)]]
+                                     (cond-> (merge
+                                              {:urpx.resolved/price-definition-id (:jsonld/id pd)
+                                               :urpx.resolved/price-id            (:jsonld/id price)
+                                               :urpx.resolved/price-name          (:urpx/name price)}
+                                              (price-fields price by-id member-status))
+                                       interval
+                                       (assoc :urpx.resolved/interval-duration interval)
+                                       (:urpx/hasDynamicPricing price)
+                                       (assoc :urpx.resolved/dynamic-pricing
+                                              (:urpx/hasDynamicPricing price))
+                                       gates
+                                       (assoc :urpx.resolved/condition-gated gates))))))
                       ;; Sorted like the base path. marginal-unit-rate documents
                       ;; itself as taking the LOWEST tier and implements that as
                       ;; `first`, which only holds if the vector is ordered by
                       ;; tier number. Unsorted, the modifier path handed it
                       ;; whatever came first in the document.
-                      (sort-by #(or (:urpx.resolved/tier-number %) 0))
-                      vec)
-                 psa-marked (when (empty? tier-entries) psa-prices)
-                 withheld (seq (concat
+                       (sort-by #(or (:urpx.resolved/tier-number %) 0))
+                       vec)
+                  psa-marked (when (empty? tier-entries) psa-prices)
+                  withheld (seq (concat
                                  alt-withheld
                                  (filter (or psa-marked {}) (map :jsonld/id ledger-pds))))
-                 unselected-ids (seq (filter unselected
-                                             (map :urpx.resolved/price-id tier-entries)))
-                 withheld-prices
-                 (into []
-                       (distinct)
-                       (concat
+                  unselected-ids (seq (filter unselected
+                                              (map :urpx.resolved/price-id tier-entries)))
+                  withheld-prices
+                  (into []
+                        (distinct)
+                        (concat
                         ;; A price that is BOTH present in :tiers and named by
                         ;; the mark contributes its own TIER ENTRY, not a
                         ;; reconstruction of it. marginal-unit-rate asks
@@ -1777,19 +1776,19 @@
                         ;; and then sums the present view, so the two must be
                         ;; the same map or the guard judges one and the sum
                         ;; takes the other.
-                        (filter #(unselected (:urpx.resolved/price-id %)) tier-entries)
-                        (for [pd (:unselected by-alt)
-                              price (concat (map first (pd->prices (:jsonld/id pd)))
-                                            (get psa-prices (:jsonld/id pd)))]
-                          (withheld-price-entry pd price))
-                        (for [pd ledger-pds
-                              price (get (or psa-marked {}) (:jsonld/id pd))]
-                          (withheld-price-entry pd price))))]
-           :when (or (seq tier-entries) withheld)]
-       (merge {:urpx.resolved/ledger-id   (:jsonld/id ledger)
-               :urpx.resolved/ledger-name (:urpx/name ledger)
-               :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
-               :urpx.resolved/tiers       (vec tier-entries)}
+                         (filter #(unselected (:urpx.resolved/price-id %)) tier-entries)
+                         (for [pd (:unselected by-alt)
+                               price (concat (map first (pd->prices (:jsonld/id pd)))
+                                             (get psa-prices (:jsonld/id pd)))]
+                           (withheld-price-entry pd price))
+                         (for [pd ledger-pds
+                               price (get (or psa-marked {}) (:jsonld/id pd))]
+                           (withheld-price-entry pd price))))]
+            :when (or (seq tier-entries) withheld)]
+        (merge {:urpx.resolved/ledger-id   (:jsonld/id ledger)
+                :urpx.resolved/ledger-name (:urpx/name ledger)
+                :urpx.resolved/ledger-type (:urpx/ledgerType ledger)
+                :urpx.resolved/tiers       (vec tier-entries)}
               ;; A modifier whose version does not describe this instant is
               ;; marked, not dropped, exactly as the base plan is. Dropping
               ;; would be a silent loss on a discount, where the bill quietly
@@ -1805,15 +1804,15 @@
               ;; returned 744 intervals where it returns 1. The instant the
               ;; caller asked about is the caller's own, and :version-id,
               ;; :effective and :expires identify the window without it.
-              (when-not (version-covers? version zdt (.getZone zdt))
-                {:urpx.resolved/outside-version-window
-                 {:version-id (:jsonld/id version)
-                  :effective  (version-effective-at version (.getZone zdt))
-                  :expires    (version-expires-at version (.getZone zdt))}})
-              (when-let [ids (seq (concat unselected-ids withheld))]
-                {:urpx.resolved/unselected-alternatives (vec ids)
-                 :urpx.resolved/withheld-prices         withheld-prices})
-              (ledger-metric-info ledger mi-index)))))))
+               (when-not (version-covers? version zdt (.getZone zdt))
+                 {:urpx.resolved/outside-version-window
+                  {:version-id (:jsonld/id version)
+                   :effective  (version-effective-at version (.getZone zdt))
+                   :expires    (version-expires-at version (.getZone zdt))}})
+               (when-let [ids (seq (concat unselected-ids withheld))]
+                 {:urpx.resolved/unselected-alternatives (vec ids)
+                  :urpx.resolved/withheld-prices         withheld-prices})
+               (ledger-metric-info ledger mi-index)))))))
 
 (defn resolve-modifier-prices
   "Resolve every per-energy unit price that `modifier` (a coerced
@@ -2056,25 +2055,25 @@
    are event-driven, so a caller can compute both."
   ([resolved] (marginal-unit-rate resolved nil))
   ([resolved opts]
-  (let [include-dyn? (:include-dynamic-pricing? opts false)
-        assume-conditions? (:assume-conditions-hold? opts false)
-        exclude-tier? (fn [t]
-                        (or
+   (let [include-dyn? (:include-dynamic-pricing? opts false)
+         assume-conditions? (:assume-conditions-hold? opts false)
+         exclude-tier? (fn [t]
+                         (or
                          ;; A recurring charge is priced per interval, not per
                          ;; unit consumed, so it cannot go into a $/kWh sum
                          ;; whatever its ledger is measured in.
-                         (:urpx.resolved/interval-duration t)
-                         (and (not include-dyn?) (:urpx.resolved/dynamic-pricing t))))
-        energy     (->> (:urpx.resolved/ledgers resolved)
-                        (filter #(and (= "urpx:energy"
-                                         (get-in % [:urpx.resolved/measurement-kind :jsonld/id]))
-                                      (import-energy-ledger? %)
+                          (:urpx.resolved/interval-duration t)
+                          (and (not include-dyn?) (:urpx.resolved/dynamic-pricing t))))
+         energy     (->> (:urpx.resolved/ledgers resolved)
+                         (filter #(and (= "urpx:energy"
+                                          (get-in % [:urpx.resolved/measurement-kind :jsonld/id]))
+                                       (import-energy-ledger? %)
                                       ;; A ledger whose prices were WITHHELD by an
                                       ;; unselected alternatives set has no tiers and
                                       ;; still counts, or the refusal below would be
                                       ;; deleted by the very thing it guards against.
-                                      (or (seq (:urpx.resolved/tiers %))
-                                          (:urpx.resolved/unselected-alternatives %)))))
+                                       (or (seq (:urpx.resolved/tiers %))
+                                           (:urpx.resolved/unselected-alternatives %)))))
         ;; A ledger of mutually-exclusive alternatives has no marginal tier
         ;; until the caller says which alternative applies. Taking the first
         ;; added an arbitrary one of PG&E's 18 vintage-PCIA prices to every
@@ -2089,12 +2088,12 @@
         ;; the customer. An empty record is treated as contributory rather than
         ;; harmless, because not knowing what was withheld is not evidence that
         ;; it did not matter.
-        unselected (filter (fn [l]
-                             (when (:urpx.resolved/unselected-alternatives l)
-                               (let [w (:urpx.resolved/withheld-prices l)]
-                                 (or (empty? w)
-                                     (boolean (some (complement exclude-tier?) w))))))
-                           energy)
+         unselected (filter (fn [l]
+                              (when (:urpx.resolved/unselected-alternatives l)
+                                (let [w (:urpx.resolved/withheld-prices l)]
+                                  (or (empty? w)
+                                      (boolean (some (complement exclude-tier?) w))))))
+                            energy)
         ;; Excluded BEFORE taking the first tier, not after. A ledger mixing an
         ;; event charge with an ordinary price should contribute the ordinary
         ;; one, where filtering afterwards would drop the whole ledger.
@@ -2122,123 +2121,123 @@
         ;; agree exactly. Refusing would decline a question that has an answer,
         ;; and plain summing would re-create the original bug the moment a
         ;; genuine ladder appeared beside additive components.
-        marginal   (mapcat #(-> (remove exclude-tier? (:urpx.resolved/tiers %))
-                                (additive-plus-lowest-rung :urpx.resolved/tier-number))
-                           energy)
-        unvaluable (filter :urpx.resolved/unvaluable marginal)
+         marginal   (mapcat #(-> (remove exclude-tier? (:urpx.resolved/tiers %))
+                                 (additive-plus-lowest-rung :urpx.resolved/tier-number))
+                            energy)
+         unvaluable (filter :urpx.resolved/unvaluable marginal)
         ;; Only tiers that would actually ENTER the sum: `marginal` is already
         ;; import-energy-only and already past exclude-tier?, so a gated export
         ;; price or a gated event charge is not in scope here.
-        gated      (filter :urpx.resolved/condition-gated marginal)
+         gated      (filter :urpx.resolved/condition-gated marginal)
         ;; Same question on the MODIFIER path, where the mark rides on the
         ;; ledger rather than on the result: a composition can mix an expired
         ;; modifier with live ones. Scoped to ledgers that actually contribute
         ;; to this sum, so an expired modifier whose ledgers are all non-energy,
         ;; or all excluded, costs the caller nothing and does not refuse.
-        stale      (filter #(and (:urpx.resolved/outside-version-window %)
-                                 (seq (-> (remove exclude-tier? (:urpx.resolved/tiers %))
-                                          (additive-plus-lowest-rung
-                                           :urpx.resolved/tier-number))))
-                           energy)]
+         stale      (filter #(and (:urpx.resolved/outside-version-window %)
+                                  (seq (-> (remove exclude-tier? (:urpx.resolved/tiers %))
+                                           (additive-plus-lowest-rung
+                                            :urpx.resolved/tier-number))))
+                            energy)]
     ;; A price from a version that does not describe this instant is the
     ;; confident wrong number this whole function exists to refuse. The
     ;; structural answers alongside it (season, TOU period) stay available on
     ;; the resolved map, which is why the mark is there rather than a throw
     ;; from resolve-prices.
-    (when-let [w (or (:urpx.resolved/outside-version-window resolved)
-                     (:urpx.resolved/outside-version-window (first stale)))]
-      (let [from-modifier? (and (seq stale)
-                                (not (:urpx.resolved/outside-version-window resolved)))]
-      (throw (ex-info (str "Cannot compute a marginal rate: "
-                           (if from-modifier?
+     (when-let [w (or (:urpx.resolved/outside-version-window resolved)
+                      (:urpx.resolved/outside-version-window (first stale)))]
+       (let [from-modifier? (and (seq stale)
+                                 (not (:urpx.resolved/outside-version-window resolved)))]
+         (throw (ex-info (str "Cannot compute a marginal rate: "
+                              (if from-modifier?
                              ;; Every stale ledger, grouped by the version that
                              ;; made it stale. A caller who clears one and
                              ;; re-runs should not meet a second refusal naming
                              ;; a modifier the first never mentioned, and with
                              ;; several versions involved there is no single
                              ;; "the version used" to name.
-                             (str (count stale) " modifier ledger(s) come from "
-                                  (count (distinct (map #(:version-id
-                                                          (:urpx.resolved/outside-version-window %))
-                                                        stale)))
-                                  " version(s) that do not cover the instant resolved: "
-                                  (str/join "; "
-                                            (for [[v ls] (group-by
-                                                          #(:version-id
-                                                            (:urpx.resolved/outside-version-window %))
-                                                          stale)
-                                                  :let [w' (:urpx.resolved/outside-version-window
-                                                            (first ls))]]
-                                              (str (pr-str v)
-                                                   (when-let [e (:effective w')]
-                                                     (str ", which takes effect " e))
-                                                   (when-let [x (:expires w')]
-                                                     (str " and expires " x))
-                                                   ", on "
-                                                   (str/join ", "
-                                                             (map #(pr-str (:urpx.resolved/ledger-id %))
-                                                                  ls))))))
-                             (str "the version used, " (pr-str (:version-id w))
-                                  ", does not cover the instant resolved"
-                                  (when-let [e (:effective w)] (str "; it takes effect " e))
-                                  (when-let [x (:expires w)] (str "; it expires " x))))
-                           ". Resolve at an instant the filing describes, or load "
-                           "the version that does and pass :versions-by-plan.")
+                                (str (count stale) " modifier ledger(s) come from "
+                                     (count (distinct (map #(:version-id
+                                                             (:urpx.resolved/outside-version-window %))
+                                                           stale)))
+                                     " version(s) that do not cover the instant resolved: "
+                                     (str/join "; "
+                                               (for [[v ls] (group-by
+                                                             #(:version-id
+                                                               (:urpx.resolved/outside-version-window %))
+                                                             stale)
+                                                     :let [w' (:urpx.resolved/outside-version-window
+                                                               (first ls))]]
+                                                 (str (pr-str v)
+                                                      (when-let [e (:effective w')]
+                                                        (str ", which takes effect " e))
+                                                      (when-let [x (:expires w')]
+                                                        (str " and expires " x))
+                                                      ", on "
+                                                      (str/join ", "
+                                                                (map #(pr-str (:urpx.resolved/ledger-id %))
+                                                                     ls))))))
+                                (str "the version used, " (pr-str (:version-id w))
+                                     ", does not cover the instant resolved"
+                                     (when-let [e (:effective w)] (str "; it takes effect " e))
+                                     (when-let [x (:expires w)] (str "; it expires " x))))
+                              ". Resolve at an instant the filing describes, or load "
+                              "the version that does and pass :versions-by-plan.")
                       ;; ex-data carries everything the message says, so a
                       ;; consumer classifying programmatically is not worse off
                       ;; than one reading prose. No :at on either mark: both
                       ;; carry only fields that identify the WINDOW, because a
                       ;; per-instant field makes every step of a horizon walk
                       ;; distinct and nothing merges.
-                      (cond-> {:reason :outside-version-window
-                               :version-id (:version-id w)
-                               :effective (:effective w)}
-                        (:expires w) (assoc :expires (:expires w))
-                        from-modifier?
-                        (assoc :ledger-id (:urpx.resolved/ledger-id (first stale))
-                               :stale (mapv #(select-keys
-                                              % [:urpx.resolved/ledger-id
-                                                 :urpx.resolved/outside-version-window])
-                                            stale)))))))
+                         (cond-> {:reason :outside-version-window
+                                  :version-id (:version-id w)
+                                  :effective (:effective w)}
+                           (:expires w) (assoc :expires (:expires w))
+                           from-modifier?
+                           (assoc :ledger-id (:urpx.resolved/ledger-id (first stale))
+                                  :stale (mapv #(select-keys
+                                                 % [:urpx.resolved/ledger-id
+                                                    :urpx.resolved/outside-version-window])
+                                               stale)))))))
     ;; No energy ledger at all is not an answer of zero, it is a malformed
     ;; question. A street lighting schedule prices per lamp per month; its
     ;; marginal unit is not a kWh. Returning 0M conflated that with a plan whose
     ;; energy ledgers genuinely sum to zero, and read to a consumer as free.
-    (when (empty? energy)
-      (throw (ex-info (str "Cannot compute a marginal rate: this plan has no energy "
-                           "ledger, so it prices nothing per kWh and a marginal "
-                           "per-kWh rate does not apply to it. "
-                           (cond
-                             (seq (measurement-kinds resolved))
-                             (str "It prices in: "
-                                  (pr-str (vec (sort (measurement-kinds resolved)))) ".")
-                             (seq (:urpx.resolved/ledgers resolved))
-                             (str (count (:urpx.resolved/ledgers resolved))
-                                  " ledger(s) resolved, none of them measured in a "
-                                  "urpx:measurementKind this library can sum.")
-                             :else "Nothing resolved at this instant at all.")
-                           " Call has-energy-ledger? first when sweeping.")
-                      {:reason :no-energy-ledger
-                       :measurement-kinds (measurement-kinds resolved)
-                       :ledger-count (count (:urpx.resolved/ledgers resolved))})))
-    (when (seq unselected)
-      (throw (ex-info (str "Cannot compute a marginal rate: "
-                           (count unselected) " energy ledger(s) carry mutually-exclusive "
-                           "price alternatives with no selection. Pass :profile-alternatives "
-                           "naming the applicable urpx:ProfileAlternative for each.")
-                      {:reason :unselected-alternatives
-                       :ledgers (mapv #(select-keys % [:urpx.resolved/ledger-id
-                                                       :urpx.resolved/unselected-alternatives])
-                                      unselected)})))
+     (when (empty? energy)
+       (throw (ex-info (str "Cannot compute a marginal rate: this plan has no energy "
+                            "ledger, so it prices nothing per kWh and a marginal "
+                            "per-kWh rate does not apply to it. "
+                            (cond
+                              (seq (measurement-kinds resolved))
+                              (str "It prices in: "
+                                   (pr-str (vec (sort (measurement-kinds resolved)))) ".")
+                              (seq (:urpx.resolved/ledgers resolved))
+                              (str (count (:urpx.resolved/ledgers resolved))
+                                   " ledger(s) resolved, none of them measured in a "
+                                   "urpx:measurementKind this library can sum.")
+                              :else "Nothing resolved at this instant at all.")
+                            " Call has-energy-ledger? first when sweeping.")
+                       {:reason :no-energy-ledger
+                        :measurement-kinds (measurement-kinds resolved)
+                        :ledger-count (count (:urpx.resolved/ledgers resolved))})))
+     (when (seq unselected)
+       (throw (ex-info (str "Cannot compute a marginal rate: "
+                            (count unselected) " energy ledger(s) carry mutually-exclusive "
+                            "price alternatives with no selection. Pass :profile-alternatives "
+                            "naming the applicable urpx:ProfileAlternative for each.")
+                       {:reason :unselected-alternatives
+                        :ledgers (mapv #(select-keys % [:urpx.resolved/ledger-id
+                                                        :urpx.resolved/unselected-alternatives])
+                                       unselected)})))
     ;; Refuse rather than sum around a price this library could not value.
     ;; Skipping would silently under-report the rate, which for a discount
     ;; means reporting the undiscounted price as though it were the real one.
-    (when (seq unvaluable)
-      (throw (ex-info (str "Cannot compute a marginal rate: "
-                           (count unvaluable) " marginal energy price(s) could not be valued. "
-                           "Inspect :urpx.resolved/unvaluable on the offending tiers.")
-                      {:reason :unvaluable-marginal-tier
-                       :unvaluable (mapv :urpx.resolved/unvaluable unvaluable)})))
+     (when (seq unvaluable)
+       (throw (ex-info (str "Cannot compute a marginal rate: "
+                            (count unvaluable) " marginal energy price(s) could not be valued. "
+                            "Inspect :urpx.resolved/unvaluable on the offending tiers.")
+                       {:reason :unvaluable-marginal-tier
+                        :unvaluable (mapv :urpx.resolved/unvaluable unvaluable)})))
     ;; A price whose condition this library cannot evaluate fired on the
     ;; assumption that the condition holds, and summing it reports that
     ;; assumption as a number. Two shapes reach here and both are wrong:
@@ -2261,44 +2260,44 @@
     ;; :assume-conditions-hold? true restores the old behavior for a caller who
     ;; wants the every-condition-true upper bound, the way
     ;; :include-dynamic-pricing? does for event prices.
-    (when (and (seq gated) (not assume-conditions?))
-      (throw (ex-info (str "Cannot compute a marginal rate: " (count gated)
-                           " price(s) in the sum are gated by a urpx:ConditionExpression "
-                           "this library does not evaluate, so including them would report "
-                           "an assumption as a number. Inspect "
-                           ":urpx.resolved/condition-gated on the tiers. Pass "
-                           ":assume-conditions-hold? true for the every-condition-true "
-                           "upper bound. Where the gated set is mutually exclusive, as a "
-                           "vintage matrix is, the filing wants urpx:ProfileAlternatives "
-                           "rather than predicates, and the choice then becomes yours to make.")
-                      {:reason :condition-gated-tier
-                       :gated (mapv #(select-keys % [:urpx.resolved/price-id
-                                                     :urpx.resolved/condition-gated])
-                                    gated)})))
+     (when (and (seq gated) (not assume-conditions?))
+       (throw (ex-info (str "Cannot compute a marginal rate: " (count gated)
+                            " price(s) in the sum are gated by a urpx:ConditionExpression "
+                            "this library does not evaluate, so including them would report "
+                            "an assumption as a number. Inspect "
+                            ":urpx.resolved/condition-gated on the tiers. Pass "
+                            ":assume-conditions-hold? true for the every-condition-true "
+                            "upper bound. Where the gated set is mutually exclusive, as a "
+                            "vintage matrix is, the filing wants urpx:ProfileAlternatives "
+                            "rather than predicates, and the choice then becomes yours to make.")
+                       {:reason :condition-gated-tier
+                        :gated (mapv #(select-keys % [:urpx.resolved/price-id
+                                                      :urpx.resolved/condition-gated])
+                                     gated)})))
     ;; Every energy tier excluded is not an answer of zero either. A modifier
     ;; resolved on its own whose only energy ledger IS the event charge would
     ;; otherwise report free.
-    (when (empty? marginal)
-      (throw (ex-info (str "Cannot compute a marginal rate: every energy tier was "
-                           "excluded from the sum. "
-                           (if include-dyn?
-                             "All of them are recurring charges, priced per interval rather than per unit."
-                             (str "They are event-driven prices (urpx:hasDynamicPricing), "
-                                  "recurring charges, or both. Pass :include-dynamic-pricing? true "
-                                  "for the during-event upper bound."))
-                           " Inspect :urpx.resolved/dynamic-pricing and "
-                           ":urpx.resolved/interval-duration on the tiers"
-                           (when (some :urpx.resolved/unselected-alternatives energy)
-                             (str ", and :urpx.resolved/withheld-prices on the "
-                                  (count (filter :urpx.resolved/unselected-alternatives energy))
-                                  " ledger(s) carrying prices that were WITHHELD rather than "
-                                  "excluded: those are named there and nowhere in :tiers, and a "
-                                  ":profile-alternatives selection would resolve them"))
-                           ".")
-                      {:reason :all-energy-tiers-excluded
-                       :include-dynamic-pricing? include-dyn?
-                       :energy-ledgers (mapv :urpx.resolved/ledger-id energy)})))
-    (reduce (fn [^java.math.BigDecimal acc tier]
-              (.add acc ^java.math.BigDecimal (:urpx.resolved/unit-price tier)))
-            0M
-            marginal))))
+     (when (empty? marginal)
+       (throw (ex-info (str "Cannot compute a marginal rate: every energy tier was "
+                            "excluded from the sum. "
+                            (if include-dyn?
+                              "All of them are recurring charges, priced per interval rather than per unit."
+                              (str "They are event-driven prices (urpx:hasDynamicPricing), "
+                                   "recurring charges, or both. Pass :include-dynamic-pricing? true "
+                                   "for the during-event upper bound."))
+                            " Inspect :urpx.resolved/dynamic-pricing and "
+                            ":urpx.resolved/interval-duration on the tiers"
+                            (when (some :urpx.resolved/unselected-alternatives energy)
+                              (str ", and :urpx.resolved/withheld-prices on the "
+                                   (count (filter :urpx.resolved/unselected-alternatives energy))
+                                   " ledger(s) carrying prices that were WITHHELD rather than "
+                                   "excluded: those are named there and nowhere in :tiers, and a "
+                                   ":profile-alternatives selection would resolve them"))
+                            ".")
+                       {:reason :all-energy-tiers-excluded
+                        :include-dynamic-pricing? include-dyn?
+                        :energy-ledgers (mapv :urpx.resolved/ledger-id energy)})))
+     (reduce (fn [^java.math.BigDecimal acc tier]
+               (.add acc ^java.math.BigDecimal (:urpx.resolved/unit-price tier)))
+             0M
+             marginal))))
