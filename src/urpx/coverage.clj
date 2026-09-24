@@ -57,10 +57,6 @@
   #{"urpx:complete" "urpx:partial" "urpx:pending"
     "urpx:unsupported" "urpx:unknown" "urpx:noCoverage"})
 
-(defn- as-vec
-  [v]
-  (cond (nil? v) [] (sequential? v) (vec v) :else [v]))
-
 (defn- bare-ref?
   "True if `v` is a reference and nothing else: an @id with no content of its
    own. A node carrying properties is the thing itself, however it is nested."
@@ -149,7 +145,7 @@
         on-ver  (:urpx/selfContained version)
         elsewhere (filter #(= "urpx:retrievedElsewhere"
                               (get-in % [:urpx/referenceInclusion :jsonld/id]))
-                          (as-vec (:urpx/hasPriceDefinitionReference version)))
+                          (index/as-vec (:urpx/hasPriceDefinitionReference version)))
         value   (if (some? claimed) claimed on-ver)]
     (when (and (true? claimed) (seq elsewhere))
       (throw (ex-info (str "Coverage claim on " (pr-str (:jsonld/id version))
@@ -183,7 +179,7 @@
               {:kind        (get-in node [:urpx/evaluationKind :jsonld/id])
                :evaluated-on (:urpx/evaluatedOn node)
                :description (:urpx/description node)})))
-        (as-vec (:urpx/explainedBy c))))
+        (index/as-vec (:urpx/explainedBy c))))
 
 (defn- coverage-window-of
   "The TemporalScope whose scopeKind is urpx:coverage, or nil.
@@ -199,7 +195,7 @@
   [c doc version-id]
   (let [covers (filter #(= "urpx:coverage" (get-in % [:urpx/scopeKind :jsonld/id]))
                        (keep #(let [n (deref-node % doc)] (when-not (= ::unresolved n) n))
-                             (as-vec (:urpx/hasTemporalScope c))))]
+                             (index/as-vec (:urpx/hasTemporalScope c))))]
     (when (> (count covers) 1)
       (throw (ex-info (str "Coverage claim on " (pr-str version-id) " carries "
                            (count covers) " TemporalScopes with scopeKind "

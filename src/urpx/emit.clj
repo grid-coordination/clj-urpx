@@ -44,6 +44,7 @@
   (:require [clojure.data.json :as json]
             [urpx.coerce :as coerce]
             [urpx.core :as core]
+            [urpx.index :as index]
             [urpx.schema :as schema]))
 
 ;; ---------------------------------------------------------------------------
@@ -213,14 +214,21 @@
    (:jsonld/id-only maps) survive intact — encoding skips fields the entity
    doesn't carry."
   [document]
+  ;; Each payload goes through index/as-vec before mapv. These are 0..N and a
+  ;; wrapper writing one document writes a bare object, which every vendored
+  ;; wrapper does; mapv over that map produced MapEntry pairs and emitted
+  ;; "urpx:hasRatePlan":[["type","urpx:RatePlan"],["id","pge:e-tou-c"],...],
+  ;; a corrupt artifact with the @ prefixes stripped and no exception. Worse
+  ;; than the read-side defects of the same class because the output leaves the
+  ;; process.
   (cond-> document
     (:urpx/hasRatePlan document)
     (update :urpx/hasRatePlan
-            (fn [vs] (mapv #(coerce/encode schema/RatePlan %) vs)))
+            (fn [vs] (mapv #(coerce/encode schema/RatePlan %) (index/as-vec vs))))
 
     (:urpx/hasRatePlanModifier document)
     (update :urpx/hasRatePlanModifier
-            (fn [vs] (mapv #(coerce/encode schema/RatePlanModifier %) vs)))
+            (fn [vs] (mapv #(coerce/encode schema/RatePlanModifier %) (index/as-vec vs))))
 
     (:urpx/packages document)
     (update :urpx/packages
@@ -228,7 +236,7 @@
                              (if-let [sch (payload-schemas (:jsonld/type v))]
                                (coerce/encode sch v)
                                v))
-                           vs)))))
+                           (index/as-vec vs))))))
 
 (defn write-urpx-document
   "Serialize a coerced urpx:URPXDocument wrapper to a JSON-LD string. Inverse of

@@ -5,7 +5,8 @@
   and resolves prices for any given timestamp and timezone."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [urpx.index :as index]))
 
 (defn- prefixed-key->keyword
   "Convert a JSON-LD string key into a Clojure keyword.
@@ -126,15 +127,6 @@
   [src]
   (parse-graph src))
 
-(defn- as-vec
-  "Normalize a JSON-LD property value into a vector. Handles the
-   single-object / vector / nil shapes URPX docs use interchangeably."
-  [v]
-  (cond
-    (nil? v) []
-    (sequential? v) (vec v)
-    :else [v]))
-
 (def ^:private wrapper-types
   "Top-level wrapper @types that `expand-document-entities` descends through.
    v0.3.0 renamed urpx:URPXDocument to urpx:URPXPackage; both are accepted, so
@@ -159,10 +151,10 @@
    single-entity, or `@graph`-bundled."
   [entity]
   (if (contains? wrapper-types (:jsonld/type entity))
-    (vec (concat (as-vec (:urpx/hasRatePlan entity))
-                 (as-vec (:urpx/hasRatePlanModifier entity))
-                 (as-vec (:urpx/hasTariffPublication entity))
-                 (as-vec (:urpx/packages entity))))
+    (vec (concat (index/as-vec (:urpx/hasRatePlan entity))
+                 (index/as-vec (:urpx/hasRatePlanModifier entity))
+                 (index/as-vec (:urpx/hasTariffPublication entity))
+                 (index/as-vec (:urpx/packages entity))))
     [entity]))
 
 (defn load-rate-plan

@@ -118,8 +118,7 @@
    through it, and reading a bare map as a collection yields MapEntries that
    match no @id."
   [node]
-  (let [raw (:urpx/appliesInSeason node)]
-    (cond (nil? raw) nil (sequential? raw) raw :else [raw])))
+  (index/as-vec (:urpx/appliesInSeason node)))
 
 (defn- find-tou-period
   "Find the TOUPeriod whose TimeBracket matches the given season, date,
@@ -804,8 +803,7 @@
    0.26104 against 0.46886 with nothing in the result to say so."
   [pd selection idx]
   (let [{:keys [dim-of]} idx
-        refs (:urpx/referencesProfileAlternative pd)
-        refs (if (sequential? refs) refs (when refs [refs]))]
+        refs (index/as-vec (:urpx/referencesProfileAlternative pd))]
     (cond
       (empty? refs) :unconstrained
 
@@ -1325,8 +1323,7 @@
       ;; candidates is still an error. Only a bare @id can be absent, because
       ;; index-walk indexes nodes carrying both @id and @type, so a mistyped
       ;; IRI cannot masquerade as a candidate belonging to another plan.
-      (let [candidates (let [b (:urpx/basedOnPrice price)]
-                         (if (sequential? b) (vec b) [b]))
+      (let [candidates (index/as-vec (:urpx/basedOnPrice price))
             ids        (mapv :jsonld/id candidates)
             present    (filterv #(contains? by-id %) ids)]
         (cond
@@ -1629,9 +1626,7 @@
       ;; opt useless exactly where it is needed. Membership answers the
       ;; question that is actually being asked, is it one of this document's,
       ;; and it answers it for one snapshot and for several alike.
-      (let [nested (get plan nested-key)]
-        (boolean (some #(= version %)
-                       (if (sequential? nested) nested [nested])))))))
+      (boolean (some #(= version %) (index/as-vec (get plan nested-key)))))))
 
 (defn- version-opt-for
   "The caller's `:version` for THIS document, or nil to resolve normally.
@@ -2037,7 +2032,7 @@
   ([modifier plan-id opts ^ZonedDateTime zdt]
    (or (nil? plan-id)
        (let [version (plan-version modifier opts :urpx/hasRatePlanModifierVersion zdt)
-             refs    (:urpx/applicableToRatePlan version)]
+             refs    (index/as-vec (:urpx/applicableToRatePlan version))]
          (boolean (some #(= plan-id (:jsonld/id %)) refs))))))
 
 (defn- modifier-ledger-results

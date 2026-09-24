@@ -43,9 +43,6 @@
 ;; Plan inspection
 ;; ---------------------------------------------------------------------------
 
-(defn- as-vec [v]
-  (cond (nil? v) [] (sequential? v) (vec v) :else [v]))
-
 (defn- eia-id
   "The EIA utility id, from either place URPX has put it.
 
@@ -60,7 +57,7 @@
       (some (fn [ident]
               (when (= "urpx:eiaScheme" (get-in ident [:urpx/scheme :jsonld/id]))
                 (:skos/notation ident)))
-            (as-vec (get-in org [:urpx/hasIdentity :urpx/hasIdentifier])))))
+            (index/as-vec (get-in org [:urpx/hasIdentity :urpx/hasIdentifier])))))
 
 (defn- published-by
   "Return the Organization (a map) that offers or published `plan`.

@@ -107,6 +107,34 @@
   [doc]
   (back-pointer-walk {} doc))
 
+(defn as-vec
+  "A property URPX models 0..N, as a vector, whatever arity the document wrote.
+
+   For a property this library ITERATES. `single` is the mirror, for one this
+   library reads as a single value, and the two must stay distinct: `single`
+   refuses when a document supplies several, which `as-vec` must never do.
+
+   Necessary because a 0..N property is written either as a JSON-LD list or, when
+   single-valued, as a bare object, and the two expand identically. A reader that
+   iterates the bare form gets MapEntries rather than nodes and silently sees
+   nothing: `(keep :jsonld/id {:jsonld/id \"x\"})` is empty where the one-element
+   list gives `(\"x\")`. urpx.schema normalizes the properties it decodes, but only
+   after `urpx.coerce` has run, so a reader on a raw or partly coerced document
+   needs this.
+
+   The last arm is `[v]`, not `(vec v)`: sequential values are handled above, so
+   anything reaching it is a scalar, and `(vec \"urpx:foo\")` would shred a compact
+   string @id into characters.
+
+   This replaced seven private copies that disagreed about nil, three returning
+   [], two nil and two [nil]. All seven call sites were checked to be
+   nil-equivalent before collapsing them."
+  [v]
+  (cond
+    (nil? v)        []
+    (sequential? v) (vec v)
+    :else           [v]))
+
 (defn single
   "Normalize a property that URPX declares 0..N but that this library reads as
    one value, or nil when there is none.

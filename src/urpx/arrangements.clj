@@ -285,8 +285,16 @@
 (defn- applicability
   "The two compatibility statements on `mv`, as sets of @ids."
   [mv]
-  [(into #{} (keep :jsonld/id) (:urpx/applicableToRatePlanVersion mv))
-   (into #{} (keep :jsonld/id) (:urpx/applicableToRatePlan mv))])
+  ;; Through index/as-vec because both properties are 0..N and a document
+  ;; writing the single-valued form writes a bare object. Iterating that yields
+  ;; MapEntries, so `keep :jsonld/id` found nothing and BOTH shipped policies
+  ;; returned false: the modifier applied to no base plan, every arrangement
+  ;; came out base-only, and nothing was raised. The corpus writes
+  ;; applicableToRatePlanVersion bare in every occurrence, and `check-coerced!`
+  ;; cannot catch it because it tests for date-shaped strings rather than Ref
+  ;; arity.
+  [(into #{} (keep :jsonld/id) (index/as-vec (:urpx/applicableToRatePlanVersion mv)))
+   (into #{} (keep :jsonld/id) (index/as-vec (:urpx/applicableToRatePlan mv)))])
 
 ;; A COMPATIBILITY POLICY is `(fn [modifier-version base-version plan-id] ->
 ;; boolean)`. It exists because URPX does not settle what a version-level
