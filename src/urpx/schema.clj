@@ -510,7 +510,7 @@
 
    Both qualifiers are read at resolution time, on this container and on
    urpx:ServiceBracket alike, by `urpx.price/select-tier-bracket`
-   (price.clj:495). For a urpx:RatePlan's tiers only: `urpx.price/tier-info`
+   For a urpx:RatePlan's tiers only: `urpx.price/tier-info`
    has one call site, on the base-plan path, so a urpx:RatePlanModifier's
    brackets are read by nothing (URPX-sr4). The 120 above are that case."
   [:map
@@ -885,7 +885,8 @@
    ;; sh:minCount 0 sh:maxCount 1 upstream: a conformant Price may omit it.
    ;; Required here until now, which rejected such a Price; PriceSetAlternative
    ;; already modeled it optional, so the two disagreed with each other too.
-   ;; Both readers (price.clj:224, :261) nil-thread through get-in.
+   ;; Both readers, urpx.price/scoped-prices and price-active-at-tou?,
+   ;; nil-thread through get-in.
    [:urpx/referencesPriceDefinition {:optional true} Ref]
    [:urpx/referencesServiceTier    {:optional true} Ref]
    [:urpx/referencesServiceBracket {:optional true} Ref]
@@ -1444,8 +1445,10 @@
    ;; this property outright; v0.5.1 re-admitted it as optional, so the nested
    ;; shape stays legal and an un-nested filing that states the link only as
    ;; forRatePlan on a sibling snapshot is legal too. NOT widened to 0..N yet:
-   ;; SHACL sets no sh:maxCount, but price.clj:493, holidays.clj:182 and
-   ;; tz_inference.clj:46 all read this as a single map, so a vector here would
+   ;; SHACL sets no sh:maxCount, but urpx.index/nested-version and the callers
+   ;; that go through it, urpx.price/plan-version, urpx.holidays/plan-calendar
+   ;; and urpx.tz-inference/published-by, all read this as a single map, so a
+   ;; vector here would
    ;; validate documents the resolver then silently misreads. Widening it means
    ;; rewriting those three readers first.
    ;; v0.5.1 typed identity. hasIdentifier and hasLocationDataSet are 0..N
@@ -1559,8 +1562,9 @@
    [:urpx/url                {:optional true} :string]
    [:urpx/version            {:optional true} :string]
    ;; Optional for the same reason as RatePlan/hasRatePlanVersion above, and
-   ;; likewise not yet widened to 0..N: holidays.clj:183, tz_inference.clj:47
-   ;; and price.clj:564/584 read it as a single map.
+   ;; likewise not yet widened to 0..N: urpx.holidays/plan-calendar,
+   ;; urpx.tz-inference/published-by and urpx.price/plan-version read it as a
+   ;; single map, the last through urpx.index/nested-version.
    ;; v0.5.1 typed identity. hasIdentifier and hasLocationDataSet are 0..N
    ;; upstream; timezoneIdentifier is maxCount 1.
    [:urpx/hasIdentifier

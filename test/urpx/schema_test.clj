@@ -465,7 +465,7 @@
             three; no vendored fixture carries more than one, and
             single-or-vec→vec is what keeps those compatible. All three state
             identical brackets for tier 1, so it is also a shape
-            select-tier-bracket accepts (src/urpx/price.clj:604) rather than
+            select-tier-bracket accepts, on its identical-bounds branch, rather than
             refusing, though nothing here reaches resolution to check that."
     (let [tier {:jsonld/type "urpx:ServiceTier"
                 :urpx/serviceTierNumber 1

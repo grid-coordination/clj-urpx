@@ -520,7 +520,7 @@
   (testing "pd-alternative-status is reached from a bracket now, so its two
             refusals report :node-id and :node-type where they reported
             :price-definition-id. Reachable only from a hand-built map:
-            schema.clj:468 types referencesProfileAlternative on a
+            urpx.schema/ServiceBracket types referencesProfileAlternative on a
             ServiceBracket as a bare Ref, matching sh:maxCount 1, so a coerced
             document cannot carry two."
     (let [p (with-alternatives

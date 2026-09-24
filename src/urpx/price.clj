@@ -464,8 +464,8 @@
 
    The container travels beside its tier because BOTH scopes qualify bounds:
    urpx:appliesInSeason and urpx:referencesProfileAlternative sit on
-   urpx:ServiceTiers (schema.clj:508, 514) and on urpx:ServiceBracket
-   (schema.clj:465, 468) alike. A mapcat over hasServiceTier loses the
+   urpx:ServiceTiers and on urpx:ServiceBracket alike (both carry the two
+   properties in urpx.schema). A mapcat over hasServiceTier loses the
    container a tier came from, and with it half the question.
 
    Grouping, where this was a map from number to ONE tier: two containers
@@ -475,7 +475,7 @@
 
    :bracket is nil for a tier whose :urpx/hasServiceBracket is empty or absent.
    ServiceTierShape forbids that (sh:minCount 1), but the Malli schema types it
-   as a plain vector (schema.clj:481-483) and so does `urpx.validate`, so a
+   as a plain vector on urpx.schema/ServiceTier, and so does `urpx.validate`, so a
    document that never met SHACL reaches here.
 
    hasServiceTiers is a vector, though every tiered fixture carries exactly one
@@ -773,8 +773,8 @@
    Named for the PriceDefinition it was written for, but it reads only
    urpx:referencesProfileAlternative off whatever node it is handed, and
    `select-tier-bracket` hands it urpx:ServiceTiers containers and
-   urpx:ServiceBracket nodes, which carry the same property (schema.clj:468,
-   514). Its two refusals report :node-id and :node-type for that reason.
+   urpx:ServiceBracket nodes, which carry the same property (see
+   urpx.schema/ServiceBracket and ServiceTiers). Its two refusals report :node-id and :node-type for that reason.
 
    One of:
 
@@ -1086,7 +1086,8 @@
      with no bounds, which a consumer reads as unbounded; a PriceDefinition
      that fails to match merely does not apply.
    - A single ref written as a bare map is normalized. The coercion decoder
-     produces a vector (schema.clj:465), but a document assembled in code need
+     produces a vector for urpx.schema/ServiceBracket, but a document
+     assembled in code need
      not have been through it.
 
    `resolve-season` is a function of @id, not the seasons index itself, so a
