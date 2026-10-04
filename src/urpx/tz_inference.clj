@@ -51,13 +51,17 @@
    urpx:hasIdentity -> urpx:hasIdentifier -> {urpx:scheme urpx:eiaScheme,
    skos:notation \"<id>\"}. urpx:eiaId has zero occurrences in a v0.5.1
    document, so reading only the old key silently loses eia-id inference the
-   moment a utility migrates, and falls back to legalName without saying so."
+   moment a utility migrates, and falls back to legalName without saying so.
+
+   hasIdentity and hasIdentifier are both 0..N, so either may be a bare object
+   or a list."
   [org]
   (or (:urpx/eiaId org)
       (some (fn [ident]
               (when (= "urpx:eiaScheme" (get-in ident [:urpx/scheme :jsonld/id]))
                 (:skos/notation ident)))
-            (index/as-vec (get-in org [:urpx/hasIdentity :urpx/hasIdentifier])))))
+            (mapcat (comp index/as-vec :urpx/hasIdentifier)
+                    (index/as-vec (:urpx/hasIdentity org))))))
 
 (defn- published-by
   "Return the Organization (a map) that offers or published `plan`.

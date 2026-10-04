@@ -80,6 +80,29 @@
           {:keys [inferred-from]} (tz/infer-zone plan)]
       (is (= :legal-name (:source inferred-from))))))
 
+(deftest eia-id-read-from-every-spelling-of-the-identity-chain
+  (testing "urpx:hasIdentity and urpx:hasIdentifier are both 0..N, so a
+            conforming document may write either as a list. The fixture writes
+            both bare; every spelling must infer the same zone from the eia id."
+    (let [base     (fixtures/load-rate-plan "pge-e-1-2026-03-01")
+          org-path [:urpx/hasRatePlanVersion :urpx/offeredBy]
+          identity (get-in base (conj org-path :urpx/hasIdentity))
+          other    {:jsonld/type "urpx:OrganizationIdentity"
+                    :urpx/hasIdentifier {:jsonld/type "urpx:OrganizationIdentifier"
+                                         :urpx/scheme {:jsonld/id "urpx:otherScheme"}
+                                         :skos/notation "X-1"}}
+          with-id  #(assoc-in base (conj org-path :urpx/hasIdentity) %)
+          infer    (comp :inferred-from tz/infer-zone)
+          baseline (infer base)]
+      (is (map? identity) "sanity: the fixture writes hasIdentity bare")
+      (is (= {:source :eia-id :value "14328" :iana "America/Los_Angeles"} baseline))
+      (is (= baseline (infer (with-id [identity]))) "hasIdentity as a list")
+      (is (= baseline (infer (with-id [other identity])))
+          "the eia identity second in a list")
+      (is (= baseline (infer (with-id (update identity :urpx/hasIdentifier
+                                              #(vector (:urpx/hasIdentifier other) %)))))
+          "hasIdentifier as a list, the eia identifier second"))))
+
 (deftest no-publisher-returns-nil
   (testing "Plan with no organization at all yields no inference. v0.5.1 states
             it as urpx:offeredBy; urpx:publishedBy left the version shapes."
