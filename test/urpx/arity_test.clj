@@ -13,8 +13,8 @@
   shipped compatibility policies returned false so every arrangement came out
   base-only; `urpx.price/modifier-applies-to?`, where a modifier applied to no
   base plan; and `urpx.emit`, which wrote a corrupt artifact with the @ prefixes
-  stripped. The corpus writes `applicableToRatePlanVersion` bare in every
-  occurrence and `hasRatePlan` in 13 of 13.
+  stripped. URPX writes a lone value of a 0..N property as a bare object, so
+  that is the spelling real filings carry.
 
   THE GUARD IS GENERATIVE, not per-site. Forty reads of one shape cannot be
   pinned by forty tests, because the forty-first read is written by someone who
@@ -49,16 +49,16 @@
 ;;
 ;; What it must have when it lands: a non-vacuity assertion on how many
 ;; documents it reached, equality against the unmodified baseline rather than
-;; "does not throw", and both directions, since the corpus writes forRatePlan,
-;; offeredBy, hasIdentity and hasPlanElements bare in every occurrence and so
-;; exercises the list spelling of those readers nowhere.
+;; "does not throw", and both directions, since a filing writing forRatePlan,
+;; offeredBy, hasIdentity and hasPlanElements bare exercises the list spelling
+;; of those readers nowhere.
 
 (deftest applicability-reads-a-bare-compatibility-statement
   (testing "urpx.arrangements/applicability. Both shipped policies returned
             false on the bare form, so applicable-modifiers gave [] and every
-            arrangement came out base-only, with nothing raised. The corpus
-            writes applicableToRatePlanVersion bare in every occurrence, so the
-            list form these read correctly is the one real data never uses."
+            arrangement came out base-only, with nothing raised. The fixture
+            writes applicableToRatePlanVersion bare, so the list form these read
+            correctly is not what real data carries."
     (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
           m    (fixtures/load-modifier "pge-e-tou-c-baseline-tier-2026-03-01")
           mv   (:urpx/hasRatePlanModifierVersion m)

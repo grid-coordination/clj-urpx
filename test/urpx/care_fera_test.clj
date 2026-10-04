@@ -1,5 +1,5 @@
 (ns urpx.care-fera-test
-  "The first percentage discounts in the URPX corpus, pinned against the filed
+  "Percentage discounts, pinned against the filed
   documents rather than against synthetic ones.
 
   A CARE or FERA discount is a urpx:Price carrying urpx:multiplier and
@@ -51,11 +51,11 @@
    matching no bill any customer can receive.
 
    The number is read from the Price FIRST and then from its PriceDefinition,
-   because URPX puts it on both and 69 of 73 filings use the definition. This
-   helper read only the Price, which is the identical narrow read that made the
-   0.22.0 summary tier fix pass on a fixture and do nothing on the corpus; it
-   went unnoticed here for the same reason, that the fixture happened to carry
-   the minority form. Re-pinning the fixture to the house idiom is what exposed
+   because URPX puts it on both. This helper read only the Price, which is the
+   identical narrow read that made the 0.22.0 summary tier fix pass on a
+   fixture and do nothing on filings using the definition; it went unnoticed
+   here for the same reason, that the fixture happened to carry the Price form.
+   Re-pinning the fixture to the definition form is what exposed
    it: the helper silently went back to summing both rungs and computed 0.37353
    again, the exact subtotal its own docstring calls impossible."
   [plan summary-id]
@@ -207,21 +207,20 @@
 
 (deftest the-tier-discriminator-is-read-from-either-placement
   (testing "URPX puts urpx:serviceTierNumber on both urpx:Price and
-            urpx:PriceDefinition, and filings use both. 69 of 73 corpus filings
-            carry it on the DEFINITION, one per tier, which is the house idiom,
-            and this fixture now does too.
+            urpx:PriceDefinition, and filings use both. This fixture carries it
+            on the DEFINITION, one per tier.
 
             The first version of the summary tier fix read only the Price, so
             it computed the right answer on the fixture as it was then pinned
-            and no answer at all on the corpus. tier-info has read both since
-            long before, three hundred lines up in the same file; not reusing it
-            was the defect.
+            and no answer at all on filings carrying it on the definition.
+            tier-info has read both since long before, three hundred lines up
+            in the same file; not reusing it was the defect.
 
-            The fixture was re-pinned once the corpus moved it to the house
-            idiom, so the construction runs the other way now: the definition
+            The fixture was re-pinned at a revision carrying the definition
+            form, so the construction runs the other way now: the definition
             form is what is filed, and the PRICE form is derived from it. That
-            is the better direction, because the derived half is the minority
-            idiom rather than the one every filing uses.
+            is the better direction, because the derived half is the Price form
+            rather than the one filed.
 
             Pinned for BOTH placements, because a test covering one is exactly
             what let the narrow version through."
@@ -231,7 +230,7 @@
                        vals (filter :urpx/serviceTierNumber)
                        (sort-by :urpx/serviceTierNumber))
           pd-ids  (set (map :jsonld/id tiered))
-          ;; Collapse the way the corpus used to file it: point every tiered
+          ;; Collapse to the Price form: point every tiered
           ;; Price at ONE shared definition and carry the discriminator on the
           ;; Price instead. Merely copying the number onto the Price while
           ;; leaving the split definitions in place is not the minority idiom,

@@ -9,8 +9,8 @@
   interact badly enough to produce a negative marginal rate.
 
   This marks them. It deliberately does NOT exclude them from any aggregate:
-  most of the gated population across the wider corpus is export price
-  matrices, where the gate is how the matrix is indexed, so excluding wholesale
+  export price matrices are gated by design, since the gate is how the matrix
+  is indexed, so excluding wholesale
   would delete the filing rather than correct it. Marking costs nothing, breaks
   nothing, and lets a consumer compute a defensible number today."
   (:require [clojure.test :refer [deftest is testing]]
@@ -134,8 +134,8 @@
             range is 0.59423 to 0.62691.
 
             Refusing both means the answer no longer depends on which layer a
-            filer happened to express exclusivity in. This corpus fixture is
-            not vendored, so the case is constructed from the two gated SCE CPP
+            filer happened to express exclusivity in. That filing is not
+            vendored, so the case is constructed from the two gated SCE CPP
             prices, which exercise the same guard."
     (let [r (price/resolve-prices-with-modifiers (prime) [(prime-cpp)] (at))
           summed (price/marginal-unit-rate r {:assume-conditions-hold? true})
@@ -151,18 +151,16 @@
 
 (deftest a-gated-export-price-does-not-refuse-an-import-rate
   (testing "the guard is scoped to tiers that would actually enter the sum.
-            Across the corpus, 100,640 of the 101,992 condition-gated tiers are
-            export prices in NBT matrices, where the gate is how the matrix is
-            indexed by vintage, month and hour. urpx:flowDirection urpx:reverse
-            has kept those out of the marginal since 0.21.0, so they must not
-            refuse it either: a guard that fired on them would refuse almost
-            every filing in the corpus.
+            Export prices in NBT matrices are condition-gated because the gate is
+            how the matrix is indexed by vintage, month and hour.
+            urpx:flowDirection urpx:reverse has kept those out of the marginal
+            since 0.21.0, so they must not refuse it either.
 
             Constructed by flipping the CPP modifier's own MetricSpecification
             to urpx:reverse, so its two gated prices become export while the
             base plan keeps a real import ledger. Scoping the guard to every
-            tier rather than to the summed ones would refuse this, and would
-            refuse almost every filing in the corpus with it."
+            tier rather than to the summed ones would refuse this, and every
+            filing carrying an export matrix with it."
     (let [exported (clojure.walk/postwalk
                     (fn [n] (if (and (map? n) (= "urpx:MetricSpecification" (:jsonld/type n)))
                               (assoc n :urpx/flowDirection {:jsonld/id "urpx:reverse"})

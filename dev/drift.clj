@@ -20,8 +20,8 @@
   What it deliberately does NOT do:
 
     - enforce sh:closed. 79 of 144 shapes are closed upstream and clj-urpx
-      closes one map on purpose; adopting closedness would reject every filing
-      in the corpus. Closedness is reported as information and never fails.
+      closes one map on purpose; adopting closedness would reject real
+      filings. Closedness is reported as information and never fails.
     - translate RDF-encoding paths. sh:path rdf:first is the idiom for
       \"non-empty rdf:List\" and has no counterpart in a compact JSON-LD tree.
       Those are listed as untranslatable rather than silently compared.

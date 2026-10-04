@@ -12,26 +12,19 @@
 ;; unexplained entry is indistinguishable from one added to make the gate green.
 
 {:accepted
- [;; The corpus's only publicationType value is urpx:regulatoryFiling, a member
-  ;; of the retired 10-member urpx:PublicationTypeValue with no successor among
-  ;; the 8 v0.5.1 members. Enforcing the upstream list alone would reject 6
-  ;; filings. Drop this entry, and the legacy member, when the last migration
-  ;; wave lands or when the migration picks a successor.
+ [;; urpx:regulatoryFiling is a member of the retired 10-member
+  ;; urpx:PublicationTypeValue with no successor among the 8 v0.5.1 members,
+  ;; and a v0.2.x filing may carry it. Enforcing the upstream list alone would
+  ;; reject that filing. Drop this entry, and the legacy member, when v0.2.x
+  ;; acceptance is withdrawn.
   ["SourcePublication" "urpx:publicationType" "enum-drift"]
 
   ;; forRatePlan and hasCoverageClaim are sh:minCount 1 on the version shapes at
   ;; v0.5.1 and are held optional here.
   ;;
-  ;; The original reason no longer holds and is recorded as having been checked
-  ;; rather than assumed: all 23 vendored fixtures now declare
-  ;; targetURPXVersion v0.5.1, every fixture carrying a RatePlanVersion declares
-  ;; forRatePlan (13 of 13) and hasCoverageClaim (23 of 23), and every fixture
-  ;; carrying a RatePlanModifierVersion declares forRatePlanModifier (14 of 14).
-  ;; Requiring them would reject nothing here.
-  ;;
-  ;; What is NOT verifiable from this repo is the production corpus, which is
-  ;; not vendored. Flip to required and drop these four entries once that corpus
-  ;; is confirmed migrated.
+  ;; Requiring them would reject every v0.2.x document, which has neither term,
+  ;; and this library advertises v0.2.x acceptance. Flip to required and drop
+  ;; these four entries when that promise is withdrawn.
   ["RatePlanVersion" "urpx:forRatePlan" "under-validates"]
   ["RatePlanVersion" "urpx:hasCoverageClaim" "under-validates"]
   ["RatePlanModifierVersion" "urpx:forRatePlanModifier" "under-validates"]

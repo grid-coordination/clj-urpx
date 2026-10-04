@@ -9,13 +9,13 @@
   cells by either surfaced BOTH at every instant. A modifier discriminating by
   `urpx:touPeriodNumber` gated correctly, which is why this went unseen.
 
-  Reported from the corpus side: SMUD's NEM1 export credit is that shape over
-  smud:fixed, whose two energy definitions are told apart by month rule rather
-  than by TOU period, so only the TOU-discriminated cells were buildable.
+  SMUD's NEM1 export credit is that shape over smud:fixed, whose two energy
+  definitions are told apart by month rule rather than by TOU period, so only
+  the TOU-discriminated cells were buildable.
 
   No vendored fixture exercises it. Checked by walking all 23: not one
   modifier PriceDefinition or PriceSummary carries `appliesInSeason` or a month
-  rule, so every case here is constructed and the corpus cannot move."
+  rule, so every case here is constructed."
   (:require [clojure.test :refer [deftest is testing]]
             [urpx.price :as price])
   (:import [java.time LocalDate LocalDateTime ZoneId ZonedDateTime]))

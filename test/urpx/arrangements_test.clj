@@ -7,11 +7,10 @@
   nothing here writes it into a document.
 
   The split that makes it tractable is what the documents can and cannot say.
-  Compatibility, which modifier MAY apply to which plan, is stated:
-  urpx:applicableToRatePlan is populated on all 40 modifier version nodes at
-  urpx-rate-plans 9deae4dbaa8b. Which of them a customer HAS is not, and URPX excludes it
-  deliberately. So this namespace answers the first and takes a policy for the
-  second."
+  Compatibility, which modifier MAY apply to which plan, is stated, by
+  urpx:applicableToRatePlan and urpx:applicableToRatePlanVersion. Which of them
+  a customer HAS is not, and URPX excludes it deliberately. So this namespace
+  answers the first and takes a policy for the second."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.walk]
@@ -36,9 +35,8 @@
 
 (deftest discovery-answers-what-may-apply
   (testing "the query a consumer actually wants, and the half URPX can answer.
-            urpx:applicableToRatePlan states compatibility with a plan identity
-            and is populated on every modifier version in the production
-            corpus."
+            urpx:applicableToRatePlan states compatibility with a plan
+            identity."
     (let [docs (sce-docs)
           bv   (first (arr/plan-versions docs))]
       (is (= ["sce:d-2026-03-20"] (mapv :jsonld/id (arr/plan-versions docs))))
@@ -56,8 +54,7 @@
             document says a customer has at most one. There is no property
             anywhere in the URPX ontology expressing exclusivity or
             combinability between modifiers, and urpx:modifierCategory and
-            urpx:modifierType, which might have served, are unset on all 40
-            modifier version nodes at urpx-rate-plans 9deae4dbaa8b.
+            urpx:modifierType, which might have served, are optional.
 
             So the library states compatibility and the caller states
             possession. That is why `arrangements` takes a policy rather than
@@ -180,7 +177,7 @@
 ;; Constructed documents.
 ;;
 ;; Hand-built rather than vendored, because the cases below are about SHAPES
-;; the corpus may or may not happen to contain today, and a test that only
+;; real filings may or may not happen to contain today, and a test that only
 ;; holds while a filing stays as it is tests the filing.
 ;; ---------------------------------------------------------------------------
 
@@ -200,16 +197,11 @@
 
 (deftest one-id-naming-two-snapshots-is-refused
   (testing "an @id identifies a thing, so two different things under one @id is
-            a contradiction rather than a choice. The production corpus carries
-            three: cpau:e-1-2025-07-01, cpau:e-eec-1-2025-09-01 and
-            cpau:e-nse-1-2025-09-01 are each published by more than one filing
-            with differing content.
+            a contradiction rather than a choice.
 
             This was silently broken by (apply max-key ...), which returns the
             LAST maximal element, so the surviving snapshot depended on the
-            order the documents arrived in: at urpx-rate-plans 889344b, 739
-            arrangements and 144 distinct pairs in glob order, 731 and 136
-            reversed, with no error either way.
+            order the documents arrived in, with no error either way.
 
             NO ESCAPE HATCH, unlike urpx.price's :ambiguous-version. There the
             caller has two distinguishable snapshots and can name one; here both
@@ -236,8 +228,8 @@
 (deftest the-same-snapshot-published-twice-is-deduplicated
   (testing "two filings carrying a byte-identical version node are one version
             published twice. That is benign and must NOT refuse: only differing
-            content is a contradiction. The corpus has two such @ids, and before
-            this deduplicated they produced 540 duplicate arrangements."
+            content is a contradiction. Before this deduplicated, a repeat
+            produced duplicate arrangements."
     (let [one  [(plan-doc "x:p" "x:p-v1" (ldt 2026 1 1))]
           twice (conj one (plan-doc "x:p" "x:p-v1" (ldt 2026 1 1)))]
       (is (= 1 (count (arr/arrangements one))))
@@ -250,9 +242,8 @@
             nothing here picks among them; a namespace sitting on top of
             urpx.price must not quietly undo that refusal.
 
-            Absent from the production corpus today (zero identities have it),
-            which is exactly why it is constructed here: the guard would
-            otherwise be carried by nothing."
+            Constructed, so the guard does not depend on a filing happening to
+            carry the shape."
     (let [docs [(plan-doc "x:p" "x:p-v1" (ldt 2026 1 1))
                 (plan-doc "x:p" "x:p-v2" (ldt 2026 1 1))]
           e    (is (thrown? clojure.lang.ExceptionInfo
@@ -326,9 +317,6 @@
   (testing "the 0.28.0 defect class a third time. The document was recovered by
             version @id from an (into {} ...) map, so when two documents publish
             one @id the loser's snapshot was paired with the winner's document.
-            Measured on the production corpus: 69 of 1728 base bindings and 641
-            of 1728 modifier bindings named a document that was not the
-            snapshot's source.
 
             Identity, not @id: the bound document must be the one that literally
             contains this node."
@@ -414,16 +402,13 @@
             owl:FunctionalProperty appears zero times in the ontology, and
             sh:closed closes the property set rather than the value set.
 
-            The default narrows, matching the ontology's wording and what the
-            corpus and the peer reference implementation both assume. The
-            monotone reading is sound under RDF, where merging adds triples and
-            never retracts, so a larger corpus cannot yield fewer arrangements.
+            The default narrows, matching the ontology's wording. The monotone
+            reading is sound under RDF, where merging adds triples and never
+            retracts, so a larger corpus cannot yield fewer arrangements.
 
-            CONSTRUCTED, and it has to be: the only two modifiers in the
-            production corpus where the readings differ are both among the
-            identities the namespace refuses as :conflicting-version-id, so on
-            the corpus it can enumerate the two policies are indistinguishable
-            (1041 arrangements, 193 pairs either way)."
+            CONSTRUCTED, because the readings differ only when a modifier names
+            some version, about a base version it does not name whose plan it
+            names."
     (let [plan (plan-doc "x:p" "x:p-v1" (ldt 2026 1 1))
           m    (modifier-doc "x:m" "x:m-v" (ldt 2026 1 1)
                              {:urpx/applicableToRatePlan        [{:jsonld/id "x:p"}]
@@ -529,8 +514,8 @@
 (defn- scope-pd-to
   "Point PG&E E-TOU-C's generation PriceDefinition at `alt-ids`, changing
    nothing else. The same technique urpx.pd-alternatives-test uses, and for the
-   same reason: the corpus has ZERO PriceDefinitions scoped to an alternative,
-   so the fixture's three income-tier cells exist while nothing is scoped to
+   same reason: the fixture scopes no PriceDefinition to an alternative, so
+   its three income-tier cells exist while nothing is scoped to
    them and the choice between them is inert. Without this, every assertion
    about a selection mattering passes whether or not the selection arrives."
   [doc alt-ids]
@@ -550,7 +535,7 @@
             income tiers resolve to the same marginal rate at this instant,
             with and without the baseline-tier modifier composed, and dropping
             :profile-alternatives from the binding changes nothing, because the
-            corpus scopes no PriceDefinition to an alternative. The cells exist
+            fixture scopes no PriceDefinition to an alternative. The cells exist
             and nothing hangs on them.
 
             So scope one, exactly as urpx.pd-alternatives-test does. Then the
@@ -694,8 +679,7 @@
    (plan-doc "x:p" "x:p-v" (ldt 2026 1 1) extra)])
 
 (deftest repeated-ids-union-merges-what-can-be-merged
-  (testing "the reading a corpus whose own SHACL gate validates a MERGED graph
-            already assumes: several documents describing one IRI contribute
+  (testing "the RDF reading: several documents describing one IRI contribute
             the union of their statements. Collection-valued properties union;
             byte-identical repeats were never a conflict either way.
 
@@ -738,9 +722,8 @@
             identity the version points back at via urpx:forRatePlanModifier.
             That is data, unlike a file-naming convention.
 
-            Constructed to mirror the production corpus, where
-            cpau:e-nse-1-2025-09-01 appears in its own modifier filing and again
-            bundled inside two different plan filings.
+            Constructed as a modifier version that appears in its own modifier
+            filing and again bundled inside a plan filing.
 
             The plan is named so that it sorts BEFORE the modifier under any
             content ordering, so a fallback that ignores the identity link picks

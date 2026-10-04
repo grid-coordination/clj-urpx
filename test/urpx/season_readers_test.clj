@@ -18,7 +18,7 @@
   Every case is constructed. Measured across all 23 vendored fixtures: no
   TimeBracket names more than one Season, no urpx:PriceDefinition, urpx:Price or
   urpx:PriceSet carries urpx:appliesInSeason at all, and no Season lacking
-  urpx:month is referenced. So none of this is reachable from the corpus, which
+  urpx:month is referenced. So none of this is reachable from the fixtures, which
   is why the three readers could disagree unnoticed."
   (:require [clojure.test :refer [deftest is testing]]
             [urpx.price :as price])

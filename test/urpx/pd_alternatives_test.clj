@@ -15,7 +15,7 @@
   summed. Scoping the definitions to alternatives makes the exclusivity
   readable without evaluating anything.
 
-  The corpus has zero uses today, so every case here is constructed. That is
+  No vendored fixture uses the slot, so every case here is constructed. That is
   the point: the slot has to work before a filing can be written against it."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.walk]
@@ -107,11 +107,12 @@
 
 (deftest several-references-refuse-rather-than-combine
   (testing "PriceDefinitionShape permits several (sh:minCount 0, no
-            sh:maxCount) and no filing uses them. A matrix does not need them:
-            URPX puts multi-dimensionality in ONE ProfileAlternatives, whose
-            single AlternativeDimensions wraps several dimensions and whose
-            alternatives enumerate the CELLS of the cross product. PG&E's own
-            baseline territory/code set is 2 dimensions and 20 alternatives.
+            sh:maxCount) and no vendored fixture uses them. A matrix does not
+            need them: URPX puts multi-dimensionality in ONE
+            ProfileAlternatives, whose single AlternativeDimensions wraps
+            several dimensions and whose alternatives enumerate the CELLS of
+            the cross product. PG&E's own baseline territory/code set is 2
+            dimensions and 20 alternatives.
 
             So the conjunction is already inside the cell, and defining
             semantics for several references would be inventing a rule for a
@@ -135,7 +136,7 @@
           (is (not (contains? d :price-definition-id))))))))
 
 (deftest an-unscoped-definition-is-unaffected
-  (testing "every filing in the corpus today, since none uses the slot"
+  (testing "every vendored fixture, since none uses the slot"
     (let [{:keys [plan]} (fixture)]
       (is (= 0.46886M (price/marginal-unit-rate (resolved plan nil))))
       (is (false? (marked? (resolved plan nil)))))))
@@ -206,8 +207,8 @@
             is what gives it the single-or-vector decode every other reference
             property has. Undeclared, it validated as an unknown key on an open
             map and passed through coerce and emit untouched, so a definition
-            written the way the corpus writes every other reference, as one
-            object rather than an array, arrived in a shape nothing reads."
+            written the way URPX writes any lone reference, as one object
+            rather than an array, arrived in a shape nothing reads."
     (let [pd {:jsonld/id "x:pd" :jsonld/type "urpx:PriceDefinition" :urpx/name "n"
               :urpx/referencesLedger {:jsonld/id "x:led"}
               :urpx/referencesProfileAlternative {:jsonld/id "x:alt"}}
@@ -431,9 +432,9 @@
 
 (deftest a-selection-is-checked-against-the-document-that-declares-it
   (testing "the membership check runs once per document, not per definition,
-            because the damage is not confined to the definition-level slot: the
-            same typo on the PriceSetAlternatives path, which every filing uses,
-            drops the whole ledger and answers short.
+            because the damage is not confined to the definition-level slot:
+            the same typo on the PriceSetAlternatives path drops the whole
+            ledger and answers short.
 
             It also has to run on the MODIFIER's own containers.
             pge:pa-departure-vintage is declared by the modifier, so the base
@@ -477,7 +478,7 @@
 
 (defn- with-dimension
   "Add a two-cell ProfileAlternatives, and scope SCE D's generation definition
-   to the first cell. Neither shape exists in the corpus; the point is that a
+   to the first cell. Neither shape exists in the fixtures; the point is that a
    filing authoring the new slot on a plan with a discountable subtotal, which
    is every SCE and SDG&E plan here, hits this on the first try."
   [doc]
@@ -645,7 +646,7 @@
 
 (deftest a-base-plan-definition-can-be-scoped-to-a-container-a-modifier-declares
   (testing "the same property in the other direction, which is the ordinary
-            corpus shape: pge:pa-departure-vintage is declared by the modifier,
+            shape: pge:pa-departure-vintage is declared by the modifier,
             not the plan."
     (let [plan (scope-pd (base-fixture) ["zz:a"])
           modi (add-container (modifier-fixture) "zz:dim" ["zz:a" "zz:b"])

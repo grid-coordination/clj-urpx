@@ -1305,7 +1305,7 @@
 ;; Composition defects found by auditing the modifier path (2026-09-21)
 ;;
 ;; All three were reachable by conformant documents and invisible to the
-;; corpus, because no vendored fixture happens to have the triggering shape.
+;; suite, because no vendored fixture happens to have the triggering shape.
 ;; Each test below FAILED before its fix.
 ;; ---------------------------------------------------------------------------
 
@@ -1642,7 +1642,7 @@
             energy ledger IS its event charge would report free.
 
             Tested on a constructed resolved value rather than a fixture,
-            because no filing in the corpus has that shape: SMUD CPP comes
+            because no vendored fixture has that shape: SMUD CPP comes
             closest and still carries two discount ledgers alongside its event
             charge, so excluding the charge leaves a real answer."
     (let [only-event {:urpx.resolved/ledgers
@@ -1706,7 +1706,7 @@
                                              (str (:urpx.resolved/price-id %)))))))))))
 
 (deftest additive-rate-components-are-summed-not-sampled
-  (testing "a ledger is used for two different things in this corpus. A block
+  (testing "a ledger is used for two different things. A block
             tier ladder is mutually exclusive, so only the marginal rung counts.
             An additive rate stack, which is how delivery charges are modeled,
             is cumulative and all of it counts.
@@ -1771,7 +1771,7 @@
             compensation for energy sent back, not a cost of the next kWh
             consumed. Summing the two conflates a credit with a charge.
 
-            Measured on the real corpus before this fix: composing PG&E E-ELEC
+            Measured on a real filing before this fix: composing PG&E E-ELEC
             with its NBT modifier returned -213.15920 per kWh, because four
             export ledgers carrying 4,610 hourly avoided-cost values were added
             to a 0.56006 import rate. Excluding them returns exactly 0.56006,
@@ -1815,8 +1815,7 @@
         (is (true? (price/has-energy-ledger? {:urpx.resolved/ledgers [import-ledger]}))))
 
       (testing "urpx:net and urpx:bidirectional contribute, deliberately:
-                neither appears in the corpus, so excluding them would be
-                speculation"
+                excluding them would be speculation"
         (doseq [d ["urpx:net" "urpx:bidirectional"]]
           (is (= 0.30M (price/marginal-unit-rate
                         {:urpx.resolved/ledgers
@@ -1829,11 +1828,8 @@
             may carry the TOU link itself. Only the PriceDefinition was read,
             and the same blind spot produced two DIFFERENT wrong answers.
 
-            Reported by the urpx-tariffs session, which found the summary half;
-            the tier half turned up while confirming it. Their corpus fix has
-            since collapsed these variants, so the live corpus no longer
-            exercises this path at all. This fixture is pinned at the commit
-            that still does, which is the whole reason fixtures are pinned."
+            Later revisions of this filing collapse these variants; the fixture
+            is frozen at one that still carries them."
     (let [plan (fixtures/load-rate-plan "sdge-ev-tou-2026-04-01")
           care (fixtures/load-modifier "sdge-care-2025-10-01")]
 

@@ -6,15 +6,14 @@
   which is the same class of defect as picking one of eighteen mutually
   exclusive vintage prices: a defensible-looking number with no rule behind it.
 
-  It stayed invisible because every filing carries exactly one version, so
-  loading one file gives one answer. It stops being invisible the moment a
+  It stayed invisible while each filing loaded carried one version, so
+  loading one file gave one answer. It stops being invisible the moment a
   caller loads several versions to cover a window, which is precisely what a
   forecast client must do.
 
-  Two corpus facts shape the rule. All 84 version snapshots carry
-  urpx:effectiveDateTime and NONE carries an expiration, so a version's span is
-  inferable only from the next version's start; the rule therefore needs a
-  plan's whole candidate set rather than one snapshot."
+  A version need not carry an expiration, so a version's span may be inferable
+  only from the next version's start; the rule therefore needs a plan's whole
+  candidate set rather than one snapshot."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.walk]
             [urpx.index :as index]
@@ -87,10 +86,9 @@
   (testing "0.17.0 routed the single-candidate case PAST the effective and
             expiration tests, reasoning that one candidate is no choice to
             make. That confused `no choice` with `applies at every instant`,
-            and every one of the 40 base filings carries exactly one version,
-            so it was the branch standalone resolution always took: SCE D
-            2026-03-20 answered 0.31085 five weeks before its version took
-            effect, byte-identical to the in-window answer.
+            and a single-version filing resolved alone always takes that
+            branch: SCE D 2026-03-20 answered 0.31085 five weeks before its
+            version took effect, byte-identical to the in-window answer.
 
             The earlier version of this test asserted that behavior, which is
             how it survived. It now asserts the opposite."
@@ -140,11 +138,11 @@
                     (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))))))))
 
 (deftest two-descriptions-of-one-version-are-ambiguous-not-arbitrary
-  (testing "the corpus has two CPAU e-1 filings publishing the SAME version @id
-            at the SAME effective instant with DIFFERENT content: the September
-            filing adds two urpx:hasModifierOptions the July one lacks. Their
-            directory dates differ while the version's effective date does not,
-            so anything keying on the path would get it wrong too.
+  (testing "two filings may publish the SAME version @id at the SAME effective
+            instant with DIFFERENT content, as when a later filing adds
+            urpx:hasModifierOptions an earlier one lacks. Their dates differ
+            while the version's effective date does not, so anything keying on
+            the path would get it wrong too.
 
             Candidates are therefore deduplicated by VALUE rather than by @id.
             The nested snapshot and its own entry in the back-pointer index are
@@ -167,9 +165,9 @@
 
 (deftest an-unorderable-candidate-is-refused
   (testing "urpx:effectiveDateTime is sh:minCount 0, so a conformant version may
-            state none. All 84 in the corpus do state one, but a candidate that
-            does not cannot be ordered against the others, and guessing its
-            place is how an arbitrary pick gets reintroduced."
+            state none. A candidate that does not cannot be ordered against the
+            others, and guessing its place is how an arbitrary pick gets
+            reintroduced."
     (let [plan (fixtures/load-rate-plan newer)
           v    (:urpx/hasRatePlanVersion plan)
           bare (dissoc plan :urpx/hasRatePlanVersion)
@@ -282,12 +280,11 @@
         "CARE expired, FERA live: refused")))
 
 (deftest a-modifier-before-its-effective-instant-is-outside-its-window-too
-  (testing "the symmetric half, and the one the corpus exercises today. Every
-            SCE modifier takes effect 2026-03-20; composing at 2026-01-15 was
+  (testing "the symmetric half, and the one the vendored fixtures exercise.
+            The SCE modifiers take effect 2026-03-20; composing at 2026-01-15 was
             applying prices from a filing that would not exist for two months.
 
-            No corpus version carries an end bound, so expiry is not yet
-            reachable from real data; this case is, which is why it is pinned
+            This case is reachable from a real filing, which is why it is pinned
             against the vendored fixture rather than a constructed bound."
     (let [r (price/resolve-prices-with-modifiers (sce-d) [(care)] (zdt 2026 1 15 17))
           marked (filter :urpx.resolved/outside-version-window (:urpx.resolved/ledgers r))]

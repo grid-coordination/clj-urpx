@@ -11,10 +11,9 @@
   `urpx:ServiceArrangement` IS NOT A URPX CLASS. It occurs zero times in the
   ontology and zero times in the SHACL shapes. It is a name for a thing the
   standard describes the parts of and does not name the whole of, and nothing
-  here writes it into a document or claims a urpx: prefix for it. The concept
-  and its evidence are set out in urpx-rate-plans doc/service-arrangements.md;
-  the cardinalities this namespace relies on were checked against the shapes
-  graph rather than recalled.
+  here writes it into a document or claims a urpx: prefix for it. The
+  cardinalities this namespace relies on were checked against the shapes graph
+  rather than recalled.
 
   WHAT THIS CAN AND CANNOT ENUMERATE. Which compatible modifiers a given
   CUSTOMER has is a fact about the customer, and URPX places customer data
@@ -50,15 +49,14 @@
    Read from the BACK POINTER rather than from nesting or from a filing's path.
    urpx:forRatePlan is sh:minCount 1 sh:maxCount 1 on RatePlanVersionShape, so
    the link is always there to read; a directory count is not a version count,
-   and this corpus holds two directories carrying one version node.
+   because one version node can be published in more than one filing.
 
    THE SOURCE DOCUMENT TRAVELS WITH THE SNAPSHOT and is never recovered by @id
    later. Two documents may publish the same version @id, so an @id lookup
    cannot tell their snapshots apart and binds one to whichever document a map
-   happened to keep. Measured on the production corpus before this carried the
-   document: 69 of 1728 base bindings and 641 of 1728 modifier bindings named a
-   document that was not the snapshot's source. That is the 0.28.0 defect class
-   a third time, and the fix is structural rather than another guard.
+   happened to keep, which paired a snapshot with a document that was not its
+   source. That is the 0.28.0 defect class a third time, and the fix is
+   structural rather than another guard.
 
    No filter on urpx:effectiveDateTime here either. A version stating only
    urpx:effectiveDate, or neither, is conformant (both are sh:minCount 0), and
@@ -133,8 +131,8 @@
                            ". Two different things cannot share one identifier, and nothing "
                            "in the documents says which is meant. Pass :repeated-ids "
                            "urpx.arrangements/repeated-ids-union to merge them instead, "
-                           "which is what a corpus whose own gate validates a merged graph "
-                           "already assumes.")
+                           "which is the RDF reading of several documents describing "
+                           "one IRI.")
                       {:reason  :urpx.arrangement/conflicting-version-id
                        :ids     (vec (mapcat (fn [[_ gs]] (map first gs)) bad))
                        :counts  (into {} (mapcat val bad))
@@ -178,27 +176,24 @@
 (defn repeated-ids-union
   "A policy that MERGES snapshots sharing one @id rather than refusing them.
 
-   The reading a corpus whose own SHACL gate validates a merged graph already
-   assumes: several documents describing one IRI contribute the union of their
-   statements, and absence of a property is not a negative assertion.
+   The RDF reading: several documents describing one IRI contribute the union
+   of their statements, and absence of a property is not a negative assertion.
 
    KNOWN COST, and it is not small. RDF MERGES TRIPLES, NOT MEANINGS. Merging a
    copy that states urpx:applicableToRatePlanVersion with one that omits it
    yields a node that HAS the property, which under `named-versions-narrow`
    restricts the modifier to exactly those versions. The omitting copy meant the
    opposite: no version restriction at all. So the union of the triples narrows
-   where the union of the meanings would widen. On the production corpus that
-   difference is 7 of 166 base/modifier pairs, all of one modifier losing one
-   plan. Pair this with `named-versions-add` if the widening reading is what you
-   want.
+   where the union of the meanings would widen. Pair this with
+   `named-versions-add` if the widening reading is what you want.
 
    It also SILENTLY RECONCILES a case that is a defect on any reading: a version
    @id whose option list differs between filings because the list is
-   time-varying and the @id is not. cpau:e-1-2025-07-01 offers [e-hra] in the
-   July filing and [e-hra, e-eec-1, e-nse-1] in the September one, and the two
-   additions are September versions that did not exist in July. The union
-   asserts that a version effective in July offered them. Merging makes that
-   enumerable; it does not make it true.
+   time-varying and the @id is not. A July filing offers one option; a
+   September filing republishes the same version @id with two more, which are
+   September versions that did not exist in July. The union asserts that a
+   version effective in July offered them. Merging makes that enumerable; it
+   does not make it true.
 
    Refuses `:urpx.arrangement/unmergeable-property` when occurrences disagree
    about a non-collection property, which cannot be combined."
@@ -237,11 +232,10 @@
    TIES ARE REFUSED, NOT BROKEN. This read `(apply max-key ...)`, which returns
    the LAST maximal element, so two snapshots sharing the latest effective
    instant meant one was silently discarded and which one depended on the order
-   the documents arrived in. On the production corpus that moved the answer
-   between 739 and 731 arrangements, and 144 and 136 distinct pairs, with no
-   error either way. urpx.price refuses exactly this input with
-   :ambiguous-version; a namespace sitting on top of it must not quietly undo
-   that.
+   the documents arrived in: reordering the same documents changed the
+   enumeration, with no error either way. urpx.price refuses exactly this input
+   with :ambiguous-version; a namespace sitting on top of it must not quietly
+   undo that.
 
    An identity with no version in force at `t` contributes nothing, and that is
    NOT the same silence: a plan whose versions have all expired, or none of
@@ -289,10 +283,8 @@
   ;; writing the single-valued form writes a bare object. Iterating that yields
   ;; MapEntries, so `keep :jsonld/id` found nothing and BOTH shipped policies
   ;; returned false: the modifier applied to no base plan, every arrangement
-  ;; came out base-only, and nothing was raised. The corpus writes
-  ;; applicableToRatePlanVersion bare in every occurrence, and `check-coerced!`
-  ;; cannot catch it because it tests for date-shaped strings rather than Ref
-  ;; arity.
+  ;; came out base-only, and nothing was raised. `check-coerced!` cannot catch
+  ;; it because it tests for date-shaped strings rather than Ref arity.
   [(into #{} (keep :jsonld/id) (index/as-vec (:urpx/applicableToRatePlanVersion mv)))
    (into #{} (keep :jsonld/id) (index/as-vec (:urpx/applicableToRatePlan mv)))])
 
@@ -309,34 +301,17 @@
 ;; the ontology, and sh:closed closes the property set rather than the value
 ;; set, so nothing in the artifacts decides it.
 ;;
-;; WHERE THEY CAN DIFFER AT ALL is narrower than it looks. The two readings can
-;; only disagree about a modifier that names SOME version AND names a plan no
-;; named version belongs to. Measured over urpx-rate-plans 9deae4dbaa8b: 33 of
-;; 40 modifier versions name no version, so both policies treat them
-;; identically, and of the 7 that do, the 4 PG&E vintage-PCIA ones name a
-;; version of the only plan they name, so those agree too.
+;; WHERE THEY CAN DIFFER AT ALL is narrower than it looks. The two readings
+;; disagree only when a modifier names SOME version, and only about a base
+;; version it does not name whose plan it names by urpx:applicableToRatePlan.
+;; A modifier that names no version gets the same answer under both.
 ;;
-;; That leaves exactly two, cpau:e-eec-1-2025-09-01 and cpau:e-nse-1-2025-09-01,
-;; and BOTH are among the three identities this namespace refuses by default as
-;; :conflicting-version-id. So on the corpus the library can enumerate today,
-;; the two policies are INDISTINGUISHABLE: 1041 arrangements and 193 pairs
-;; either way.
+;; Which means the choice cannot be settled by testing it against documents
+;; that never take that shape. It is a question about what URPX documents may
+;; say.
 ;;
-;; CORROBORATED INDEPENDENTLY, and from the other end. The urpx-rate-plans
-;; reference enumerator resolves a repeated @id by AUTHORITY, the definition in
-;; the version's own filing, rather than by union, and it narrows. It reaches
-;; the same pair set because its narrowing never fires: of its 37
-;; authority-resolved modifier versions, 4 state applicableToRatePlanVersion and
-;; each names a version of the only plan it names. So under authority resolution
-;; the two readings cannot differ either, by a different route and on a
-;; different document set.
-;;
-;; Which means the choice is currently unfalsifiable against DATA under either
-;; resolution strategy. It is a question about documents URPX may yet carry, not
-;; about documents anyone holds.
-;;
-;; THERE IS ARTIFACT EVIDENCE, THOUGH, and it was missed on both sides of that
-;; analysis: URPX Decision #090, which introduced urpx:applicableToRatePlanVersion
+;; THERE IS ARTIFACT EVIDENCE, THOUGH: URPX Decision #090, which introduced
+;; urpx:applicableToRatePlanVersion
 ;; (urpx-org/urpx-dev, dev-docs/decisions/urpx-design-decisions-081-120.md). It
 ;; cuts both ways and is recorded here rather than summarized, because a
 ;; one-sided reading of it would settle this on half the text.
@@ -386,13 +361,13 @@
 ;; So: evidence, not settlement, and the default is unchanged only because
 ;; changing it is a behaviour change nobody has asked for yet. It is the reading
 ;; with the least support in the artifacts, which is recorded here rather than
-;; left for the next reader to rediscover. The 159-versus-166 difference reported elsewhere is measured on
-;; the union-merged graph that the corpus's own SHACL gate validates, which this
-;; namespace refuses rather than merges.
+;; left for the next reader to rediscover.
 ;;
-;; The two questions are therefore entangled: they are the same filings. Both
-;; policies are shipped so that settling the copies question does not also
-;; require settling this one silently.
+;; The two questions are entangled: when copies of one modifier version
+;; disagree about urpx:applicableToRatePlanVersion, `repeated-ids-union` yields
+;; a node that states it, and the compatibility policy in force then decides
+;; what that node means. Both policies are shipped so that settling the copies
+;; question does not also require settling this one silently.
 
 (defn named-versions-narrow
   "The default policy: naming any urpx:applicableToRatePlanVersion means those
@@ -402,15 +377,14 @@
    versions are compatible with this modifier version\", and it is the only
    reading under which the property can express a restriction at all: under
    `named-versions-add` a version statement can only widen, and then only to a
-   version whose plan is not already named, which no modifier in the production
-   corpus does.
+   version whose plan is not already named.
 
    KNOWN COST, stated because it is not small. The rule is NON-MONOTONIC.
    Merging a document that adds a version statement REMOVES compatibility with
    a plan named only by urpx:applicableToRatePlan, and RDF merge never retracts.
    A partial view of a corpus can therefore yield MORE arrangements than the
-   whole of it. It is the default because it is what the corpus and the peer
-   reference implementation both assume today, not because it is known right."
+   whole of it. It is the default because changing it would change behavior,
+   not because it is known right; the evidence on each side is recorded above."
   [mv bv plan-id]
   (let [[by-version by-plan] (applicability mv)]
     (if (seq by-version)
@@ -503,12 +477,6 @@
    narrows the plan-level statement or adds to it, so this library does not
    settle it either; see the policies for the evidence on each side.
 
-   Counts below are AS MEASURED AT ONE CORPUS REVISION, urpx-rate-plans
-   9deae4dbaa8b, because a bare \"37 of 37\" is a claim with no stated conditions
-   and this one had already drifted twice before it was pinned: 40 distinct
-   modifier version nodes, applicableToRatePlan on 40 of 40 naming 3.40 plans
-   on average, applicableToRatePlanVersion on 7 of 40.
-
    WHAT THIS DOES NOT ANSWER, deliberately. Which of these a given customer HAS
    is a fact about the customer, and URPX places customer data outside its
    scope: urpx:AccountServiceAgreement carries the skos:note \"Service account
@@ -516,7 +484,7 @@
    which modifiers may be held TOGETHER: there is no property anywhere in the
    ontology expressing exclusivity or combinability between modifiers, and
    urpx:modifierCategory and urpx:modifierType, which might have served as a
-   signal, are unset on all 40. So CARE and FERA are both returned for SCE
+   signal, are optional. So CARE and FERA are both returned for SCE
    Schedule D and nothing in the documents says a customer has at most one.
    Choosing among them is the caller's, which is why `arrangements` takes a
    combining policy rather than inventing one.
@@ -526,12 +494,10 @@
      :repeated-ids  fn from {kind -> [[identity-id version document] ...]} to the
                same, deciding what one @id naming several distinct snapshots
                means. Defaults to `repeated-ids-refuse`; `repeated-ids-union`
-               merges them, which is what a corpus whose own SHACL gate
-               validates a merged graph already assumes. A THIRD POLICY for the
+               merges them, which is the RDF reading. A THIRD POLICY for the
                same reason as the other two: URPX does not say, and a client
                reading one filing and a client merging a corpus want different
-               answers. Over the production corpus the default refuses and the
-               union yields 137 pairs, or 144 paired with `named-versions-add`.
+               answers.
      :compatibility  fn `[modifier-version base-version plan-id] -> boolean`.
                      Defaults to `named-versions-narrow`; `named-versions-add`
                      is the monotone alternative."
@@ -556,15 +522,9 @@
   "Group version snapshots by the urpx:Organization @id that offers them, for a
    broader search than one plan at a time.
 
-   urpx:offeredBy is populated on all 40 modifier version nodes at
-   urpx-rate-plans 9deae4dbaa8b.
-
-   This used to add that urpx:applicableToRateGroup and urpx:hasServiceClass
-   \"would also serve this purpose and are unset on all 37\", which was wrong in
-   kind rather than in degree: both appear ZERO times in
-   RatePlanModifierVersionShape, so they cannot be set on a modifier version at
-   all and there was never anything to be unset. Asserting a mechanism that is
-   not in the ontology."
+   urpx:applicableToRateGroup and urpx:hasServiceClass might look like
+   alternatives, but both appear ZERO times in RatePlanModifierVersionShape, so
+   they cannot be set on a modifier version at all."
   [versions]
   (into (sorted-map)
         (map (fn [[k vs]] [k (vec (sort-by :jsonld/id vs))]))
@@ -627,19 +587,18 @@
                `named-versions-narrow`; `named-versions-add` is the monotone
                alternative. TWO POLICIES, not one, because URPX does not say
                whether naming a urpx:applicableToRatePlanVersion narrows
-               urpx:applicableToRatePlan or adds to it. They are
-               indistinguishable on the corpus this namespace can enumerate
-               today; see the policies for where that stops being true.
+               urpx:applicableToRatePlan or adds to it. They differ only when
+               a modifier names some version, about a base version it does not
+               name whose plan it names; see the policies.
 
    THE COMBINING POLICY IS THE CALLER'S BECAUSE URPX CANNOT STATE IT. Nothing
    in the ontology expresses exclusivity or combinability between modifiers,
    and urpx:modifierCategory and urpx:modifierType, the only properties that
-   might have served, are unset on all 40 modifier version nodes at
-   urpx-rate-plans 9deae4dbaa8b. So CARE and FERA are both compatible with SCE Schedule D and no
-   document says a customer has at most one. The default is conservative and
-   knowingly incomplete; `every-subset` is complete and knowingly wrong; a
-   caller holding its own program rules should pass those instead. Use
-   `applicable-modifiers` to see what it is choosing among.
+   might have served, are optional. So CARE and FERA are both compatible with
+   SCE Schedule D and no document says a customer has at most one. The default
+   is conservative and knowingly incomplete; `every-subset` is complete and
+   knowingly wrong; a caller holding its own program rules should pass those
+   instead. Use `applicable-modifiers` to see what it is choosing among.
 
    Each arrangement is a map:
      :urpx.arrangement/rate-plan            the coerced base document

@@ -178,7 +178,7 @@
                                  first))]
 
       (testing "the fixture really does state both members, so the expected
-                value is the corpus's own arithmetic and not a constant"
+                value is the filing's own arithmetic and not a constant"
         (is (= 2 (count (filter :urpx/unitPrice member-ps))))
         (is (neg? expected)))
 

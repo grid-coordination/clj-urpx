@@ -592,8 +592,8 @@
                       (assoc minimal-version
                              :urpx/forRatePlan {:jsonld/id "urpx:rp-1"}
                              :urpx/hasCoverageClaim {:jsonld/id "urpx:cc-1"}))))
-    (testing "both stay OPTIONAL until the last migration wave: v0.5.1 requires
-              them 1..1, but the whole v0.2.x corpus omits them"
+    (testing "both stay OPTIONAL while v0.2.x is accepted: v0.5.1 requires
+              them 1..1, but every v0.2.x document omits them"
       (is (m/validate s/RatePlanVersion minimal-version)))
     (testing "a malformed claim cannot slip through the reference arm, because
               that arm is ExclusiveRef rather than the open Ref"
@@ -706,8 +706,8 @@
                 :urpx/sourcePublication {:jsonld/id "pge:pub-1"}
                 :urpx/hasSelector {:jsonld/id "pge:sel-1"}}]
       (is (nil? (m/explain s/DataSourceReference (coerce/coerce s/DataSourceReference flat))))))
-  (testing "the v0.2.x nested form still validates: every filing in the corpus
-            carries it and nothing is removed until the last wave"
+  (testing "the v0.2.x nested form still validates, since v0.2.x filings carry
+            it"
     (let [nested {:jsonld/type "urpx:DataSourceReference"
                   :urpx/fileName "x.pdf"
                   :urpx/hasTariffBookReference
@@ -721,8 +721,8 @@
               :urpx/filingNumber "ELEC-4321-E"
               :urpx/issuingAuthority "CPUC"
               :urpx/publicationType {:jsonld/id "urpx:tariffBook"}}]
-    (testing "both the v0.5.1 and the v0.2.x @type validate, because the corpus
-              carries both at once through the waves"
+    (testing "both the v0.5.1 and the v0.2.x @type validate, because a set of
+              filings migrating utility by utility carries both at once"
       (is (m/validate s/SourcePublication (assoc base :jsonld/type "urpx:SourcePublication")))
       (is (m/validate s/SourcePublication (assoc base :jsonld/type "urpx:TariffPublication"))))
     (testing "an unrelated @type does not"
@@ -788,16 +788,15 @@
       (is (not (m/validate schema {:jsonld/id (str/upper-case (str "urpx:" (first members)))}))
           (str label " membership is exact, not case-insensitive")))))
 
-(deftest publication-type-accepts-the-legacy-corpus-value
+(deftest publication-type-accepts-the-legacy-value
   (testing "the 8 v0.5.1 members are accepted"
     (doseq [m ["tariffBook" "tariffStatement" "tariffSupplement" "tariffAddendum"
                "supplyCharges" "derExports" "highlyDynamicPrices" "marketPriceFeed"]]
       (is (m/validate s/SourcePublicationType {:jsonld/id (str "urpx:" m)}))))
   (testing "urpx:regulatoryFiling is accepted as a documented legacy member: it
             belonged to the retired 10-member urpx:PublicationTypeValue, has no
-            successor among the 8, and is the only publicationType value the
-            corpus uses (8 occurrences across 6 filings). Enforcing the v0.5.1
-            list alone would reject those filings."
+            successor among the 8, and v0.2.x filings may carry it. Enforcing the
+            v0.5.1 list alone would reject those filings."
     (is (m/validate s/SourcePublicationType {:jsonld/id "urpx:regulatoryFiling"})))
   (testing "the other retired members are NOT readmitted"
     (doseq [m ["amendment" "notice" "order" "supplement" "tariffBookLeaves"
@@ -930,9 +929,8 @@
 
 (deftest version-snapshots-require-change-reason-and-service-role
   (testing "both are sh:minCount 1 on the version shapes, and have been since
-            v0.2.1. All 84 version snapshots across the corpus carry both, so
-            requiring them costs nothing on real data; clj-urpx accepted
-            snapshots the standard rejects until now."
+            v0.2.1, so clj-urpx accepted snapshots the standard rejects until
+            now."
     (let [v {:jsonld/type "urpx:RatePlanVersion"
              :urpx/changeReason {:jsonld/id "urpx:rateCase"}
              :urpx/forRatePlan {:jsonld/id "ex:parent"}
@@ -986,9 +984,7 @@
   (testing "urpx:hasTemporalScope appears as sh:path ZERO times in the shapes
             graph and in sh:ignoredProperties 79 times, so every closed shape
             permits it and none constrains it. Modeled 0..N because that is what
-            unconstrained means, not because any filing carries several: there
-            are zero TemporalScope nodes of any kind in the production corpus or
-            the vendored fixtures.
+            unconstrained means, not because any filing carries several.
 
             URPX writes a lone value as an object rather than a one-element
             array, so the decoder normalizes."

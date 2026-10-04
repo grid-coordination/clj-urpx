@@ -173,7 +173,7 @@ Which `urpx:ServiceBracket` states those bounds is selected per `urpx:serviceTie
 
 The library uses `java.time.ZonedDateTime` end-to-end internally and at output boundaries — DST-correct under daylight transitions because every step of the walk preserves zone, no `Instant`-to-local-time conversions in the middle of the schedule.
 
-**Everything resolves in the plan's own zone.** A URPX document writes every bound — `urpx:effectiveDateTime`, `urpx:expirationDateTime`, every TOU bracket — as a naive wall-clock reading with no offset: all 89 in the production corpus carry none. They are wall-clock *in the zone the plan declares*, so reading them in any other zone reads a different moment. `resolve-prices` therefore anchors the query in `urpx:timezoneIdentifier` before comparing anything.
+**Everything resolves in the plan's own zone.** A URPX document writes every bound — `urpx:effectiveDateTime`, `urpx:expirationDateTime`, every TOU bracket — as a naive wall-clock reading with no offset. They are wall-clock *in the zone the plan declares*, so reading them in any other zone reads a different moment. `resolve-prices` therefore anchors the query in `urpx:timezoneIdentifier` before comparing anything.
 
 That makes **one moment cost one price, however it is spelled**. It did not used to: until 0.31.0 the query was reduced with `.toLocalDateTime`, which kept whatever zone the caller happened to use, so the same instant written two ways gave two answers — on PG&E E-TOU-C, Peak `0.46886` asked in Pacific and Off-Peak `0.34586` asked in UTC, 36% apart, with no error and no mark.
 
@@ -364,7 +364,7 @@ Covering a **window** is different. A forecast client loads several versions of 
 ;; => resolved against the version in effect at zdt
 ```
 
-The rule is the latest `urpx:effectiveDateTime` at or before the instant, which is inclusive, skipping any version whose `urpx:expirationDate` has passed. No version in the corpus carries an expiration, so a version's span is in practice inferable only from the next version's start; that is why the rule needs a plan's whole candidate set rather than one snapshot.
+The rule is the latest `urpx:effectiveDateTime` at or before the instant, which is inclusive, skipping any version whose `urpx:expirationDate` has passed. A version need not carry an expiration, so a version's span may be inferable only from the next version's start; that is why the rule needs a plan's whole candidate set rather than one snapshot.
 
 `urpx:expectedEndDate` is deliberately **not** read. An expected end anticipates a successor rather than terminating anything, so a version past its expected end with no successor is still the one in force.
 
@@ -416,11 +416,11 @@ They never enter `marginal-unit-rate`, which sums $/kWh: a per-interval figure i
 
 `marginal-unit-rate` sums across every energy ledger. **Within** a ledger it sums the additive rate components and adds the lowest rung of the block-tier ladder, if there is one.
 
-That distinction exists because a ledger is used for two different things. A block tier ladder is mutually exclusive, so only the marginal rung applies. An additive rate stack, which is how delivery charges are modeled throughout this corpus (transmission, distribution, public purpose, wildfire NBC, and the rest), is cumulative and all of it applies.
+That distinction exists because a ledger is used for two different things. A block tier ladder is mutually exclusive, so only the marginal rung applies. An additive rate stack, which is how delivery charges are modeled (transmission, distribution, public purpose, wildfire NBC, and the rest), is cumulative and all of it applies.
 
-Export ledgers are excluded entirely. `urpx:flowDirection urpx:reverse` marks compensation for energy sent back, which is not a cost of the next kWh consumed; summing the two conflates a credit with a charge. Composing PG&E E-ELEC with its NBT modifier produced **-213.15920/kWh** before this, because four export ledgers carrying 4,610 hourly avoided-cost values were added to a 0.56006 import rate. `urpx:net` and `urpx:bidirectional` still contribute: neither appears in the corpus, so excluding them would be speculation. Resolved ledgers carry `:urpx.resolved/flow-direction` when the filing declares one.
+Export ledgers are excluded entirely. `urpx:flowDirection urpx:reverse` marks compensation for energy sent back, which is not a cost of the next kWh consumed; summing the two conflates a credit with a charge. Composing PG&E E-ELEC with its NBT modifier produced **-213.15920/kWh** before this, because four export ledgers carrying 4,610 hourly avoided-cost values were added to a 0.56006 import rate. `urpx:net` and `urpx:bidirectional` still contribute, because excluding them would be speculation. Resolved ledgers carry `:urpx.resolved/flow-direction` when the filing declares one.
 
-`urpx:serviceTierNumber` is what separates them: a numbered tier belongs to a ladder, a bare one is a component. URPX has no vocabulary declaring which kind a ledger is, so this is the signal available rather than the signal designed. Across 40 base plans at four instants, multi-tier energy ledgers were 183 additive, 31 ladder, and 3 mixed — all three being the same ledger. A mixed ledger contributes its bare components plus the lowest numbered rung.
+`urpx:serviceTierNumber` is what separates them: a numbered tier belongs to a ladder, a bare one is a component. URPX has no vocabulary declaring which kind a ledger is, so this is the signal available rather than the signal designed. A mixed ledger contributes its bare components plus the lowest numbered rung.
 
 ### Plans that price nothing per kWh
 
@@ -490,14 +490,14 @@ Four outcomes, given the caller's `:profile-alternatives`. That map is keyed by 
 
 | the definition | outcome |
 |---|---|
-| references no alternative | applies, as every filing does today |
+| references no alternative | applies, as in every vendored fixture |
 | references the chosen one | applies |
 | references a **different** one in that dimension | filtered out silently: it genuinely does not apply, exactly as an out-of-season definition does not |
 | references one in a dimension nothing was chosen for | prices **withheld**, and the ledger says so |
 
 The same four outcomes decide a `ServiceTiers` container or a `ServiceBracket`, but the fourth one withholds a different thing: the tier's **bounds**, under `:urpx.resolved/tier-bounds-unresolved` with `:reason :alternative-unselected`, rather than prices on the ledger. The tier still surfaces with its number and unit price.
 
-Naming **several** alternatives on one definition refuses with `:multiple-profile-alternatives`. The shapes permit it (`sh:minCount 0`, no `sh:maxCount`) and no filing uses it; a matrix does not need it, because the conjunction already lives inside the cell. Defining a rule for a shape nothing has is how an arbitrary pick gets built in.
+Naming **several** alternatives on one definition refuses with `:multiple-profile-alternatives`. The shapes permit it (`sh:minCount 0`, no `sh:maxCount`) and no vendored fixture uses it; a matrix does not need it, because the conjunction already lives inside the cell. Defining a rule for a shape nothing has is how an arbitrary pick gets built in.
 
 A definition that names an alternative no `ProfileAlternatives` in the document declares is treated as the fourth row, not as an error: which one applies is unknown for the same reason, and a composition whose container lives in the other document should withhold rather than hard-fail.
 
@@ -521,9 +521,7 @@ A `urpx:Price` may carry a `urpx:ConditionExpression`: *applies only if the cust
 
 Gated tiers carry `:urpx.resolved/condition-gated`, naming each gate's `@id`, its name, and whether it hangs off the Price or the PriceDefinition. `marginal-unit-rate` **refuses** with `:condition-gated-tier` when such a price would enter its sum, because summing it reports the assumption as a number. Pass `:assume-conditions-hold? true` for the every-condition-true upper bound, exactly as `:include-dynamic-pricing? true` gives the during-event one.
 
-Measured across the production corpus, this changes 35 of 172 composed resolutions on five base plans, and leaves discounts alone: no `urpx:PriceSummary` member carries a gated price, so CARE and FERA compositions answer exactly as before.
-
-The guard is scoped to prices that would actually be summed. Across the production corpus, 100,640 of 101,992 gated tiers are export prices in net-billing matrices where the gate *is* the lookup key (which vintage, which month, which hour); `urpx:flowDirection urpx:reverse` has kept those out of the marginal since 0.21.0, and they do not refuse it either.
+The guard is scoped to prices that would actually be summed. Export prices in net-billing matrices are gated because the gate *is* the lookup key (which vintage, which month, which hour); `urpx:flowDirection urpx:reverse` has kept those out of the marginal since 0.21.0, and they do not refuse it either.
 
 **Two different things reach this refusal, and only one of them is really about conditions.** SCE's CCA-CRS files twenty PCIA vintages as twenty gated prices, one per vintage year, of which exactly one applies to any customer; summing all twenty took SCE TOU-D-PRIME from `0.60067` to `0.95664` where the true range is `0.59423` to `0.62691`. That is the same defect this function already refuses when a filing states it as `urpx:PriceSetAlternatives`, which is how PG&E files the identical concept. Refusing both means the answer no longer depends on which layer a filer happened to use. Where exclusivity is what is meant, the filing wants `ProfileAlternatives`, and the choice then becomes the caller's to make rather than a predicate nobody can evaluate.
 
@@ -593,7 +591,7 @@ So a segment from `segments-for` and a coverage window compare with no conversio
 (ti/relation segment (cov/coverage-interval report zone)) ; => :during
 ```
 
-**`verdict-applies?` refuses on every real filing today.** Zero `TemporalScope` nodes of any kind exist in the production corpus or the fixtures, so `:coverage-scope-absent` is what a price server meets first. That is not a bug: returning `false` would claim the verdict does not cover the window, which no document said, and `true` would be worse. A caller that publishes anyway is choosing its own policy, and catching a named reason is how it says so.
+**`verdict-applies?` refuses when a claim states no coverage scope.** No shape requires one, so `:coverage-scope-absent` is what a price server should expect to meet first. That is not a bug: returning `false` would claim the verdict does not cover the window, which no document said, and `true` would be worse. A caller that publishes anyway is choosing its own policy, and catching a named reason is how it says so.
 
 ### What it refuses
 
@@ -626,7 +624,7 @@ A resolution that throws inside the window becomes a segment carrying `:urpx.int
 
 ### What may apply, and what does apply
 
-The library answers the first; only the caller can answer the second. `urpx:applicableToRatePlan` states which plans a modifier may apply to, and is populated on every modifier version in the production corpus. Which of them a given **customer holds** is not in any document, because URPX places customer data outside its scope (`urpx:AccountServiceAgreement` carries the note "Service account and agreement data lives in customer data, not URPX").
+The library answers the first; only the caller can answer the second. `urpx:applicableToRatePlan` states which plans a modifier may apply to. Which of them a given **customer holds** is not in any document, because URPX places customer data outside its scope (`urpx:AccountServiceAgreement` carries the note "Service account and agreement data lives in customer data, not URPX").
 
 So the discovery functions are queryable on their own, without enumerating anything:
 
@@ -650,14 +648,14 @@ Nothing in URPX expresses exclusivity or combinability **between** modifiers, so
 | `named-versions-narrow` (default) | those versions and no others, overriding the plan list. Fits the ontology's "which **specific** versions", and is the only reading under which the property can express a restriction. Known cost: **non-monotonic**, so merging a document can *remove* compatibility |
 | `named-versions-add` | an addition to the plan list, never a removal. Sound under RDF merge. Known cost: the property can then only widen, and only to a version whose plan is not already named |
 
-The two are indistinguishable on most corpora. They can differ only about a modifier that names some version *and* names a plan no named version belongs to — and on the production corpus every such modifier is one that `:repeated-ids` resolves away first. An independent reference enumerator reaches the same conclusion by a different route: it resolves repeated `@id`s by authority rather than union, and narrows, but its narrowing never fires because every authority definition stating `applicableToRatePlanVersion` names a version of the only plan it names. The choice is currently unfalsifiable against real data under either strategy, which is why both ship.
+They differ only when a modifier names some version, and only about a base version it does not name whose plan it names. Documents that never take that shape cannot settle the choice, which is why both ship.
 
 **What one `@id` naming several different snapshots means is a third policy**, `:repeated-ids`, because URPX does not say and a client reading one filing wants a different answer from a client merging a corpus.
 
 | `:repeated-ids` policy | Does |
 |--------|--------|
 | `repeated-ids-refuse` (default) | refuses `:conflicting-version-id`, naming every offending `@id` at once. An `@id` identifies a thing, so two different things under one is a contradiction rather than a choice |
-| `repeated-ids-union` | merges them property by property, the reading a corpus whose own SHACL gate validates a *merged* graph already assumes |
+| `repeated-ids-union` | merges them property by property, the RDF reading of several documents describing one IRI |
 
 Byte-identical repeats are never a conflict under either: one version published in two filings is one version, and it is deduplicated.
 
@@ -701,7 +699,7 @@ That list is not hypothetical. A consumer composing these by hand from an earlie
 
 ### What gets discarded, and how to notice
 
-`coerce-doc` returns `nil` for an entity type this library does not model, so `document-xf` drops it **silently**. Over the production corpus that is 42 of 129 expanded entities: `urpx:ProgramEnrollment` 30, `urpx:SourcePublication` 8, `urpx:RateCase` 4.
+`coerce-doc` returns `nil` for an entity type this library does not model, so `document-xf` drops it **silently**, for example `urpx:ProgramEnrollment`, `urpx:SourcePublication` and `urpx:RateCase`.
 
 None is a version today, which is luck rather than design. `scan` does the same work in one pass and reports the discards, so a caller can assert what it could not before:
 
@@ -755,9 +753,9 @@ The verdict is **not this library's judgement**. Per the ontology, claims "are p
 
 **Absent is not `unknown`.** A version with no claim reports `:stated? false` and `:completeness nil`, never `"urpx:unknown"`. `urpx:unknown` is itself a verdict, meaning no evaluation has run, so a document asserting it has said something a document omitting the claim has not.
 
-**`selfContained true` is not "complete", and here it is vacuous.** It is derived as "false iff any `PriceDefinitionReference` is `retrievedElsewhere`", and there are zero such references in the production corpus or the vendored fixtures, so the existential ranges over an empty set. It is `true` on all 80 corpus version nodes and means only "nothing here is fetched from elsewhere".
+**`selfContained true` is not "complete", and can be vacuous.** It is derived as "false iff any `PriceDefinitionReference` is `retrievedElsewhere`", so on a snapshot with no such reference the existential ranges over an empty set. It means only "nothing here is fetched from elsewhere".
 
-**A verdict states no window.** The `CoverageClaim` note says producers *should* attach a `TemporalScope` with `scopeKind urpx:coverage` saying what the verdict covers. Measured: **zero** `TemporalScope` nodes of any kind across the corpus and the fixtures. So a consumer publishing a horizon cannot assume a verdict covers it. `:scope-stated?` and `:coverage-window` are separate for the same reason: `scopeKind` is the only required field on a scope, so one can name its role and bound nothing.
+**A verdict states no window.** The `CoverageClaim` note says producers *should* attach a `TemporalScope` with `scopeKind urpx:coverage` saying what the verdict covers, and no shape requires one. So a consumer publishing a horizon cannot assume a verdict covers it. `:scope-stated?` and `:coverage-window` are separate for the same reason: `scopeKind` is the only required field on a scope, so one can name its role and bound nothing.
 
 ### Conformance, as distinct from validity
 
@@ -769,7 +767,7 @@ The verdict is **not this library's judgement**. Per the ontology, claims "are p
 | `:self-contained-disagrees` | `urpx:selfContained` may appear on the claim and the version and "MUST agree". `urpx.coverage` reads such a document without refusing, because the same note settles which wins; the violated MUST is the validator's business |
 | `:unparseable-target-version` | a document names a target this cannot read, so whether the claim rule applies is unknown. Said out loud rather than skipped |
 
-`urpx:targetURPXVersion` is found by a **deep** walk: it sits on the `urpx:URPXPackage` wrapper in most filings and on a node inside the `@graph` in the rest. Every filing in the production corpus and every vendored fixture declares it, all `v0.5.1`.
+`urpx:targetURPXVersion` is found by a **deep** walk: it sits on the `urpx:URPXPackage` wrapper in most filings and on a node inside the `@graph` in the rest.
 
 ### What it refuses
 
@@ -779,7 +777,7 @@ The verdict is **not this library's judgement**. Per the ontology, claims "are p
 | `:urpx.coverage/claim-ref-unresolved` | the claim is a bare `@id` that cannot be followed. A reference going nowhere is not the same as no claim |
 | `:urpx.coverage/self-contained-contradicts-references` | the claim asserts `selfContained true` while a `PriceDefinitionReference` is `retrievedElsewhere`, contradicting the property's own derivation with no stated precedence |
 | `:urpx.coverage/ambiguous-coverage-scope` | more than one scope names `urpx:coverage`. A verdict covers one window and nothing says which is meant |
-| `:urpx.coverage/coverage-scope-absent` | `coverage-interval` or `verdict-applies?` asked about a claim with no `urpx:coverage` scope. Every filing in the corpus today |
+| `:urpx.coverage/coverage-scope-absent` | `coverage-interval` or `verdict-applies?` asked about a claim with no `urpx:coverage` scope, which no shape requires |
 | `:urpx.coverage/coverage-scope-unbounded` | a coverage scope naming its role and no bounds, which `scopeKind` being the only required field permits. It asserts a role, not a window |
 | `:urpx.coverage/zone-required` | a coverage window was asked for with no `ZoneId`. URPX states the bounds without one and any default would be this library's invention |
 
@@ -939,7 +937,7 @@ For a longer worked walkthrough that mirrors selected examples from the upstream
 
 Targets **URPX v0.5.1** (urpx-org/urpx `95eb8e22`) while continuing to accept **v0.2.x** in full.
 
-That dual acceptance is deliberate, not transitional debt: the production corpus migrates utility by utility in six waves and carries both vocabularies at once for the whole migration, so anything phrased as a hard cut is wrong until the last wave lands. Where v0.5.1 renamed or moved something, both spellings validate; where it made something required that v0.2.x never had, clj-urpx models it optional and says so at the site.
+That dual acceptance is deliberate, not transitional debt: a set of filings migrating utility by utility carries both vocabularies at once for the whole migration, so anything phrased as a hard cut is wrong until the last filing migrates. Where v0.5.1 renamed or moved something, both spellings validate; where it made something required that v0.2.x never had, clj-urpx models it optional and says so at the site.
 
 Release history is in [CHANGELOG.md](CHANGELOG.md).
 
@@ -950,8 +948,8 @@ Currently covered:
 - Top-level document classes parse, coerce and validate against Malli schemas: `urpx:RatePlan`, `urpx:RatePlanModifier`, both version snapshots, and both wrapper classes. The loader descends a wrapper transparently, so consumers target inner entities by `@type` regardless of packaging shape (bare entity, `@graph` bundle, or wrapper). `urpx.core/expand-document-entities` exposes that descent for consumers walking a document themselves
 - Both wrapper vocabularies at once: `urpx:URPXDocument` and `urpx:URPXPackage`, its v0.3.0 rename, which drops `urpx:hasTariffPublication` and adds the general `urpx:packages` containment pointer
 - **The version hop resolves either direction.** v0.5.1 un-nests the snapshot: a document may state the plan-to-version link downward (`urpx:hasRatePlanVersion`, nested), upward (`urpx:forRatePlan` on a top-level snapshot), or both. `urpx.index/versions-by-plan` indexes the back-pointer, and `resolve-prices` takes an explicit `:version`, falls back to the nested pointer, then to that index. Both pointers are 0..N upstream and are accepted as such; with more than one nested snapshot and no explicit choice, resolution throws rather than picking arbitrarily, because which snapshot applies to an instant is a selection question the vocabulary does not yet settle
-- **v0.5.1 coverage machinery**: `urpx:CoverageClaim`, `urpx:Evaluation`, `urpx:ModelExclusion` and `urpx:PriceDefinitionReference`, with `urpx:forRatePlan` and `urpx:hasCoverageClaim` on the snapshots. Both are `sh:minCount 1` upstream and are held optional here until the last migration wave
-- **Enum membership is enforced** on the reframe vocabularies (`completenessResult`, `referenceInclusion`, `confidence`, `evaluationKind`, `exclusionReason`, `publicationType`), transcribed from the shipped `sh:in` lists. `publicationType` also accepts `urpx:regulatoryFiling`, a member of the retired 10-member class with no v0.5.1 successor that is the only value the corpus actually uses
+- **v0.5.1 coverage machinery**: `urpx:CoverageClaim`, `urpx:Evaluation`, `urpx:ModelExclusion` and `urpx:PriceDefinitionReference`, with `urpx:forRatePlan` and `urpx:hasCoverageClaim` on the snapshots. Both are `sh:minCount 1` upstream and are held optional here, because requiring them would reject every v0.2.x document
+- **Enum membership is enforced** on the reframe vocabularies (`completenessResult`, `referenceInclusion`, `confidence`, `evaluationKind`, `exclusionReason`, `publicationType`), transcribed from the shipped `sh:in` lists. `publicationType` also accepts `urpx:regulatoryFiling`, a member of the retired 10-member class with no v0.5.1 successor, which a v0.2.x filing may carry
 - **The publication split**: `urpx:SourcePublication` (dual-accepting the v0.2.x `urpx:TariffPublication` `@type`) and `urpx:TariffFiling`
 - **Typed identity**: `RatePlanIdentifier`, `RatePlanModifierIdentifier` and `OrganizationIdentifier` on plans, modifiers and their snapshots, each requiring `skos:notation` and `urpx:scheme`. `urpx:IdentifierScheme` is an open class upstream, so an implementer's own scheme IRI is accepted
 - **`DataSourceReference` flattening**: v0.5.1 deleted `urpx:TariffBookReference` and `urpx:TariffStatementReference` and hoisted their fields inline; both forms validate
@@ -975,7 +973,7 @@ Currently covered:
 
 Known gaps:
 
-- Tier bounds on the modifier path: a `urpx:RatePlanModifier`'s `urpx:ServiceTiers` is read by nothing, so its tiers surface with no tier number and no bounds. The corpus's only bracket-qualified filing is that shape, PG&E's E-TOU-C baseline-tier modifier: one container of three tiers, each holding 40 brackets, one per cell of its 20 (`baselineTerritory` x `baselineCode`) x 2 seasons matrix
+- Tier bounds on the modifier path: a `urpx:RatePlanModifier`'s `urpx:ServiceTiers` is read by nothing, so its tiers surface with no tier number and no bounds. The only bracket-qualified fixture is that shape, PG&E's E-TOU-C baseline-tier modifier: one container of three tiers, each holding 40 brackets, one per cell of its 20 (`baselineTerritory` x `baselineCode`) x 2 seasons matrix
 - `urpx:referencesServiceBracket` on `Price`, `PriceDefinition`, `PriceSet` and `PriceSetAlternative` is modeled and round-trips, but is read by no resolver: a Price naming one bracket directly while tier selection picks a different one will disagree, with nothing in the result to say so
 - A container-level `urpx:referencesMetricInput` does not narrow a tier-number clash: two `urpx:ServiceTiers` declaring one `urpx:serviceTierNumber` with different bounds refuse even when each is scoped to a different metric
 - Programmatic interpretation of `urpx:ConditionExpression` for active-tier selection in matrix-style modifiers — currently the caller picks the active value by `price-id` after walking the condition tree itself
@@ -989,7 +987,7 @@ It is an auditor, not a generator. Nothing it produces is compiled or shipped. D
 
 ## Command-line validation
 
-Check any single URPX JSON-LD file, which is what a per-wave conversion smoke test needs while a corpus migrates utility by utility:
+Check any single URPX JSON-LD file, which is what a conversion smoke test needs while a set of filings migrates utility by utility:
 
 ```bash
 clojure -M:validate path/to/filing.jsonld [more.jsonld ...]

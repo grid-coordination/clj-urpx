@@ -147,10 +147,9 @@
             filings and on a node inside the @graph in the rest, so a top-level
             read finds it in some documents and not others.
 
-            Measured: every one of the 73 production filings and all 23 vendored
-            fixtures declare it, all v0.5.1. A shallow search made four fixtures
-            look as though they stated none, which would have silently skipped
-            the coverage-claim rule on exactly the documents it applies to."
+            A shallow search made four fixtures look as though they stated
+            none, which would have silently skipped the coverage-claim rule on
+            exactly the documents it applies to."
     (let [graph-shaped (validate/check-file
                         (.getPath (fixtures/fixture-resource "pge-e-1-2026-03-01")))
           wrapped      (validate/check-file

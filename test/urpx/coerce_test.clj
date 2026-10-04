@@ -90,7 +90,7 @@
         ;; Per upstream urpx 423e83f, bounds live on ServiceBracket(s)
         ;; attached via ServiceTier.hasServiceBracket. (first ...) reads the
         ;; bound because each of this fixture's tiers carries exactly one
-        ;; bracket: a property of pge-e-1, not of the corpus (one fixture's
+        ;; bracket: a property of pge-e-1, not of the fixtures (one fixture's
         ;; tiers carry 40 brackets each) and not of the resolver, where
         ;; select-tier-bracket does the choosing.
         (is (every? #(instance? BigDecimal
@@ -189,7 +189,7 @@
 
 (deftest urpx-document-rejected-when-target-version-missing
   (testing "URPX-1ii / Decision #103: missing urpx:targetURPXVersion fails
-            Malli validation — corpus filings retrofit must add the field."
+            Malli validation, so a retrofitted filing must add the field."
     (let [no-version (dissoc valid-urpx-document-raw :urpx/targetURPXVersion)
           coerced (coerce/coerce-urpx-document no-version)
           err (coerce/explain schema/URPXDocument coerced)]

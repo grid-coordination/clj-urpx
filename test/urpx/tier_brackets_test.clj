@@ -142,7 +142,7 @@
   {:profile-alternatives {"test:pas-income" alternative}})
 
 ;; ---------------------------------------------------------------------------
-;; The unqualified case, which is the whole corpus
+;; The unqualified case, which is every tiered fixture
 ;; ---------------------------------------------------------------------------
 
 (deftest an-unqualified-bracket-supplies-its-bounds
@@ -646,7 +646,7 @@
       (is (not-any? :urpx.resolved/tier-bounds-unresolved july)))))
 
 (deftest no-vendored-fixture-carries-a-bounds-mark
-  (testing "the corpus-wide net. Every tiered base-plan fixture takes the
+  (testing "the fixture-wide net. Every tiered base-plan fixture takes the
             unqualified short-circuit, so none of them reads the date, the
             seasons or the selection to find its bounds, and none can acquire
             the new key. A failure here means a fixture gained a qualifier and

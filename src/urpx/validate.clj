@@ -1,11 +1,8 @@
 (ns urpx.validate
   "Command-line validator for a single URPX JSON-LD file.
 
-  Complements, rather than replaces, the corpus gate that lives in the
-  urpx-rate-plans repo: that one walks a fixed tree, takes no path argument,
-  and is named for a single URPX version. This checks any one file, which is
-  what a per-wave conversion smoke test needs while a corpus migrates utility
-  by utility and carries two vocabularies at once.
+  Checks any one file, which is what a conversion smoke test needs while a set
+  of filings migrates utility by utility and carries two vocabularies at once.
 
       clojure -M:validate path/to/filing.jsonld [more.jsonld ...]
 
@@ -82,17 +79,13 @@
    it to, so the claim rule would be UNVERIFIABLE there rather than broken.
    Reporting such a document nonconformant would be wrong; saying nothing would
    make an unapplied rule look like a passed one, which is the pattern this
-   repository keeps finding. No filing in the production corpus is that shape
-   today, which is why the branch is constructed in the tests rather than
-   observed.
+   repository keeps finding. The tests construct that branch.
 
    `entities` must be the DEEP walk of a document, not its top-level entities.
-   urpx:targetURPXVersion sits on the urpx:URPXPackage wrapper in 67 of the 73
-   production filings and on a node inside the @graph in the other 6, so a
-   top-level read finds it in some documents and not others. Every filing in the
-   corpus and every vendored fixture declares it, all v0.5.1; the appearance
-   that some did not was a shallow search, which is the same mistake in
-   miniature that this function exists to catch."
+   urpx:targetURPXVersion may sit on the urpx:URPXPackage wrapper or on a node
+   inside the @graph, so a top-level read finds it in some documents and not
+   others. A shallow search once made declaring filings look undeclared, which
+   is the same mistake in miniature that this function exists to catch."
   [entities]
   (let [target (some target-urpx-version entities)
         v051+  (and (vector? target) (>= (compare target [0 5]) 0))

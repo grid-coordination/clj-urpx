@@ -184,8 +184,6 @@
    something about itself and should be validated as a node of that type, not
    waved through as a reference; without this, an @id paired with any @type at
    all passes whatever slot it sits in.
-   Every one of the 15,295 bare references in the urpx-rate-plans corpus carries
-   @id and nothing else, so this costs nothing real.
 
    Use `Ref` for reference-only properties, where no inline form is permitted
    and openness costs nothing."
@@ -262,20 +260,17 @@
    Value-suffixed at 95eb8e22, same 8 members. Do NOT reuse the retired
    10-member urpx:PublicationTypeValue, which has zero occurrences at v0.5.1.
 
-   urpx:regulatoryFiling, a member of that retired class, was accepted here as
-   a documented legacy value while the corpus still emitted it. Migration wave
-   6 finished and it is gone: the corpus now models the same node as
-   urpx:tariffSupplement, following upstream's own v0.5.1 test case for the
-   identical Advice Letter rather than inventing a parallel convention. Zero
-   occurrences remain in the corpus. The allowance is RETAINED anyway, because
-   removing it would reject a v0.2.x urpx:TariffPublication that carries the old
+   urpx:regulatoryFiling, a member of that retired class, is accepted as a
+   legacy value. Upstream's own v0.5.1 test case models an Advice Letter as
+   urpx:tariffSupplement instead. The allowance is RETAINED because removing it
+   would reject a v0.2.x urpx:TariffPublication that carries the old
    member, and this library still advertises v0.2.x acceptance. Drop it when
    that promise is withdrawn."
   (enum-ref "tariffBook" "tariffStatement" "tariffSupplement" "tariffAddendum"
             "supplyCharges" "derExports" "highlyDynamicPrices" "marketPriceFeed"
             ;; RETAINED pending a decision: dropping it would reject a v0.2.x
             ;; urpx:TariffPublication carrying it, and this library advertises
-            ;; v0.2.x acceptance. The corpus no longer emits it.
+            ;; v0.2.x acceptance.
             "regulatoryFiling"))
 
 (def NodeIdentity
@@ -411,7 +406,7 @@
    ;; definition, which is how a multi-dimensional matrix declares exclusivity
    ;; readably rather than burying it in ApplicabilityRule predicates nothing
    ;; evaluates. `urpx.price` reads ONE; several refuse rather than inventing a
-   ;; conjunctive reading for a shape no filing has.
+   ;; conjunctive reading for a shape no vendored fixture has.
    [:urpx/referencesProfileAlternative
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
@@ -508,7 +503,7 @@
    bounds off a monthly fixed charge tiered by consumption, which is a real
    filing shape rather than a modeling error (URPX-c0d).
 
-   No ServiceTiers in the vendored corpus carries either qualifier. The PG&E
+   No ServiceTiers in the vendored fixtures carries either qualifier. The PG&E
    E-TOU-C baseline-tier modifier is not the per-cell shape: it carries one
    container of three tiers, 40 brackets each, and states its
    20 (territory, code) x 2 season matrix per urpx:ServiceBracket.
@@ -1003,8 +998,7 @@
   "v0.2.x only. urpx:TariffBookReference was DELETED upstream in bbaea780 and
    has zero occurrences in the v0.5.1 ontology and SHACL; its fields moved
    inline onto urpx:DataSourceReference, whose shape is now sh:closed. Retained
-   to validate v0.2.x filings, which is every filing in the corpus today.
-   Remove only once the last migration wave lands."
+   to validate v0.2.x filings, which this library advertises it accepts."
   [:map
    [:jsonld/type [:= "urpx:TariffBookReference"]]
    [:jsonld/id {:optional true} :string]
@@ -1051,7 +1045,7 @@
    [:urpx/sourcePublication {:optional true} Ref]
    ;; Enum membership deliberately unenforced here; see the enum issue.
    [:urpx/tariffStatementType {:optional true} Ref]
-   ;; v0.2.x nesting, kept so every corpus filing still validates. The
+   ;; v0.2.x nesting, kept so v0.2.x filings still validate. The
    ;; flattened form above is what a v0.5.1 filing carries instead.
    [:urpx/hasTariffBookReference {:optional true} TariffBookReference]])
 
@@ -1181,10 +1175,9 @@
    [:urpx/selfContained    {:optional true} :boolean]
    ;; The skos:note on urpx:CoverageClaim says producers "should attach a
    ;; TemporalScope with scopeKind coverage stating the window the verdict
-   ;; covers". Should, not must, and no shape enforces it: measured zero
-   ;; TemporalScope nodes of any kind across the production corpus and the
-   ;; vendored fixtures. A verdict that states no window is the normal case
-   ;; today, which is what makes reading one worth doing carefully.
+   ;; covers". Should, not must, and no shape enforces it, so a verdict that
+   ;; states no window is conformant, which is what makes reading one worth
+   ;; doing carefully.
    [:urpx/hasTemporalScope
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector [:or TemporalScope ExclusiveRef]]]
@@ -1406,12 +1399,10 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
    ;; v0.5.1 coverage machinery, both sh:minCount 1 sh:maxCount 1 upstream.
-   ;; STILL OPTIONAL, and no longer because of the corpus. Migration wave 6
-   ;; finished and all 84 snapshots now carry both (40 forRatePlan + 44
-   ;; forRatePlanModifier, 84 hasCoverageClaim), so tightening would reject
-   ;; nothing there. It would reject every v0.2.x document, which has neither
-   ;; term, and this library advertises v0.2.x acceptance. Requiring these ends
-   ;; that promise; it is a contract decision, not a conformance one.
+   ;; STILL OPTIONAL: requiring them would reject every v0.2.x document, which
+   ;; has neither term, and this library advertises v0.2.x acceptance.
+   ;; Requiring these ends that promise; it is a contract decision, not a
+   ;; conformance one.
    [:urpx/forRatePlan {:optional true} Ref]
    [:urpx/hasCoverageClaim {:optional true} [:or CoverageClaim ExclusiveRef]]
    [:urpx/selfContained {:optional true} :boolean]
@@ -1467,7 +1458,7 @@
     [:vector Ref]]
    ;; 0..N upstream: sh:minCount 0 and no sh:maxCount. Accepts a single nested
    ;; snapshot or several. Deliberately NOT normalized to a vector by a decoder:
-   ;; every filing in the corpus nests exactly one, and forcing a vector would
+   ;; a filing nesting one snapshot coerces to a map, and forcing a vector would
    ;; change the coerced shape every consumer already reads. Readers go through
    ;; `urpx.index/nested-version`, which refuses to guess when there is more
    ;; than one rather than silently resolving against an arbitrary snapshot.
@@ -1528,12 +1519,10 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
    ;; v0.5.1 coverage machinery, both sh:minCount 1 sh:maxCount 1 upstream.
-   ;; STILL OPTIONAL, and no longer because of the corpus. Migration wave 6
-   ;; finished and all 84 snapshots now carry both (40 forRatePlan + 44
-   ;; forRatePlanModifier, 84 hasCoverageClaim), so tightening would reject
-   ;; nothing there. It would reject every v0.2.x document, which has neither
-   ;; term, and this library advertises v0.2.x acceptance. Requiring these ends
-   ;; that promise; it is a contract decision, not a conformance one.
+   ;; STILL OPTIONAL: requiring them would reject every v0.2.x document, which
+   ;; has neither term, and this library advertises v0.2.x acceptance.
+   ;; Requiring these ends that promise; it is a contract decision, not a
+   ;; conformance one.
    [:urpx/forRatePlanModifier {:optional true} Ref]
    [:urpx/hasCoverageClaim {:optional true} [:or CoverageClaim ExclusiveRef]]
    [:urpx/selfContained {:optional true} :boolean]
@@ -1686,8 +1675,8 @@
    they are siblings.
 
    Dual-accept: the @type admits both the v0.5.1 urpx:SourcePublication and the
-   v0.2.x urpx:TariffPublication, because the corpus migrates utility by
-   utility and carries both at once. That is also why this schema has no DSL
+   v0.2.x urpx:TariffPublication, because a set of filings migrating utility by
+   utility carries both at once. That is also why this schema has no DSL
    builder: `urpx.dsl/make-builder` requires a `[:= \"...\"]` type entry and
    throws on an `:enum`.
 

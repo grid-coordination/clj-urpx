@@ -5,9 +5,9 @@
   The safety property is that the candidate instant set must be a SUPERSET of
   true transitions. An extra candidate merges away harmlessly; a missed one is
   a silently wrong boundary. These tests pin the superset's foundations rather
-  than only its outputs, because an output test on this corpus would pass even
-  if the rule were wrong: every TimeBracket in the corpus except one sits on an
-  hour, so hourly sampling happens to agree."
+  than only its outputs, because an output test would pass even if the rule
+  were wrong wherever every TimeBracket sits on an hour, since hourly sampling
+  then happens to agree."
   (:require [clojure.test :refer [deftest is testing]]
             [urpx.index :as index]
             [urpx.price :as price]
@@ -125,12 +125,12 @@
                           (#'schedule/harvest-literals {:urpx/startDate "2026-03-01"}))))
 
   (testing "a DATE-SHAPED STRING IS NOT EVIDENCE OF ANYTHING on its own.
-            urpx:version is rdfs:range xsd:string, and every filing in the
-            corpus uses the effective date as its version LABEL, so
+            urpx:version is rdfs:range xsd:string, and filings use the
+            effective date as the version LABEL, so
             \"2026-03-20\" is a perfectly coerced string. The first version of
             this guard tested the shape of strings, which reads oddly next to
-            harvesting by java.time type, and rejected all 33 modifier filings
-            in the corpus and therefore every composed horizon.
+            harvesting by java.time type, and rejected real modifier filings
+            and therefore every composed horizon.
 
             The signature of an uncoerced document is having NO java.time
             values at all while carrying date-shaped strings."
@@ -148,8 +148,8 @@
         "one real temporal anywhere is enough to show the document was coerced")))
 
 (deftest a-composed-horizon-segments
-  (testing "every modifier filing in the corpus carries urpx:version as a
-            date-shaped label, so a guard that rejected those rejected every
+  (testing "modifier filings carry urpx:version as a date-shaped label, as the
+            SCE CARE fixture does, so a guard that rejected those rejected every
             COMPOSED horizon, which is the path a price server actually needs."
     (let [base  (fixtures/load-rate-plan "sce-d-2026-03-20")
           care  (fixtures/load-modifier "sce-care-2026-03-20")
@@ -164,8 +164,8 @@
           "and still tile"))))
 
 (deftest a-non-hour-boundary-is-representable
-  (testing "the corpus contains one time literal that is not on an hour,
-            23:59:59, in the NBT filings. An hour grid cannot place a boundary
+  (testing "a time literal need not sit on an hour, as 23:59:59 does not.
+            An hour grid cannot place a boundary
             there at all, and a 15-minute grid would cost 288 samples a day and
             still miss it. Derived candidates place it exactly."
     (let [cands (#'schedule/candidate-instants

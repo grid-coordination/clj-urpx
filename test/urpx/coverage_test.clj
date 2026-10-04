@@ -1,11 +1,9 @@
 (ns urpx.coverage-test
   "Reading what a version snapshot claims about its own coverage.
 
-  Most cases are constructed. The production corpus exercises exactly one
-  configuration of this vocabulary: every claim states completenessResult and
-  selfContained and nothing else, no claim carries a TemporalScope, and
-  confidence, stale and fallbackSourced are absent everywhere. Testing only what
-  the corpus happens to contain would leave every guard here unexercised, which
+  Most cases are constructed. Real filings exercise little of this vocabulary,
+  and testing only what they happen to contain would leave every guard here
+  unexercised, which
   is the point urpx.pd-alternatives-test already makes: the slot has to work
   before a filing can be written against it."
   (:require [clojure.java.io :as io]
@@ -83,9 +81,8 @@
             alongside such a reference contradicts its own definition and no rule
             says whether the assertion or the derivation wins.
 
-            Cannot fire on real data: there are zero PriceDefinitionReference
-            nodes in the corpus or the fixtures, which is exactly why the guard
-            needs constructing."
+            No vendored fixture carries a PriceDefinitionReference, which is why
+            the guard needs constructing."
     (let [e (is (thrown? clojure.lang.ExceptionInfo
                          (cov/of-version
                           (version {:urpx/completenessResult {:jsonld/id "urpx:complete"}
@@ -150,7 +147,7 @@
       (is (false? (:document-supplied? (ex-data e)))))))
 
 (deftest nothing-is-fabricated-on-real-filings
-  (testing "every field the corpus does not populate must come back nil rather
+  (testing "every field a filing does not populate must come back nil rather
             than defaulted. Measured over the vendored fixtures, and the guard
             matters because a default here would look exactly like a filing that
             said something."
@@ -162,7 +159,7 @@
                               :urpx.coverage/fallback-sourced
                               :urpx.coverage/coverage-window) r))
           "confidence, stale, fallbackSourced and any coverage window are absent
-           on every filing in both trees"))))
+           on this fixture"))))
 
 (defn- transitive-requires
   "Every urpx.* namespace `root` reaches, read from the ns forms on disk.
@@ -294,7 +291,8 @@
             modifier's claim against the base plan's document would refuse
             :claim-ref-unresolved, so this passing IS the assertion.
 
-            Constructed because the corpus records no claim by reference."
+            Constructed because no vendored fixture records a claim by
+            reference."
     (let [claim-node {:jsonld/id "x:cc-m" :jsonld/type "urpx:CoverageClaim"
                       :urpx/completenessResult {:jsonld/id "urpx:pending"}}
           mod-doc {:jsonld/id "x:m" :jsonld/type "urpx:RatePlanModifier" :urpx/timezoneIdentifier "America/Los_Angeles"
@@ -315,8 +313,8 @@
 
 (deftest descriptions-carry-the-prose-that-names-the-gap
   (testing "a completeness result says THAT something is missing; the linked
-            Evaluation says WHAT. In this corpus the prose is specific enough to
-            act on, which makes it the thing a consumer deciding whether to
+            Evaluation says WHAT. The prose can be specific enough to act on,
+            which makes it the thing a consumer deciding whether to
             publish a partial snapshot actually reads."
     (let [ds (cov/descriptions (cov/of-arrangement (sce-d+care)))]
       (is (= 1 (count ds)) "one part carries prose")
@@ -399,9 +397,8 @@
                               (zdt 2026 1 1) (zdt 2026 2 1))))))))
 
 (deftest no-coverage-scope-refuses-rather-than-answering
-  (testing "THIS FIRES ON EVERY FILING IN THE PRODUCTION CORPUS, because zero
-            TemporalScope nodes of any kind exist there or in the fixtures. The
-            ontology says producers SHOULD attach one and no shape makes them.
+  (testing "the ontology says producers SHOULD attach a coverage scope and no
+            shape makes them, so a claim with none is conformant.
 
             False would claim the verdict does not cover the window, which the
             document never said; true would be worse. The honest answer is that

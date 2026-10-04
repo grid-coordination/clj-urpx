@@ -3,8 +3,8 @@
 
   These are real migrated filings, not synthetic cases, and they are the first
   end-to-end exercise of the v0.5.1 work against data someone else produced.
-  The v0.2.x PG&E fixtures stay alongside them deliberately: the corpus is
-  mixed-vocabulary for the whole migration, so the suite should prove both
+  The v0.2.x PG&E fixtures stay alongside them deliberately: a set of filings
+  is mixed-vocabulary while it migrates, so the suite should prove both
   vocabularies load through one library rather than proving them one at a time."
   (:require [clojure.test :refer [deftest is testing]]
             [malli.core :as m]
@@ -95,10 +95,9 @@
 
 (deftest both-vocabularies-load-through-one-library
   (testing "the mixed-vocabulary claim, which now needs a SYNTHETIC v0.2.x
-            document to state at all: as of migration wave 6 the corpus is
-            entirely v0.5.1, so no vendored fixture carries the old shape any
-            more. The dual acceptance is still real and still load-bearing for
-            anyone whose filings have not migrated, so it keeps a test; the
+            document to state at all: no vendored fixture carries the old shape
+            any more. The dual acceptance is still real and still load-bearing
+            for anyone whose filings have not migrated, so it keeps a test; the
             test just cannot borrow a fixture for it.
 
             The v0.2.x side below uses every key v0.5.1 moved or renamed:

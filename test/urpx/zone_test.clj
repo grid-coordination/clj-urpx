@@ -4,10 +4,8 @@
   urpx.price used to reduce the caller's ZonedDateTime with .toLocalDateTime and
   compare those wall-clock fields against document bounds that are wall-clock in
   the PLAN's zone. So the answer depended on how the caller wrote the instant,
-  silently, and by up to 36%.
-
-  Reported by the urpx-rate-plans session for version windows. The TOU half was
-  worse and was not reported: their probe instants never sat near a boundary."
+  silently, and by up to 36%. It reached both version windows and TOU
+  brackets."
   (:require [clojure.test :refer [deftest is testing]]
             [urpx.price :as price]
             [urpx.price-test :as price-test]
@@ -137,9 +135,8 @@
 (deftest a-composition-resolves-in-the-base-plans-zone
   (testing "a composition answers ONE question about one moment, so both halves
             resolve in one frame: the base plan's. A modifier may declare its
-            own, and 41 of the 72 production filings do, but resolving the
-            halves in different zones would reintroduce the disagreement the
-            projection exists to remove."
+            own, but resolving the halves in different zones would reintroduce
+            the disagreement the projection exists to remove."
     (let [plan {:jsonld/type "urpx:RatePlan" :jsonld/id "test:base-plan"
                 :urpx/timezoneIdentifier "America/Los_Angeles"
                 :urpx/hasRatePlanVersion

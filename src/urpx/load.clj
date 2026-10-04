@@ -69,11 +69,10 @@
        :urpx.load/uncoercible [{:jsonld/type t :jsonld/id id} ...]}
 
   THE DISCARD IS THE POINT. `document-xf` drops every entity this library does
-  not model, and over the production corpus that is 42 of 129 expanded entities:
-  urpx:ProgramEnrollment 30, urpx:SourcePublication 8, urpx:RateCase 4. None is
-  a version today, which is luck rather than design, and the unlucky form of
-  exactly this cost a whole rate plan once: a version stating only
-  urpx:effectiveDate was dropped by a filter that read only
+  not model, such as urpx:ProgramEnrollment, urpx:SourcePublication and
+  urpx:RateCase. That none of those is a version is luck rather than design,
+  and the unlucky form of exactly this cost a whole rate plan once: a version
+  stating only urpx:effectiveDate was dropped by a filter that read only
   urpx:effectiveDateTime, and nothing said so.
 
   So a caller can assert what it could not before:
@@ -82,9 +81,9 @@
                       (:urpx.load/uncoercible (scan sources))))
 
   Note that \"this library does not model it\" and \"it does not matter\" are
-  different statements. urpx:ProgramEnrollment is 30 of the 42 discards and is
-  modeled nowhere here; whether that matters is the caller's call, and it cannot
-  be made at all while the discard is invisible.
+  different statements. urpx:ProgramEnrollment is modeled nowhere here; whether
+  that matters is the caller's call, and it cannot be made at all while the
+  discard is invisible.
 
   Entries carry `@type` and `@id` only, not the entity, so scanning a large
   corpus does not retain every graph it walked past."

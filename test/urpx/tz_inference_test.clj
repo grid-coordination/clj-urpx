@@ -7,10 +7,10 @@
 (def la (ZoneId/of "America/Los_Angeles"))
 (def ny (ZoneId/of "America/New_York"))
 
-;; v0.2.0 fixtures (post urpx-rate-plans commit 02da66e, retrieved here) carry
-;; both urpx:eiaId and urpx:legalName on Organization. Inference prefers
-;; eiaId (the standardized identifier); legalName remains the documented
-;; fallback for fixtures that omit eiaId — see plan-with-only-legal-name.
+;; v0.2.0 fixtures carry both urpx:eiaId and urpx:legalName on Organization.
+;; Inference prefers eiaId (the standardized identifier); legalName remains the
+;; documented fallback for fixtures that omit eiaId. See
+;; plan-with-only-legal-name.
 
 (deftest pge-zone-inferred-from-eia-id
   (testing "v0.2.0 PG&E fixtures carry urpx:eiaId; inference resolves via

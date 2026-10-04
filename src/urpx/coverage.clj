@@ -15,31 +15,14 @@
   library: not urpx.price, not urpx.arrangements. Nothing in src/ requires it,
   which a test asserts over the whole source tree.
 
-  WHAT THE CORPUS ACTUALLY SAYS, measured at urpx-rate-plans 9deae4dbaa8b over
-  80 distinct version nodes, because it shapes how much a verdict is worth:
-
-    completenessResult   partial 76, complete 4; NOT ONE of the 40 base versions
-                         claims complete
-    selfContained        true on all 80, and VACUOUS: it is defined as \"false
-                         iff any PriceDefinitionReference is referenceInclusion
-                         retrievedElsewhere\", and there are zero
-                         PriceDefinitionReference nodes in the corpus or the
-                         fixtures, so the existential ranges over an empty set
-    confidence           absent on all 80
-    stale                absent on all 80
-    fallbackSourced      absent on all 80
-    explainedBy          present on 76 of 80
-    TemporalScope        ZERO, of any scopeKind, so no verdict anywhere states
-                         the window it covers
-
-  Two consequences worth carrying to a call site. `selfContained true` means
-  \"nothing here is fetched from elsewhere\", which is not \"complete\" and must
-  not be read as reassurance. And a verdict with no scope is the normal case, so
-  a consumer publishing a horizon cannot assume a verdict covers it.
-
-  The vendored fixtures are NOT representative on this axis: 6 of their 13 base
-  versions claim complete where 0 of the corpus's 40 do. A test written only
-  against fixtures shows a picture the production corpus never exhibits."
+  TWO FIELDS ARE EASY TO OVER-READ. `selfContained` is defined as \"false iff
+  any PriceDefinitionReference is referenceInclusion retrievedElsewhere\", so
+  `true` means \"nothing here is fetched from elsewhere\", which is not
+  \"complete\" and must not be read as reassurance; on a snapshot with no
+  PriceDefinitionReference it is vacuously true. And the CoverageClaim note says
+  producers SHOULD attach a TemporalScope with scopeKind urpx:coverage, which no
+  shape requires, so a verdict with no scope is conformant and a consumer
+  publishing a horizon cannot assume a verdict covers it."
   (:require [urpx.index :as index]))
 
 (def completeness-results
@@ -78,7 +61,7 @@
 
    `doc` is the document the version came from, needed only to follow a claim
    recorded as a bare @id reference; the schema admits that arm
-   (`[:or CoverageClaim ExclusiveRef]`) though the corpus uses it nowhere.
+   (`[:or CoverageClaim ExclusiveRef]`).
 
    REFUSES `:urpx.coverage/claim-ref-unresolved` when the claim IS a bare
    reference and cannot be followed, because a reference that goes nowhere is
@@ -353,15 +336,13 @@
    `[{:role :version-id :description} ...]`.
 
    THE PROSE IS THE ONLY PLACE A GAP IS NAMED. A completeness result says THAT
-   something is missing; the linked Evaluation says WHAT, and in this corpus it
-   is specific enough to act on. One filing's description names the five
-   customer groups whose component exemptions it does not represent and states
-   plainly that \"a consumer applying this filing to any of those customers will
-   charge components the tariff exempts\".
+   something is missing; the linked Evaluation says WHAT, and that prose can be
+   specific enough to act on, naming for instance the customer groups whose
+   component exemptions a filing does not represent.
 
    So a consumer deciding whether a `partial` snapshot is publishable is reading
    this, not the verdict keyword. Entries with no description are dropped;
-   `explainedBy` is present on 76 of 80 corpus version nodes, not all."
+   `explainedBy` is optional."
   [arrangement-report]
   (into []
         (for [p (:urpx.coverage/parts arrangement-report)
@@ -437,8 +418,7 @@
                            "its verdict covers is a question the document does "
                            "not answer. The ontology says producers should attach "
                            "a TemporalScope with scopeKind urpx:coverage; no shape "
-                           "requires it, and no filing in the production corpus "
-                           "carries one.")
+                           "requires it.")
                       {:reason :urpx.coverage/coverage-scope-absent
                        :version-id vid})))
     (let [beginning (scope-bound scope :urpx/startDateTime :urpx/startDate)
@@ -476,9 +456,8 @@
    reads the same map; it exists as a named predicate because the refusals are
    the interesting part, not the comparison.
 
-   REFUSES `:urpx.coverage/coverage-scope-absent`, which a price server meets on
-   EVERY real filing today (zero TemporalScope nodes of any kind exist in the
-   production corpus or the vendored fixtures),
+   REFUSES `:urpx.coverage/coverage-scope-absent` for a claim with no
+   urpx:coverage scope, which no shape requires,
    `:urpx.coverage/coverage-scope-unbounded` for a scope that names its role and
    bounds nothing, and `:urpx.coverage/zone-required`.
 

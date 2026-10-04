@@ -127,11 +127,11 @@
    carries date-shaped strings and no java.time values anywhere at all.
 
    It is NOT enough that a date-shaped string exists. urpx:version is
-   `rdfs:range xsd:string` and every filing in the production corpus uses its
-   effective date as the version LABEL, so \"2026-03-20\" is a perfectly
-   coerced string. A shape-based test on strings alone rejected all 33 modifier
-   filings when `urpx.schedule` first tried it, which is why the test is the
-   ABSENCE of real temporals rather than the presence of a string.
+   `rdfs:range xsd:string` and filings use the effective date as the version
+   LABEL, so \"2026-03-20\" is a perfectly coerced string. A shape-based test
+   on strings alone rejected real modifier filings when `urpx.schedule` first
+   tried it, which is why the test is the ABSENCE of real temporals rather than
+   the presence of a string.
 
    A document with no temporal content at all is not uncoerced, merely empty of
    dates, and reports false."

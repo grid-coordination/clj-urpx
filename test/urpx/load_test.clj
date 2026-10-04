@@ -105,11 +105,10 @@
 
 (deftest scan-reports-what-document-xf-discards
   (testing "THE POINT OF scan. coerce-doc returns nil for an entity type this
-            library does not model, so document-xf drops it silently. Over the
-            production corpus that is 42 of 129 expanded entities:
-            urpx:ProgramEnrollment 30, urpx:SourcePublication 8, urpx:RateCase 4.
+            library does not model, so document-xf drops it silently:
+            urpx:ProgramEnrollment, urpx:SourcePublication, urpx:RateCase.
 
-            None is a version today, which is luck rather than design. The
+            None of those is a version, which is luck rather than design. The
             unlucky form of the same thing cost a whole rate plan once: a
             version stating only urpx:effectiveDate was dropped by a filter that
             read only urpx:effectiveDateTime, and nothing said so."

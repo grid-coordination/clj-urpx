@@ -271,9 +271,8 @@
 
    urpx:touPeriodNumber is rdfs:domain the union of urpx:Price,
    urpx:PriceDefinition, urpx:PriceSet and urpx:TOUPeriod, so a Price may carry
-   the TOU link itself. 43 Prices across the corpus do. Only the
-   PriceDefinition was ever read, so those Prices were never gated, with two
-   different wrong answers depending on the path:
+   the TOU link itself. Only the PriceDefinition was ever read, so such Prices
+   were never gated, with two different wrong answers depending on the path:
 
      in a urpx:PriceSummary   every TOU variant of one charge summed into the
                               subtotal. SDG&E EV-TOU's CARE discount came out
@@ -283,9 +282,9 @@
                               reported at EVERY hour. The transmission charge
                               read at its on-peak value around the clock.
 
-   A Price carrying no period is left to its PriceDefinition's gate, which is
-   how every other filing in the corpus states it. A nil resolved period means
-   there is nothing to match against, so nothing is gated out."
+   A Price carrying no period is left to its PriceDefinition's gate. A nil
+   resolved period means there is nothing to match against, so nothing is
+   gated out."
   [price resolved-period-num]
   (let [n (:urpx/touPeriodNumber price)]
     (or (nil? n) (nil? resolved-period-num) (= n resolved-period-num))))
@@ -493,11 +492,11 @@
    selection.
 
    Worth naming because the unqualified case is everything that reaches here:
-   the 18 tiers across the five tiered base-plan filings carry neither
+   the 18 tiers across the five tiered base-plan fixtures carry neither
    property, on the container or on the bracket. `select-tier-bracket`
    short-circuits them without reading the date or the selection at all, so
-   what those filings resolve to cannot depend on any of this. The corpus is
-   not all unqualified: PG&E's E-TOU-C baseline-tier modifier carries 120
+   what those fixtures resolve to cannot depend on any of this. Not every
+   fixture is unqualified: PG&E's E-TOU-C baseline-tier modifier carries 120
    brackets with both properties, and no modifier's tiers reach this path.
 
    A single ref written as a bare map rather than a vector counts as qualified:
@@ -870,8 +869,7 @@
 
    The container's urpx:hasProfileAlternative list and the alternatives its
    PriceSetAlternatives name are two different sets, and nothing in the shapes
-   forces them to agree. Every one of the eight pairs in this corpus agrees, so
-   this changes nothing today; it exists because validating only against the
+   forces them to agree. Where they differ, validating only against the
    container would REFUSE a selection the price path resolves correctly, and
    rejecting a valid document is the expensive direction."
   [alt-index prices]
@@ -896,11 +894,10 @@
 
    Checked once per document rather than per PriceDefinition, because the
    damage is not confined to the definition-level slot: the SAME typo on the
-   urpx:PriceSetAlternatives path, which every filing in the corpus uses, drops
-   the whole ledger and answers short with no mark anywhere. On PG&E E-TOU-C
-   composed with its vintage-PCIA modifier, a stale departure-vintage id
-   returned 0.46886 where the correct id returns 0.49859, and the PCIA ledger
-   was simply absent from the result.
+   urpx:PriceSetAlternatives path drops the whole ledger and answers short with
+   no mark anywhere. On PG&E E-TOU-C composed with its vintage-PCIA modifier, a
+   stale departure-vintage id returned 0.46886 where the correct id returns
+   0.49859, and the PCIA ledger was simply absent from the result.
 
    A key naming a container this document does not declare is left alone, not
    refused: one selection map is passed to the base plan and to every modifier,
@@ -1366,9 +1363,9 @@
                         ;; urpx:serviceTierNumber on both, tier-info at the
                         ;; resolved-tier site has read it that way all along,
                         ;; and reading only the Price here made the fix
-                        ;; unreachable for the 69 of 73 filings that carry the
+                        ;; unreachable for filings that carry the
                         ;; discriminator on the definition. The fixture that
-                        ;; passed is pinned before that idiom was adopted.
+                        ;; passed then carried it on the Price.
                         tier-of (fn [m]
                                   (or (:urpx/serviceTierNumber m)
                                       (:urpx/serviceTierNumber
@@ -1444,13 +1441,12 @@
   "The ZoneId a plan or modifier declares as urpx:timezoneIdentifier, or nil.
 
    THE ZONE EVERY BOUND IN A URPX DOCUMENT IS WRITTEN IN. urpx:effectiveDateTime,
-   urpx:expirationDateTime and every TOU bracket are naive wall-clock readings:
-   measured across the production corpus, all 89 carry no offset. They are
-   wall-clock IN THIS ZONE, so reading them in any other is reading a different
-   moment.
+   urpx:expirationDateTime and every TOU bracket are naive wall-clock readings.
+   They are wall-clock IN THIS ZONE, so reading them in any other is reading a
+   different moment.
 
-   Present on all 72 production filings, on the urpx:RatePlan in 39 and the
-   urpx:RatePlanModifier in 41, so both halves of a composition can be zoned."
+   Read from the urpx:RatePlan or the urpx:RatePlanModifier, so both halves of
+   a composition can be zoned."
   ^ZoneId [doc]
   (when-let [tz (:urpx/timezoneIdentifier doc)]
     (ZoneId/of tz)))
@@ -1536,7 +1532,7 @@
    answer is that the caller asked about an instant this plan does not cover,
    not the earliest version it happens to have.
 
-   No version in the corpus carries an expiration, so a version's span is
+   A version need not carry an expiration, so a version's span may be
    inferable only from the next version's start. That is exactly why the rule
    needs the full candidate set rather than one snapshot."
   [candidates ^ZonedDateTime t ^ZoneId zone plan-id]
@@ -1686,9 +1682,9 @@
 
    Selection used to be `(first ...)` over the back-pointer index, which took
    whatever the index happened to hold first rather than what was in force.
-   That was invisible while every filing carried exactly one version, and six
-   SCE plans in the corpus already carry two. A forecast client loading several
-   versions to cover a window is the case it was silently wrong for."
+   That was invisible while every filing carried exactly one version. A
+   forecast client loading several versions to cover a window is the case it
+   was silently wrong for."
   [plan opts nested-key ^ZonedDateTime zdt]
   (or (version-opt-for plan opts nested-key)
       (let [nested (index/nested-version plan nested-key)
@@ -1696,12 +1692,12 @@
             indexed (when-let [by-plan (:versions-by-plan opts)] (get by-plan plan-id))
             ;; Deduplicated BY VALUE, not by @id. The nested snapshot and its
             ;; entry in the back-pointer index are the same node and collapse.
-            ;; Two nodes sharing an @id but differing in content do NOT: the
-            ;; corpus has exactly that, where two CPAU e-1 filings both publish
-            ;; cpau:e-1-2025-07-01 at the same effective instant while differing
-            ;; in urpx:hasModifierOptions. Collapsing on @id would pick one of
-            ;; those silently, which is the failure this whole function exists
-            ;; to remove; as two candidates they tie and are refused instead.
+            ;; Two nodes sharing an @id but differing in content do NOT, as when
+            ;; two filings publish one version @id at the same effective instant
+            ;; while differing in urpx:hasModifierOptions. Collapsing on @id
+            ;; would pick one of those silently, which is the failure this whole
+            ;; function exists to remove; as two candidates they tie and are
+            ;; refused instead.
             candidates (distinct (remove nil? (cons nested indexed)))]
         (case (count candidates)
           0 nil
@@ -2291,10 +2287,9 @@
   ([rate-plan modifiers ^ZonedDateTime zdt] (resolve-prices-with-modifiers rate-plan modifiers zdt nil))
   ([rate-plan modifiers ^ZonedDateTime zdt opts]
    (let [;; ONE ZONE FOR THE WHOLE COMPOSITION, the base plan's. A modifier may
-         ;; declare its own, and 41 of the 72 production filings do, but a
-         ;; composition answers one question about one moment and resolving its
-         ;; halves in different frames would reintroduce the disagreement this
-         ;; projection exists to remove.
+         ;; declare its own, but a composition answers one question about one
+         ;; moment and resolving its halves in different frames would
+         ;; reintroduce the disagreement this projection exists to remove.
          ^ZonedDateTime zdt (.withZoneSameInstant zdt (require-zone rate-plan))
          ;; One @id index spanning the base plan and every modifier. This is
          ;; what lets a discount Price in a modifier dereference a
@@ -2391,10 +2386,10 @@
    -213.15920 per kWh, because four export ledgers carrying 4,610 hourly
    avoided-cost values were added to a 0.56006 import rate.
 
-   urpx:net and urpx:bidirectional are treated as contributing. Neither appears
-   in the corpus, so excluding them would be speculation; if one shows up, a
-   netted quantity in an import marginal is genuinely ambiguous and this is the
-   line to revisit."
+   urpx:net and urpx:bidirectional are treated as contributing, because
+   excluding them would be speculation. A netted quantity in an import marginal
+   is genuinely ambiguous, and this is the line to revisit when a filing uses
+   one."
   [ledger]
   (not= "urpx:reverse" (get-in ledger [:urpx.resolved/flow-direction :jsonld/id])))
 
@@ -2548,20 +2543,18 @@
         ;;
         ;; Taking only the first tier is right for a block-tier ladder, which is
         ;; what this function was written for, and wrong for the additive rate
-        ;; stacks that most of this corpus uses ledgers for. SDG&E EV-TOU's
-        ;; delivery ledger carries ten components; keeping the first dropped
-        ;; nine of them and reported 0.57086 where the components sum to
-        ;; 0.86302, a third low. It is not a one-sided error either: SCE
-        ;; TOU-D-4-9PM OVERSTATED by 0.05249 at summer on-peak, because the
-        ;; dropped set included a negative Baseline Credit.
+        ;; stacks that ledgers also carry. SDG&E EV-TOU's delivery ledger
+        ;; carries ten components; keeping the first dropped nine of them and
+        ;; reported 0.57086 where the components sum to 0.86302, a third low.
+        ;; It is not a one-sided error either: SCE TOU-D-4-9PM OVERSTATED by
+        ;; 0.05249 at summer on-peak, because the dropped set included a
+        ;; negative Baseline Credit.
         ;;
-        ;; urpx:serviceTierNumber separates the two, and cleanly: across 40 base
-        ;; plans at four instants, multi-tier energy ledgers were 183 additive,
-        ;; 31 ladder, and 3 mixed, all three being one ledger. URPX has no
-        ;; vocabulary distinguishing additive from exclusive tiers, so the tier
-        ;; number is the signal available rather than the signal designed.
+        ;; urpx:serviceTierNumber separates the two. URPX has no vocabulary
+        ;; distinguishing additive from exclusive tiers, so the tier number is
+        ;; the signal available rather than the signal designed.
         ;;
-        ;; MIXED is summed-plus-lowest rather than refused. The one real case,
+        ;; MIXED is summed-plus-lowest rather than refused. The fixture case,
         ;; sdge:dr-2026-04-01-ledger-energy-delivery, is ten UDC components plus
         ;; a single tier-numbered Baseline Credit, where this and plain summing
         ;; agree exactly. Refusing would decline a question that has an answer,
