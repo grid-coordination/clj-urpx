@@ -4,3 +4,5 @@ target/
 .DS_Store
 .clj-kondo/.cache/
 .clj-xref/
+.env
+.codex/

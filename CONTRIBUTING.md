@@ -47,6 +47,17 @@ clojure -M:nrepl                # nREPL on the port written to .nrepl-port
 clj-kondo --lint src test       # lint
 ```
 
+### Configuration
+
+The library and its tests need nothing beyond the Clojure CLI. `scripts/shacl-drift.sh` reads two environment variables, documented with placeholders in [`.env.example`](.env.example):
+
+| Variable | Used by | Value |
+|---|---|---|
+| `URPX_DIR` | `scripts/shacl-drift.sh`, when no checkout path is given | a git checkout of [urpx-org/urpx](https://github.com/urpx-org/urpx) |
+| `PYTHON` | `scripts/shacl-drift.sh`, to run `dev/shacl_extract.py` | a `python3` that can import `rdflib` (`python3 -m pip install rdflib`); default `python3` |
+
+Copy `.env.example` to `.env` (gitignored), edit it, and load it with `set -a; . ./.env; set +a`. `markdownlint-cli2` picks up the repo's `.markdownlint-cli2.jsonc` when run from the repo root.
+
 ### The documentation is executed
 
 `urpx.docs-test` runs the docs so their claims can fail like any other test, in two tiers.
@@ -59,7 +70,7 @@ Both tiers exist because prose about code rots silently. A missing DSL builder i
 
 ### Checking for drift against the URPX standard
 
-`scripts/shacl-drift.sh <path-to-urpx-checkout> [rev]` reports where the hand-written Malli schemas have fallen behind the shipped SHACL shapes. It reads the shapes out of the checkout you point it at rather than vendoring them, the same convention the fixture sync uses, and needs `rdflib` on the `python3` that runs it.
+`scripts/shacl-drift.sh [path-to-urpx-checkout] [rev]` reports where the hand-written Malli schemas have fallen behind the shipped SHACL shapes. It reads the shapes out of the checkout you point it at, or `$URPX_DIR`, rather than vendoring them, and runs its extractor with `$PYTHON` (see [Configuration](#configuration)).
 
 It is an auditor, not a generator: it emits no schemas and nothing it produces is compiled or shipped. That division is deliberate. A generator's central mapping rule can be silently vacuous, and neither compilation nor a passing test suite catches that; a diff a person reads cannot fail the same way.
 

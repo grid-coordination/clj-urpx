@@ -6,12 +6,11 @@
 Thin on purpose: this knows how to read Turtle and nothing about Malli or about
 what clj-urpx models. The comparison lives in dev/drift.clj, in the repo's own
 language. Nothing URPX-derived is written to disk here; the shapes are read out
-of a urpx checkout passed in, the same convention scripts/sync-urpx-fixtures.sh
-uses for fixtures.
+of a urpx checkout passed in.
 
     python3 dev/shacl_extract.py <urpx-checkout> <rev> > shapes.json
 
-Requires rdflib (available in the p3newa venv alongside pyshacl).
+Requires rdflib (`python3 -m pip install rdflib`).
 """
 import json
 import subprocess
@@ -22,8 +21,8 @@ try:
     from rdflib import Graph, RDF, Namespace
     from rdflib.namespace import SH
 except ImportError:
-    sys.stderr.write("REFUSED: rdflib not importable. Activate the venv that has it:\n")
-    sys.stderr.write("  source ~/env/py/p3newa/bin/activate\n")
+    sys.stderr.write("REFUSED: rdflib not importable by %s\n" % sys.executable)
+    sys.stderr.write("  install it (python3 -m pip install rdflib) or set PYTHON to a python3 that has it\n")
     sys.exit(2)
 
 URPX = Namespace("https://urpx.org/ns/ontology/")

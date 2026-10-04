@@ -54,11 +54,11 @@ Each check exists because the thing it checks for happened, or because the artif
 ```bash
 clj-kondo --lint src test dev
 clojure -M:validate test/resources/urpx-fixtures/*.jsonld
-scripts/shacl-drift.sh <path-to-urpx-checkout>
-markdownlint-cli2 --config ~/.markdownlint-cli2.jsonc README.md CHANGELOG.md 'doc/*.md'
+scripts/shacl-drift.sh [path-to-urpx-checkout]    # defaults to $URPX_DIR
+markdownlint-cli2 README.md CHANGELOG.md 'doc/*.md'
 ```
 
-`shacl-drift.sh` needs `rdflib`, and exits `2` rather than `0` when it could not compare anything, so a run that checked nothing does not read as clean.
+`markdownlint-cli2` reads its rules from the repo's `.markdownlint-cli2.jsonc`. `shacl-drift.sh` needs `rdflib` (see [CONTRIBUTING](../CONTRIBUTING.md#configuration) for `URPX_DIR` and `PYTHON`), and exits `2` rather than `0` when it could not compare anything, so a run that checked nothing does not read as clean.
 
 ## What lands in the jar
 

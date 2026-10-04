@@ -121,7 +121,7 @@ That last number is the standing argument *for* codegen, and it is why the detec
 ## Reproducing this
 
 ```bash
-source ~/env/py/p3newa/bin/activate          # needs rdflib
+python3 -m pip install rdflib                 # or set PYTHON to a python3 that has it
 scripts/shacl-drift.sh /path/to/urpx-checkout [rev]
 ```
 

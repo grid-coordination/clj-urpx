@@ -36,13 +36,7 @@ These are frozen specimens, not a mirror of the upstream corpus. Each one is her
 
 ## Source and license
 
-All vendored `.jsonld` files originate in the
-[urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) project,
-released under **CC0-1.0**. The accompanying `.license` sidecars carry SPDX
-headers consistent with the URPX project's
-[REUSE](https://reuse.software/) framework. The underlying tariff data is from
-public regulatory filings (CPUC advice letters); the URPX serializations are
-the work of the urpx-rate-plans contributors.
+All vendored `.jsonld` files come from [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) and keep that repository's license: [CDLA-Permissive-2.0](../../../LICENSES/CDLA-Permissive-2.0.txt), copyright 2026 Clark Communications Corporation. This differs from the MIT license that covers the rest of clj-urpx. Each `.license` sidecar carries the SPDX headers that urpx-rate-plans' `REUSE.toml` declares for the source path at the commit the bytes came from.
 
 ## Adding a specimen
 
@@ -57,7 +51,23 @@ git -C /path/to/urpx-rate-plans show <commit>:<path> \
   > test/resources/urpx-fixtures/<name>.jsonld
 ```
 
-Then write `<name>.jsonld.license` with the SPDX headers and the provenance lines, say in this file what shape the specimen covers and why the suite needs it, and take every document of one filing from the same commit.
+Then write `<name>.jsonld.license`. Its SPDX headers are whatever `git -C /path/to/urpx-rate-plans show <commit>:REUSE.toml` resolves to for `<path>`: the catch-all gives the two lines below, and a path with an `override` annotation (such as the PG&E `e-elec` 2026-01-01 plan, jointly copyrighted with Flux Tailor LLC) takes that annotation's values instead. If the result names a license not yet in `LICENSES/`, copy its text from urpx-rate-plans' `LICENSES/` too.
+
+<!-- REUSE-IgnoreStart -->
+
+```text
+SPDX-FileCopyrightText: 2026 Clark Communications Corporation
+SPDX-License-Identifier: CDLA-Permissive-2.0
+
+Derived from https://github.com/grid-coordination/urpx-rate-plans
+at <commit>, path <path>
+Vendored as a frozen specimen. This records where the bytes came from;
+it is not a pin to be kept current.
+```
+
+<!-- REUSE-IgnoreEnd -->
+
+Then say in this file what shape the specimen covers and why the suite needs it, and take every document of one filing from the same commit.
 
 ## Loading fixtures from tests
 

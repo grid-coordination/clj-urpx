@@ -10,7 +10,9 @@ Clojure library for [URPX](https://lfenergy.org/projects/utility-rate-plan-excha
 
 URPX is an [LF Energy](https://lfenergy.org/) open standard for exchanging utility rate plan information using semantic web technologies (RDF, OWL, SHACL, JSON-LD). It enables precise, machine-readable data exchange between utilities, regulators, vendors, and researchers.
 
-The standard's source of truth — ontology, SHACL shapes, JSON-LD context, decision log, tutorial, and reference test cases — lives at [github.com/urpx-org/urpx](https://github.com/urpx-org/urpx). This library targets the same version-pinned ontology snapshot that fixtures cite via `urpx:targetURPXVersion`.
+The standard's source of truth — ontology, SHACL shapes, JSON-LD context, tutorial, and reference test cases — lives at [github.com/urpx-org/urpx](https://github.com/urpx-org/urpx); its design-decision logs are maintained in [urpx-org/urpx-dev](https://github.com/urpx-org/urpx-dev). This library targets the same version-pinned ontology snapshot that fixtures cite via `urpx:targetURPXVersion`.
+
+> **Repository access:** [urpx-org/urpx](https://github.com/urpx-org/urpx), [urpx-org/urpx-dev](https://github.com/urpx-org/urpx-dev) and [grid-coordination/urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) are not yet public. Links to them resolve once each one is.
 
 ## What does this library do?
 
@@ -941,7 +943,7 @@ That dual acceptance is deliberate, not transitional debt: the production corpus
 
 Release history is in [CHANGELOG.md](CHANGELOG.md).
 
-Test fixtures are vendored from [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) (the production rate-plan corpus) at pinned commits — see [`test/resources/urpx-fixtures/FIXTURES.md`](test/resources/urpx-fixtures/FIXTURES.md) for the table and the re-sync workflow.
+Test fixtures are frozen specimens of filings from [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) (the production rate-plan corpus, private for now), each recording where its bytes came from in its own `.license` sidecar. See [`test/resources/urpx-fixtures/FIXTURES.md`](test/resources/urpx-fixtures/FIXTURES.md) for the shape each specimen covers and how to add one.
 
 Currently covered:
 
@@ -981,7 +983,7 @@ Known gaps:
 
 ## Checking for drift against the standard
 
-`scripts/shacl-drift.sh <path-to-urpx-checkout> [rev]` reports where these hand-written Malli schemas have fallen behind the shipped SHACL shapes: properties the standard requires that aren't modeled, cardinalities that disagree, enum members that moved. It reads the shapes out of a checkout you point it at rather than vendoring them, and needs `rdflib` on the `python3` that runs it.
+`scripts/shacl-drift.sh [path-to-urpx-checkout] [rev]` reports where these hand-written Malli schemas have fallen behind the shipped SHACL shapes: properties the standard requires that aren't modeled, cardinalities that disagree, enum members that moved. It reads the shapes out of a checkout you point it at, or `$URPX_DIR`, rather than vendoring them, and needs `rdflib` on `$PYTHON` (default `python3`); see [CONTRIBUTING](CONTRIBUTING.md#configuration).
 
 It is an auditor, not a generator. Nothing it produces is compiled or shipped. Deliberate divergence lives in [`dev/drift-baseline.edn`](dev/drift-baseline.edn) with a written reason; a known bug does not, because silencing it there is how it stops being known. See [CONTRIBUTING](CONTRIBUTING.md) for the finding taxonomy, and [SHACL and Malli](doc/shacl-and-malli.md) for why the schemas are hand-written rather than generated from the shapes, with the measurements behind that.
 
@@ -997,8 +999,9 @@ Wrappers are descended, so a `urpx:URPXDocument` or `urpx:URPXPackage` is checke
 
 ## See also
 
-- [URPX standard](https://github.com/urpx-org/urpx) — ontology, SHACL shapes, decision log, tutorial, and reference test cases (the upstream specification this library targets)
-- [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) — production corpus of California utility rate-plan filings; vendored test fixtures here are pinned snapshots from there
+- [URPX standard](https://github.com/urpx-org/urpx) — ontology, SHACL shapes, tutorial, and reference test cases (the upstream specification this library targets)
+- [urpx-org/urpx-dev](https://github.com/urpx-org/urpx-dev): design-decision logs and development record for the URPX standard
+- [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) — production corpus of California utility rate-plan filings; vendored test fixtures here are frozen specimens taken from there
 - [LF Energy URPX project page](https://lfenergy.org/projects/utility-rate-plan-exchange-urpx/) — broader context for the URPX initiative
 - [`doc/dsl-tutorial.md`](doc/dsl-tutorial.md) — worked DSL examples mirroring sections of the upstream URPX tutorial
 
@@ -1013,3 +1016,5 @@ Issues, Discussions, and pull requests are welcome — see [CONTRIBUTING.md](CON
 ## License
 
 Copyright (c) 2026 Clark Communications Corporation. [MIT License](LICENSE).
+
+The vendored test fixtures under `test/resources/urpx-fixtures/` are licensed [CDLA-Permissive-2.0](LICENSES/CDLA-Permissive-2.0.txt).
