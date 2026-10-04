@@ -11,16 +11,11 @@ Each file here finds the URPX filings in one corpus's directory layout and retur
 
 | Walker | Corpus |
 |---|---|
-| `urpx-rate-plans` | [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans), California residential electric filings |
-| `urpx-upstream` | the URPX standard's own `test-cases/`, which exercise shapes no single publisher does |
+| `urpx-upstream` | the URPX standard's own `test-cases/` in [urpx-org/urpx](https://github.com/urpx-org/urpx), which exercise shapes no single publisher does |
 
 ## Why a walker rather than a glob
 
-Globbing every `.jsonld` under a corpus root looks equivalent and is not, and the two corpora here fail in opposite ways.
-
-In urpx-rate-plans a glob picks up 76 files where the corpus holds 73, because `dev/fixtures/` contains documents that are not filings — one deliberately non-conforming, so that corpus's own gate has something to fail on. **Nothing errors.** The count is simply about something other than the corpus, which is the failure mode this repository keeps finding: a plausible number rather than a refusal.
-
-In a URPX checkout older than upstream `ebde5871`, or in urpx-org/urpx-dev, a glob **crashes**: `dev-docs/samples` carries an instant written `2026-01-01T06:00:00Z`, coercion refuses it, and the error names no file. Neither failure tells you the layout was the problem.
+Globbing every `.jsonld` under a corpus root looks equivalent and is not. In a URPX checkout older than upstream `ebde5871`, or in urpx-org/urpx-dev, a glob **crashes**: `dev-docs/samples` carries an instant written `2026-01-01T06:00:00Z`, coercion refuses it, and the error names no file. In a corpus that keeps test fixtures or deliberately invalid documents beside its filings, a glob counts them too and **nothing errors**: a plausible number rather than a refusal. Neither failure tells you the layout was the problem.
 
 ## Adding one
 
@@ -40,5 +35,12 @@ Return sources, not documents: anything `clojure.java.io/reader` coerces will do
 Run one with:
 
 ```bash
-clojure -M:dev:corpus -m corpus-sweep <path-to-corpus> --layout urpx-rate-plans
+clojure -M:dev:corpus -m corpus-sweep <path-to-urpx> --layout urpx-upstream
+```
+
+`--layout <ns>` requires `<ns>` and calls `<ns>/sources`, so a walker kept elsewhere works the same way once it is on the classpath. For a walker in a directory with its own `deps.edn` (`{:paths ["."]}` will do):
+
+```bash
+clojure -Sdeps '{:deps {my/walkers {:local/root "/path/to/walkers"}}}' \
+  -M:dev:corpus -m corpus-sweep <path-to-corpus> --layout my-corpus
 ```

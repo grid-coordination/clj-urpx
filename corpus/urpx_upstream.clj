@@ -4,8 +4,7 @@
   "A source walker for the URPX standard's own test-case layout.
 
   The upstream repository at urpx-org/urpx ships worked test cases, and they
-  are a corpus like any other: a second layout, with its own conventions, which
-  is the whole reason `corpus/` holds walkers rather than one function.
+  are a corpus like any other, with a layout of their own.
 
   THE LAYOUT:
 
@@ -19,16 +18,14 @@
   date-parse error that names no file. Those samples now live in
   urpx-org/urpx-dev, where a glob fails the same way. On urpx main at 6bccd004 a
   glob reaches 13 files, the 12 filings plus the @context document, and yields
-  the same 7 documents as this walker. The urpx-rate-plans walker exists because
-  a glob quietly counts the wrong things; this one exists because a glob has
-  stopped the run dead, and neither failure tells you the layout was the problem.
+  the same 7 documents as this walker.
 
-  IT EXERCISES SHAPES THE PRODUCTION CORPUS DOES NOT. Of 45 expanded entities in
-  the 12 test-case files, 7 are documents this library models and 33 are not:
-  urpx:Organization 11, urpx:TariffFiling 6, urpx:PricingModel, urpx:ServiceClass,
-  urpx:RateGroup, urpx:RatePlanIdentifier, urpx:UtilityOperator, and 11 carrying
-  NO @type at all. Three are top-level urpx:RatePlanVersions rather than versions
-  nested in a plan, which is a shape the production corpus never uses.
+  IT EXERCISES SHAPES A SINGLE PUBLISHER'S FILINGS MAY NOT. Of 45 expanded
+  entities in the 12 test-case files, 7 are documents this library models and
+  33 are not: urpx:Organization 11, urpx:TariffFiling 6, urpx:PricingModel,
+  urpx:ServiceClass, urpx:RateGroup, urpx:RatePlanIdentifier,
+  urpx:UtilityOperator, and 11 carrying NO @type at all. Three are top-level
+  urpx:RatePlanVersions rather than versions nested in a plan.
 
   So this is the walker to reach for when checking whether a change handles the
   standard's own examples and not only one publisher's filings. Use

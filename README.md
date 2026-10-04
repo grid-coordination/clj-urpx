@@ -714,16 +714,17 @@ None is a version today, which is luck rather than design. `scan` does the same 
 
 ### Example walkers
 
-`corpus/` holds worked examples of the first half, one per corpus layout, with [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) as the first. None of it is library code: `corpus/` is not on the library's `:paths`, nothing in `src/` requires it, and none of it ships in the jar.
+`corpus/` holds a worked example of the first half for the URPX standard's own `test-cases/` in [urpx-org/urpx](https://github.com/urpx-org/urpx). None of it is library code: `corpus/` is not on the library's `:paths`, nothing in `src/` requires it, and none of it ships in the jar.
 
 ```bash
-clojure -M:dev:corpus -m corpus-sweep <path-to-corpus> --layout urpx-rate-plans
-clojure -M:dev:corpus -m corpus-sweep <path-to-urpx>    --layout urpx-upstream
+clojure -M:dev:corpus -m corpus-sweep <path-to-urpx> --layout urpx-upstream
 ```
 
-They exist because a glob looks equivalent to a walk and is not, and the two corpora fail differently. Over urpx-rate-plans a naive `**/*.jsonld` yields **87** documents where the walker yields **84**: the extra three live in `dev/fixtures/`, are not filings, and one is deliberately non-conforming. Nothing errors; the count is simply about something else. Over a URPX checkout older than upstream `ebde5871`, or over urpx-org/urpx-dev, a naive glob **crashes**, because `dev-docs/samples` carries an instant written `2026-01-01T06:00:00Z` that coercion refuses, and the error names no file. Those samples moved to urpx-dev at `ebde5871`; on urpx main at `6bccd004` a glob adds only `context/urpx-context.jsonld` and yields the same documents.
+`--layout <ns>` requires `<ns>` from the classpath and calls `<ns>/sources`, so a walker for another corpus can live with that corpus; [corpus/README.md](corpus/README.md) shows how to add one with `-Sdeps`.
 
-The upstream test cases are worth walking for a second reason: they exercise shapes the production corpus never uses. Three top-level `RatePlanVersion`s rather than nested ones, two base versions claiming `urpx:complete` where the production corpus has none, the only `TemporalScope` with `scopeKind urpx:coverage` in either tree, and a genuine `:ambiguous-version` tie.
+A walker exists because a glob looks equivalent to a walk and is not. Over a URPX checkout older than upstream `ebde5871`, or over urpx-org/urpx-dev, a naive `**/*.jsonld` **crashes**, because `dev-docs/samples` carries an instant written `2026-01-01T06:00:00Z` that coercion refuses, and the error names no file. Those samples moved to urpx-dev at `ebde5871`; on urpx main at `6bccd004` a glob adds only `context/urpx-context.jsonld` and yields the same documents.
+
+The upstream test cases are worth walking for a second reason: they exercise shapes a single publisher's filings may never use. Three top-level `RatePlanVersion`s rather than nested ones, two base versions claiming `urpx:complete`, a `TemporalScope` with `scopeKind urpx:coverage`, and a genuine `:ambiguous-version` tie.
 
 `dev/corpus_sweep.clj` is a full worked example, and pins a corpus to an exact revision with [tools.gitlibs](https://github.com/clojure/tools.gitlibs) rather than to whatever a sibling checkout holds. `babashka/fs` and `tools.gitlibs` are `:dev` dependencies; the library itself does no filesystem traversal and fetches nothing.
 

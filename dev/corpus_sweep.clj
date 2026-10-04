@@ -197,7 +197,7 @@
         ;; The instant-restricted call can refuse where the all-versions call
         ;; did not: a tie on the latest effective instant is only reachable once
         ;; currency has narrowed the candidates. The upstream test cases carry
-        ;; exactly that, which the production corpus does not.
+        ;; exactly that.
         _           (when (instance? clojure.lang.ExceptionInfo cur)
                       (println)
                       (println "REFUSED at" (str now) ":" (:reason (ex-data cur)))
