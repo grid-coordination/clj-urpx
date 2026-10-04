@@ -1,9 +1,9 @@
 (ns urpx.schema
   "Malli schemas for URPX entities, describing the coerced shape.
 
-  Tracks the ontology snapshot the fixtures pin via urpx:targetURPXVersion,
-  currently v0.5.1. scripts/shacl-drift.sh reports where these have fallen
-  behind the upstream shapes.
+  Tracks the ontology snapshot the fixtures pin via urpx:targetURPXVersion
+  (v0.5.1). scripts/shacl-drift.sh reports where these have fallen behind the
+  upstream shapes.
 
   Two-layer model (mirroring the clj-oa3 pattern):
     - urpx.core      — raw parse: JSON-LD with namespaced keys, all string values.
@@ -805,9 +805,8 @@
 ;; ---------------------------------------------------------------------------
 
 (def CustomerProfile
-  "v0.2.0: greatly expanded; we list the few properties we currently consume
-   plus hasCustomerKind which is the canonical test-case dispatch in the
-   fixtures."
+  "v0.2.0: greatly expanded; we list the few properties we consume plus
+   hasCustomerKind which is the canonical test-case dispatch in the fixtures."
   [:map
    [:jsonld/type [:= "urpx:CustomerProfile"]]
    [:jsonld/id {:optional true} :string]
@@ -1029,9 +1028,8 @@
    [:urpx/pageEnd   {:optional true} Int]
    ;; v0.5.1 flattening (upstream bbaea780): urpx:TariffBookReference and
    ;; urpx:TariffStatementReference were deleted and their fields hoisted
-   ;; inline onto this node, which is now sh:closed with 31 paths and nothing
-   ;; required. hasSelector and sourcePublication are not new, merely never
-   ;; modeled here.
+   ;; inline onto this node, which is now sh:closed with nothing required.
+   ;; hasSelector and sourcePublication are not new, merely never modeled here.
    [:urpx/leafStart  {:optional true} :string]
    [:urpx/leafEnd    {:optional true} :string]
    [:urpx/anchorLink {:optional true} :string]
@@ -1064,8 +1062,8 @@
    ;; "not a closed enumeration ... an implementer operating a scheme that is
    ;; not among them mints its own IRI as an IdentifierScheme instance." There
    ;; is no sh:in on this path, so a plain Ref is correct and an :enum would be
-   ;; wrong. At 95eb8e22 the vocabulary publishes eleven named members, among
-   ;; them urpx:caMidasRinScheme and urpx:utilityTariffCodeScheme, which it says
+   ;; wrong. The vocabulary publishes named members, among them
+   ;; urpx:caMidasRinScheme and urpx:utilityTariffCodeScheme, which it says
    ;; "cover the common registers".
    [:urpx/scheme Ref]
    [:urpx/identifierJurisdiction {:optional true} Ref]])
@@ -1343,8 +1341,8 @@
 (def RatePlanVersion
   "v0.2.0: changeReason, serviceRole, publishedBy are now required; gains
    customerChoice, isDefault, hasModifierOptions, hasRateCase, supersedes,
-   plus a set of date/dateTime metadata fields. We list the fields we
-   currently consume plus the headline metadata."
+   plus a set of date/dateTime metadata fields. We list the fields we consume
+   plus the headline metadata."
   [:map
    [:jsonld/type [:= "urpx:RatePlanVersion"]]
    [:jsonld/id {:optional true} :string]
@@ -1680,10 +1678,10 @@
    builder: `urpx.dsl/make-builder` requires a `[:= \"...\"]` type entry and
    throws on an `:enum`.
 
-   urpx-shacl:SourcePublicationShape has 23 paths and requires nothing. The
-   entries below it are v0.2.1 TariffPublicationShape paths that v0.5.1 drops;
-   the vendored PG&E fixtures carry hasRatePlan and hasRatePlanModifier, so
-   omitting them would break the suite."
+   urpx-shacl:SourcePublicationShape requires nothing. The entries after its
+   paths are v0.2.1 TariffPublicationShape paths that v0.5.1 drops; the
+   vendored PG&E fixtures carry hasRatePlan and hasRatePlanModifier, so omitting
+   them would break the suite."
   [:map
    [:jsonld/type [:enum "urpx:SourcePublication" "urpx:TariffPublication"]]
    [:jsonld/id {:optional true} :string]

@@ -7,40 +7,29 @@ SPDX-License-Identifier: MIT
 
 URPX ships SHACL shapes. clj-urpx validates with hand-written [Malli](https://github.com/metosin/malli) schemas. Both describe shape, structure and constraints, so the obvious question is why the schemas are not simply generated from the shapes.
 
-They could be. A generator was built and it worked. This note records why it is not what ships, what is shipped instead, and the measurements behind both, so the question does not have to be re-derived from scratch.
-
-Every figure here was measured against `urpx-org/urpx` at `95eb8e22` (the v0.5.1-candidate tip) and clj-urpx at the commit that introduced this file. Where a number is time-bound, it says so.
+They could be. A generator was built and it worked. This note records why it is not what ships and what is shipped instead, so the question does not have to be re-derived from scratch.
 
 ## The shapes are an unusually compilable subset of SHACL
 
 SHACL is a large language. URPX uses a small, regular corner of it.
 
-| | |
-|---|---|
-| `sh:NodeShape` declarations | 150 |
-| …of which carry `sh:targetClass` | 144 |
-| `sh:property` statements | 906 |
-| `sh:path` statements | 906 |
-
-Every one of those 906 paths is a plain predicate: all 906 objects are IRIs, none is a blank node holding a path expression. There are **zero** occurrences of `sh:inversePath`, `sh:alternativePath`, `sh:zeroOrMorePath`, `sh:oneOrMorePath` and `sh:zeroOrOnePath`, and **zero** of `sh:sparql`, `sh:qualifiedValueShape`, `sh:not` and `sh:and`. The features that make a general SHACL compiler a research project are simply not used.
+In the v0.5.1 shapes (`urpx-org/urpx` `95eb8e22`), every `sh:path` is a plain predicate IRI, never a blank node holding a path expression. `sh:inversePath`, `sh:alternativePath`, `sh:zeroOrMorePath`, `sh:oneOrMorePath` and `sh:zeroOrOnePath` do not occur, and neither do `sh:sparql`, `sh:qualifiedValueShape`, `sh:not` or `sh:and`. The features that make a general SHACL compiler a research project are simply not used.
 
 What is used is a short list, each with a clean Malli counterpart:
 
-| Construct | Count | Malli counterpart |
-|---|---|---|
-| `sh:minCount` / `sh:maxCount` | 894 / 698 | `{:optional true}`, scalar vs `[:vector …]` |
-| `sh:datatype` | 452 | the typed leaves (`Date`, `Decimal`, `MonthNumber`, …) |
-| `sh:class` | 296 | `[:or Node ExclusiveRef]` |
-| `sh:node` | 116 | a schema var reference |
-| `sh:closed` + `sh:ignoredProperties` | 79 + 79 | `{:closed true}` plus allowed extras |
-| `sh:nodeKind sh:IRI` | 71 | `Ref` |
-| `sh:in` | 68 | `[:enum …]` |
-| `sh:or` / `sh:xone` | 19 / 6 | `:or` / `:multi` |
-| `pattern`, `minInclusive`, `hasValue`, `maxInclusive` | 7, 7, 3, 2 | `:re`, `:>=`, `:=`, `:<=` |
+| Construct | Malli counterpart |
+|---|---|
+| `sh:minCount` / `sh:maxCount` | `{:optional true}`, scalar vs `[:vector …]` |
+| `sh:datatype` | the typed leaves (`Date`, `Decimal`, `MonthNumber`, …) |
+| `sh:class` | `[:or Node ExclusiveRef]` |
+| `sh:node` | a schema var reference |
+| `sh:closed` + `sh:ignoredProperties` | `{:closed true}` plus allowed extras |
+| `sh:nodeKind sh:IRI` | `Ref` |
+| `sh:in` | `[:enum …]` |
+| `sh:or` / `sh:xone` | `:or` / `:multi` |
+| `pattern`, `minInclusive`, `hasValue`, `maxInclusive` | `:re`, `:>=`, `:=`, `:<=` |
 
-The 79 `sh:closed` shapes are all among the 144 targeted ones, and the set of closed shapes is exactly the set carrying `sh:ignoredProperties`.
-
-> A caution for anyone remeasuring: `grep -c 'sh:closed'` returns 82, because three `rdfs:comment` prose strings contain the text. The statement count is 79. An earlier draft of this note published 82, and the denominator 150 rather than 144; both were wrong.
+Every `sh:closed` shape carries `sh:targetClass`, and the closed shapes are exactly the shapes carrying `sh:ignoredProperties`.
 
 ## The hard part is not SHACL, it is that SHACL describes a graph
 
@@ -50,7 +39,7 @@ In RDF, writing a node inline and referring to it by `@id` produce the *identica
 
 That gap has bitten this library in both directions from a single `sh:class` line:
 
-- `[:vector ApplicabilityRule]` rejected 15,295 valid bare references in the production corpus.
+- `[:vector ApplicabilityRule]` rejected valid bare references to rules defined elsewhere in the document.
 - `[:or ApplicabilityRule Ref]` then accepted a rule with a month of 13 and arbitrary payload, because `Ref` is an open map and the permissive arm matched first.
 - Only `[:or ApplicabilityRule ExclusiveRef]`, where the reference arm is closed to `@id` alone, is right — and **nothing in the SHACL says so**. It is a fact about JSON-LD serialization, not about the shape.
 
@@ -58,34 +47,30 @@ A second gap: SHACL validates, it does not convert. `urpx.schema` also *decodes*
 
 ## What the generator experiment found
 
-A generator was built and run. It works at the mechanical level: 501 lines of Python over `rdflib`, emitting Malli that compiles — 31 public vars for the ten-shape spike, 144 for the full registry, every one building a validator.
+A generator was built and run. It works at the mechanical level: Python over `rdflib`, emitting Malli that compiles for the full registry, every var building a validator.
 
 It is not what ships, for three reasons.
 
-**Its central rule was silently vacuous.** The generated schemas reported `valid=true` on all four vendored fixtures while an embedded version snapshot was independently invalid with three violations. Neither compilation nor the fixture suite caught it, because a schema that checks nothing passes everything. A diff a person reads cannot fail that way.
+**Its central rule was silently vacuous.** The generated schemas reported `valid=true` on the vendored fixtures while an embedded version snapshot was independently invalid. Neither compilation nor the fixture suite caught it, because a schema that checks nothing passes everything. A diff a person reads cannot fail that way.
 
 **It guesses where it should refuse.** Two defects, both structural rather than incidental:
 
-- `xsd:gYear` has no typed leaf in `urpx.schema`, so the generator emitted `:int` as a guess. The failure cascaded through three schemas across five filings.
+- `xsd:gYear` has no typed leaf in `urpx.schema`, so the generator emitted `:int` as a guess, and the guess cascaded into rejecting valid filings.
 - `sh:path rdf:first` is the RDF idiom for "non-empty `rdf:List`". Transliterated into a map key, it produces a schema **no compact JSON-LD document can ever satisfy**.
 
-**A generator bug is systemic where a hand-written one is local.** One bad rule is 296 wrong slots. A hand-written mistake more often announces itself, because you write the test while thinking about the case.
+**A generator bug is systemic where a hand-written one is local.** One bad rule is wrong at every slot it generates. A hand-written mistake more often announces itself, because you write the test while thinking about the case.
 
 ## The differential oracle, and why its verdict was time-bound
 
-The measurement that was supposed to settle it: across the 73-filing production corpus, does generated Malli agree with pyshacl — the shipped SHACL, the actual standard — more closely than the hand-written schemas do?
+The measurement that was supposed to settle it: across a corpus of real filings, does generated Malli agree with pyshacl (the shipped SHACL, the actual standard) more closely than the hand-written schemas do?
 
-Getting a trustworthy answer first required noticing that the obvious run is a lie. pyshacl reported `Conforms: True` over the corpus because the filings bound `urpx:` to one namespace and the shapes targeted another, so **zero focus nodes matched** and every shape validated nothing. Rebasing the namespace in copies of the filings took focus nodes from 0 to 22,638. Any SHACL run should be treated as failed until non-vacuity is proved.
+Getting a trustworthy answer first required noticing that the obvious run is a lie. pyshacl reported `Conforms: True` over the corpus because the filings bound `urpx:` to one namespace and the shapes targeted another, so **zero focus nodes matched** and every shape validated nothing. Rebasing the namespace in copies of the filings made the shapes match. Any SHACL run should be treated as failed until non-vacuity is proved.
 
-Against the corpus *as it stood then* — v0.2.x filings measured against v0.5.1 shapes — the result was 557 violations, 0 of 73 conforming, and:
+Against v0.2.x filings measured against v0.5.1 shapes, no filing conformed, and the generated schemas agreed with pyshacl on every filing and the hand-written schemas on none.
 
-| | generated | hand-written |
-|---|---|---|
-| agreed with pyshacl | 73/73 | 0/73 |
+**That result inverted once the filings migrated to v0.5.1, and the reason matters more than the number.** The hand-written schemas then agreed with pyshacl more often than the frozen generated schemas did. The generated schema became the *worse* of the two, partly because it is frozen, and partly because the `gYear` and `rdf:first` defects make it reject valid documents.
 
-**That result has since inverted, and the reason matters more than the number.** The corpus has migrated to v0.5.1. Re-running the same artifacts today: pyshacl conforms on 39 of 73, the hand-written schemas accept all 73 and so agree on 39, and the frozen generated schemas accept 0 and so agree on 34. The generated schema is now the *worse* of the two — partly because it is frozen, and partly because the `gYear` and `rdf:first` defects make it reject valid documents.
-
-So the honest reading of the original 73/73 is narrower than it looked. Both pyshacl and the generated schema rejected everything, for overlapping but not identical reasons, and agreeing to reject is cheap. The 557 violations also reduce to **eight** distinct `(constraint-component, path)` pairs — or six once the two `sh:class` pairs are set aside as artifacts of single-document validation — which is one version-gap event counted 557 times, not 557 findings.
+So the honest reading of the original agreement is narrower than it looked. Both pyshacl and the generated schema rejected everything, for overlapping but not identical reasons, and agreeing to reject is cheap. The violations also reduced to a handful of distinct `(constraint-component, path)` pairs: one version-gap event counted many times, not many findings.
 
 ## What ships instead
 
@@ -101,7 +86,7 @@ Shapes are read from a checkout passed as an argument rather than vendored, so n
 
 ### What it found on its first run
 
-A `rejects-valid` defect nobody had noticed: `Price.referencesPriceDefinition` was required while `PriceShape` declares `sh:minCount 0`, so conformant documents omitting it were refused — and `PriceSetAlternative` modeled the same property optional, so the two schemas disagreed with each other. Plus thirteen cardinality mismatches and four under-validations.
+A `rejects-valid` defect nobody had noticed: `Price.referencesPriceDefinition` was required while `PriceShape` declares `sh:minCount 0`, so conformant documents omitting it were refused — and `PriceSetAlternative` modeled the same property optional, so the two schemas disagreed with each other. It also found cardinality mismatches and under-validations.
 
 ## Decisions this rests on
 
@@ -109,14 +94,12 @@ A `rejects-valid` defect nobody had noticed: `Price.referencesPriceDefinition` w
 |---|---|
 | Keep hand-written Malli | No SHACL engine, no runtime RDF dependency. Vocabulary changes are concrete schema edits. |
 | Validate the compact document tree | `urpx.emit` round-trips to authored shape. Flattening would collapse the inline-vs-reference ambiguity and make generation easier, at the cost of the authoring contract. |
-| Report `sh:closed`, do not enforce it | 79 of 144 shapes are closed upstream; enforcing would reject every filing in the corpus. Exactly one map here is `{:closed true}` — `ExclusiveRef`, and its closedness is reference-vs-node discrimination, not `sh:closed` mirroring. |
-| Accept both vocabularies | The corpus migrated utility by utility and carried both at once. 16 `[:or X ExclusiveRef]` sites exist; there are zero `[:or X Ref]` sites, because the open form is the vacuous one. |
+| Report `sh:closed`, do not enforce it | A closed shape rejects every property it does not list, so enforcing it would reject the v0.2.x spellings this library accepts. The one `{:closed true}` map here is `ExclusiveRef`, and its closedness is reference-vs-node discrimination, not `sh:closed` mirroring. |
+| Accept both vocabularies | Filings migrate utility by utility and carry both at once. Reference arms are `[:or X ExclusiveRef]`, never `[:or X Ref]`, because the open form is the vacuous one. |
 
 ## Where the hand-written schemas stand
 
-55 public schemas carry a `:jsonld/type` entry; 54 pin a literal `@type` and 52 of those correspond to a `sh:targetClass`. 83 of the 95 `[:vector …]` map entries carry the `single-or-vec->vec` decoder; twelve do not, which is the kind of inconsistency a person applying a mechanical rule produces and a generator would not.
-
-That last number is the standing argument *for* codegen, and it is why the detector exists rather than nothing: the answer to mechanical drift is a mechanical check, but it does not follow that the check should also write the code.
+A person applying a mechanical rule by hand produces inconsistencies a generator would not: `[:vector …]` map entries have been found missing the `single-or-vec->vec` decoder their neighbors carry. That is the standing argument *for* codegen, and it is why the detector exists rather than nothing: the answer to mechanical drift is a mechanical check, but it does not follow that the check should also write the code.
 
 ## Reproducing this
 

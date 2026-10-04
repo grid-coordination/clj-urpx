@@ -418,7 +418,7 @@ They never enter `marginal-unit-rate`, which sums $/kWh: a per-interval figure i
 
 That distinction exists because a ledger is used for two different things. A block tier ladder is mutually exclusive, so only the marginal rung applies. An additive rate stack, which is how delivery charges are modeled (transmission, distribution, public purpose, wildfire NBC, and the rest), is cumulative and all of it applies.
 
-Export ledgers are excluded entirely. `urpx:flowDirection urpx:reverse` marks compensation for energy sent back, which is not a cost of the next kWh consumed; summing the two conflates a credit with a charge. Composing PG&E E-ELEC with its NBT modifier produced **-213.15920/kWh** before this, because four export ledgers carrying 4,610 hourly avoided-cost values were added to a 0.56006 import rate. `urpx:net` and `urpx:bidirectional` still contribute, because excluding them would be speculation. Resolved ledgers carry `:urpx.resolved/flow-direction` when the filing declares one.
+Export ledgers are excluded entirely. `urpx:flowDirection urpx:reverse` marks compensation for energy sent back, which is not a cost of the next kWh consumed; summing the two conflates a credit with a charge. Composing PG&E E-ELEC with its NBT modifier produced a large negative rate per kWh before this, because the hourly avoided-cost values on its export ledgers were added to the import rate. `urpx:net` and `urpx:bidirectional` still contribute, because excluding them would be speculation. Resolved ledgers carry `:urpx.resolved/flow-direction` when the filing declares one.
 
 `urpx:serviceTierNumber` is what separates them: a numbered tier belongs to a ladder, a bare one is a component. URPX has no vocabulary declaring which kind a ledger is, so this is the signal available rather than the signal designed. A mixed ledger contributes its bare components plus the lowest numbered rung.
 
@@ -701,7 +701,7 @@ That list is not hypothetical. A consumer composing these by hand from an earlie
 
 `coerce-doc` returns `nil` for an entity type this library does not model, so `document-xf` drops it **silently**, for example `urpx:ProgramEnrollment`, `urpx:SourcePublication` and `urpx:RateCase`.
 
-None is a version today, which is luck rather than design. `scan` does the same work in one pass and reports the discards, so a caller can assert what it could not before:
+Nothing guarantees a discarded type is never a version. `scan` does the same work in one pass and reports the discards, so a caller can assert what it could not before:
 
 ```clojure
 (let [{:urpx.load/keys [documents uncoercible]} (load/scan sources)]
@@ -710,7 +710,7 @@ None is a version today, which is luck rather than design. `scan` does the same 
   documents)
 ```
 
-"This library does not model it" and "it does not matter" are different statements. `ProgramEnrollment` is 30 of the 42 and is modeled nowhere here; whether that matters is yours to decide, and it cannot be decided while the discard is invisible.
+"This library does not model it" and "it does not matter" are different statements. `ProgramEnrollment` is modeled nowhere here; whether that matters is yours to decide, and it cannot be decided while the discard is invisible.
 
 ### Example walkers
 
@@ -722,7 +722,7 @@ clojure -M:dev:corpus -m corpus-sweep <path-to-urpx> --layout urpx-upstream
 
 `--layout <ns>` requires `<ns>` from the classpath and calls `<ns>/sources`, so a walker for another corpus can live with that corpus; [corpus/README.md](corpus/README.md) shows how to add one with `-Sdeps`.
 
-A walker exists because a glob looks equivalent to a walk and is not. Over a URPX checkout older than upstream `ebde5871`, or over urpx-org/urpx-dev, a naive `**/*.jsonld` **crashes**, because `dev-docs/samples` carries an instant written `2026-01-01T06:00:00Z` that coercion refuses, and the error names no file. Those samples moved to urpx-dev at `ebde5871`; on urpx main at `6bccd004` a glob adds only `context/urpx-context.jsonld` and yields the same documents.
+A walker exists because a glob looks equivalent to a walk and is not. Over a URPX checkout older than upstream `ebde5871`, a naive `**/*.jsonld` **crashes**, because `dev-docs/samples` carried an instant written `2026-01-01T06:00:00Z` that coercion refuses, and the error names no file. Those samples moved to urpx-org/urpx-dev at `ebde5871`.
 
 The upstream test cases are worth walking for a second reason: they exercise shapes a single publisher's filings may never use. Three top-level `RatePlanVersion`s rather than nested ones, two base versions claiming `urpx:complete`, a `TemporalScope` with `scopeKind urpx:coverage`, and a genuine `:ambiguous-version` tie.
 
@@ -856,7 +856,7 @@ A `@context` already present on the input entity (e.g. from a parsed document) i
 
 The emit path targets **logical / RDF-graph equivalence** on round-trip: `parse → coerce → emit → re-parse → re-coerce` yields a structurally equal Clojure entity. Byte-for-byte equality with the input is **not** a goal — key ordering, single-vs-vector property emission, and `@context` recreation may differ from the source document.
 
-`urpx.emit-test` runs an authoritative round-trip suite over every vendored fixture (PG&E E-1, E-TOU-C, E-TOU-D, EV2 — both the base RatePlan and the bundled vintage-PCIA modifier in each `@graph`) plus a URPXDocument-wrapped E-ELEC document; all round-trip cleanly with plain `(= original re-coerced)`. The DSL test suite (`urpx.dsl-test`) extends this to a CPAU-E-2-shaped plan authored entirely via the DSL.
+`urpx.emit-test` runs an authoritative round-trip suite over the vendored PG&E `@graph` bundles (both the base RatePlan and the bundled vintage-PCIA modifier in each) plus a URPXDocument-wrapped E-ELEC document; all round-trip cleanly with plain `(= original re-coerced)`. The DSL test suite (`urpx.dsl-test`) extends this to a CPAU-E-2-shaped plan authored entirely via the DSL.
 
 ## Authoring URPX entities
 
@@ -942,9 +942,9 @@ That dual acceptance is deliberate, not transitional debt: a set of filings migr
 
 Release history is in [CHANGELOG.md](CHANGELOG.md).
 
-Test fixtures are frozen specimens of filings from [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) (the production rate-plan corpus, private for now), each recording where its bytes came from in its own `.license` sidecar. See [`test/resources/urpx-fixtures/FIXTURES.md`](test/resources/urpx-fixtures/FIXTURES.md) for the shape each specimen covers and how to add one.
+Test fixtures are frozen specimens of filings from [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) (a production rate-plan corpus), each recording where its bytes came from in its own `.license` sidecar. See [`test/resources/urpx-fixtures/FIXTURES.md`](test/resources/urpx-fixtures/FIXTURES.md) for the shape each specimen covers and how to add one.
 
-Currently covered:
+Covered:
 
 - Top-level document classes parse, coerce and validate against Malli schemas: `urpx:RatePlan`, `urpx:RatePlanModifier`, both version snapshots, and both wrapper classes. The loader descends a wrapper transparently, so consumers target inner entities by `@type` regardless of packaging shape (bare entity, `@graph` bundle, or wrapper). `urpx.core/expand-document-entities` exposes that descent for consumers walking a document themselves
 - Both wrapper vocabularies at once: `urpx:URPXDocument` and `urpx:URPXPackage`, its v0.3.0 rename, which drops `urpx:hasTariffPublication` and adds the general `urpx:packages` containment pointer
@@ -969,22 +969,22 @@ Currently covered:
 - Modifier resolution alongside the base plan (vintage-PCIA pattern: many Prices share one PD, discriminated by `urpx:PriceSetAlternatives` / `urpx:referencesProfileAlternative`, and selected with `:profile-alternatives`)
 - `urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives`, the selection layer for declarative customer-or-configuration choices (income tier CARE/FERA/Standard, voltage configuration, vintage-PCIA departure year). Coerce + validate full schemas; resolve-prices selects the active alternative via an explicit `:profile-alternatives` opt; emit round-trips cleanly. `urpx:referencesProfileAlternative` is read on `PriceSetAlternative`, on `PriceDefinition`, and on `ServiceTiers` and `ServiceBracket` when a tier's bounds are selected; the shapes also carry it on `TOUSchedule`, which is not read. Programmatic `ConditionExpression` evaluation against a customer profile is a future enhancement
 - Configurable schedule step (hourly default; sub-hour available via `:step`)
-- Symmetric write-side: `urpx.emit` emits JSON-LD from any coerced `RatePlan` / `RatePlanModifier` / `URPXDocument`; the vendored-fixture round-trip suite verifies `parse → coerce → emit → re-parse → re-coerce` is a fixed point for every PG&E filing × {RatePlan, Modifier} plus a URPXDocument-wrapped E-ELEC test case
+- Symmetric write-side: `urpx.emit` emits JSON-LD from any coerced `RatePlan` / `RatePlanModifier` / `URPXDocument`; the vendored-fixture round-trip suite verifies `parse → coerce → emit → re-parse → re-coerce` is a fixed point for each vendored PG&E bundle × {RatePlan, Modifier} plus a URPXDocument-wrapped E-ELEC test case
 - Authoring DSL (`urpx.dsl`): named builders for every entity-type schema, kebab-case kwarg aliases, auto-coercion of raw inputs (numbers → BigDecimal, ISO strings → java.time, `--MM` → int month), validation-on-construct, and local-symbol refs scoped via `dsl-scope`
 
 Known gaps:
 
-- Tier bounds on the modifier path: a `urpx:RatePlanModifier`'s `urpx:ServiceTiers` is read by nothing, so its tiers surface with no tier number and no bounds. The only bracket-qualified fixture is that shape, PG&E's E-TOU-C baseline-tier modifier: one container of three tiers, each holding 40 brackets, one per cell of its 20 (`baselineTerritory` x `baselineCode`) x 2 seasons matrix
+- Tier bounds on the modifier path: a `urpx:RatePlanModifier`'s `urpx:ServiceTiers` is read by nothing, so its tiers surface with no tier number and no bounds. PG&E's E-TOU-C baseline-tier modifier fixture is that shape: one container of tiers, each holding one bracket per cell of its (`baselineTerritory` x `baselineCode`) x season matrix
 - `urpx:referencesServiceBracket` on `Price`, `PriceDefinition`, `PriceSet` and `PriceSetAlternative` is modeled and round-trips, but is read by no resolver: a Price naming one bracket directly while tier selection picks a different one will disagree, with nothing in the result to say so
 - A container-level `urpx:referencesMetricInput` does not narrow a tier-number clash: two `urpx:ServiceTiers` declaring one `urpx:serviceTierNumber` with different bounds refuse even when each is scoped to a different metric
-- Programmatic interpretation of `urpx:ConditionExpression` for active-tier selection in matrix-style modifiers — currently the caller picks the active value by `price-id` after walking the condition tree itself
+- Programmatic interpretation of `urpx:ConditionExpression` for active-tier selection in matrix-style modifiers: the caller picks the active value by `price-id` after walking the condition tree itself
 - A handful of SHACL classes that appear as references but aren't deeply modeled — `urpx:TariffPublication`, `urpx:ProgramEnrollment`, `urpx:ServicePointProfile`, plus the non-RatePlan URPXDocument subclasses (`urpx:TariffStatementDocument`, `urpx:DERExportsDocument`, `urpx:HighlyDynamicPricesDocument`, `urpx:SupplyChargesDocument`). They round-trip correctly as opaque maps via `:map`-typed payload pointers; deeper modeling (named builders, validation) lands as consumers need it.
 
 ## Checking for drift against the standard
 
 `scripts/shacl-drift.sh [path-to-urpx-checkout] [rev]` reports where these hand-written Malli schemas have fallen behind the shipped SHACL shapes: properties the standard requires that aren't modeled, cardinalities that disagree, enum members that moved. It reads the shapes out of a checkout you point it at, or `$URPX_DIR`, rather than vendoring them, and needs `rdflib` on `$PYTHON` (default `python3`); see [CONTRIBUTING](CONTRIBUTING.md#configuration).
 
-It is an auditor, not a generator. Nothing it produces is compiled or shipped. Deliberate divergence lives in [`dev/drift-baseline.edn`](dev/drift-baseline.edn) with a written reason; a known bug does not, because silencing it there is how it stops being known. See [CONTRIBUTING](CONTRIBUTING.md) for the finding taxonomy, and [SHACL and Malli](doc/shacl-and-malli.md) for why the schemas are hand-written rather than generated from the shapes, with the measurements behind that.
+It is an auditor, not a generator. Nothing it produces is compiled or shipped. Deliberate divergence lives in [`dev/drift-baseline.edn`](dev/drift-baseline.edn) with a written reason; a known bug does not, because silencing it there is how it stops being known. See [CONTRIBUTING](CONTRIBUTING.md) for the finding taxonomy, and [SHACL and Malli](doc/shacl-and-malli.md) for why the schemas are hand-written rather than generated from the shapes.
 
 ## Command-line validation
 

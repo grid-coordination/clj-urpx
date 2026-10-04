@@ -15,22 +15,21 @@
   repository also carried dev-docs/samples/**/*.jsonld, price series and samples
   rather than filings, and one of those carries an instant written
   \"2026-01-01T06:00:00Z\"; coercion refuses it, so the whole load fails with a
-  date-parse error that names no file. Those samples now live in
-  urpx-org/urpx-dev, where a glob fails the same way. On urpx main at 6bccd004 a
-  glob reaches 13 files, the 12 filings plus the @context document, and yields
-  the same 7 documents as this walker.
+  date-parse error that names no file. Those samples moved to urpx-org/urpx-dev
+  at that commit. A glob also reaches context/urpx-context.jsonld, which is a
+  @context document rather than a filing.
 
-  IT EXERCISES SHAPES A SINGLE PUBLISHER'S FILINGS MAY NOT. Of 45 expanded
-  entities in the 12 test-case files, 7 are documents this library models and
-  33 are not: urpx:Organization 11, urpx:TariffFiling 6, urpx:PricingModel,
-  urpx:ServiceClass, urpx:RateGroup, urpx:RatePlanIdentifier,
-  urpx:UtilityOperator, and 11 carrying NO @type at all. Three are top-level
-  urpx:RatePlanVersions rather than versions nested in a plan.
+  IT EXERCISES SHAPES A SINGLE PUBLISHER'S FILINGS MAY NOT. The test cases carry
+  entities this library does not model (urpx:Organization, urpx:TariffFiling,
+  urpx:PricingModel, urpx:ServiceClass, urpx:RateGroup,
+  urpx:RatePlanIdentifier, urpx:UtilityOperator), entities carrying NO @type at
+  all, and top-level urpx:RatePlanVersions rather than versions nested in a
+  plan.
 
   So this is the walker to reach for when checking whether a change handles the
   standard's own examples and not only one publisher's filings. Use
-  `urpx.load/scan` rather than `documents` against it: with 33 of 45 entities
-  discarded, what was dropped is the interesting half.
+  `urpx.load/scan` rather than `documents` against it: what it discards is the
+  interesting half.
 
   READ-ONLY, and from a LOCAL CHECKOUT. Nothing here fetches anything, and
   nothing in this repository interacts with urpx-org/urpx."

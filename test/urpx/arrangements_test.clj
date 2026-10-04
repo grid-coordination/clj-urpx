@@ -350,9 +350,9 @@
 
 (defn- two-version-plan
   "One document carrying TWO versions of one plan identity: v1 runs
-   2026-01-01 to 2026-06-01, v2 from 2026-06-01. No fixture has this shape
-   (checked: not one of the 23 carries more than one RatePlanVersion), which is
-   why the binding below was invisible to every test until now."
+   2026-01-01 to 2026-06-01, v2 from 2026-06-01. No vendored fixture carried
+   more than one RatePlanVersion when this was written, which is why the
+   binding below was invisible to every test until then."
   []
   {:jsonld/id "x:p" :jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"
    :urpx/hasRatePlanVersion
@@ -792,5 +792,5 @@
            no version of Q at all. That is retraction ACROSS plans, and nothing
            in Decision #090 argues for it")
       (is (= ["x:m-v"] (ask Q arr/named-versions-add))
-          "the monotone reading keeps Q, which is the behaviour the
+          "the monotone reading keeps Q, which is the behavior the
            preserves-document-level-properties line supports"))))

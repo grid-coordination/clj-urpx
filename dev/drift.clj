@@ -19,14 +19,14 @@
 
   What it deliberately does NOT do:
 
-    - enforce sh:closed. 79 of 144 shapes are closed upstream and clj-urpx
-      closes one map on purpose; adopting closedness would reject real
+    - enforce sh:closed. Many shapes are closed upstream and clj-urpx closes
+      only ExclusiveRef, on purpose; adopting closedness would reject real
       filings. Closedness is reported as information and never fails.
     - translate RDF-encoding paths. sh:path rdf:first is the idiom for
       \"non-empty rdf:List\" and has no counterpart in a compact JSON-LD tree.
       Those are listed as untranslatable rather than silently compared.
-    - guess at datatypes clj-urpx has no leaf for. xsd:gYear is the live
-      example. They are listed as unmodeled rather than assumed equivalent."
+    - guess at datatypes clj-urpx has no leaf for, such as xsd:gYear. They
+      are listed as unmodeled rather than assumed equivalent."
   (:require [clojure.data.json :as json]
             [clojure.edn :as edn]
             [clojure.java.io :as io]

@@ -112,8 +112,8 @@
       (is (= :no-unit-price (:reason (:urpx.resolved/unvaluable t)))))))
 
 (deftest existing-fixtures-carry-no-unvaluable-marker
-  (testing "purely additive: every vendored fixture still values every tier, so
-            the marker never appears on real data today"
+  (testing "purely additive: each of these vendored fixtures values every
+            tier, so the marker never appears on them"
     (doseq [n ["pge-e-1-2026-03-01" "pge-e-tou-c-2026-03-01" "pge-e-tou-d-2026-03-27"
                "pge-ev2-2026-03-27" "ladwp-r-1a-2026-04-01" "ladwp-r-1b-2026-04-01"]]
       (let [r (price/resolve-prices (fixtures/load-rate-plan n) (zdt))

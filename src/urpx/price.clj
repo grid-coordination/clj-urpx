@@ -224,8 +224,8 @@
    When the caller hasn't supplied a selection for a given
    PriceSetAlternatives, that set is silently skipped — prices for the
    unresolved alternative aren't surfaced. Programmatic ConditionExpression
-   evaluation against a customer profile is a future enhancement; today
-   the caller drives selection explicitly via `:profile-alternatives` opts."
+   evaluation against a customer profile is a future enhancement; the
+   caller drives selection explicitly via `:profile-alternatives` opts."
   [prices ^LocalDate query-date selection]
   (mapcat (fn [psas]
             (let [pa-id   (get-in psas [:urpx/referencesProfileAlternatives :jsonld/id])
@@ -1012,10 +1012,10 @@
    gated on a grandfathered-customer attribute both apply at every instant.
 
    Marking rather than excluding, deliberately. Excluding wholesale is not
-   available as a default: most of the gated population is export price
-   matrices where the gate is how the matrix is indexed, and dropping those
-   would delete the filing. This surfaces the assumption so a consumer can
-   compute a defensible number today, and decides nothing.
+   available as a default: export price matrices are gated too, the gate being
+   how the matrix is indexed, and dropping those would delete the filing. This
+   surfaces the assumption so a consumer can compute a defensible number today,
+   and decides nothing.
 
    Only gates carried by the Price or its PriceDefinition count. A condition
    inside a urpx:ProfileAlternative is correct by construction, since URPX
@@ -2383,8 +2383,8 @@
    urpx:flowDirection urpx:reverse marks export: compensation for energy sent
    back, not a cost of the next kWh consumed. Summing the two conflates a
    credit with a charge. Composing PG&E E-ELEC with its NBT modifier produced
-   -213.15920 per kWh, because four export ledgers carrying 4,610 hourly
-   avoided-cost values were added to a 0.56006 import rate.
+   a large negative rate per kWh, because the hourly avoided-cost values on its
+   export ledgers were added to the import rate.
 
    urpx:net and urpx:bidirectional are treated as contributing, because
    excluding them would be speculation. A netted quantity in an import marginal
@@ -2546,9 +2546,8 @@
         ;; stacks that ledgers also carry. SDG&E EV-TOU's delivery ledger
         ;; carries ten components; keeping the first dropped nine of them and
         ;; reported 0.57086 where the components sum to 0.86302, a third low.
-        ;; It is not a one-sided error either: SCE TOU-D-4-9PM OVERSTATED by
-        ;; 0.05249 at summer on-peak, because the dropped set included a
-        ;; negative Baseline Credit.
+        ;; It is not a one-sided error either: SCE TOU-D-4-9PM OVERSTATED,
+        ;; because the dropped set included a negative Baseline Credit.
         ;;
         ;; urpx:serviceTierNumber separates the two. URPX has no vocabulary
         ;; distinguishing additive from exclusive tiers, so the tier number is

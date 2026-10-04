@@ -193,10 +193,10 @@
 ;; Vendored-fixture round-trip suite (URPX-739)
 ;; ---------------------------------------------------------------------------
 ;; The authoritative correctness check for the write side: every fixture
-;; in test/resources/urpx-fixtures/ must round-trip through
+;; in `vendored-fixtures` must round-trip through
 ;; parse → coerce → emit → re-parse → re-coerce with structural equality.
 ;;
-;; Each fixture is a JSON-LD @graph bundling a base urpx:RatePlan with a
+;; Each is a JSON-LD @graph bundling a base urpx:RatePlan with a
 ;; sibling urpx:RatePlanModifier (vintage-PCIA pattern). Both halves are
 ;; round-tripped independently. `:context nil` suppresses the URPX-awl
 ;; default @context — the inner RatePlan / RatePlanModifier entities don't
