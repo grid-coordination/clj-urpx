@@ -10,15 +10,18 @@
   THE LAYOUT:
 
       test-cases/<case>/data/*.jsonld     the filings
-      dev-docs/samples/**/*.jsonld        price series and samples, NOT filings
       context/urpx-context.jsonld         a JSON-LD @context document
 
-  A NAIVE GLOB DOES NOT MISCOUNT HERE, IT CRASHES. Globbing the repository root
-  pulls in dev-docs/samples, and one of those carries an instant written
+  A NAIVE GLOB OVER AN OLDER CHECKOUT CRASHES. Before upstream ebde5871 the
+  repository also carried dev-docs/samples/**/*.jsonld, price series and samples
+  rather than filings, and one of those carries an instant written
   \"2026-01-01T06:00:00Z\"; coercion refuses it, so the whole load fails with a
-  date-parse error that names no file. The urpx-rate-plans walker exists because
-  a glob quietly counts the wrong things; this one exists because a glob stops
-  the run dead, and neither failure tells you the layout was the problem.
+  date-parse error that names no file. Those samples now live in
+  urpx-org/urpx-dev, where a glob fails the same way. On urpx main at 6bccd004 a
+  glob reaches 13 files, the 12 filings plus the @context document, and yields
+  the same 7 documents as this walker. The urpx-rate-plans walker exists because
+  a glob quietly counts the wrong things; this one exists because a glob has
+  stopped the run dead, and neither failure tells you the layout was the problem.
 
   IT EXERCISES SHAPES THE PRODUCTION CORPUS DOES NOT. Of 45 expanded entities in
   the 12 test-case files, 7 are documents this library models and 33 are not:
@@ -40,7 +43,7 @@
   "Every test-case filing under `root`, as Files, sorted for reproducibility.
 
    `test-cases/*/data/` only. See the namespace docstring for what globbing the
-   whole tree pulls in instead, and why it fails rather than miscounts."
+   whole tree pulls in instead, and why it has failed rather than miscounted."
   [root]
   (->> (fs/glob (fs/file root "test-cases") "*/data/*.jsonld")
        (map fs/file)

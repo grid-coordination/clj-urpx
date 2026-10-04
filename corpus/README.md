@@ -20,7 +20,7 @@ Globbing every `.jsonld` under a corpus root looks equivalent and is not, and th
 
 In urpx-rate-plans a glob picks up 76 files where the corpus holds 73, because `dev/fixtures/` contains documents that are not filings — one deliberately non-conforming, so that corpus's own gate has something to fail on. **Nothing errors.** The count is simply about something other than the corpus, which is the failure mode this repository keeps finding: a plausible number rather than a refusal.
 
-In the URPX standard's own repository a glob **crashes**: `dev-docs/samples` carries an instant written `2026-01-01T06:00:00Z`, coercion refuses it, and the error names no file. Neither failure tells you the layout was the problem.
+In a URPX checkout older than upstream `ebde5871`, or in urpx-org/urpx-dev, a glob **crashes**: `dev-docs/samples` carries an instant written `2026-01-01T06:00:00Z`, coercion refuses it, and the error names no file. Neither failure tells you the layout was the problem.
 
 ## Adding one
 

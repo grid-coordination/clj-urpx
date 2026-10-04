@@ -1070,7 +1070,9 @@
    ;; "not a closed enumeration ... an implementer operating a scheme that is
    ;; not among them mints its own IRI as an IdentifierScheme instance." There
    ;; is no sh:in on this path, so a plain Ref is correct and an :enum would be
-   ;; wrong. The vocabulary publishes no named scheme individuals at 95eb8e22.
+   ;; wrong. At 95eb8e22 the vocabulary publishes eleven named members, among
+   ;; them urpx:caMidasRinScheme and urpx:utilityTariffCodeScheme, which it says
+   ;; "cover the common registers".
    [:urpx/scheme Ref]
    [:urpx/identifierJurisdiction {:optional true} Ref]])
 

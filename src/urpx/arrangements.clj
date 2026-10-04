@@ -337,9 +337,9 @@
 ;;
 ;; THERE IS ARTIFACT EVIDENCE, THOUGH, and it was missed on both sides of that
 ;; analysis: URPX Decision #090, which introduced urpx:applicableToRatePlanVersion
-;; (documentation/pages/urpx-design-decisions-081-120.md:661). It cuts both ways
-;; and is recorded here rather than summarised, because a one-sided reading of it
-;; would settle this on half the text.
+;; (urpx-org/urpx-dev, dev-docs/decisions/urpx-design-decisions-081-120.md). It
+;; cuts both ways and is recorded here rather than summarized, because a
+;; one-sided reading of it would settle this on half the text.
 ;;
 ;; FOR `named-versions-add`. The decision records "Breaking Change: None - this
 ;; is an additive enhancement", and the alternative it selected is credited with

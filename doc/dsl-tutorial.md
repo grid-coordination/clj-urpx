@@ -51,7 +51,7 @@ You can pass plain ints just as easily — both shapes route through the schema'
 
 ## Example 2: a MetricInput with a nested MetricSpecification
 
-The upstream tutorial's basic plan declares an energy `MetricInput` that nests a `MetricSpecification` describing the commodity, measurement kind, and unit ([upstream §Step 2: Rate Plan and Version](https://github.com/urpx-org/urpx/blob/main/documentation/pages/urpx-tutorial.md#step-2-rate-plan-and-version)):
+The upstream tutorial's basic plan declares an energy `MetricInput` that nests a `MetricSpecification` describing the commodity, measurement kind, and unit ([upstream §Step 2: Rate Plan Identity and Version](https://github.com/urpx-org/urpx/blob/main/documentation/pages/urpx-tutorial.md#step-2-rate-plan-identity-and-version)):
 
 ```json
 {
