@@ -9,6 +9,24 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [0.35.0] — 2026-10-04
+
+### Fixed
+
+- **0..N properties stayed undecoded when written as a single value.** The schema admitted a vector with no `:decode/urpx-jsonld` for `ApplicabilityRule/month`, `Season/month`, `PlanElements/hasSeasons`, `PlanElements/hasMetricInput`, `PriceSet/hasPrice`, `Prices/hasPrice`, `Prices/hasPriceSet`, `ServiceTiers/hasServiceTier`, `TOUPeriod/hasTimeBracket`, `TOUSchedule/hasTOUTier`, `TOUTier/hasTOUPeriod` and `TimeBracket/appliesInSeason`. Malli does not descend a non-vector, so a bare value left its whole subtree untransformed: a bare `hasSeasons` kept `urpx:month` as `["--06" "--07"]` and threw on a later cast. Read-one properties (`hasRatePlanVersion`, `hasRatePlanModifierVersion`, `hasMetricSpecification`, `hasHolidayCalendar`) keep their shape and are read through `urpx.index/single`.
+- **Three reads iterated a bare 0..N value as if it were a list.** `applicable-modifiers` returned `[]` under both shipped compatibility policies when `applicableToRatePlanVersion` was bare, so every arrangement came out base-only. A modifier whose target list was bare applied to no plan. `urpx.emit` mapped over a bare `hasRatePlan` and emitted key-value pairs with the `@` prefixes stripped. All three now read the bare and list forms alike, through `urpx.index/as-vec`.
+- **A zone was not inferred from the EIA id when `urpx:hasIdentity` was a list.** The v0.5.1 shapes allow it as 0..N. Every identity and identifier is now read.
+- **A top-level rate plan version whose zone is declared on its plan could not be enumerated or resolved.** Arrangements now take the zone from the version, its plan or modifier (embedded or in a separate identity document), the document it came from, and any package that names one of them. `resolve-at`, `segments-for` and `schedule-for` resolve such a version.
+- **A merged `price-schedule` interval reported the first step's season and TOU period for its whole span.** See Changed.
+
+### Changed
+
+- **`price-schedule` intervals may omit labels.** A merged interval carries `:urpx.resolved/season-name`, `:urpx.resolved/tou-period-name` and `:urpx.resolved/tou-period-number` only when every merged step agrees on that value. Steps still merge on ledgers. Use `price-segments` when the labels matter, since it splits on them.
+- **New refusal: `:urpx.arrangement/conflicting-timezone`.** Arrangements throw it when the nodes a version belongs to declare different zones, with or without `:at`.
+- **The outside-version-window marks carry `:plan-id`.** The ex-data and each `:stale` entry name the owning plan's or modifier's `@id`, the key `:versions-by-plan` is looked up by, and the message names it too.
+- **Vendored fixtures are licensed CDLA-Permissive-2.0**, copyright Clark Communications Corporation, matching their source; their sidecars had declared CC0-1.0. The repository is REUSE-compliant, with everything else MIT under `REUSE.toml`.
+- **The dev-only `corpus/` ships only the urpx-upstream walker.** The urpx-rate-plans walker moved to that repository.
+
 ## [0.34.0] — 2026-09-24
 
 ### Fixed
@@ -642,6 +660,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.35.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.35.0
 [0.34.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.34.0
 [0.33.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.33.0
 [0.32.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.32.0
