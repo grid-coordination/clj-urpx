@@ -602,7 +602,7 @@ Enumeration answers a question about a whole corpus, so a corpus that does not d
 | `:uncoerced-document` | a document still carries date-shaped strings and no `java.time` values. Reading one does not fail loudly on its own: it answers a different question |
 | `:urpx.arrangement/conflicting-version-id` | one version `@id` names two snapshots that differ. An `@id` identifies a thing, so this is a contradiction, and every offending `@id` is named at once |
 | `:urpx.arrangement/ambiguous-version` | two distinct snapshots of one identity share the latest effective instant, the same input `urpx.price` refuses with `:ambiguous-version` |
-| `:urpx.arrangement/conflicting-timezone` | the nodes a version belongs to (the version, its plan or modifier, the document it came from, a `urpx:URPXPackage` naming any of them) declare different `urpx:timezoneIdentifier` values. One value, or several that agree, is the zone the arrangement resolves in |
+| `:urpx.arrangement/conflicting-timezone` | the nodes a version belongs to (the version, its plan or modifier, the document it came from, a `urpx:URPXPackage` naming any of them) declare different `urpx:timezoneIdentifier` values. One value, or several that agree, is the zone the arrangement resolves in. `:package-zones` decides what a package's value counts for |
 
 Publishing one `@id` twice with byte-identical content is *not* refused: that is one version appearing in two filings, and it is deduplicated.
 
@@ -662,6 +662,16 @@ Byte-identical repeats are never a conflict under either: one version published 
 
 `repeated-ids-union` has two costs worth knowing. **RDF merges triples, not meanings**: merging a copy that states `applicableToRatePlanVersion` with one that omits it yields a node that *has* the property, which under `named-versions-narrow` restricts the modifier to exactly those versions — while the omitting copy meant no restriction at all. And it silently reconciles a version `@id` whose content is time-varying, which is a defect on any reading. Only vector-valued properties union; two differing scalars refuse `:unmergeable-property`, since URPX gives many of those `sh:maxCount 1`.
 
+**What a zone on a package counts for is a fourth policy**, `:package-zones`, taken by `arrangements`, `plan-versions` and `applicable-modifiers`. `urpx:timezoneIdentifier` is admitted on the version, its plan or modifier, and the `urpx:URPXPackage` containing it, and URPX gives no precedence among them. A package counts when it names the version, its identity or its source document by `urpx:packages`, `urpx:hasRatePlan` or `urpx:hasRatePlanModifier`.
+
+| `:package-zones` | A package's zone is |
+|--------|--------|
+| `:agree` (default) | one more declaration: any disagreement with the version, its identity or its source document refuses `:conflicting-timezone` |
+| `:fallback` | read only when none of those declares a zone |
+| `:ignore` | not read |
+
+Under every mode, two packages declaring different zones for one version refuse, as do a version and its identity. Any other value refuses `:urpx.arrangement/unknown-package-zones`. Zones are read only to place a version against `:at` and to zone an arrangement's documents, so `plan-versions` and `applicable-modifiers` without `:at` read none.
+
 ### Comparing two enumerators
 
 ```clojure
@@ -672,7 +682,7 @@ Byte-identical repeats are never a conflict under either: one version published 
 
 One row per composition, with `ProfileAlternative` choices **not** expanded — a coarser question than `arrangements` answers and deliberately a different one. An arrangement with an open dimension is several arrangements and one pair.
 
-It exists so two independent enumerators can be compared on *what composes with what*, without disagreeing about whether a pending choice is one row or several. **Pin every policy explicitly** when the result is a gate's expected value: `:at`, `:combine`, `:compatibility` and `:repeated-ids` each change the answer, and matching defaults across two implementations is agreement by coincidence rather than by construction.
+It exists so two independent enumerators can be compared on *what composes with what*, without disagreeing about whether a pending choice is one row or several. **Pin every policy explicitly** when the result is a gate's expected value: `:at`, `:combine`, `:compatibility`, `:repeated-ids` and `:package-zones` each change the answer, and matching defaults across two implementations is agreement by coincidence rather than by construction.
 
 ### Loading documents, and who walks the corpus
 
@@ -693,10 +703,16 @@ A **source** is anything `clojure.java.io/reader` coerces: a `File`, `URL`, `Rea
 `document-xf` is three steps, and each is a way to be wrong by hand:
 
 - **`mapcat`, not `map`, over `load-graph`.** One source can carry several top-level entities. Mapping yields a collection per source, and a collection survives a `tree-seq` walk, so getting this wrong returns an answer rather than an error.
-- **`expand-document-entities`** descends a `urpx:URPXPackage` wrapper. Without it a wrapped filing contributes nothing.
+- **`expand-document-entities`** descends a `urpx:URPXPackage` wrapper. Without it a wrapped filing contributes nothing. The wrapper follows its payloads as a **shell**: its own properties, with each embedded payload replaced by a `{:jsonld/id id}` reference. That is how a `urpx:timezoneIdentifier` declared only on the package reaches `urpx.arrangements`. An embedded payload with no `@id` refuses `:urpx.load/payload-without-id`.
 - **`coerce-doc`** turns strings into `java.time` values. Without it `urpx:effectiveDateTime` is still a string: anything comparing dates throws from deep inside, and anything that does *not* compare them quietly answers a different question.
 
 That list is not hypothetical. A consumer composing these by hand from an earlier version of this section used `mapv` for `mapcat` and omitted the coercion step, and got a plausible count instead of a refusal. The pipeline is named so that composition is unavailable to make rather than documented against.
+
+`documents` and `scan` both yield the shells. A caller wanting only the payloads drops them:
+
+```clojure
+(remove #(#{"urpx:URPXPackage" "urpx:URPXDocument"} (:jsonld/type %)) (load/documents sources))
+```
 
 ### What gets discarded, and how to notice
 

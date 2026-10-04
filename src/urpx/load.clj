@@ -12,8 +12,7 @@
   first consumer to do so got it wrong in the one way that does not fail loudly:
   `mapv` where `mapcat` belongs, and no coercion step, which returned a
   plausible number rather than an error. Naming it makes that composition
-  unavailable to make rather than documented against. Nothing here is new
-  behavior; it is the same three functions in the one order that is correct.
+  unavailable to make rather than documented against.
 
   It lives in its own namespace because it cannot live in either of the two it
   spans. `urpx.core` requires only data.json, java.io and string, and
@@ -21,7 +20,51 @@
   other. Putting this in core would drag Malli into the parse layer, and putting
   it in coerce would make a coercion-only consumer pull in the parser."
   (:require [urpx.coerce :as coerce]
-            [urpx.core :as core]))
+            [urpx.core :as core]
+            [urpx.index :as index]))
+
+(def ^:private payload-keys
+  [:urpx/hasRatePlan :urpx/hasRatePlanModifier :urpx/hasTariffPublication :urpx/packages])
+
+(defn- stub
+  "`payload` as a `{:jsonld/id id}` reference. A payload with no @id cannot be
+   referenced, and an empty map in its place would read as a reference to
+   nothing, so that refuses."
+  [package k payload]
+  (if-let [id (:jsonld/id payload)]
+    {:jsonld/id id}
+    (throw (ex-info (str "Cannot reference the " (pr-str k) " payload of "
+                         (pr-str (:jsonld/id package)) ": it has no @id, so the "
+                         "package cannot name it.")
+                    {:reason      :urpx.load/payload-without-id
+                     :package-id  (:jsonld/id package)
+                     :property    k
+                     :payload-type (:jsonld/type payload)}))))
+
+(defn- package-shell
+  "The wrapper `entity` with each embedded payload replaced by a reference to
+   it, keeping the wrapper's own properties, or nil when `entity` is not a
+   wrapper. A wrapper whose payloads are already references is already a
+   shell.
+
+   The shell is what carries the package's own statements, urpx:timezoneIdentifier
+   among them, past `expand-document-entities`, which returns the payloads alone."
+  [entity]
+  (when (core/wrapper-types (:jsonld/type entity))
+    (reduce (fn [pkg k]
+              (if-let [v (get pkg k)]
+                (assoc pkg k (if (map? v)
+                               (stub pkg k v)
+                               (mapv #(stub pkg k %) (index/as-vec v))))
+                pkg))
+            entity payload-keys)))
+
+(defn- expand
+  "`expand-document-entities`, followed by the package shell when `entity` is a
+   wrapper."
+  [entity]
+  (let [shell (package-shell entity)]
+    (cond-> (core/expand-document-entities entity) shell (conj shell))))
 
 (def document-xf
   "A transducer from sources to coerced URPX documents.
@@ -37,7 +80,14 @@
                                 throws on a file carrying only a modifier, and
                                 dropping those makes every composition vacuous.
     `expand-document-entities`  descends a urpx:URPXPackage wrapper. Without it
-                                a wrapped filing contributes nothing.
+                                a wrapped filing contributes nothing. The
+                                wrapper itself follows its payloads as a SHELL:
+                                its own properties, with each embedded payload
+                                replaced by a `{:jsonld/id id}` reference. That
+                                is how a zone declared only on the package
+                                reaches `urpx.arrangements`. An embedded payload
+                                with no @id refuses
+                                `:urpx.load/payload-without-id`.
     `coerce-doc`                strings become java.time values and BigDecimals.
                                 Without it urpx:effectiveDateTime is still a
                                 string, so anything comparing dates throws from
@@ -52,7 +102,7 @@
   element at a time, but it is not unobservable: use `scan` when a caller needs
   to assert what was discarded."
   (comp (mapcat core/load-graph)
-        (mapcat core/expand-document-entities)
+        (mapcat expand)
         (keep coerce/coerce-doc)))
 
 (defn documents
@@ -96,5 +146,5 @@
                        :jsonld/id   (:jsonld/id entity)})))
           {:urpx.load/documents [] :urpx.load/uncoercible []}
           (eduction (comp (mapcat core/load-graph)
-                          (mapcat core/expand-document-entities))
+                          (mapcat expand))
                     sources)))

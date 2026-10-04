@@ -227,6 +227,56 @@
 
 (def ^:private package-types #{"urpx:URPXPackage" "urpx:URPXDocument"})
 
+(defn- shell?
+  "True for a package whose every payload is a `{:jsonld/id id}` reference.
+   Nothing here reads a date from one, and its only date-shaped value may be a
+   urpx:version label, which `coerce/uncoerced?` cannot tell from an uncoerced
+   date."
+  [doc]
+  (and (package-types (:jsonld/type doc))
+       (every? #(= [:jsonld/id] (keys %))
+               (mapcat #(index/as-vec (get doc %))
+                       [:urpx/hasRatePlan :urpx/hasRatePlanModifier
+                        :urpx/hasTariffPublication :urpx/packages]))))
+
+(defn- check-coerced!
+  "`coerce/check-coerced!` over `documents`, less the package shells."
+  [documents who]
+  (coerce/check-coerced! (remove shell? documents) who))
+
+(def ^:private package-zone-modes #{:agree :fallback :ignore})
+
+(defn- package-zone-mode
+  "The `:package-zones` option, defaulting to `:agree`, refusing any other value."
+  [opts]
+  (let [mode (get opts :package-zones :agree)]
+    (when-not (package-zone-modes mode)
+      (throw (ex-info (str "Unknown :package-zones " (pr-str mode) "; expected one of "
+                           (pr-str (sort package-zone-modes)) ".")
+                      {:reason :urpx.arrangement/unknown-package-zones
+                       :value  mode
+                       :known  package-zone-modes})))
+    mode))
+
+(defn- refuse-zones
+  [v pid declared]
+  (throw (ex-info (str "Cannot zone " (pr-str (:jsonld/id v)) ": the nodes it "
+                       "belongs to declare different urpx:timezoneIdentifier "
+                       "values, " (pr-str (vec declared)) ", so its wall-clock "
+                       "bounds name different moments in each and nothing "
+                       "says which is meant.")
+                  {:reason     :urpx.arrangement/conflicting-timezone
+                   :version-id (:jsonld/id v)
+                   :plan-id    pid
+                   :declared   (vec declared)})))
+
+(defn- declared-zones
+  "`[@id zone]` for each of `nodes` declaring urpx:timezoneIdentifier, sorted."
+  [nodes]
+  (into (sorted-set)
+        (keep #(when-let [tz (:urpx/timezoneIdentifier %)] [(:jsonld/id %) tz]))
+        nodes))
+
 (defn- zone-finder
   "A fn from an `[identity-id version source-doc]` triple to the ZoneId its
    version is written in, or nil when no node it belongs to declares one.
@@ -236,16 +286,21 @@
    the embedded back-pointer node, every document in `documents` carrying the
    identity's @id, the document the version was read from, and every package in
    `documents` naming the version, its identity or that document by
-   urpx:packages.
+   urpx:packages, urpx:hasRatePlan or urpx:hasRatePlanModifier.
 
-   One value, or several that agree, is the zone. Values that disagree refuse:
-   the documents state two frames for one set of bounds and nothing says which
-   is meant."
-  [documents]
+   `mode` decides what a package zone counts for; see `:package-zones` on
+   `arrangements`. Under every mode, the non-package nodes must agree among
+   themselves and the packages must agree among themselves. Values that
+   disagree refuse: the documents state two frames for one set of bounds and
+   nothing says which is meant."
+  [documents mode]
   (let [by-id     (group-by :jsonld/id documents)
         packaging (reduce (fn [acc pkg]
                             (reduce #(update %1 (:jsonld/id %2) (fnil conj []) pkg)
-                                    acc (index/as-vec (:urpx/packages pkg))))
+                                    acc
+                                    (mapcat #(index/as-vec (get pkg %))
+                                            [:urpx/packages :urpx/hasRatePlan
+                                             :urpx/hasRatePlanModifier])))
                           {} (filter #(package-types (:jsonld/type %)) documents))]
     (fn [[pid v doc]]
       (let [nodes    (concat [v (get v (back-pointer (:jsonld/type v))) doc]
@@ -253,22 +308,17 @@
                              (packaging pid)
                              (packaging (:jsonld/id v))
                              (packaging (:jsonld/id doc)))
-            declared (into (sorted-set)
-                           (keep #(when-let [tz (:urpx/timezoneIdentifier %)]
-                                    [(:jsonld/id %) tz]))
-                           nodes)
-            zones    (into (sorted-set) (map second) declared)]
-        (when (> (count zones) 1)
-          (throw (ex-info (str "Cannot zone " (pr-str (:jsonld/id v)) ": the nodes it "
-                               "belongs to declare different urpx:timezoneIdentifier "
-                               "values, " (pr-str (vec declared)) ", so its wall-clock "
-                               "bounds name different moments in each and nothing "
-                               "says which is meant.")
-                          {:reason     :urpx.arrangement/conflicting-timezone
-                           :version-id (:jsonld/id v)
-                           :plan-id    pid
-                           :declared   (vec declared)})))
-        (some-> (first zones) ZoneId/of)))))
+            pkg?     #(package-types (:jsonld/type %))
+            own      (declared-zones (remove pkg? nodes))
+            pkgs     (declared-zones (filter pkg? nodes))
+            zones-of #(into (sorted-set) (map second) %)
+            declared (case mode
+                       :agree    (into own pkgs)
+                       :fallback (if (seq own) own pkgs)
+                       :ignore   own)]
+        (doseq [d [own pkgs declared]]
+          (when (> (count (zones-of d)) 1) (refuse-zones v pid d)))
+        (some-> (first (zones-of declared)) ZoneId/of)))))
 
 (defn- zone-requirer
   "`find-zone`, refusing `:urpx.price/no-timezone` where it finds nothing."
@@ -509,16 +559,18 @@
   "Every urpx:RatePlanVersion in `documents`, as a vector of snapshots.
 
    `:at` restricts to the version of each plan identity in force at that
-   instant. Omit it for every version the documents carry."
+   instant. Omit it for every version the documents carry, which reads no zone.
+   `:package-zones` is as `arrangements` takes it."
   ([documents] (plan-versions documents nil))
   ([documents opts]
-   (let [_       (coerce/check-coerced! documents "urpx.arrangements/plan-versions")
+   (let [_       (check-coerced! documents "urpx.arrangements/plan-versions")
          t       (:at opts)
          repeated (or (:repeated-ids opts) repeated-ids-refuse)
          triples (-> {"urpx:RatePlanVersion"
                       (mapcat #(versions-in % "urpx:RatePlanVersion") documents)}
                      repeated (get "urpx:RatePlanVersion"))]
-     (->> (current-versions triples t (zone-requirer (zone-finder documents)))
+     (->> (current-versions triples t (zone-requirer
+                                        (zone-finder documents (package-zone-mode opts))))
           vals
           (mapcat #(map second %))
           (sort-by :jsonld/id)
@@ -562,10 +614,11 @@
                answers.
      :compatibility  fn `[modifier-version base-version plan-id] -> boolean`.
                      Defaults to `named-versions-narrow`; `named-versions-add`
-                     is the monotone alternative."
+                     is the monotone alternative.
+     :package-zones  as `arrangements` takes it."
   ([documents base-version] (applicable-modifiers documents base-version nil))
   ([documents base-version opts]
-   (let [_       (coerce/check-coerced! documents "urpx.arrangements/applicable-modifiers")
+   (let [_       (check-coerced! documents "urpx.arrangements/applicable-modifiers")
          t       (:at opts)
          compat  (or (:compatibility opts) named-versions-narrow)
          plan-id (:jsonld/id (:urpx/forRatePlan base-version))
@@ -573,7 +626,8 @@
          triples (-> {"urpx:RatePlanModifierVersion"
                       (mapcat #(versions-in % "urpx:RatePlanModifierVersion") documents)}
                      repeated (get "urpx:RatePlanModifierVersion"))]
-     (->> (current-versions triples t (zone-requirer (zone-finder documents)))
+     (->> (current-versions triples t (zone-requirer
+                                        (zone-finder documents (package-zone-mode opts))))
           vals
           (mapcat #(map second %))
           (filter #(compat % base-version plan-id))
@@ -652,6 +706,19 @@
                urpx:applicableToRatePlan or adds to it. They differ only when
                a modifier names some version, about a base version it does not
                name whose plan it names; see the policies.
+     :package-zones  what a urpx:timezoneIdentifier on a package counts for
+               when zoning a version. A package counts when it
+               names the version, its identity or its source document by
+               urpx:packages, urpx:hasRatePlan or urpx:hasRatePlanModifier.
+                 :agree     (default) one more declaration, which must agree
+                            with the version, its identity and its source
+                            document, or the call refuses
+                            `:urpx.arrangement/conflicting-timezone`.
+                 :fallback  read only when none of those declares a zone.
+                 :ignore    packages contribute no zone.
+               Under every mode, two packages declaring different zones for one
+               version refuse, as do a version and its identity. Any other
+               value refuses `:urpx.arrangement/unknown-package-zones`.
 
    THE COMBINING POLICY IS THE CALLER'S BECAUSE URPX CANNOT STATE IT. Nothing
    in the ontology expresses exclusivity or combinability between modifiers,
@@ -678,7 +745,7 @@
    documents gives the same order. Nothing here consults wall-clock time."
   ([documents] (arrangements documents nil))
   ([documents opts]
-   (let [_       (coerce/check-coerced! documents "urpx.arrangements/arrangements")
+   (let [_       (check-coerced! documents "urpx.arrangements/arrangements")
          combine (or (:combine opts) one-modifier-at-most)
          compat  (or (:compatibility opts) named-versions-narrow)
          repeated (or (:repeated-ids opts) repeated-ids-refuse)
@@ -687,7 +754,7 @@
          mods  (mapcat #(versions-in % "urpx:RatePlanModifierVersion") documents)
          merged (repeated {"urpx:RatePlanVersion"         plans
                            "urpx:RatePlanModifierVersion" mods})
-         find-zone  (zone-finder documents)
+         find-zone  (zone-finder documents (package-zone-mode opts))
          zone-of    (zone-requirer find-zone)
          live-plans (current-versions (get merged "urpx:RatePlanVersion") t zone-of)
          live-mods  (current-versions (get merged "urpx:RatePlanModifierVersion") t zone-of)]
@@ -744,9 +811,10 @@
    composes with what.
 
    `opts` is what `arrangements` takes. PIN EVERY POLICY EXPLICITLY when the
-   result is an expected value in a gate: `:at`, `:combine`, `:compatibility`
-   and `:repeated-ids` each change the answer, and matching defaults across two
-   implementations is agreement by coincidence rather than by construction."
+   result is an expected value in a gate: `:at`, `:combine`, `:compatibility`,
+   `:repeated-ids` and `:package-zones` each change the answer, and matching
+   defaults across two implementations is agreement by coincidence rather than
+   by construction."
   ([documents] (arrangement-pairs documents nil))
   ([documents opts]
    (into #{}

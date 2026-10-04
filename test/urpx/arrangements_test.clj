@@ -11,15 +11,19 @@
   urpx:applicableToRatePlan and urpx:applicableToRatePlanVersion. Which of them
   a customer HAS is not, and URPX excludes it deliberately. So this namespace
   answers the first and takes a policy for the second."
-  (:require [clojure.java.io :as io]
+  (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.walk]
             [clojure.test :refer [deftest is testing]]
             [urpx.arrangements :as arr]
+            [urpx.core :as core]
             [urpx.index :as index]
+            [urpx.load :as load]
             [urpx.price :as price]
             [urpx.test-fixtures :as fixtures])
-  (:import [java.time ZoneId ZonedDateTime]))
+  (:import [java.io StringReader]
+           [java.time ZoneId ZonedDateTime]))
 
 (def ^:private la (ZoneId/of "America/Los_Angeles"))
 (defn- at
@@ -889,3 +893,129 @@
                            (arr/arrangements [identity (assoc version :urpx/timezoneIdentifier ny)])))]
         (is (= :urpx.arrangement/conflicting-timezone (:reason (ex-data e)))
             "without :at too, since the arrangement must carry one zone to resolve in")))))
+
+;; ---------------------------------------------------------------------------
+;; A version zoned by the package carrying it, through the loader
+;; ---------------------------------------------------------------------------
+
+(def ^:private la-tz "America/Los_Angeles")
+(def ^:private ny "America/New_York")
+
+(defn- raw-plan
+  "SCE Schedule D as parsed and not yet coerced, declaring no zone, or `tz`."
+  ([] (raw-plan nil))
+  ([tz]
+   (cond-> (dissoc (core/load-rate-plan (.getPath (fixtures/fixture-resource "sce-d-2026-03-20")))
+                   :urpx/timezoneIdentifier)
+     tz (assoc :urpx/timezoneIdentifier tz))))
+
+(defn- package
+  "A urpx:URPXPackage `id` declaring `tz`, or no zone when nil, with `props`."
+  [id tz props]
+  (merge (cond-> {:jsonld/id id :jsonld/type "urpx:URPXPackage"
+                  :urpx/targetURPXVersion
+                  "https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl"}
+           tz (assoc :urpx/timezoneIdentifier tz))
+         props))
+
+(defn- source
+  "A source carrying `entity`, or an @graph of `entities`."
+  [& entities]
+  (StringReader. (json/write-str (core/keys->jsonld (if (next entities)
+                                                      {:jsonld/graph (vec entities)}
+                                                      (first entities))))))
+
+(defn- refusal [f] (try (f) nil (catch clojure.lang.ExceptionInfo e (ex-data e))))
+
+(deftest a-zone-declared-only-on-the-package-zones-a-loaded-plan
+  (let [docs (load/documents [(source (package "x:pkg" la-tz {:urpx/hasRatePlan (raw-plan)}))])
+        [a :as as] (arr/arrangements docs {:at (at)})]
+    (is (= ["sce:d-2026-03-20"] (mapv :urpx.arrangement/version-id as)))
+    (is (= 0.31085M (rate a)) "resolve-at prices it in the package's zone")
+    (is (= ["sce:d-2026-03-20"] (mapv :jsonld/id (arr/plan-versions docs {:at (at)}))))
+    (is (= 0.31085M (rate (first (arr/arrangements docs {:at (at) :package-zones :fallback}))))
+        ":fallback reads the package when nothing else declares a zone")
+    (is (= :urpx.price/no-timezone
+           (:reason (refusal #(arr/arrangements docs {:at (at) :package-zones :ignore}))))
+        "with packages ignored, nothing declares a zone")))
+
+(deftest a-shell-whose-only-date-shaped-value-is-a-label-is-accepted
+  (let [docs (load/documents [(source (package "x:pkg" la-tz {:urpx/version "2026-03-20"
+                                                              :urpx/hasRatePlan (raw-plan)}))])]
+    (is (= 0.31085M (rate (first (arr/arrangements docs {:at (at)})))))))
+
+(deftest a-package-naming-a-plan-by-reference-zones-it
+  (let [pkg (package "x:pkg" la-tz {:urpx/packages {:jsonld/id "sce:d"}})]
+    (doseq [[nm srcs] [["one source" #(vector (source (raw-plan) pkg))]
+                       ["two sources" #(vector (source pkg) (source (raw-plan)))]]]
+      (is (= 0.31085M (rate (first (arr/arrangements (load/documents (srcs)) {:at (at)}))))
+          nm))))
+
+(deftest a-top-level-version-whose-plan-the-package-carries
+  (let [plan     (raw-plan)
+        identity (dissoc plan :urpx/hasRatePlanVersion)
+        version  (assoc (:urpx/hasRatePlanVersion plan) :jsonld/type "urpx:RatePlanVersion")
+        docs     (load/documents [(source (package "x:pkg" la-tz {:urpx/hasRatePlan identity})
+                                          version)])]
+    (is (not-any? :urpx/timezoneIdentifier (remove #(= "x:pkg" (:jsonld/id %)) docs))
+        "only the package declares a zone")
+    (is (= 0.31085M (rate (first (arr/arrangements docs {:at (at)})))))))
+
+(deftest two-packages-zoning-one-plan-differently-are-refused
+  (let [a (source (package "x:pkg-a" la-tz {:urpx/hasRatePlan (raw-plan)}))
+        b (source (package "x:pkg-b" ny {:urpx/hasRatePlan (raw-plan)}))
+        a2 (source (package "x:pkg-a" la-tz {:urpx/hasRatePlan (raw-plan)}))
+        b2 (source (package "x:pkg-b" ny {:urpx/hasRatePlan (raw-plan)}))]
+    (doseq [[nm docs] [["a then b" (load/documents [a b])]
+                       ["b then a" (load/documents [b2 a2])]]
+            mode [:agree :fallback :ignore]]
+      (is (= :urpx.arrangement/conflicting-timezone
+             (:reason (refusal #(arr/arrangements docs {:at (at) :package-zones mode}))))
+          (str nm " " mode)))))
+
+(deftest a-package-zone-against-the-plans-own
+  (let [docs #(load/documents [(source (package "x:pkg" ny {:urpx/hasRatePlan (raw-plan la-tz)}))])]
+    (is (= :urpx.arrangement/conflicting-timezone
+           (:reason (refusal #(arr/arrangements (docs) {:at (at)}))))
+        ":agree, the default, refuses")
+    (doseq [mode [:fallback :ignore]]
+      (let [[a] (arr/arrangements (docs) {:at (at) :package-zones mode})]
+        (is (= la-tz (:urpx/timezoneIdentifier (:urpx.arrangement/rate-plan a))) (str mode))
+        (is (= 0.31085M (rate a)) (str mode " uses the plan's zone"))))))
+
+(deftest a-bare-and-a-wrapped-filing-of-one-plan
+  (let [bare    #(source (raw-plan))
+        wrapped #(source (package "x:pkg" la-tz {:urpx/hasRatePlan (raw-plan)}))]
+    (doseq [[nm srcs] [["bare first" [(bare) (wrapped)]] ["wrapped first" [(wrapped) (bare)]]]]
+      (let [as (arr/arrangements (load/documents srcs) {:at (at)})]
+        (is (= ["sce:d-2026-03-20"] (mapv :urpx.arrangement/version-id as)) nm)
+        (is (= 0.31085M (rate (first as))) nm)))))
+
+(deftest a-horizon-is-bounded-in-the-packages-zone
+  (let [docs (load/documents [(source (package "x:pkg" ny {:urpx/hasRatePlan (raw-plan)}))])
+        segs (arr/segments-for (first (arr/arrangements docs)) (inst 2026 7 15 0) (inst 2026 7 16 0))]
+    (is (seq segs))
+    (is (every? #(and (instance? ZonedDateTime (:tick/beginning %))
+                      (= (ZoneId/of ny) (.getZone ^ZonedDateTime (:tick/beginning %)))
+                      (= (ZoneId/of ny) (.getZone ^ZonedDateTime (:tick/end %))))
+                segs))))
+
+(deftest without-at-no-zone-is-read
+  (let [docs (load/documents [(source (package "x:pkg-a" la-tz {:urpx/hasRatePlan (raw-plan)}))
+                              (source (package "x:pkg-b" ny {:urpx/hasRatePlan (raw-plan)}))])
+        bv   (first (arr/plan-versions docs))]
+    (is (= "sce:d-2026-03-20" (:jsonld/id bv)) "plan-versions reads no zone")
+    (is (= [] (arr/applicable-modifiers docs bv)) "nor does applicable-modifiers")
+    (is (= :urpx.arrangement/conflicting-timezone
+           (:reason (refusal #(arr/plan-versions docs {:at (at)}))))
+        "the same documents refuse once an instant needs a zone")))
+
+(deftest an-unknown-package-zones-value-is-refused
+  (let [docs [(fixtures/load-rate-plan "sce-d-2026-03-20")]
+        bv   (:urpx/hasRatePlanVersion (first docs))]
+    (doseq [[nm f] [["arrangements" #(arr/arrangements docs {:package-zones :prefer})]
+                    ["plan-versions" #(arr/plan-versions docs {:package-zones :prefer})]
+                    ["applicable-modifiers" #(arr/applicable-modifiers docs bv {:package-zones :prefer})]]]
+      (is (= {:reason :urpx.arrangement/unknown-package-zones :value :prefer}
+             (select-keys (refusal f) [:reason :value]))
+          nm))))

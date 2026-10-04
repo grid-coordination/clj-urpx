@@ -69,7 +69,38 @@
   (testing "urpx:URPXPackage nests the payload. Without expand-document-entities
             a wrapped filing contributes nothing at all, and an enumeration over
             a corpus of wrapped filings comes back empty rather than wrong."
-    (is (= ["x:p"] (mapv :jsonld/id (load/documents [(src wrapped)]))))))
+    (is (= ["x:p" "x:pkg"] (mapv :jsonld/id (load/documents [(src wrapped)]))))))
+
+(deftest a-wrapped-source-yields-the-package-shell
+  (let [json  (str "{" ctx ",\"@id\":\"x:pkg\",\"@type\":\"urpx:URPXPackage\","
+                   "\"urpx:targetURPXVersion\":\"x:v0.5.1\","
+                   "\"urpx:timezoneIdentifier\":\"America/New_York\","
+                   "\"urpx:dateCreated\":\"2026-01-01\","
+                   "\"urpx:hasRatePlan\":{\"@id\":\"x:p\",\"@type\":\"urpx:RatePlan\","
+                   "\"urpx:hasRatePlanVersion\":{\"@id\":\"x:p-v1\","
+                   "\"@type\":\"urpx:RatePlanVersion\",\"urpx:forRatePlan\":{\"@id\":\"x:p\"},"
+                   "\"urpx:effectiveDateTime\":\"2026-01-01T00:00:00\"}}}")
+        [plan shell :as docs] (load/documents [(src json)])]
+    (is (= ["x:p" "x:pkg"] (mapv :jsonld/id docs)))
+    (is (= "urpx:RatePlan" (:jsonld/type plan)))
+    (is (= [{:jsonld/id "x:p"}] (:urpx/hasRatePlan shell)) "the payload is a stub")
+    (is (= "America/New_York" (:urpx/timezoneIdentifier shell)) "the package keeps its own properties")
+    (is (nil? (coerce/check-coerced! [shell] "load-test")))))
+
+(deftest a-by-reference-package-is-already-a-shell
+  (let [json (str "{" ctx ",\"@id\":\"x:pkg\",\"@type\":\"urpx:URPXPackage\","
+                  "\"urpx:packages\":{\"@id\":\"x:p\"}}")]
+    (is (= [(coerce/coerce-doc (first (core/load-graph (src json))))]
+           (load/documents [(src json)])))))
+
+(deftest an-embedded-payload-without-an-id-is-refused
+  (let [json (str "{" ctx ",\"@id\":\"x:pkg\",\"@type\":\"urpx:URPXPackage\","
+                  "\"urpx:hasRatePlan\":{\"@type\":\"urpx:RatePlan\"}}")]
+    (doseq [f [load/documents load/scan]]
+      (let [e (is (thrown? clojure.lang.ExceptionInfo (f [(src json)])))]
+        (is (= {:reason :urpx.load/payload-without-id :package-id "x:pkg"
+                :property :urpx/hasRatePlan}
+               (select-keys (ex-data e) [:reason :package-id :property])))))))
 
 (deftest values-arrive-coerced
   (testing "the step that bites, because skipping it does not fail loudly.

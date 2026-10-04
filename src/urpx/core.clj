@@ -127,7 +127,7 @@
   [src]
   (parse-graph src))
 
-(def ^:private wrapper-types
+(def wrapper-types
   "Top-level wrapper @types that `expand-document-entities` descends through.
    v0.3.0 renamed urpx:URPXDocument to urpx:URPXPackage; both are accepted, so
    a corpus part-way through a wave-by-wave migration loads either way."
