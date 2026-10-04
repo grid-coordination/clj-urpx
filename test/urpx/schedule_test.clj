@@ -284,3 +284,62 @@
       (is (= beg (:tick/beginning (first sched))))
       (is (= fin (:tick/end (last sched))))
       (is (= 3 (count sched)) "off-peak, peak, off-peak"))))
+
+(defn- labels [iv]
+  (select-keys (:urpx.interval/resolved iv)
+               [:urpx.resolved/season-name
+                :urpx.resolved/tou-period-name
+                :urpx.resolved/tou-period-number]))
+
+(deftest a-merged-interval-keeps-only-labels-true-for-all-of-it
+  (testing "URPX-xqt. SCE D prices Winter and Summer identically, so May through
+            September merges into one interval on ledgers. It used to carry the
+            first step's Winter for all five months."
+    (let [plan (fixtures/load-rate-plan "sce-d-2026-03-20")
+          beg  (start-of-day 2026 5 1)
+          fin  (start-of-day 2026 10 1)
+          sch  (schedule/price-schedule plan beg fin la-zone)
+          segs (schedule/price-segments plan [] beg fin la-zone)]
+      (is (= 1 (count sch)) "still one interval: steps merge on ledgers")
+      (is (not (contains? (:urpx.interval/resolved (first sch))
+                          :urpx.resolved/season-name))
+          "the season changes inside it, so it carries none")
+      (is (= {:urpx.resolved/tou-period-name nil :urpx.resolved/tou-period-number nil}
+             (labels (first sch)))
+          "labels every step agrees on are kept, here the absence of a TOU period")
+      (is (= [["Winter" (start-of-day-zdt 2026 5 1)]
+              ["Summer" (start-of-day-zdt 2026 6 1)]]
+             (mapv (juxt #(get-in % [:urpx.interval/resolved :urpx.resolved/season-name])
+                         :tick/beginning)
+                   segs))
+          "price-segments splits on the season")))
+
+  (testing "the modifier path follows the same rule"
+    (let [sch (schedule/price-schedule-with-modifiers
+               (fixtures/load-rate-plan "sce-d-2026-03-20")
+               [(fixtures/load-modifier "sce-care-2026-03-20")]
+               (start-of-day 2026 5 1) (start-of-day 2026 10 1) la-zone)]
+      (is (= 1 (count sch)))
+      (is (not (contains? (:urpx.interval/resolved (first sch))
+                          :urpx.resolved/season-name)))))
+
+  (testing "a uniform season is kept"
+    (let [sch (schedule/price-schedule (fixtures/load-rate-plan "sce-d-2026-03-20")
+                                       (start-of-day 2026 6 1) (start-of-day 2026 7 1)
+                                       la-zone)]
+      (is (= 1 (count sch)))
+      (is (= "Summer" (get-in (first sch) [:urpx.interval/resolved
+                                           :urpx.resolved/season-name])))))
+
+  (testing "TOU labels follow the same rule. Before PG&E E-TOU-C takes effect its
+            ledgers do not vary by period, so a February day merges across peak
+            and off-peak: Winter holds throughout and is kept, the period does
+            not and is omitted."
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          beg  (start-of-day 2026 2 3)
+          fin  (start-of-day 2026 2 4)
+          sch  (schedule/price-schedule plan beg fin la-zone)]
+      (is (= 1 (count sch)))
+      (is (= {:urpx.resolved/season-name "Winter"} (labels (first sch))))
+      (is (< 1 (count (distinct (map labels (schedule/price-segments plan [] beg fin la-zone)))))
+          "sanity: the period really does change across this day"))))

@@ -7,8 +7,9 @@
 
   Output is a vector of interval maps each carrying `:tick/beginning` and
   `:tick/end` (java.time.ZonedDateTime in the resolved zone — DST-correct
-  end-to-end) plus the full `urpx.price` resolved structure under
-  `:urpx.interval/resolved`. Callers that want plain `java.time.Instant`
+  end-to-end) plus the `urpx.price` resolved structure under
+  `:urpx.interval/resolved`, keeping a season or TOU label only when it holds
+  for the whole interval. Callers that want plain `java.time.Instant`
   values invoke `.toInstant` themselves at the call site.
 
   Default step is 1 hour, anchored to the start-of-hour of `start`, so interior
@@ -89,17 +90,35 @@
        (= (:urpx.resolved/outside-version-window a)
           (:urpx.resolved/outside-version-window b))))
 
+(defn- agreeing
+  "Resolved value `a` keeping only the top-level entries `b` carries with an
+   equal value.
+
+   Steps merge on what same-ledgers? compares, so those entries always survive.
+   The rest are per-step labels: season, TOU period name and number. Keeping the
+   earlier step's labels reported one season or period for a span that crossed
+   into another; omitting a label that differs leaves the interval saying only
+   what is true for all of it."
+  [a b]
+  (reduce-kv (fn [m k v]
+               (if (and (contains? b k) (= v (get b k))) m (dissoc m k)))
+             a a))
+
 (defn- merge-adjacent
   "Merge consecutive intervals whose resolved ledger structure matches.
    The merged interval keeps the earlier `:tick/beginning` and the later
-   `:tick/end`; the embedded resolved value comes from the earlier step."
+   `:tick/end`; its resolved value keeps the entries every merged step agrees
+   on."
   [intervals]
   (reduce
    (fn [acc iv]
-     (let [prev (peek acc)]
-       (if (and prev (same-ledgers? (:urpx.interval/resolved prev)
-                                    (:urpx.interval/resolved iv)))
-         (conj (pop acc) (assoc prev :tick/end (:tick/end iv)))
+     (let [prev (peek acc)
+           a    (:urpx.interval/resolved prev)
+           b    (:urpx.interval/resolved iv)]
+       (if (and prev (same-ledgers? a b))
+         (conj (pop acc) (assoc prev
+                                :tick/end (:tick/end iv)
+                                :urpx.interval/resolved (agreeing a b)))
          (conj acc iv))))
    []
    intervals))
@@ -143,11 +162,17 @@
    Each entry is:
      {:tick/beginning           ZonedDateTime
       :tick/end                 ZonedDateTime
-      :urpx.interval/resolved   <full price/resolve-prices result>}
+      :urpx.interval/resolved   <price/resolve-prices result>}
 
    `:tick/*` are ZonedDateTimes in the resolved zone (callers wanting
    plain Instants invoke `.toInstant` themselves). Adjacent steps with
    identical ledger resolution are merged.
+
+   A merged interval carries `:urpx.resolved/season-name`,
+   `:urpx.resolved/tou-period-name` and `:urpx.resolved/tou-period-number`
+   only when that value holds for every step merged into it; a label that
+   changes inside the interval is omitted. `price-segments` splits on those
+   labels instead, so use it when they matter.
 
    `zone` (a java.time.ZoneId) is optional when `rate-plan` declares
    `urpx:timezoneIdentifier`; pass `nil` to use the plan's declared

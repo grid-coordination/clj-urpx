@@ -857,7 +857,7 @@
   "A stepped price schedule for `arrangement` across `[start, end)`, as
    `urpx.schedule/price-schedule-with-modifiers` returns them.
 
-   Walks a grid, default hourly, merging adjacent steps whose resolution is
+   Walks a grid, default hourly, merging adjacent steps whose prices are
    equal. Use it when a caller genuinely wants a fixed cadence; use
    `segments-for` when they want the truth about where prices change, which for
    a price server is almost always the question.
