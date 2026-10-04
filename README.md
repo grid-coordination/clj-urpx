@@ -602,6 +602,7 @@ Enumeration answers a question about a whole corpus, so a corpus that does not d
 | `:uncoerced-document` | a document still carries date-shaped strings and no `java.time` values. Reading one does not fail loudly on its own: it answers a different question |
 | `:urpx.arrangement/conflicting-version-id` | one version `@id` names two snapshots that differ. An `@id` identifies a thing, so this is a contradiction, and every offending `@id` is named at once |
 | `:urpx.arrangement/ambiguous-version` | two distinct snapshots of one identity share the latest effective instant, the same input `urpx.price` refuses with `:ambiguous-version` |
+| `:urpx.arrangement/conflicting-timezone` | the nodes a version belongs to (the version, its plan or modifier, the document it came from, a `urpx:URPXPackage` naming any of them) declare different `urpx:timezoneIdentifier` values. One value, or several that agree, is the zone the arrangement resolves in |
 
 Publishing one `@id` twice with byte-identical content is *not* refused: that is one version appearing in two filings, and it is deduplicated.
 

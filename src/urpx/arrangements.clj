@@ -32,7 +32,7 @@
             [urpx.index :as index]
             [urpx.price :as price]
             [urpx.schedule :as schedule])
-  (:import [java.time Instant ZonedDateTime]))
+  (:import [java.time Instant ZonedDateTime ZoneId]))
 
 ;; ---------------------------------------------------------------------------
 ;; Versions and currency
@@ -221,6 +221,70 @@
                                 [pid (union-nodes id nodes kind) doc]))))]))
         by-kind))
 
+;; ---------------------------------------------------------------------------
+;; Zones
+;; ---------------------------------------------------------------------------
+
+(def ^:private package-types #{"urpx:URPXPackage" "urpx:URPXDocument"})
+
+(defn- zone-finder
+  "A fn from an `[identity-id version source-doc]` triple to the ZoneId its
+   version is written in, or nil when no node it belongs to declares one.
+
+   urpx:timezoneIdentifier is admitted on the version, its identity, and the
+   urpx:URPXPackage containing it. So every one of those is read: the version,
+   the embedded back-pointer node, every document in `documents` carrying the
+   identity's @id, the document the version was read from, and every package in
+   `documents` naming the version, its identity or that document by
+   urpx:packages.
+
+   One value, or several that agree, is the zone. Values that disagree refuse:
+   the documents state two frames for one set of bounds and nothing says which
+   is meant."
+  [documents]
+  (let [by-id     (group-by :jsonld/id documents)
+        packaging (reduce (fn [acc pkg]
+                            (reduce #(update %1 (:jsonld/id %2) (fnil conj []) pkg)
+                                    acc (index/as-vec (:urpx/packages pkg))))
+                          {} (filter #(package-types (:jsonld/type %)) documents))]
+    (fn [[pid v doc]]
+      (let [nodes    (concat [v (get v (back-pointer (:jsonld/type v))) doc]
+                             (by-id pid)
+                             (packaging pid)
+                             (packaging (:jsonld/id v))
+                             (packaging (:jsonld/id doc)))
+            declared (into (sorted-set)
+                           (keep #(when-let [tz (:urpx/timezoneIdentifier %)]
+                                    [(:jsonld/id %) tz]))
+                           nodes)
+            zones    (into (sorted-set) (map second) declared)]
+        (when (> (count zones) 1)
+          (throw (ex-info (str "Cannot zone " (pr-str (:jsonld/id v)) ": the nodes it "
+                               "belongs to declare different urpx:timezoneIdentifier "
+                               "values, " (pr-str (vec declared)) ", so its wall-clock "
+                               "bounds name different moments in each and nothing "
+                               "says which is meant.")
+                          {:reason     :urpx.arrangement/conflicting-timezone
+                           :version-id (:jsonld/id v)
+                           :plan-id    pid
+                           :declared   (vec declared)})))
+        (some-> (first zones) ZoneId/of)))))
+
+(defn- zone-requirer
+  "`find-zone`, refusing `:urpx.price/no-timezone` where it finds nothing."
+  [find-zone]
+  (fn [tr] (or (find-zone tr) (price/require-zone (nth tr 2)))))
+
+(defn- zoned-doc
+  "The triple's source document, declaring the zone found for its version when
+   its root declares none. urpx.price and urpx.schedule read the zone from the
+   document they are handed, which for a top-level version is the version."
+  [find-zone [_ _ doc :as tr]]
+  (let [zone (find-zone tr)]
+    (if (or (:urpx/timezoneIdentifier doc) (nil? zone))
+      doc
+      (assoc doc :urpx/timezoneIdentifier (str zone)))))
+
 (defn- current-versions
   "For each identity, the version in force at `t`, as a vector of triples.
    Nil `t` keeps every version, which is the whole expressed space rather than
@@ -242,18 +306,16 @@
    which has taken effect, is genuinely not offered then. urpx.price refuses
    there because it was asked for one plan's price; this was asked which
    arrangements exist, and the answer for that plan is none."
-  [triples ^ZonedDateTime t]
+  [triples ^ZonedDateTime t zone-of]
   (let [by-identity (group-by first triples)]
     (if (nil? t)
       (into {} (map (fn [[pid ts]] [pid (vec ts)])) by-identity)
       (into {}
             (keep (fn [[pid ts]]
-                    ;; Each version is zoned by ITS OWN document, which the
-                    ;; triple carries. A corpus may span zones, and reading one
-                    ;; publisher's bounds in another's frame is the defect this
-                    ;; whole path was just fixed for.
-                    (let [zone-of (fn [tr] (price/require-zone (nth tr 2)))
-                          live (filter #(price/version-covers? (second %) t (zone-of %)) ts)]
+                    ;; Each version is zoned by the nodes IT belongs to. A
+                    ;; corpus may span zones, and reading one publisher's
+                    ;; bounds in another's frame reads a different moment.
+                    (let [live (filter #(price/version-covers? (second %) t (zone-of %)) ts)]
                       (when (seq live)
                         (let [latest  (->> live (map #(price/version-effective-at (second %) (zone-of %)))
                                            (sort) (last))
@@ -456,7 +518,7 @@
          triples (-> {"urpx:RatePlanVersion"
                       (mapcat #(versions-in % "urpx:RatePlanVersion") documents)}
                      repeated (get "urpx:RatePlanVersion"))]
-     (->> (current-versions triples t)
+     (->> (current-versions triples t (zone-requirer (zone-finder documents)))
           vals
           (mapcat #(map second %))
           (sort-by :jsonld/id)
@@ -511,7 +573,7 @@
          triples (-> {"urpx:RatePlanModifierVersion"
                       (mapcat #(versions-in % "urpx:RatePlanModifierVersion") documents)}
                      repeated (get "urpx:RatePlanModifierVersion"))]
-     (->> (current-versions triples t)
+     (->> (current-versions triples t (zone-requirer (zone-finder documents)))
           vals
           (mapcat #(map second %))
           (filter #(compat % base-version plan-id))
@@ -601,11 +663,13 @@
    instead. Use `applicable-modifiers` to see what it is choosing among.
 
    Each arrangement is a map:
-     :urpx.arrangement/rate-plan            the coerced base document
+     :urpx.arrangement/rate-plan            the coerced base document, declaring
+                                            the zone found for its version
      :urpx.arrangement/version              the base version snapshot
      :urpx.arrangement/version-id           its @id
      :urpx.arrangement/plan-id              the plan identity @id
-     :urpx.arrangement/modifiers            coerced modifier documents, in order
+     :urpx.arrangement/modifiers            coerced modifier documents, in order,
+                                            zoned the same way
      :urpx.arrangement/modifier-versions    their snapshots
      :urpx.arrangement/modifier-version-ids their @ids
      :urpx.arrangement/selections           {container-@id alternative-@id}
@@ -623,13 +687,15 @@
          mods  (mapcat #(versions-in % "urpx:RatePlanModifierVersion") documents)
          merged (repeated {"urpx:RatePlanVersion"         plans
                            "urpx:RatePlanModifierVersion" mods})
-         live-plans (current-versions (get merged "urpx:RatePlanVersion") t)
-         live-mods  (current-versions (get merged "urpx:RatePlanModifierVersion") t)]
+         find-zone  (zone-finder documents)
+         zone-of    (zone-requirer find-zone)
+         live-plans (current-versions (get merged "urpx:RatePlanVersion") t zone-of)
+         live-mods  (current-versions (get merged "urpx:RatePlanModifierVersion") t zone-of)]
      ;; Base version and modifier versions are carried as [id version doc]
      ;; triples the whole way, so the document attached to an arrangement is
      ;; the one the snapshot was read out of rather than one looked up by @id.
      (->> (for [[plan-id bvs] live-plans
-                [_ bv bdoc] bvs
+                [_ bv _ :as btriple] bvs
                 :let [ctriples (vec (sort-by #(:jsonld/id (second %))
                                              (for [[_ cands] live-mods
                                                    [_ mv _ :as tr] cands
@@ -650,11 +716,11 @@
                       mtriples (mapv by-node mvs)
                       dims     (open-dimensions (cons bv mvs))]
                 sel (selection-combinations dims)]
-            {:urpx.arrangement/rate-plan            bdoc
+            {:urpx.arrangement/rate-plan            (zoned-doc find-zone btriple)
              :urpx.arrangement/version              bv
              :urpx.arrangement/version-id           (:jsonld/id bv)
              :urpx.arrangement/plan-id              plan-id
-             :urpx.arrangement/modifiers            (mapv #(nth % 2) mtriples)
+             :urpx.arrangement/modifiers            (mapv #(zoned-doc find-zone %) mtriples)
              :urpx.arrangement/modifier-versions    mvs
              :urpx.arrangement/modifier-version-ids (mapv :jsonld/id mvs)
              :urpx.arrangement/selections           sel})

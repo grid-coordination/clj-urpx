@@ -794,3 +794,98 @@
       (is (= ["x:m-v"] (ask Q arr/named-versions-add))
           "the monotone reading keeps Q, which is the behavior the
            preserves-document-level-properties line supports"))))
+
+;; ---------------------------------------------------------------------------
+;; A version zoned by the nodes it belongs to
+;; ---------------------------------------------------------------------------
+
+(defn- un-nest
+  "`plan` split into its identity document and a top-level version document
+   carrying only a back-pointer to it, as v0.5.1 permits. The zone stays on
+   the identity."
+  [plan]
+  (let [v (:urpx/hasRatePlanVersion plan)]
+    [(dissoc plan :urpx/hasRatePlanVersion)
+     (-> v
+         (dissoc :urpx/timezoneIdentifier)
+         (assoc :urpx/forRatePlan {:jsonld/id (:jsonld/id plan)}))]))
+
+(deftest a-top-level-version-is-zoned-by-its-separate-identity-document
+  (testing "urpx:timezoneIdentifier is admitted on the version, its plan and the
+            package that contains it. A top-level version whose plan document
+            carries the zone was refused :urpx.price/no-timezone, because only
+            the version's own document root was read."
+    (let [[identity version] (un-nest (fixtures/load-rate-plan "sce-d-2026-03-20"))
+          docs [identity version]
+          [a :as as] (arr/arrangements docs {:at (at)})]
+      (is (nil? (:urpx/timezoneIdentifier version)) "the version declares no zone")
+      (is (= ["sce:d-2026-03-20"] (mapv :urpx.arrangement/version-id as))
+          "enumerated at an instant")
+      (is (= ["sce:d-2026-03-20"] (mapv :jsonld/id (arr/plan-versions docs {:at (at)}))))
+      (is (= 0.31085M (rate a))
+          "and resolve-at prices it, the same rate as the nested filing")
+      (is (seq (arr/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0)))
+          "and a horizon walks it"))))
+
+(deftest a-top-level-modifier-version-is-zoned-by-its-identity-document
+  (let [mv   {:jsonld/id "x:m-v" :jsonld/type "urpx:RatePlanModifierVersion"
+              :urpx/forRatePlanModifier {:jsonld/id "x:m"}
+              :urpx/applicableToRatePlan [{:jsonld/id "x:p"}]
+              :urpx/effectiveDateTime (ldt 2026 1 1)}
+        m    {:jsonld/id "x:m" :jsonld/type "urpx:RatePlanModifier"
+              :urpx/timezoneIdentifier "America/Los_Angeles"}
+        p    (plan-doc "x:p" "x:p-v" (ldt 2026 1 1))
+        docs [p m mv]]
+    (is (= ["x:m-v"] (mapv :jsonld/id (arr/applicable-modifiers
+                                       docs (:urpx/hasRatePlanVersion p) {:at (at)}))))
+    (is (= [[] ["x:m-v"]] (mapv :urpx.arrangement/modifier-version-ids
+                                (arr/arrangements docs {:at (at)}))))))
+
+(deftest zones-that-agree-across-nodes-are-the-zone
+  (let [[identity version] (un-nest (fixtures/load-rate-plan "sce-d-2026-03-20"))
+        pkg {:jsonld/id "x:pkg" :jsonld/type "urpx:URPXPackage"
+             :urpx/timezoneIdentifier "America/Los_Angeles"
+             :urpx/packages [{:jsonld/id (:jsonld/id version)}]}
+        docs [identity (assoc version :urpx/timezoneIdentifier "America/Los_Angeles") pkg]]
+    (is (= 0.31085M (rate (first (arr/arrangements docs {:at (at)})))))))
+
+(deftest a-package-naming-the-plan-zones-its-versions
+  (let [[identity version] (un-nest (fixtures/load-rate-plan "sce-d-2026-03-20"))
+        pkg (fn [tz] {:jsonld/id "x:pkg" :jsonld/type "urpx:URPXPackage"
+                      :urpx/timezoneIdentifier tz
+                      :urpx/packages [{:jsonld/id (:jsonld/id identity)}]})]
+    (is (= 0.31085M (rate (first (arr/arrangements
+                                  [(dissoc identity :urpx/timezoneIdentifier) version
+                                   (pkg "America/Los_Angeles")]
+                                  {:at (at)}))))
+        "the only zone is on the package carrying the plan")
+    (let [e (is (thrown? clojure.lang.ExceptionInfo
+                         (arr/arrangements [identity version (pkg "America/New_York")]
+                                           {:at (at)})))]
+      (is (= :urpx.arrangement/conflicting-timezone (:reason (ex-data e)))))))
+
+(deftest zones-that-disagree-across-nodes-are-refused
+  (testing "the version, its plan and its package each admit a zone, and the
+            spec gives no precedence among them. Two different values state two
+            frames for one set of bounds."
+    (let [[identity version] (un-nest (fixtures/load-rate-plan "sce-d-2026-03-20"))
+          ny  "America/New_York"
+          pkg {:jsonld/id "x:pkg" :jsonld/type "urpx:URPXPackage"
+               :urpx/timezoneIdentifier ny
+               :urpx/packages [{:jsonld/id (:jsonld/id version)}]}]
+      (doseq [[nm docs] [["version against plan"
+                          [identity (assoc version :urpx/timezoneIdentifier ny)]]
+                         ["package against plan" [identity version pkg]]
+                         ["embedded back-pointer node against plan"
+                          [identity (assoc version :urpx/forRatePlan
+                                           {:jsonld/id (:jsonld/id identity)
+                                            :jsonld/type "urpx:RatePlan"
+                                            :urpx/timezoneIdentifier ny})]]]]
+        (let [e (is (thrown? clojure.lang.ExceptionInfo (arr/arrangements docs {:at (at)})) nm)]
+          (is (= :urpx.arrangement/conflicting-timezone (:reason (ex-data e))) nm)
+          (is (= "sce:d-2026-03-20" (:version-id (ex-data e))) nm)
+          (is (= #{"America/Los_Angeles" ny} (set (map second (:declared (ex-data e))))) nm)))
+      (let [e (is (thrown? clojure.lang.ExceptionInfo
+                           (arr/arrangements [identity (assoc version :urpx/timezoneIdentifier ny)])))]
+        (is (= :urpx.arrangement/conflicting-timezone (:reason (ex-data e)))
+            "without :at too, since the arrangement must carry one zone to resolve in")))))
