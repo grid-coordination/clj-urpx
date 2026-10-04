@@ -4,9 +4,9 @@
   The parser (`urpx.core/load-rate-plan`) produces a Clojure map with
   namespaced keys but all-string leaf values. This namespace applies the
   `:decode/urpx-jsonld` decoders attached to `urpx.schema` schemas to convert
-  those strings into BigDecimals, LocalDates, LocalTimes, LocalDateTimes,
-  Durations, and integer month numbers — and to normalize fields that URPX
-  permits as either a single map or a vector of maps."
+  those strings into BigDecimals, java.time values, Durations, and integer
+  month numbers — and to normalize fields that URPX permits as either a single
+  map or a vector of maps."
   (:require [malli.core :as m]
             [malli.transform :as mt]
             [urpx.schema :as schema]))
@@ -99,6 +99,9 @@
   "Walk `doc` and report what temporal literals it carries:
    `{:times #{} :dates #{} :date-times #{} :date-shaped-strings n}`.
 
+   `:times` holds LocalTimes and OffsetTimes, `:date-times` LocalDateTimes and
+   ZonedDateTimes, the latter including an xsd:date written with an offset.
+
    By java.time TYPE rather than by property name, deliberately. A name list
    would have to be kept in step with the vocabulary, and the one it missed
    would be a missing value rather than a loud failure.
@@ -112,7 +115,9 @@
     (letfn [(walk [x]
               (cond
                 (instance? java.time.LocalTime x)     (vswap! acc update :times conj x)
+                (instance? java.time.OffsetTime x)    (vswap! acc update :times conj x)
                 (instance? java.time.LocalDateTime x) (vswap! acc update :date-times conj x)
+                (instance? java.time.ZonedDateTime x) (vswap! acc update :date-times conj x)
                 (instance? java.time.LocalDate x)     (vswap! acc update :dates conj x)
                 (string? x) (when (re-find uncoerced-re x)
                               (vswap! acc update :date-shaped-strings inc))

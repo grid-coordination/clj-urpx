@@ -283,11 +283,11 @@
   (testing "Date: LocalDate → ISO date"
     (is (= "2026-01-01"
            (coerce/encode schema/Date (LocalDate/of 2026 1 1)))))
-  (testing "Time: LocalTime → 'HH:mm' (or 'HH:mm:ss' if seconds non-zero)"
-    (is (= "16:00"
+  (testing "Time: LocalTime → 'HH:mm:ss', which xsd:time requires"
+    (is (= "16:00:00"
            (coerce/encode schema/Time (LocalTime/of 16 0)))))
-  (testing "DateTime: LocalDateTime → ISO local datetime"
-    (is (= "2026-01-01T00:00"
+  (testing "DateTime: LocalDateTime → 'yyyy-MM-ddTHH:mm:ss', which xsd:dateTime requires"
+    (is (= "2026-01-01T00:00:00"
            (coerce/encode schema/DateTime (LocalDateTime/of 2026 1 1 0 0)))))
   (testing "MonthNumber: int → '--MM' (zero-padded)"
     (is (= "--06" (coerce/encode schema/MonthNumber 6)))

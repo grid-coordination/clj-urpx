@@ -41,7 +41,7 @@
             that could change value between two candidates without any literal
             being crossed, and no test here would fail."
     (let [src   (slurp "src/urpx/price.clj")
-          calls (set (map second (re-seq #"\(\.([a-zA-Z]+)\s+(?:\^ZonedDateTime\s+)?zdt\)" src)))]
+          calls (set (map second (re-seq #"\(\.([a-zA-Z]+)\s+(?:\^ZonedDateTime\s+)?(?:zdt|q)\)" src)))]
       (is (= #{"toLocalDate" "toLocalTime" "getDayOfWeek" "getZone"} calls)
           (str "urpx.price now projects the query instant differently: " (pr-str calls)
                ". Local field reads plus the plan's zone are the superset "
@@ -249,3 +249,22 @@
       (is (< (count cands) 72)
           (str "expected fewer than the 72 hourly samples, got " (count cands)))
       (is (pos? (count cands))))))
+
+(deftest a-version-starting-in-a-dst-gap-starts-where-its-segment-does
+  (testing "2026-03-08T02:30 does not exist in Los Angeles. The version reader
+            and the candidate rule must read it as the same instant, the
+            transition, or the segment boundary falls where the version does
+            not change and the change falls between candidates."
+    (is (= (zdt 2026 3 8 3 0)
+           (price/version-effective-at {:urpx/effectiveDateTime (LocalDateTime/of 2026 3 8 2 30)}
+                                       la)))
+    (let [plan (update (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+                       :urpx/hasRatePlanVersion
+                       #(-> % (dissoc :urpx/effectiveDate)
+                            (assoc :urpx/effectiveDateTime (LocalDateTime/of 2026 3 8 2 30))))
+          segs (schedule/price-segments plan [] (.toInstant (zdt 2026 3 8 0 0))
+                                        (.toInstant (zdt 2026 3 9 0 0)) la)]
+      (is (= (zdt 2026 3 8 3 0)
+             (:tick/beginning (first (remove #(get-in % [:urpx.interval/resolved
+                                                          :urpx.resolved/outside-version-window])
+                                             segs))))))))

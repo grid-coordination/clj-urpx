@@ -277,6 +277,12 @@
         (keep #(when-let [tz (:urpx/timezoneIdentifier %)] [(:jsonld/id %) tz]))
         nodes))
 
+(defn- same-instant?
+  "True if ZonedDateTimes `a` and `b` name one instant, or are both nil. `=`
+   also compares their zones, and versions of one identity may be read in two."
+  [^ZonedDateTime a ^ZonedDateTime b]
+  (if (and a b) (.isEqual a b) (= a b)))
+
 (defn- zone-finder
   "A fn from an `[identity-id version source-doc]` triple to the ZoneId its
    version is written in, or nil when no node it belongs to declares one.
@@ -370,7 +376,8 @@
                         (let [latest  (->> live (map #(price/version-effective-at (second %) (zone-of %)))
                                            (sort) (last))
                               winners (distinct-by-node
-                                       (filter #(= latest (price/version-effective-at (second %) (zone-of %)))
+                                       (filter #(same-instant? latest
+                                                               (price/version-effective-at (second %) (zone-of %)))
                                                live))]
                           (when (> (count winners) 1)
                             (throw (ex-info (str "Cannot choose a version for " (pr-str pid) ": "

@@ -11,9 +11,9 @@
   Pipeline (per call):
 
     1. urpx.coerce/encode runs the schema's :encode/urpx-jsonld transformer
-       — turns BigDecimal / LocalDate / LocalDateTime / LocalTime / Duration
-       / int-month back into the JSON-LD string forms (xsd:decimal,
-       xsd:date, xsd:dateTime, xsd:time, xsd:duration, xsd:gMonth).
+       — turns BigDecimal / java.time values / Duration / int-month back
+       into the JSON-LD string forms (xsd:decimal, xsd:date, xsd:dateTime,
+       xsd:time, xsd:duration, xsd:gMonth).
        Already-string values pass through unchanged.
     2. urpx.core/keys->jsonld walks the result, converting namespaced
        keyword keys back to their CURIE / @-reserved JSON-LD forms.
@@ -97,6 +97,8 @@
    "urpx:expectedEndDate"      {"@type" "xsd:date"}
    "urpx:holidayDate"          {"@type" "xsd:date"}
    "urpx:dateValue"            {"@type" "xsd:date"}
+   "urpx:dateModified"         {"@type" "xsd:date"}
+   "urpx:cancelledOn"          {"@type" "xsd:date"}
 
    ;; xsd:dateTime
    "urpx:effectiveDateTime"   {"@type" "xsd:dateTime"}
@@ -109,6 +111,9 @@
    "urpx:dateTimeReceived"    {"@type" "xsd:dateTime"}
    "urpx:expectedEndDateTime" {"@type" "xsd:dateTime"}
    "urpx:dateTimeValue"       {"@type" "xsd:dateTime"}
+   "urpx:dateTimeModified"    {"@type" "xsd:dateTime"}
+   "urpx:cancelledOnDateTime" {"@type" "xsd:dateTime"}
+   "urpx:evaluatedOn"         {"@type" "xsd:dateTime"}
 
    ;; xsd:time
    "urpx:startTime"  {"@type" "xsd:time"}

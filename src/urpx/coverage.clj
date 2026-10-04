@@ -23,7 +23,8 @@
   producers SHOULD attach a TemporalScope with scopeKind urpx:coverage, which no
   shape requires, so a verdict with no scope is conformant and a consumer
   publishing a horizon cannot assume a verdict covers it."
-  (:require [urpx.index :as index]))
+  (:require [urpx.index :as index]
+            [urpx.schema :as schema]))
 
 (def completeness-results
   "The six urpx:CompletenessResultValue members, from
@@ -208,7 +209,9 @@
       :urpx.coverage/coverage-window that scope node, raw, or nil
       :urpx.coverage/evaluations     [{:kind :evaluated-on :description}], or
                                      {:unresolved-ref id} for one that cannot
-                                     be followed
+                                     be followed. :evaluated-on is a
+                                     ZonedDateTime when the document wrote an
+                                     offset, else a LocalDateTime
 
    ABSENT IS NOT UNKNOWN. A version with no claim reports `stated? false` and
    `completeness nil`, never `\"urpx:unknown\"`. urpx:unknown is itself a
@@ -357,27 +360,28 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- scope-bound
-  "One end of a TemporalScope as a LocalDateTime, or nil.
+  "One end of a TemporalScope as a ZonedDateTime in `zone`, or nil.
 
    The dateTime form is preferred and the date form read at start of day, which
    is how urpx.price/version-effective-at already reads the version shapes' own
    pair. Two readings of the same kind of bound in one library would be the
    drift that put an effectiveDateTime-only filter in urpx.arrangements."
-  [scope dt-key d-key]
-  (or (get scope dt-key)
-      (some-> ^java.time.LocalDate (get scope d-key) (.atStartOfDay))))
+  [scope dt-key d-key ^java.time.ZoneId zone]
+  (schema/in-zone (or (get scope dt-key) (get scope d-key)) zone))
 
 (defn coverage-interval
   "The window a verdict covers, as `{:tick/beginning <ZonedDateTime>
    :tick/end <ZonedDateTime>}` in `zone`, with either end nil when unbounded on
    that side.
 
-   ZONED, AND THE ZONE IS REQUIRED. URPX states a TemporalScope's bounds without
-   one, so a bare bound is a wall-clock reading that means nothing until a zone
-   is supplied. Returning it unzoned looked like the honest choice and was the
-   opposite: `urpx.schedule` emits `{:tick/beginning :tick/end}` carrying
-   ZonedDateTimes, so an unzoned window is the same map with the same keys and
-   an incompatible type, and the natural comparison does not fail loudly.
+   ZONED, AND THE ZONE IS REQUIRED. A TemporalScope's bounds are usually
+   written without an offset, so a bare bound is a wall-clock reading that means
+   nothing until a zone is supplied. A bound written with an offset is moved to
+   `zone` with its instant kept. Returning it unzoned looked like the honest
+   choice and was the opposite: `urpx.schedule` emits
+   `{:tick/beginning :tick/end}` carrying ZonedDateTimes, so an unzoned window
+   is the same map with the same keys and an incompatible type, and the natural
+   comparison does not fail loudly.
    Measured: `tick.alpha.interval/relation` throws a ClassCastException on the
    mixture, and `contains?` returns TRUE regardless of the values. A silently
    wrong answer about whether a verdict covers a published horizon is the worst
@@ -407,9 +411,9 @@
   (let [scope (:urpx.coverage/coverage-window version-report)
         vid   (:urpx.coverage/version-id version-report)]
     (when-not zone
-      (throw (ex-info (str "A coverage window needs a zone: URPX states a "
-                           "TemporalScope's bounds as wall-clock readings with "
-                           "no zone, and an unzoned interval compares against a "
+      (throw (ex-info (str "A coverage window needs a zone: a TemporalScope's "
+                           "bounds written without an offset are wall-clock "
+                           "readings, and an unzoned interval compares against a "
                            "zoned schedule interval without failing loudly.")
                       {:reason :urpx.coverage/zone-required
                        :version-id vid})))
@@ -421,8 +425,8 @@
                            "requires it.")
                       {:reason :urpx.coverage/coverage-scope-absent
                        :version-id vid})))
-    (let [beginning (scope-bound scope :urpx/startDateTime :urpx/startDate)
-          end       (scope-bound scope :urpx/endDateTime :urpx/endDate)]
+    (let [beginning (scope-bound scope :urpx/startDateTime :urpx/startDate zone)
+          end       (scope-bound scope :urpx/endDateTime :urpx/endDate zone)]
       (when (and (nil? beginning) (nil? end))
         (throw (ex-info (str "The coverage scope on " (pr-str vid) " states its "
                              "role and no bounds, so it says which clock the "
@@ -432,8 +436,8 @@
                              "unanswerable.")
                         {:reason :urpx.coverage/coverage-scope-unbounded
                          :version-id vid})))
-      {:tick/beginning (some-> ^java.time.LocalDateTime beginning (.atZone zone))
-       :tick/end       (some-> ^java.time.LocalDateTime end (.atZone zone))})))
+      {:tick/beginning beginning
+       :tick/end       end})))
 
 (defn verdict-applies?
   "True if the window `version-report`'s verdict covers CONTAINS `interval`.

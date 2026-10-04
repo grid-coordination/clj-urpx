@@ -17,7 +17,7 @@ The standard's source of truth — ontology, SHACL shapes, JSON-LD context, tuto
 ## What does this library do?
 
 - **Parse** URPX JSON-LD rate plan documents into Clojure data structures
-- **Validate & coerce** parsed data against [Malli](https://github.com/metosin/malli) schemas — string leaves become `BigDecimal`, `LocalDate`, `LocalTime`, `LocalDateTime`, `Duration`, `Period`, integer month numbers
+- **Validate & coerce** parsed data against [Malli](https://github.com/metosin/malli) schemas — string leaves become `BigDecimal`, `LocalDate`, `LocalTime`, `LocalDateTime`, `ZonedDateTime`, `OffsetTime`, `Duration`, `Period`, integer month numbers
 - **Resolve** the per-ledger, per-tier prices that apply at a given instant in a given timezone — TOU period, season, day-of-week, midnight-wrapping brackets, block-tier ladders
 - **Generate** contiguous price-interval schedules suitable for [OpenADR 3](https://www.openadr.org/) events, either sampled on a grid or as exact segments whose boundaries come from the tariff
 - **Emit** URPX JSON-LD from coerced Clojure entities (the inverse of parse + coerce) — useful for round-trip validation and programmatic authoring of URPX documents
@@ -173,7 +173,9 @@ Which `urpx:ServiceBracket` states those bounds is selected per `urpx:serviceTie
 
 The library uses `java.time.ZonedDateTime` end-to-end internally and at output boundaries — DST-correct under daylight transitions because every step of the walk preserves zone, no `Instant`-to-local-time conversions in the middle of the schedule.
 
-**Everything resolves in the plan's own zone.** A URPX document writes every bound — `urpx:effectiveDateTime`, `urpx:expirationDateTime`, every TOU bracket — as a naive wall-clock reading with no offset. They are wall-clock *in the zone the plan declares*, so reading them in any other zone reads a different moment. `resolve-prices` therefore anchors the query in `urpx:timezoneIdentifier` before comparing anything.
+**Everything resolves in the plan's own zone.** A URPX document usually writes its bounds — `urpx:effectiveDateTime`, `urpx:expirationDateTime`, every TOU bracket — as naive wall-clock readings with no offset. They are wall-clock *in the zone the plan declares*, so reading them in any other zone reads a different moment. `resolve-prices` therefore anchors the query in `urpx:timezoneIdentifier` before comparing anything.
+
+**A literal with an offset names its instant.** An `xsd:dateTime` written with `Z` or `-05:00` decodes to a `ZonedDateTime` in that offset and is compared as that instant, so on a Pacific plan `2026-01-10T08:00:00Z` and `2026-01-10T00:00:00` are the same bound. An `xsd:time` with an offset decodes to an `OffsetTime`, read on the query's date, and an `xsd:date` with one to a `ZonedDateTime` at the start of that day in that offset; each encodes back with its offset, in XSD canonical form (`+00:00` as `Z`, seconds always written, a fraction only when nonzero). A malformed literal refuses with `:urpx.schema/malformed-datetime`, `-date` or `-time`.
 
 That makes **one moment cost one price, however it is spelled**. It did not used to: until 0.31.0 the query was reduced with `.toLocalDateTime`, which kept whatever zone the caller happened to use, so the same instant written two ways gave two answers — on PG&E E-TOU-C, Peak `0.46886` asked in Pacific and Off-Peak `0.34586` asked in UTC, 36% apart, with no error and no mark.
 
@@ -574,7 +576,7 @@ What a caller does instead is decide its own publication policy over `completene
 
 `coverage-interval` returns the window as `{:tick/beginning <ZonedDateTime> :tick/end <ZonedDateTime>}` — the same shape *and the same types* `price-schedule` and `price-segments` emit, per this README's own rule that the library uses `ZonedDateTime` end-to-end at output boundaries. `verdict-applies?` asks whether that window contains an interval, `[beginning, end)` with start inclusive and end exclusive, matching `urpx.price/version-covers?` exactly. URPX states no convention for a `TemporalScope`'s bounds, and two readings of a window inside one library would be worse than either.
 
-**The zone is required, not defaulted.** URPX states a `TemporalScope`'s bounds as wall-clock readings with no zone, so there is no honest default and any default would be a zone this library picked. A rate plan usually declares one as `urpx:timezoneIdentifier`, which is what `urpx.schedule` resolves for the same purpose; pass that. Refuses `:urpx.coverage/zone-required` otherwise.
+**The zone is required, not defaulted.** A `TemporalScope`'s bounds are usually wall-clock readings with no offset, so there is no honest default and any default would be a zone this library picked. A rate plan usually declares one as `urpx:timezoneIdentifier`, which is what `urpx.schedule` resolves for the same purpose; pass that. Refuses `:urpx.coverage/zone-required` otherwise.
 
 **These are tick intervals in fact, not only in shape.** `tick.alpha.interval`'s functions read any map carrying those two keys, so Allen's relations work on the value directly and `ti/contains?` agrees with `verdict-applies?` case for case:
 
@@ -828,7 +830,7 @@ The library also supports the inverse direction: emit URPX JSON-LD from a coerce
    :urpx/packages [plan]})
 ```
 
-Each function takes a coerced (or already-typed EDN) entity, runs the schema's `:encode/urpx-jsonld` transformer to convert typed leaves (`BigDecimal`, `LocalDate`, `LocalDateTime`, `Duration`, integer month numbers, …) back to JSON-LD string forms, projects namespaced-keyword keys to their CURIE / `@`-reserved JSON-LD forms, and serializes via `clojure.data.json/write-str`.
+Each function takes a coerced (or already-typed EDN) entity, runs the schema's `:encode/urpx-jsonld` transformer to convert typed leaves (`BigDecimal`, `LocalDate`, `LocalDateTime`, `ZonedDateTime`, `Duration`, integer month numbers, …) back to JSON-LD string forms, projects namespaced-keyword keys to their CURIE / `@`-reserved JSON-LD forms, and serializes via `clojure.data.json/write-str`. A typed-literal object such as `{"@value": "2026-05-01T16:00:00Z", "@type": "xsd:dateTime"}` decodes like the plain string and emits as one, typed by `default-context`.
 
 ### Worked round-trip
 
@@ -899,7 +901,7 @@ For programmatic construction or test-fixture authoring, `urpx.dsl` provides idi
 The DSL handles the boring parts so authoring code stays declarative:
 
 - **`@type` is inferred** from the schema (no `:jsonld/type "urpx:Season"` boilerplate).
-- **Auto-coercion** of raw Clojure inputs through the schema's `:decode/urpx-jsonld` decoders: numbers → `BigDecimal`, ISO strings → `LocalDate` / `LocalDateTime` / `LocalTime`, `--MM` xsd:gMonth → int.
+- **Auto-coercion** of raw Clojure inputs through the schema's `:decode/urpx-jsonld` decoders: numbers → `BigDecimal`, ISO strings → `LocalDate` / `LocalDateTime` / `LocalTime`, or the zoned forms when the string carries an offset, `--MM` xsd:gMonth → int.
 - **Validation on construct** — every builder throws `ex-info` with the Malli explanation if the entity doesn't validate against its schema, so shape drift surfaces at the call site.
 - **Two kwarg forms** — canonical `:urpx/seasonName` or auto-derived kebab-case `:season-name` (both work, can be mixed in one call).
 

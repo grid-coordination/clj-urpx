@@ -33,8 +33,9 @@
   opt out of non-holidays (urpx:includeNonHolidays = false) will never match."
   (:require [clojure.string :as str]
             [urpx.holidays :as holidays]
-            [urpx.index :as index])
-  (:import [java.time DayOfWeek LocalDate LocalDateTime LocalTime ZoneId ZonedDateTime]))
+            [urpx.index :as index]
+            [urpx.schema :as schema])
+  (:import [java.time DayOfWeek LocalDate ZoneId ZonedDateTime]))
 
 ;; ---------------------------------------------------------------------------
 ;; Day-type matching
@@ -88,11 +89,15 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- time-in-bracket?
-  "Half-open containment: [startTime, endTime). If startTime > endTime the
-   bracket is treated as wrapping midnight."
-  [^LocalTime t bracket]
-  (let [start ^LocalTime (:urpx/startTime bracket)
-        end   ^LocalTime (:urpx/endTime bracket)]
+  "Half-open containment of `q`'s local time in [startTime, endTime). If
+   startTime > endTime the bracket is treated as wrapping midnight. A bound
+   with an offset is read on `q`'s date in `q`'s zone."
+  [^ZonedDateTime q bracket]
+  (let [t     (.toLocalTime q)
+        date  (.toLocalDate q)
+        zone  (.getZone q)
+        start (schema/wall-time (:urpx/startTime bracket) date zone)
+        end   (schema/wall-time (:urpx/endTime bracket) date zone)]
     (if (.isBefore start end)
       (and (not (.isBefore t start)) (.isBefore t end))
       ;; wraps midnight: [start, 24:00) ∪ [00:00, end)
@@ -121,15 +126,16 @@
   (index/as-vec (:urpx/appliesInSeason node)))
 
 (defn- find-tou-period
-  "Find the TOUPeriod whose TimeBracket matches the given season, date,
-   day-of-week, and local-time across every TOUSchedule in `tou-schedules`.
+  "Find the TOUPeriod whose TimeBracket matches the given season and the
+   date, day of week and local time of `q`, a ZonedDateTime in the plan's
+   zone, across every TOUSchedule in `tou-schedules`.
    Walks every tier's periods (the tier hierarchy is for classification —
    what matters for resolution is the bracket match).
 
    BillingModel.hasTOUSchedule is a vector: one schedule per
    MetricInput when the rate plan TOU-zones multiple metrics. The first
    bracket-matching period across all schedules wins."
-  [tou-schedules season-id ^LocalDate date ^LocalTime t ^DayOfWeek dow holiday?]
+  [tou-schedules season-id ^ZonedDateTime q holiday?]
   (when (seq tou-schedules)
     (some
      (fn [period]
@@ -153,8 +159,8 @@
                        (if (empty? refs)
                          (nil? season-id)
                          (boolean (some #(= season-id (:jsonld/id %)) refs))))
-                     (bracket-matches-day? bracket date dow holiday?)
-                     (time-in-bracket? t bracket)))
+                     (bracket-matches-day? bracket (.toLocalDate q) (.getDayOfWeek q) holiday?)
+                     (time-in-bracket? q bracket)))
               (:urpx/hasTimeBracket period))
          period))
      (mapcat (fn [schedule]
@@ -166,8 +172,8 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- not-after?
-  [^LocalDate a ^LocalDate b]
-  (not (.isAfter a b)))
+  [^LocalDate a ^ZonedDateTime q]
+  (not (.isAfter a (.toLocalDate q))))
 
 (defn- price-set-alternative-for
   "Within a PriceSetAlternatives, find the alternative whose
@@ -190,8 +196,8 @@
   LocalDate/MIN)
 
 (defn- price-start
-  "The date from which `price` is in effect, falling back to `container-date`
-   (a PriceSet's) and then to `undated`.
+  "The date in `zone` from which `price` is in effect, falling back to
+   `container-date` (a PriceSet's) and then to `undated`.
 
    urpx:startDateTime is preferred over urpx:startDate when both are stated,
    mirroring how version-effective-at prefers effectiveDateTime. The schema
@@ -207,9 +213,10 @@
    and composing it with its base plan changed nothing and said nothing.
    sh:minCount 0 on both PriceShape and PriceSetShape is the vocabulary
    agreeing that absence is legal rather than defective."
-  ^LocalDate [price ^LocalDate container-date]
-  (or (some-> (:urpx/startDateTime price) (.toLocalDate))
-      (:urpx/startDate price)
+  ^LocalDate [price ^LocalDate container-date ^ZoneId zone]
+  (or (some-> (or (:urpx/startDateTime price) (:urpx/startDate price))
+              (schema/in-zone zone)
+              (.toLocalDate))
       container-date
       undated))
 
@@ -226,21 +233,21 @@
    unresolved alternative aren't surfaced. Programmatic ConditionExpression
    evaluation against a customer profile is a future enhancement; the
    caller drives selection explicitly via `:profile-alternatives` opts."
-  [prices ^LocalDate query-date selection]
+  [prices ^ZonedDateTime q selection]
   (mapcat (fn [psas]
             (let [pa-id   (get-in psas [:urpx/referencesProfileAlternatives :jsonld/id])
                   chosen  (get selection pa-id)
                   picked  (price-set-alternative-for psas chosen)]
               (when picked
                 (keep (fn [p]
-                        (let [sd (price-start p nil)]
-                          (when (not-after? sd query-date) [p sd])))
+                        (let [sd (price-start p nil (.getZone q))]
+                          (when (not-after? sd q) [p sd])))
                       (:urpx/hasPrice picked)))))
           (:urpx/hasPriceSetAlternatives prices)))
 
 (defn- scoped-prices
   "Return a seq of [price effective-start-date] pairs for every Price under
-   `prices` whose effective start-date is <= `query-date`. Walks the flat
+   `prices` whose effective start-date is <= the date of `q`. Walks the flat
    :urpx/hasPrice list, PriceSet-nested prices, and PriceSetAlternatives-
    nested prices when the caller supplies an explicit
    `:profile-alternatives` selection in opts.
@@ -249,22 +256,23 @@
    PriceSet carries one it acts as the date floor for any contained Price that
    does not declare its own; when neither states one the Price carries no start
    constraint and is in effect, which is what `price-start` settles."
-  [prices ^LocalDate query-date opts]
-  (let [selection (:profile-alternatives opts {})]
+  [prices ^ZonedDateTime q opts]
+  (let [selection (:profile-alternatives opts {})
+        zone      (.getZone q)]
     (concat
      (keep (fn [p]
-             (let [sd (price-start p nil)]
-               (when (not-after? sd query-date) [p sd])))
+             (let [sd (price-start p nil zone)]
+               (when (not-after? sd q) [p sd])))
            (:urpx/hasPrice prices))
      (mapcat (fn [ps]
-               (let [ps-sd (price-start ps nil)]
-                 (when (not-after? ps-sd query-date)
+               (let [ps-sd (price-start ps nil zone)]
+                 (when (not-after? ps-sd q)
                    (keep (fn [p]
-                           (let [sd (price-start p (when-not (= undated ps-sd) ps-sd))]
-                             (when (not-after? sd query-date) [p sd])))
+                           (let [sd (price-start p (when-not (= undated ps-sd) ps-sd) zone)]
+                             (when (not-after? sd q) [p sd])))
                          (:urpx/hasPrice ps)))))
              (:urpx/hasPriceSet prices))
-     (prices-from-alternatives prices query-date selection))))
+     (prices-from-alternatives prices q selection))))
 
 (defn- price-active-at-tou?
   "True if `price` may apply at the resolved TOU period.
@@ -304,8 +312,8 @@
 
    For non-tiered ledgers (one PD, one Price, no serviceTierNumber) the
    returned vector has a single entry."
-  ([prices ^LocalDate query-date opts] (active-prices-by-pd prices query-date opts nil))
-  ([prices ^LocalDate query-date opts resolved-period-num]
+  ([prices ^ZonedDateTime q opts] (active-prices-by-pd prices q opts nil))
+  ([prices ^ZonedDateTime q opts resolved-period-num]
    (let [latest-per-key
          (reduce (fn [acc [price sd]]
                   ;; Keyed on the TOU period too. Without it, six TOU variants
@@ -321,7 +329,7 @@
                        (assoc acc k [price sd])
                        acc)))
                  {} (filter #(price-active-at-tou? (first %) resolved-period-num)
-                            (scoped-prices prices query-date opts)))]
+                            (scoped-prices prices q opts)))]
      (reduce-kv (fn [acc [pd-id _ _] pair]
                   (update acc pd-id (fnil conj []) pair))
                 {} latest-per-key))))
@@ -333,12 +341,12 @@
    vintage-year prices). Distinct from `prices-from-alternatives`, which
    only surfaces the caller-selected alternative for the base RatePlan
    resolution path."
-  [prices ^LocalDate query-date]
+  [prices ^ZonedDateTime q]
   (mapcat (fn [psas]
             (mapcat (fn [psa]
                       (keep (fn [p]
-                              (let [sd (price-start p nil)]
-                                (when (not-after? sd query-date) [p sd])))
+                              (let [sd (price-start p nil (.getZone q))]
+                                (when (not-after? sd q) [p sd])))
                             (:urpx/hasPrice psa)))
                     (:urpx/hasPriceSetAlternative psas)))
           (:urpx/hasPriceSetAlternatives prices)))
@@ -350,9 +358,9 @@
    prices that the caller selects from. Walks both the flat hasPrice list
    (CPAU E-HRA shape) and hasPriceSetAlternatives nesting (PG&E Vintage-PCIA
    shape — per-departure-vintage-year prices in PriceSetAlternative)."
-  ([prices ^LocalDate query-date] (all-active-prices-by-pd prices query-date nil nil))
-  ([prices ^LocalDate query-date opts] (all-active-prices-by-pd prices query-date opts nil))
-  ([prices ^LocalDate query-date opts resolved-period-num]
+  ([prices ^ZonedDateTime q] (all-active-prices-by-pd prices q nil nil))
+  ([prices ^ZonedDateTime q opts] (all-active-prices-by-pd prices q opts nil))
+  ([prices ^ZonedDateTime q opts resolved-period-num]
    (let [selection (:profile-alternatives opts)]
      (reduce (fn [acc [price :as pair]]
                (let [pd-id (get-in price [:urpx/referencesPriceDefinition :jsonld/id])]
@@ -360,7 +368,7 @@
              {}
              (filter
               #(price-active-at-tou? (first %) resolved-period-num)
-              (concat (scoped-prices prices query-date nil)
+              (concat (scoped-prices prices q nil)
                      ;; With a selection, surface only the chosen alternative,
                      ;; exactly as the base plan path does. Without one, keep the
                      ;; surface-all contract so a caller reading tiers directly
@@ -368,8 +376,8 @@
                      ;; then marks the ledger so an AGGREGATE cannot silently
                      ;; pick one of them.
                       (if (seq selection)
-                        (prices-from-alternatives prices query-date selection)
-                        (all-prices-from-alternatives prices query-date))))))))
+                        (prices-from-alternatives prices q selection)
+                        (all-prices-from-alternatives prices q))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Service-tier lookup (block tiers, e.g. CPAU E-1 baseline / over-baseline)
@@ -1440,9 +1448,9 @@
 (defn plan-zone
   "The ZoneId a plan or modifier declares as urpx:timezoneIdentifier, or nil.
 
-   THE ZONE EVERY BOUND IN A URPX DOCUMENT IS WRITTEN IN. urpx:effectiveDateTime,
-   urpx:expirationDateTime and every TOU bracket are naive wall-clock readings.
-   They are wall-clock IN THIS ZONE, so reading them in any other is reading a
+   THE ZONE A URPX DOCUMENT'S BOUNDS ARE WRITTEN IN. urpx:effectiveDateTime,
+   urpx:expirationDateTime and every TOU bracket written without an offset are
+   wall-clock readings IN THIS ZONE, so reading them in any other is reading a
    different moment.
 
    Read from the urpx:RatePlan or the urpx:RatePlanModifier, so both halves of
@@ -1473,11 +1481,13 @@
   "The instant `version` takes effect, as a ZonedDateTime in `zone`, or nil if
    it does not say.
 
-   ZONE REQUIRED, NOT OPTIONAL. The document states a naive wall-clock reading;
-   it names a moment only once anchored, and every zone anchors it to a
-   different one. An optional zone would make the unzoned call the easy one and
-   the wrong one, which is how this namespace came to compare a caller's wall
-   clock against a publisher's. urpx:effectiveDateTime is preferred; urpx:effectiveDate is read as the
+   ZONE REQUIRED, NOT OPTIONAL. A bound written without an offset is a naive
+   wall-clock reading; it names a moment only once anchored, and every zone
+   anchors it to a different one. A bound written with an offset names its
+   instant already and is moved to `zone` unchanged. An optional zone would
+   make the unzoned call the easy one and the wrong one, which is how this
+   namespace came to compare a caller's wall clock against a publisher's.
+   urpx:effectiveDateTime is preferred; urpx:effectiveDate is read as the
    start of that day. Both are sh:minCount 0, so a conformant version may state
    neither, and this returns nil rather than inventing an epoch for it.
 
@@ -1486,9 +1496,8 @@
    so silently dropping a conformant version that states only urpx:effectiveDate.
    Two namespaces disagreeing about the same date is the drift this prevents."
   [version ^ZoneId zone]
-  (some-> ^LocalDateTime (or (:urpx/effectiveDateTime version)
-                             (some-> ^LocalDate (:urpx/effectiveDate version) (.atStartOfDay)))
-          (.atZone zone)))
+  (schema/in-zone (or (:urpx/effectiveDateTime version) (:urpx/effectiveDate version))
+                  zone))
 
 (defn version-expires-at
   "The instant `version` stops applying, as a ZonedDateTime in `zone`, or nil.
@@ -1497,9 +1506,8 @@
    the resolved marks emitted it as a naive LocalDateTime while the comparison
    used something else. One reader, one type."
   [version ^ZoneId zone]
-  (some-> ^LocalDateTime (or (:urpx/expirationDateTime version)
-                             (some-> ^LocalDate (:urpx/expirationDate version) (.atStartOfDay)))
-          (.atZone zone)))
+  (schema/in-zone (or (:urpx/expirationDateTime version) (:urpx/expirationDate version))
+                  zone))
 
 (defn version-expired-by?
   "True if `version` states a hard expiration at or before `t`.
@@ -1849,8 +1857,9 @@
    by tier-number — the caller chooses based on cumulative billing-period usage."
   ([rate-plan zdt] (resolve-prices rate-plan zdt nil))
   ([rate-plan ^ZonedDateTime zdt opts]
-   ;; PROJECT INTO THE PLAN'S ZONE, ONCE, HERE. Every bound in a URPX document
-   ;; is a naive wall-clock reading in the zone the plan declares, and every
+   ;; PROJECT INTO THE PLAN'S ZONE, ONCE, HERE. A bound in a URPX document
+   ;; written without an offset is a naive wall-clock reading in the zone the
+   ;; plan declares (one with an offset is moved into that zone), and every
    ;; comparison downstream reduces the query with .toLocalDateTime. Reducing
    ;; the CALLER's zone made the answer depend on how the instant was spelled:
    ;; one moment asked as 2026-07-15T16:00-07:00 and as 2026-07-15T23:00Z gave
@@ -1871,15 +1880,12 @@
                            (holidays/derive-predicate rate-plan version))
 
          date          (.toLocalDate zdt)
-         local-time    (.toLocalTime zdt)
-         dow           (.getDayOfWeek zdt)
 
          season        (season-of seasons date)
-         tou-period    (find-tou-period tou-schedules (:jsonld/id season)
-                                        date local-time dow holiday?)
+         tou-period    (find-tou-period tou-schedules (:jsonld/id season) zdt holiday?)
          period-num    (:urpx/touPeriodNumber tou-period)
 
-         pd->prices    (active-prices-by-pd prices date opts period-num)
+         pd->prices    (active-prices-by-pd prices zdt opts period-num)
          pds           (:urpx/hasPriceDefinition billing)
          pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
          mi-index      (mi-by-id plan-elements)
@@ -2102,8 +2108,6 @@
          own-period-num
          (when (seq own-schedules)
            (let [season-id  (:jsonld/id (season-of own-seasons query-date))
-                 local-time (.toLocalTime zdt)
-                 dow        (.getDayOfWeek zdt)
                  hol?       (or holiday? (constantly false))]
              (:urpx/touPeriodNumber
              ;; hol?, not (hol? query-date): find-tou-period takes the PREDICATE
@@ -2112,10 +2116,10 @@
              ;; ClassCastException once a bracket actually reached the holiday
              ;; check (it needs the modifier to carry its own seasons as well as
              ;; its own schedule, which is why no fixture caught it).
-              (find-tou-period own-schedules season-id query-date local-time dow hol?))))
+              (find-tou-period own-schedules season-id zdt hol?))))
          gate-period (if (seq own-schedules) own-period-num base-period-num)
          gate?       (or (seq own-schedules) (some? base-period-num))
-         pd->prices  (all-active-prices-by-pd prices query-date opts gate-period)
+         pd->prices  (all-active-prices-by-pd prices zdt opts gate-period)
          unselected  (unselected-alternative-ids prices (:profile-alternatives opts))
          pds         (:urpx/hasPriceDefinition billing)
          pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)

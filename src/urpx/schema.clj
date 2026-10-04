@@ -8,7 +8,8 @@
   Two-layer model (mirroring the clj-oa3 pattern):
     - urpx.core      — raw parse: JSON-LD with namespaced keys, all string values.
     - urpx.schema    — coerced shape: typed Clojure values (BigDecimal, LocalDate,
-                       LocalTime, LocalDateTime, Duration, integer month numbers).
+                       LocalTime, LocalDateTime, ZonedDateTime, OffsetTime,
+                       Duration, integer month numbers).
 
   Schemas carry `:decode/urpx-jsonld` decoders that turn the raw parser output
   (strings) into the typed shape described here. The transformer is built and
@@ -19,7 +20,10 @@
   except inside ConditionExpression, where the recursive Comparison/Boolean
   operand tree uses a local Malli registry."
   (:import [java.math BigDecimal]
-           [java.time Duration LocalDate LocalDateTime LocalTime Period]))
+           [java.time DateTimeException Duration LocalDate LocalDateTime LocalTime
+            OffsetDateTime OffsetTime Period ZoneId ZoneOffset ZonedDateTime]
+           [java.time.format DateTimeFormatter DateTimeFormatterBuilder]
+           [java.time.temporal ChronoField]))
 
 ;; ---------------------------------------------------------------------------
 ;; Decoder helpers (consumed by `:decode/urpx-jsonld` properties below)
@@ -59,9 +63,54 @@
   [v]
   (if (instance? BigDecimal v) (.toPlainString ^BigDecimal v) v))
 
-(defn- <-date     [v] (if (instance? LocalDate v) (.toString ^LocalDate v) v))
-(defn- <-datetime [v] (if (instance? LocalDateTime v) (.toString ^LocalDateTime v) v))
-(defn- <-time     [v] (if (instance? LocalTime v) (.toString ^LocalTime v) v))
+;; xsd:time and xsd:dateTime require seconds. java.time's toString omits them
+;; when they are zero, so these formatters spell them out, adding a fraction
+;; only when there is one. An offset is written as Z for UTC.
+(def ^:private ^DateTimeFormatter xsd-time-fmt
+  (-> (DateTimeFormatterBuilder.)
+      (.appendPattern "HH:mm:ss")
+      (.appendFraction ChronoField/NANO_OF_SECOND 0 9 true)
+      (.toFormatter)))
+
+(def ^:private ^DateTimeFormatter xsd-datetime-fmt
+  (-> (DateTimeFormatterBuilder.)
+      (.append DateTimeFormatter/ISO_LOCAL_DATE)
+      (.appendLiteral \T)
+      (.append xsd-time-fmt)
+      (.toFormatter)))
+
+(defn- with-offset ^DateTimeFormatter [^DateTimeFormatter f]
+  (-> (DateTimeFormatterBuilder.) (.append f) (.appendOffset "+HH:MM" "Z") (.toFormatter)))
+
+(def ^:private xsd-time-offset-fmt     (with-offset xsd-time-fmt))
+(def ^:private xsd-datetime-offset-fmt (with-offset xsd-datetime-fmt))
+(def ^:private xsd-date-offset-fmt     (with-offset DateTimeFormatter/ISO_LOCAL_DATE))
+
+(defn- offset-date?
+  "True if `v` is how an xsd:date with an offset decodes: a ZonedDateTime at
+   midnight whose zone is a ZoneOffset."
+  [v]
+  (and (instance? ZonedDateTime v)
+       (instance? ZoneOffset (.getZone ^ZonedDateTime v))
+       (= LocalTime/MIDNIGHT (.toLocalTime ^ZonedDateTime v))))
+
+(defn- <-date [v]
+  (cond
+    (instance? LocalDate v) (.toString ^LocalDate v)
+    (offset-date? v)        (.format ^DateTimeFormatter xsd-date-offset-fmt v)
+    :else v))
+
+(defn- <-datetime [v]
+  (cond
+    (instance? LocalDateTime v) (.format xsd-datetime-fmt v)
+    (instance? ZonedDateTime v) (.format ^DateTimeFormatter xsd-datetime-offset-fmt v)
+    :else v))
+
+(defn- <-time [v]
+  (cond
+    (instance? LocalTime v)  (.format xsd-time-fmt v)
+    (instance? OffsetTime v) (.format ^DateTimeFormatter xsd-time-offset-fmt v)
+    :else v))
 
 (defn- <-duration
   "Duration → ISO 8601 time-based duration (PT1H30M); Period → ISO 8601
@@ -79,9 +128,101 @@
    '--06' form regardless."
   [v]
   (if (int? v) (format "--%02d" v) v))
-(defn- ->date     [v] (if (string? v) (LocalDate/parse v) v))
-(defn- ->datetime [v] (if (string? v) (LocalDateTime/parse v) v))
-(defn- ->time     [v] (if (string? v) (LocalTime/parse v) v))
+(defn- literal-value
+  "The lexical form of `v`: the @value of a JSON-LD typed-literal object
+   `{\"@value\" v \"@type\" t}`, else `v`."
+  [v]
+  (if (and (map? v) (contains? v :jsonld/value)) (:jsonld/value v) v))
+
+(def ^:private offset-suffix #"(Z|[+-]\d{2}:\d{2})$")
+
+(defn- parse-temporal
+  "Parse string `s` with `f`, or throw ex-info with `reason` naming the value."
+  [reason datatype f ^String s]
+  (try
+    (f s)
+    (catch DateTimeException e
+      (throw (ex-info (str "Malformed " datatype " " (pr-str s) ": " (.getMessage e))
+                      {:reason reason :datatype datatype :value s}
+                      e)))))
+
+(defn- ->date
+  "xsd:date. Without an offset, a LocalDate. With one, a ZonedDateTime at the
+   start of that day in that ZoneOffset: java.time has no OffsetDate, and this
+   keeps both the day and the offset, so it encodes back to the same literal."
+  [v]
+  (let [v (literal-value v)]
+    (if (string? v)
+      (parse-temporal
+       :urpx.schema/malformed-date "xsd:date"
+       (fn [^String s]
+         (if-let [[_ off] (re-find offset-suffix s)]
+           (.atStartOfDay (LocalDate/parse (subs s 0 (- (count s) (count off))))
+                          (ZoneOffset/of ^String off))
+           (LocalDate/parse s)))
+       v)
+      v)))
+
+(defn- ->datetime
+  "xsd:dateTime. Without an offset, a LocalDateTime: a wall-clock reading in
+   whatever zone the reader resolves. With one, a ZonedDateTime whose zone is
+   that ZoneOffset."
+  [v]
+  (let [v (literal-value v)]
+    (if (string? v)
+      (parse-temporal
+       :urpx.schema/malformed-datetime "xsd:dateTime"
+       (fn [^String s]
+         (if (re-find offset-suffix s)
+           (.toZonedDateTime (OffsetDateTime/parse s))
+           (LocalDateTime/parse s)))
+       v)
+      v)))
+
+(defn- ->time
+  "xsd:time. Without an offset, a LocalTime; with one, an OffsetTime."
+  [v]
+  (let [v (literal-value v)]
+    (if (string? v)
+      (parse-temporal
+       :urpx.schema/malformed-time "xsd:time"
+       (fn [^String s]
+         (if (re-find offset-suffix s) (OffsetTime/parse s) (LocalTime/parse s)))
+       v)
+      v)))
+
+(defn in-zone
+  "`v`, a decoded xsd:date or xsd:dateTime, as a ZonedDateTime in `zone`, or
+   nil for nil.
+
+   A value without an offset is a wall-clock reading in `zone`, a date reading
+   as the start of that day. A value with one already names its instant, which
+   is kept: it is moved to `zone`, not reinterpreted.
+
+   A wall clock in a DST gap never occurs, and reads as the transition instant,
+   the instant urpx.schedule's candidate rule gives it. `.atZone` pushes it
+   forward by the gap's width instead, so a version taking effect inside a gap
+   changed between two candidates. In an overlap, the earlier instant."
+  ^ZonedDateTime [v ^ZoneId zone]
+  (cond
+    (nil? v)                    nil
+    (instance? ZonedDateTime v) (.withZoneSameInstant ^ZonedDateTime v zone)
+    (instance? LocalDateTime v) (let [rules (.getRules zone)]
+                                  (if (.isEmpty (.getValidOffsets rules v))
+                                    (.atZone (.getInstant (.getTransition rules v)) zone)
+                                    (.atZone ^LocalDateTime v zone)))
+    (instance? LocalDate v)     (.atStartOfDay ^LocalDate v zone)
+    :else (throw (ex-info (str "Not a date or dateTime: " (pr-str v))
+                          {:reason :urpx.schema/not-a-date-or-datetime :value v}))))
+
+(defn wall-time
+  "`t`, a decoded xsd:time, as the wall-clock time it reads in `zone` on
+   `date`. A LocalTime is that already; an OffsetTime is placed on `date` at
+   its offset and moved to `zone`."
+  ^LocalTime [t ^LocalDate date ^ZoneId zone]
+  (if (instance? OffsetTime t)
+    (.toLocalTime (.atZoneSameInstant (.atDate ^OffsetTime t date) zone))
+    t))
 (defn- ->duration
   "Parse an ISO 8601 duration string. Time-based durations (containing 'T',
    e.g. PT1H30M) become java.time.Duration; date-based durations (e.g. P1M, P1Y)
@@ -130,22 +271,22 @@
    #(instance? BigDecimal %)])
 
 (def Date
-  [:fn {:error/message "should be a LocalDate"
+  [:fn {:error/message "should be a LocalDate, or a ZonedDateTime at midnight in a ZoneOffset"
         :decode/urpx-jsonld ->date
         :encode/urpx-jsonld <-date}
-   #(instance? LocalDate %)])
+   #(or (instance? LocalDate %) (offset-date? %))])
 
 (def DateTime
-  [:fn {:error/message "should be a LocalDateTime"
+  [:fn {:error/message "should be a LocalDateTime or a ZonedDateTime"
         :decode/urpx-jsonld ->datetime
         :encode/urpx-jsonld <-datetime}
-   #(instance? LocalDateTime %)])
+   #(or (instance? LocalDateTime %) (instance? ZonedDateTime %))])
 
 (def Time
-  [:fn {:error/message "should be a LocalTime"
+  [:fn {:error/message "should be a LocalTime or an OffsetTime"
         :decode/urpx-jsonld ->time
         :encode/urpx-jsonld <-time}
-   #(instance? LocalTime %)])
+   #(or (instance? LocalTime %) (instance? OffsetTime %))])
 
 (def IsoDuration
   [:fn {:error/message "should be a Duration or Period"

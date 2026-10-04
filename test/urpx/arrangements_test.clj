@@ -1019,3 +1019,16 @@
       (is (= {:reason :urpx.arrangement/unknown-package-zones :value :prefer}
              (select-keys (refusal f) [:reason :value]))
           nm))))
+
+(deftest a-tie-is-one-instant-whatever-zone-reads-it
+  (testing "two snapshots of one identity, each declaring its own zone, both
+            taking effect at 05:00Z. Read in their own zones they are the same
+            instant, so they tie."
+    (let [z    (java.time.ZonedDateTime/of 2026 1 1 5 0 0 0 java.time.ZoneOffset/UTC)
+          bare #(dissoc (plan-doc "x:p" %1 z {:urpx/timezoneIdentifier %2})
+                        :urpx/timezoneIdentifier)
+          docs [(bare "x:p-v1" "America/New_York")
+                (bare "x:p-v2" "America/Los_Angeles")]
+          e    (is (thrown? clojure.lang.ExceptionInfo
+                            (arr/arrangements docs {:at (at 2026 6 1 12)})))]
+      (is (= :urpx.arrangement/ambiguous-version (:reason (ex-data e)))))))

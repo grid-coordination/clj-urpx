@@ -18,7 +18,8 @@
   grid falls. Pass `{:step (Duration/ofMinutes 15)}` etc. for finer granularity
   when a rate plan defines sub-hour TOU bracket transitions."
   (:require [urpx.coerce :as coerce]
-            [urpx.price :as price])
+            [urpx.price :as price]
+            [urpx.schema :as schema])
   (:import [java.time Duration Instant LocalDate LocalDateTime LocalTime ZonedDateTime ZoneId]
            [java.time.temporal ChronoUnit]
            [java.time.zone ZoneRules]))
@@ -254,8 +255,8 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- harvest-literals
-  "Walk a COERCED document and collect every temporal literal by java.time TYPE:
-   LocalTimes, LocalDates and LocalDateTimes.
+  "Walk a COERCED document and collect every temporal literal by java.time TYPE,
+   as `urpx.coerce/temporal-signature` groups them.
 
    The walk and the uncoerced-document test both live in `urpx.coerce` now, so
    this namespace and `urpx.arrangements` cannot drift about what a coerced
@@ -335,8 +336,14 @@
         ;; overlap, which makes the walk direction-dependent.
         days   (take-while #(not (.isAfter ^LocalDate % dN))
                            (iterate #(.plusDays ^LocalDate % 1) d0))
-        locals (concat (for [d days, t times] (.atTime ^LocalDate d ^LocalTime t))
-                       date-times
+        ;; A literal with an offset becomes the wall clock it reads in `zone`,
+        ;; read the way urpx.price reads it, so its boundary is a candidate.
+        locals (concat (for [d days, t times]
+                         (.atTime ^LocalDate d (schema/wall-time t d zone)))
+                       (map #(if (instance? ZonedDateTime %)
+                               (.toLocalDateTime (.withZoneSameInstant ^ZonedDateTime % zone))
+                               %)
+                            date-times)
                        (map #(.atStartOfDay ^LocalDate %) dates))]
     (->> (concat (mapcat #(local->instants rules %) locals)
                  (zone-transitions rules start end)

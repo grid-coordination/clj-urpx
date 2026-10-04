@@ -1,9 +1,11 @@
 (ns urpx.emit-test
   (:require [clojure.data.json :as json]
             [clojure.test :refer [deftest is testing]]
+            [malli.core :as m]
             [urpx.coerce :as coerce]
             [urpx.core :as core]
             [urpx.emit :as emit]
+            [urpx.schema :as schema]
             [urpx.test-fixtures :as fixtures])
   (:import [java.math BigDecimal]
            [java.time LocalDate LocalDateTime]))
@@ -138,6 +140,35 @@
       (is (= "https://urpx-org.github.io/urpx/ontology/" (get ctx "urpx")))
       (is (= "http://www.w3.org/2001/XMLSchema#" (get ctx "xsd")))
       (is (= {"@type" "xsd:decimal"} (get ctx "urpx:unitPrice"))))))
+
+(defn- temporal-keys
+  "Every map key under `root` whose value schema is schema/Date, DateTime or
+   Time, to the xsd datatype it encodes as."
+  [root]
+  (let [xsd {(m/form schema/Date)     "xsd:date"
+             (m/form schema/DateTime) "xsd:dateTime"
+             (m/form schema/Time)     "xsd:time"}
+        acc (volatile! {})]
+    (m/walk root
+            (fn [s _ _ _]
+              (when (= :map (m/type s))
+                (doseq [[k _ child] (m/children s)]
+                  (when-let [t (xsd (m/form child))] (vswap! acc assoc k t))))
+              s)
+            {::m/walk-refs true ::m/walk-schema-refs true})
+    @acc))
+
+(deftest default-context-types-every-temporal-property
+  (testing "an emitted temporal literal is a plain string, so the context is
+            what types it, including one read from a {\"@value\" \"@type\"}
+            object"
+    (let [schemas (keep (fn [v] (try (m/schema @v) @v (catch Exception _ nil)))
+                        (vals (ns-publics 'urpx.schema)))
+          ks      (apply merge (map temporal-keys schemas))]
+      (is (contains? ks :urpx/evaluatedOn))
+      (doseq [[k t] ks]
+        (is (= {"@type" t} (get emit/default-context (core/keyword->jsonld-key k)))
+            (str k))))))
 
 (deftest caller-supplied-context-overrides-default
   (testing "URPX-awl: passing :context replaces the default verbatim"

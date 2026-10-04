@@ -156,7 +156,11 @@
         explicit-obs  (some-> observance :jsonld/id observance-id->fn)]
     (cond
       date
-      (let [^LocalDate d date
+      ;; A holiday names a calendar day, so a date written with an offset
+      ;; keeps the day as written rather than moving to another zone's.
+      (let [^LocalDate d (if (instance? java.time.ZonedDateTime date)
+                           (.toLocalDate ^java.time.ZonedDateTime date)
+                           date)
             target-year  (.getYear d)
             shift        (or explicit-obs observe-actual)]
         (fn [year]
