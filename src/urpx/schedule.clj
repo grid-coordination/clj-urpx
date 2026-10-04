@@ -231,7 +231,6 @@
    (price-schedule-with-modifiers
     rate-plan modifiers start (.plus start (Duration/ofDays days)) zone opts)))
 
-
 ;; ---------------------------------------------------------------------------
 ;; Exact segments
 ;;
@@ -376,8 +375,9 @@
       :tick/end               ZonedDateTime
       :urpx.interval/resolved <full price/resolve-prices result>}
 
-   the same shape `price-schedule` emits, so the two are interchangeable at a
-   call site. The difference is where the boundaries fall: `price-schedule`
+   the same shape `price-schedule` emits, except that every entry carries its
+   labels, so the two are interchangeable at a call site that reads prices.
+   The difference is where the boundaries fall: `price-schedule`
    snaps them to its step grid, this puts them where the tariff actually
    changes. For a client building a horizon and handing segments to an
    optimizer, that is the difference between a schedule that is right and one
