@@ -87,6 +87,19 @@
     (is (= "America/New_York" (:urpx/timezoneIdentifier shell)) "the package keeps its own properties")
     (is (nil? (coerce/check-coerced! [shell] "load-test")))))
 
+(deftest a-nested-graph-reaches-the-pipeline
+  (testing "a graph object inside @graph, the shape of upstream test-cases/pge-e-tou-c,
+            contributes its members, and a package among them still yields its
+            payload and its shell"
+    (let [json (str "{" ctx ",\"@graph\":[{\"@graph\":["
+                    "{\"@id\":\"x:pkg\",\"@type\":\"urpx:URPXPackage\","
+                    "\"urpx:hasRatePlan\":{\"@id\":\"x:p\",\"@type\":\"urpx:RatePlan\"}},"
+                    "{\"@id\":\"x:enrol\",\"@type\":\"urpx:ProgramEnrollment\"}]}]}")
+          {:urpx.load/keys [documents uncoercible]} (load/scan [(src json)])]
+      (is (= ["x:p" "x:pkg"] (mapv :jsonld/id documents)))
+      (is (= [{:jsonld/id "x:p"}] (:urpx/hasRatePlan (second documents))) "the shell")
+      (is (= [{:jsonld/type "urpx:ProgramEnrollment" :jsonld/id "x:enrol"}] uncoercible)))))
+
 (deftest a-by-reference-package-is-already-a-shell
   (let [json (str "{" ctx ",\"@id\":\"x:pkg\",\"@type\":\"urpx:URPXPackage\","
                   "\"urpx:packages\":{\"@id\":\"x:p\"}}")]

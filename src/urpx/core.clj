@@ -98,23 +98,42 @@
   (with-open [r (io/reader src)]
     (transform-keys (json/read r))))
 
+(def ^:private graph-object-keys
+  "The keys a JSON-LD 1.1 graph object may carry (section 9.4). A node with
+   @graph and nothing outside these names a graph and states nothing else."
+  #{:jsonld/graph :jsonld/id :jsonld/index :jsonld/context})
+
+(defn- flatten-graph
+  "`node` as the entities it contributes: its @graph members, recursively,
+   preceded by `node` itself less @graph when it carries any property a graph
+   object may not."
+  [node]
+  (if-let [g (and (map? node) (:jsonld/graph node))]
+    (into (if (every? graph-object-keys (keys node)) [] [(dissoc node :jsonld/graph)])
+          (mapcat flatten-graph)
+          (index/as-vec g))
+    [node]))
+
 (defn parse-graph
-  "Parse a URPX JSON-LD document and return a vector of every top-level entity.
+  "Parse a URPX JSON-LD document and return a vector of the entities in its
+   graphs, nested graphs included.
 
-   - Documents with a top-level `@graph` yield the graph contents (a vector
-     of entity maps), e.g. a base RatePlan + its sibling RatePlanModifier
-     bundled together.
-   - Single-entity documents yield a one-element vector containing the
-     entity itself.
+   - A single-entity document yields a one-element vector of that entity.
+   - An `@graph` yields its members, e.g. a base RatePlan and its sibling
+     RatePlanModifier bundled together. A member that is itself a node with an
+     `@graph` is flattened the same way, at any depth.
+   - A node carrying only `@graph`, `@id`, `@index` and `@context` (a JSON-LD
+     1.1 graph object, or the top-level wrapper of a document) names a graph
+     and is replaced by its members. A node with any other property is kept,
+     less its `@graph`, ahead of its members.
 
-   Always returns a vector so callers can use the same code path for both
-   shapes; dispatch on each entity's `:jsonld/type` to decide what to do
+   Graph names are not kept: the result is the union of the document's graphs.
+
+   Always returns a vector so callers can use the same code path for every
+   shape; dispatch on each entity's `:jsonld/type` to decide what to do
    with it (e.g. via `urpx.coerce/coerce-doc`)."
   [src]
-  (let [parsed (parse-rate-plan src)]
-    (if-let [g (:jsonld/graph parsed)]
-      (vec g)
-      [parsed])))
+  (flatten-graph (parse-rate-plan src)))
 
 (defn load-graph
   "Load a URPX JSON-LD document from `src` — anything `clojure.java.io/reader`
@@ -135,9 +154,8 @@
 
 (defn expand-document-entities
   "Public because it is the one piece a CLI or a third-party consumer needs and
-   cannot otherwise reach: `load-graph` returns top-level entities only, so
-   anything that walks a document itself would never descend a wrapper and
-   would validate the wrapper metadata alone.
+   cannot otherwise reach: `load-graph` does not descend a wrapper, so anything
+   that walks a document itself would validate the wrapper metadata alone.
 
    If `entity` is one of `wrapper-types`, return its embedded payload
    entities: urpx:hasRatePlan and urpx:hasRatePlanModifier (both wrappers),

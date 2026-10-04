@@ -419,3 +419,51 @@
                         core/parse-rate-plan)]
       (is (= parsed re-parsed)
           "structural equivalence under transform-keys ∘ keys->jsonld"))))
+
+(defn- doc-reader
+  "A reader over `doc`, a keywordized JSON-LD map."
+  [doc]
+  (jsonld-reader (core/keys->jsonld doc)))
+
+(def ^:private nested-plan {:jsonld/id "x:p" :jsonld/type "urpx:RatePlan"})
+(def ^:private nested-modifier {:jsonld/id "x:m" :jsonld/type "urpx:RatePlanModifier"})
+(def ^:private nested-sibling {:jsonld/id "x:s" :jsonld/type "urpx:SourcePublication"})
+
+(deftest a-nested-graph-is-flattened
+  (testing "a simple graph object inside the top-level @graph, as upstream
+            test-cases/pge-e-tou-c has it, contributes its members"
+    (let [doc {:jsonld/context {:urpx "https://urpx.org/ns#"}
+               :jsonld/graph [{:jsonld/graph [nested-plan nested-modifier]} nested-sibling]}]
+      (is (= [nested-plan nested-modifier nested-sibling] (core/load-graph (doc-reader doc))))
+      (is (= "x:p" (:jsonld/id (core/load-rate-plan (doc-reader doc)))))
+      (is (= "x:m" (:jsonld/id (core/load-rate-plan-modifier (doc-reader doc)))))))
+  (testing "at any depth"
+    (let [doc {:jsonld/graph [{:jsonld/graph [{:jsonld/graph [nested-plan]} nested-modifier]}]}]
+      (is (= [nested-plan nested-modifier] (core/load-graph (doc-reader doc))))))
+  (testing "@graph holding one node object rather than an array"
+    (is (= [nested-plan] (core/load-graph (doc-reader {:jsonld/graph {:jsonld/graph nested-plan}})))))
+  (testing "a graph object with an @id names a graph, and the name is not an entity"
+    (let [doc {:jsonld/graph [{:jsonld/id "x:g" :jsonld/graph [nested-plan]} nested-modifier]}]
+      (is (= [nested-plan nested-modifier] (core/load-graph (doc-reader doc)))))))
+
+(deftest a-node-with-a-graph-and-properties-is-kept
+  (testing "a node carrying a property a graph object may not is an entity too,
+            and precedes its members without its @graph"
+    (let [pkg {:jsonld/id "x:pkg" :jsonld/type "urpx:URPXPackage"}]
+      (is (= [pkg nested-plan]
+             (core/load-graph (doc-reader {:jsonld/graph [(assoc pkg :jsonld/graph [nested-plan])]}))))
+      (is (= [pkg nested-plan]
+             (core/load-graph (doc-reader (assoc pkg :jsonld/graph [nested-plan]))))
+          "at the top level as well"))))
+
+(deftest a-fixture-nested-one-graph-deeper-loads-the-same
+  (testing "pge-e-1 reshaped the way upstream test-cases/pge-e-tou-c is: all but
+            one of its @graph members moved into a graph object inside it"
+    (let [parsed   (core/parse-rate-plan (fixtures/fixture-resource "pge-e-1-2026-03-01"))
+          g        (:jsonld/graph parsed)
+          moved    (vec (butlast g))
+          reshaped (assoc parsed :jsonld/graph [{:jsonld/graph moved} (last g)])]
+      (is (some #(= "urpx:URPXPackage" (:jsonld/type %)) moved) "the package is among those moved")
+      (is (= (set (core/load-graph (doc-reader parsed)))
+             (set (core/load-graph (doc-reader reshaped)))))
+      (is (= "pge:e-1" (:jsonld/id (core/load-rate-plan (doc-reader reshaped))))))))
