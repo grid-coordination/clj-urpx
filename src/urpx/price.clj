@@ -2012,10 +2012,12 @@
       ;; window it does not cover returned 31 segments over a month where it
       ;; returns 1, every one holding identical prices, from 0.22.0 until now.
       ;; :version-id, :effective and :expires identify the window; the instant
-      ;; the caller asked about is the caller's own.
+      ;; the caller asked about is the caller's own. :plan-id is the key
+      ;; :versions-by-plan is looked up by.
       (when-not (version-covers? version zdt (.getZone zdt))
         {:urpx.resolved/outside-version-window
-         {:version-id (:jsonld/id version)
+         {:plan-id    (:jsonld/id rate-plan)
+          :version-id (:jsonld/id version)
           :effective  (version-effective-at version (.getZone zdt))
           :expires    (version-expires-at version (.getZone zdt))}})))))
 
@@ -2221,9 +2223,12 @@
               ;; returned 744 intervals where it returns 1. The instant the
               ;; caller asked about is the caller's own, and :version-id,
               ;; :effective and :expires identify the window without it.
+              ;; :plan-id is the MODIFIER's own @id, which is what
+              ;; :versions-by-plan keys a modifier's versions by.
                (when-not (version-covers? version zdt (.getZone zdt))
                  {:urpx.resolved/outside-version-window
-                  {:version-id (:jsonld/id version)
+                  {:plan-id    (:jsonld/id modifier)
+                   :version-id (:jsonld/id version)
                    :effective  (version-effective-at version (.getZone zdt))
                    :expires    (version-expires-at version (.getZone zdt))}})
                (when-let [ids (seq (concat unselected-ids withheld))]
@@ -2473,7 +2478,9 @@
      :all-energy-tiers-excluded   every energy tier was event-driven, recurring,
                                   or both. Free is not the answer either
      :outside-version-window      the version used does not describe this
-                                  instant
+                                  instant. :plan-id in ex-data, and on each
+                                  :stale entry's mark, is the @id
+                                  :versions-by-plan is keyed by
 
    The alternatives case is why composing a PG&E plan with its vintage-PCIA
    modifier needs `:profile-alternatives`. Taking the first of eighteen mutually
@@ -2621,7 +2628,16 @@
                                      (when-let [e (:effective w)] (str "; it takes effect " e))
                                      (when-let [x (:expires w)] (str "; it expires " x))))
                               ". Resolve at an instant the filing describes, or load "
-                              "the version that does and pass :versions-by-plan.")
+                              "the version that does and pass it in :versions-by-plan "
+                              "under "
+                              (str/join ", "
+                                        (map pr-str
+                                             (if from-modifier?
+                                               (distinct (map #(:plan-id
+                                                                (:urpx.resolved/outside-version-window %))
+                                                              stale))
+                                               [(:plan-id w)])))
+                              ".")
                       ;; ex-data carries everything the message says, so a
                       ;; consumer classifying programmatically is not worse off
                       ;; than one reading prose. No :at on either mark: both
@@ -2629,6 +2645,7 @@
                       ;; per-instant field makes every step of a horizon walk
                       ;; distinct and nothing merges.
                          (cond-> {:reason :outside-version-window
+                                  :plan-id (:plan-id w)
                                   :version-id (:version-id w)
                                   :effective (:effective w)}
                            (:expires w) (assoc :expires (:expires w))

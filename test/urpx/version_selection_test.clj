@@ -433,7 +433,7 @@
       (is (some? led-mark)  "sanity: and the modifier really is too")
       (is (= (set (keys base-mark)) (set (keys led-mark)))
           "same keys on both")
-      (is (= #{:version-id :effective :expires} (set (keys base-mark))))
+      (is (= #{:plan-id :version-id :effective :expires} (set (keys base-mark))))
       (is (not-any? #{:at} (keys base-mark)) "and no per-instant field"))))
 
 (deftest a-base-filing-outside-its-window-does-not-shatter-its-segments
@@ -500,6 +500,69 @@
           "and does NOT claim a modifier ledger, because there is none")
       (is (re-find #"expires 2026-04-01T00:00" m) "names the bound crossed")
       (is (not (re-find #"does not cover ;" m)) "no dangling clause"))))
+
+(defn- shift-modifier-effective
+  "A copy of the modifier's version snapshot, renamed and moved to take effect
+   at `ldt`: a stand-in for an earlier filing of the same modifier."
+  [doc ^java.time.LocalDateTime ldt]
+  (-> (:urpx/hasRatePlanModifierVersion doc)
+      (assoc :jsonld/id "x:care-earlier" :urpx/effectiveDateTime ldt)))
+
+(deftest the-refusal-names-the-key-its-remedy-is-looked-up-by
+  (testing "the refusal says to pass :versions-by-plan, which is keyed by the
+            owning document's @id. The version @id and the ledger @id it named
+            are not that key, and keying by either left the refusal in place.
+            Using the @id the refusal names must clear it, on both paths."
+    (let [refusal (fn [f] (try (f) nil (catch clojure.lang.ExceptionInfo e e)))]
+
+      (testing "base path: SCE D 2026-03-20 asked about January"
+        (let [plan  (fixtures/load-rate-plan newer)
+              e     (refusal #(price/marginal-unit-rate
+                               (price/resolve-prices plan (at 2026 1 15))))
+              d     (ex-data e)
+              prior (:urpx/hasRatePlanVersion (fixtures/load-rate-plan older))]
+          (is (= :outside-version-window (:reason d)) "sanity: it refuses")
+          (is (= "sce:d" (:plan-id d)))
+          (is (= "sce:d" (:plan-id (:urpx.resolved/outside-version-window
+                                    (price/resolve-prices plan (at 2026 1 15)))))
+              "and the result-level mark carries it")
+          (is (re-find #"under \"sce:d\"\.$" (ex-message e)) "and the message names it")
+          (is (= (price/marginal-unit-rate
+                  (price/resolve-prices (fixtures/load-rate-plan older) (at 2026 1 15)))
+                 (price/marginal-unit-rate
+                  (price/resolve-prices plan (at 2026 1 15)
+                                        {:versions-by-plan {(:plan-id d) [prior]}})))
+              "keyed by that @id, the prior version is selected and the rate answers")))
+
+      (testing "modifier path: SCE D 2025-11-15 with CARE 2026-03-20 in January"
+        (let [base    (fixtures/load-rate-plan older)
+              care    (care)
+              z       (zdt 2026 1 15 17)
+              e       (refusal #(price/marginal-unit-rate
+                                 (price/resolve-prices-with-modifiers base [care] z)))
+              d       (ex-data e)
+              earlier (shift-modifier-effective care (ldt 2025 1 1 0 0))]
+          (is (= :outside-version-window (:reason d)) "sanity: it refuses")
+          (is (= "sce:care" (:plan-id d))
+              "the MODIFIER's @id, not the base plan's")
+          (is (every? #(= "sce:care" (:plan-id (:urpx.resolved/outside-version-window %)))
+                      (:stale d))
+              "on every stale entry too")
+          (is (re-find #"under \"sce:care\"\.$" (ex-message e)) "and the message names it")
+          (doseq [k [:version-id :ledger-id]]
+            (is (= :outside-version-window
+                   (try (price/marginal-unit-rate
+                         (price/resolve-prices-with-modifiers
+                          base [care] z {:versions-by-plan {(k d) [earlier]}}))
+                        nil
+                        (catch clojure.lang.ExceptionInfo ex (:reason (ex-data ex)))))
+                (str "keyed by the " k " the refusal also names, it stays")))
+          (is (< (price/marginal-unit-rate
+                  (price/resolve-prices-with-modifiers
+                   base [care] z {:versions-by-plan {(:plan-id d) [earlier]}}))
+                 (price/marginal-unit-rate (price/resolve-prices base z)))
+              "keyed by the @id the refusal names, it clears, and the discount
+               applies rather than the modifier being dropped"))))))
 
 (deftest price-schedule-splits-at-a-version-boundary
   (testing "price-schedule merges adjacent steps on :urpx.resolved/ledgers, but
