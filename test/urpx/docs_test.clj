@@ -212,7 +212,9 @@
                (pr-str (sort (set/difference on-disk sidecars)))))
       (doseq [f (sort on-disk)]
         (let [side (slurp (io/file dir (str f ".license")))]
+          ;; REUSE-IgnoreStart
           (is (re-find #"SPDX-License-Identifier:" side) (str f ": no SPDX licence"))
+          ;; REUSE-IgnoreEnd
           (is (re-find #"Derived from https://" side) (str f ": no upstream repository"))
           (is (re-find #"(?m)^at [0-9a-f]{7,40}, path \S+" side)
               (str f ": no upstream commit and path"))))
