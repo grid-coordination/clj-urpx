@@ -19,6 +19,7 @@
   Schemas are bare def vars referenced by symbol — there is no central registry
   except inside ConditionExpression, where the recursive Comparison/Boolean
   operand tree uses a local Malli registry."
+  (:require [malli.core :as m])
   (:import [java.math BigDecimal]
            [java.time DateTimeException Duration LocalDate LocalDateTime LocalTime
             OffsetDateTime OffsetTime Period ZoneId ZoneOffset ZonedDateTime]
@@ -84,21 +85,8 @@
 
 (def ^:private xsd-time-offset-fmt     (with-offset xsd-time-fmt))
 (def ^:private xsd-datetime-offset-fmt (with-offset xsd-datetime-fmt))
-(def ^:private xsd-date-offset-fmt     (with-offset DateTimeFormatter/ISO_LOCAL_DATE))
 
-(defn- offset-date?
-  "True if `v` is how an xsd:date with an offset decodes: a ZonedDateTime at
-   midnight whose zone is a ZoneOffset."
-  [v]
-  (and (instance? ZonedDateTime v)
-       (instance? ZoneOffset (.getZone ^ZonedDateTime v))
-       (= LocalTime/MIDNIGHT (.toLocalTime ^ZonedDateTime v))))
-
-(defn- <-date [v]
-  (cond
-    (instance? LocalDate v) (.toString ^LocalDate v)
-    (offset-date? v)        (.format ^DateTimeFormatter xsd-date-offset-fmt v)
-    :else v))
+(defn- <-date [v] (if (instance? LocalDate v) (.toString ^LocalDate v) v))
 
 (defn- <-datetime [v]
   (cond
@@ -147,9 +135,9 @@
                       e)))))
 
 (defn- ->date
-  "xsd:date. Without an offset, a LocalDate. With one, a ZonedDateTime at the
-   start of that day in that ZoneOffset: java.time has no OffsetDate, and this
-   keeps both the day and the offset, so it encodes back to the same literal."
+  "xsd:date, as the LocalDate it names. An xsd:date is a calendar day in a
+   timezone; an offset written on it names that timezone, and the day stays as
+   written. `date-offsets-decoder` keeps the offset."
   [v]
   (let [v (literal-value v)]
     (if (string? v)
@@ -157,11 +145,66 @@
        :urpx.schema/malformed-date "xsd:date"
        (fn [^String s]
          (if-let [[_ off] (re-find offset-suffix s)]
-           (.atStartOfDay (LocalDate/parse (subs s 0 (- (count s) (count off))))
-                          (ZoneOffset/of ^String off))
+           (do (ZoneOffset/of ^String off)
+               (LocalDate/parse (subs s 0 (- (count s) (count off)))))
            (LocalDate/parse s)))
        v)
       v)))
+
+(defn- date-keys
+  "The keys of map schema `schema` whose values are `Date`s."
+  [schema]
+  (into #{}
+        (keep (fn [[k _ child]] (when (::xsd-date (m/properties child)) k)))
+        (m/children schema)))
+
+(def date-offsets-decoder
+  "A `:map` decoder that keeps the offset written on each xsd:date the map
+   holds, in the map's metadata under `:urpx.schema/date-offsets` as
+   `{property offset}`, the offset exactly as written (\"Z\", \"-08:00\").
+   A LocalDate cannot carry metadata, so the map holding it does. Map equality
+   ignores metadata, so a date written with or without an offset compares
+   equal."
+  {:compile
+   (fn [schema _]
+     (let [ks (date-keys schema)]
+       (when (seq ks)
+         {:enter
+          (fn [x]
+            (if-not (map? x)
+              x
+              (let [written (for [k ks
+                                  :let [v (literal-value (get x k))]
+                                  :when (string? v)]
+                              [k (second (re-find offset-suffix v))])]
+                (if (empty? written)
+                  x
+                  (vary-meta x (fn [md]
+                                 (let [offs (reduce (fn [acc [k off]]
+                                                      (if off (assoc acc k off) (dissoc acc k)))
+                                                    (::date-offsets md)
+                                                    written)]
+                                   (if (seq offs)
+                                     (assoc md ::date-offsets offs)
+                                     (dissoc md ::date-offsets)))))))))})))})
+
+(def date-offsets-encoder
+  "A `:map` encoder that writes each xsd:date back with the offset
+   `date-offsets-decoder` kept for it."
+  {:compile
+   (fn [schema _]
+     (let [ks (date-keys schema)]
+       (when (seq ks)
+         {:enter
+          (fn [x]
+            (if-let [offs (and (map? x) (::date-offsets (meta x)))]
+              (reduce-kv (fn [acc k off]
+                           (let [d (get acc k)]
+                             (if (and (contains? ks k) (instance? LocalDate d))
+                               (assoc acc k (str d off))
+                               acc)))
+                         x offs)
+              x))})))})
 
 (defn- ->datetime
   "xsd:dateTime. Without an offset, a LocalDateTime: a wall-clock reading in
@@ -195,9 +238,10 @@
   "`v`, a decoded xsd:date or xsd:dateTime, as a ZonedDateTime in `zone`, or
    nil for nil.
 
-   A value without an offset is a wall-clock reading in `zone`, a date reading
-   as the start of that day. A value with one already names its instant, which
-   is kept: it is moved to `zone`, not reinterpreted.
+   A date reads as the start of that day in `zone`, whatever offset was written
+   on it. A dateTime without an offset is a wall-clock reading in `zone`. One
+   with an offset already names its instant, which is kept: it is moved to
+   `zone`, not reinterpreted.
 
    A wall clock in a DST gap never occurs, and reads as the transition instant,
    the instant urpx.schedule's candidate rule gives it. `.atZone` pushes it
@@ -271,10 +315,11 @@
    #(instance? BigDecimal %)])
 
 (def Date
-  [:fn {:error/message "should be a LocalDate, or a ZonedDateTime at midnight in a ZoneOffset"
+  [:fn {:error/message "should be a LocalDate"
+        ::xsd-date true
         :decode/urpx-jsonld ->date
         :encode/urpx-jsonld <-date}
-   #(or (instance? LocalDate %) (offset-date? %))])
+   #(instance? LocalDate %)])
 
 (def DateTime
   [:fn {:error/message "should be a LocalDateTime or a ZonedDateTime"

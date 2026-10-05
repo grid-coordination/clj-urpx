@@ -38,7 +38,8 @@
       forms (`:season-name`); both can be mixed in one call.
     - Auto-coerces raw inputs through the schema's `:decode/urpx-jsonld`
       decoders: number → `BigDecimal`, ISO string → `LocalDate` /
-      `LocalDateTime` / `LocalTime` (zoned forms when it carries an offset),
+      `LocalDateTime` / `LocalTime` (zoned forms when a dateTime or time
+      carries an offset),
       `--MM` xsd:gMonth → int month-of-year,
       ISO 8601 string → `Duration` / `Period`.
     - Drops `nil`-valued kwargs (so `(builder :foo (when … x))` cleanly

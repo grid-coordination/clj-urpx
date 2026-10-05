@@ -175,7 +175,9 @@ The library uses `java.time.ZonedDateTime` end-to-end internally and at output b
 
 **Everything resolves in the plan's own zone.** A URPX document usually writes its bounds — `urpx:effectiveDateTime`, `urpx:expirationDateTime`, every TOU bracket — as naive wall-clock readings with no offset. They are wall-clock *in the zone the plan declares*, so reading them in any other zone reads a different moment. `resolve-prices` therefore anchors the query in `urpx:timezoneIdentifier` before comparing anything.
 
-**A literal with an offset names its instant.** An `xsd:dateTime` written with `Z` or `-05:00` decodes to a `ZonedDateTime` in that offset and is compared as that instant, so on a Pacific plan `2026-01-10T08:00:00Z` and `2026-01-10T00:00:00` are the same bound. An `xsd:time` with an offset decodes to an `OffsetTime`, read on the query's date, and an `xsd:date` with one to a `ZonedDateTime` at the start of that day in that offset; each encodes back with its offset, in XSD canonical form (`+00:00` as `Z`, seconds always written, a fraction only when nonzero). A malformed literal refuses with `:urpx.schema/malformed-datetime`, `-date` or `-time`.
+**A dateTime or time with an offset names its instant.** An `xsd:dateTime` written with `Z` or `-05:00` decodes to a `ZonedDateTime` in that offset and is compared as that instant, so on a Pacific plan `2026-01-10T08:00:00Z` and `2026-01-10T00:00:00` are the same bound. An `xsd:time` with an offset decodes to an `OffsetTime`, read on the query's date; each encodes back with its offset, in XSD canonical form (`+00:00` as `Z`, seconds always written, a fraction only when nonzero).
+
+**A date is a calendar day in its timezone.** An `xsd:date` decodes to the `LocalDate` it names, with or without an offset: `2026-03-01-08:00` is `2026-03-01`. Where a reader needs an instant from a date, it is midnight of that day in the plan's zone. The written offset is kept, exactly as written, in the metadata of the map holding the property, under `:urpx.schema/date-offsets` as `{property offset}`, and emit writes it back. Map equality ignores metadata, so the same date with and without an offset compares equal. A malformed literal refuses with `:urpx.schema/malformed-datetime`, `-date` or `-time`.
 
 That makes **one moment cost one price, however it is spelled**. It did not used to: until 0.31.0 the query was reduced with `.toLocalDateTime`, which kept whatever zone the caller happened to use, so the same instant written two ways gave two answers — on PG&E E-TOU-C, Peak `0.46886` asked in Pacific and Off-Peak `0.34586` asked in UTC, 36% apart, with no error and no mark.
 
@@ -904,7 +906,7 @@ For programmatic construction or test-fixture authoring, `urpx.dsl` provides idi
 The DSL handles the boring parts so authoring code stays declarative:
 
 - **`@type` is inferred** from the schema (no `:jsonld/type "urpx:Season"` boilerplate).
-- **Auto-coercion** of raw Clojure inputs through the schema's `:decode/urpx-jsonld` decoders: numbers → `BigDecimal`, ISO strings → `LocalDate` / `LocalDateTime` / `LocalTime`, or the zoned forms when the string carries an offset, `--MM` xsd:gMonth → int.
+- **Auto-coercion** of raw Clojure inputs through the schema's `:decode/urpx-jsonld` decoders: numbers → `BigDecimal`, ISO strings → `LocalDate` / `LocalDateTime` / `LocalTime`, or the zoned forms when a dateTime or time carries an offset, `--MM` xsd:gMonth → int.
 - **Validation on construct** — every builder throws `ex-info` with the Malli explanation if the entity doesn't validate against its schema, so shape drift surfaces at the call site.
 - **Two kwarg forms** — canonical `:urpx/seasonName` or auto-derived kebab-case `:season-name` (both work, can be mixed in one call).
 

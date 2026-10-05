@@ -1,14 +1,16 @@
 (ns urpx.offset-test
   "Temporal literals written with a UTC offset.
 
-  A value without an offset is a wall-clock reading in the zone the reader
-  resolves; a value with one names its instant, and every reader keeps that
-  instant."
-  (:require [clojure.test :refer [deftest is testing]]
+  A dateTime or time without an offset is a wall-clock reading in the zone the
+  reader resolves; one with an offset names its instant, and every reader keeps
+  that instant. A date is the calendar day it names, with or without an offset."
+  (:require [clojure.data.json :as json]
+            [clojure.test :refer [deftest is testing]]
             [clojure.walk :as walk]
             [urpx.coerce :as coerce]
             [urpx.core :as core]
             [urpx.coverage :as cov]
+            [urpx.emit :as emit]
             [urpx.holidays :as holidays]
             [urpx.index :as index]
             [urpx.load :as load]
@@ -69,7 +71,7 @@
                                         "2026-01-01T16:30:15.25+05:30"]]
            [schema/Time "Time" ["16:00:00" "00:00:00" "16:00:00Z" "16:00:00-05:00"
                                 "16:30:15.5+05:30"]]
-           [schema/Date "Date" ["2026-02-01" "2026-02-01Z" "2026-02-01-05:00"]]]
+           [schema/Date "Date" ["2026-02-01"]]]
           lex lexes]
     (let [v (coerce/coerce s lex)]
       (is (coerce/validate s v) (str schema-name " " lex " validates"))
@@ -78,21 +80,95 @@
 (deftest a-literal-encodes-in-xsd-canonical-form
   (doseq [[s lex canonical] [[schema/DateTime "2026-01-01T00:00:00+00:00" "2026-01-01T00:00:00Z"]
                              [schema/DateTime "2026-01-01T00:00:00.250" "2026-01-01T00:00:00.25"]
-                             [schema/Time "16:00:00.000-00:00" "16:00:00Z"]
-                             [schema/Date "2026-01-01+00:00" "2026-01-01Z"]]]
+                             [schema/Time "16:00:00.000-00:00" "16:00:00Z"]]]
     (is (= canonical (coerce/encode s (coerce/coerce s lex))) lex)))
 
 (deftest an-offset-time-is-an-offset-time
   (is (= (OffsetTime/of 16 0 0 0 (ZoneOffset/of "-05:00"))
          (coerce/coerce schema/Time "16:00:00-05:00"))))
 
-(deftest an-offset-date-keeps-its-day-and-offset
-  (testing "java.time has no OffsetDate: the start of that day in that offset"
-    (is (= (ZonedDateTime/of 2026 2 1 0 0 0 0 (ZoneOffset/of "-05:00"))
-           (coerce/coerce schema/Date "2026-02-01-05:00"))))
-  (testing "a dateTime that is not at midnight is not a date"
-    (is (not (coerce/validate schema/Date
-                              (coerce/coerce schema/DateTime "2026-02-01T01:00:00Z"))))))
+(def ^:private plan-json
+  "A RatePlan whose version writes urpx:effectiveDate with `offset` (\"\" for
+   none) and whose own urpx:initialEffectiveDate writes none."
+  (fn [offset]
+    (str "{\"@type\": \"urpx:RatePlan\", \"@id\": \"x:plan\",
+           \"urpx:ratePlanUniqueIdentifier\": \"P1\", \"urpx:name\": \"Plan One\",
+           \"urpx:timezoneIdentifier\": \"America/New_York\",
+           \"urpx:initialEffectiveDate\": \"2026-01-01\",
+           \"urpx:hasRatePlanVersion\": {
+             \"@type\": \"urpx:RatePlanVersion\",
+             \"urpx:changeReason\": {\"@id\": \"urpx:rateCase\"},
+             \"urpx:forRatePlan\": {\"@id\": \"x:plan\"},
+             \"urpx:hasCoverageClaim\": {\"@type\": \"urpx:CoverageClaim\",
+               \"urpx:completenessResult\": {\"@id\": \"urpx:complete\"}},
+             \"urpx:serviceRole\": {\"@id\": \"urpx:bundledServiceRole\"},
+             \"urpx:effectiveDate\": \"2026-03-01" offset "\",
+             \"urpx:hasPlanElements\": {\"@type\": \"urpx:PlanElements\",
+               \"urpx:hasMetricInput\": {\"@type\": \"urpx:MetricInput\", \"urpx:name\": \"kWh\",
+                 \"urpx:metricInputType\": {\"@id\": \"urpx:measuredMetricInput\"}},
+               \"urpx:hasBillingModel\": {\"@type\": \"urpx:BillingModel\",
+                 \"urpx:hasPriceDefinition\": []}},
+             \"urpx:hasPrices\": {\"@type\": \"urpx:Prices\"}}}")))
+
+(defn- version-of [plan] (first (index/as-vec (:urpx/hasRatePlanVersion plan))))
+
+(deftest an-offset-date-is-the-day-as-written
+  (doseq [lex ["2026-03-01-08:00" "2026-03-01+14:00" "2026-03-01Z"]]
+    (is (= (LocalDate/of 2026 3 1) (coerce/coerce schema/Date lex)) lex))
+  (testing "a typed-literal object too"
+    (is (= (LocalDate/of 2026 3 1)
+           (coerce/coerce schema/Date {:jsonld/value "2026-03-01-08:00"
+                                       :jsonld/type "xsd:date"})))))
+
+(deftest a-date-schema-accepts-only-a-local-date
+  (is (coerce/validate schema/Date (LocalDate/of 2026 3 1)))
+  (doseq [v [(ZonedDateTime/of 2026 3 1 0 0 0 0 (ZoneOffset/of "-08:00"))
+             (ZonedDateTime/of 2026 3 1 0 0 0 0 la)
+             (LocalDateTime/of 2026 3 1 0 0)]]
+    (is (not (coerce/validate schema/Date v)) (str v))))
+
+(deftest the-written-offset-is-kept-in-the-holding-maps-metadata
+  (let [with    (coerce/coerce-rate-plan (parse-json (plan-json "-08:00")))
+        without (coerce/coerce-rate-plan (parse-json (plan-json "")))]
+    (is (coerce/validate schema/RatePlan with))
+    (is (= (LocalDate/of 2026 3 1) (:urpx/effectiveDate (version-of with))))
+    (is (= {:urpx/effectiveDate "-08:00"}
+           (:urpx.schema/date-offsets (meta (version-of with)))))
+    (testing "a map whose dates carry no offset keeps none"
+      (is (nil? (:urpx.schema/date-offsets (meta with))))
+      (is (nil? (:urpx.schema/date-offsets (meta (version-of without))))))
+    (testing "equality ignores the offset"
+      (is (= with without)))))
+
+(deftest an-offset-date-emits-exactly-as-written
+  (doseq [offset ["-08:00" "+00:00" "Z" ""]]
+    (let [plan    (coerce/coerce-rate-plan (parse-json (plan-json offset)))
+          emitted (emit/write-rate-plan plan {:context nil})
+          out     (json/read-str emitted)]
+      (is (= (str "2026-03-01" offset)
+             (get-in out ["urpx:hasRatePlanVersion" "urpx:effectiveDate"]))
+          (str "offset " (pr-str offset)))
+      (is (= "2026-01-01" (get out "urpx:initialEffectiveDate")))
+      (testing "and survives a second round trip"
+        (let [again (coerce/coerce-rate-plan (parse-json emitted))]
+          (is (= plan again))
+          (is (= (meta (version-of plan)) (meta (version-of again)))))))))
+
+(deftest a-package-date-emits-exactly-as-written
+  (let [pkg (coerce/coerce-urpx-package
+             (parse-json "{\"@type\": \"urpx:URPXPackage\",
+                           \"urpx:targetURPXVersion\": \"0.5.1\",
+                           \"urpx:dateCreated\": \"2026-03-01+05:30\"}"))]
+    (is (= (LocalDate/of 2026 3 1) (:urpx/dateCreated pkg)))
+    (is (= "2026-03-01+05:30"
+           (get (json/read-str (emit/write-urpx-package pkg {:context nil}))
+                "urpx:dateCreated")))))
+
+(deftest an-offset-date-reads-as-midnight-in-the-plan-zone
+  (let [ny   (ZoneId/of "America/New_York")
+        plan (coerce/coerce-rate-plan (parse-json (plan-json "-08:00")))]
+    (is (= (ZonedDateTime/of 2026 3 1 0 0 0 0 ny)
+           (price/version-effective-at (version-of plan) ny)))))
 
 (deftest a-malformed-literal-refuses-with-a-reason
   (doseq [[s lex reason] [[schema/DateTime "2026-13-01T00:00:00" :urpx.schema/malformed-datetime]
@@ -191,7 +267,7 @@
 ;; Coverage
 ;; ---------------------------------------------------------------------------
 
-(deftest coverage-reads-offset-bounds-as-their-instants
+(deftest coverage-reads-offset-bounds-in-the-plan-zone
   (let [raw (parse-json
              "{\"@id\": \"x:v\", \"@type\": \"urpx:RatePlanVersion\",
                \"urpx:forRatePlan\": {\"@id\": \"x:p\"},
@@ -213,7 +289,8 @@
         window (cov/coverage-interval report la)]
     (is (coerce/validate schema/CoverageClaim (:urpx/hasCoverageClaim v)))
     (is (= (la-at 2026 2 1 0 0) (:tick/beginning window)))
-    (is (= (la-at 2026 6 1 21 0) (:tick/end window)))
+    (is (= (la-at 2026 6 2 0 0) (:tick/end window))
+        "an offset date's bound is midnight of that day in the plan zone")
     (is (= (coerce/coerce schema/DateTime "2026-05-01T16:00:00Z")
            (-> report :urpx.coverage/evaluations first :evaluated-on)))
     (is (instance? ZonedDateTime

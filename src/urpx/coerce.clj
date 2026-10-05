@@ -14,6 +14,8 @@
 (def ^:private jsonld-transformer
   (mt/transformer
    {:name :urpx-jsonld
+    :decoders {:map schema/date-offsets-decoder}
+    :encoders {:map schema/date-offsets-encoder}
     :default-decoder identity
     :default-encoder identity}))
 
@@ -100,7 +102,7 @@
    `{:times #{} :dates #{} :date-times #{} :date-shaped-strings n}`.
 
    `:times` holds LocalTimes and OffsetTimes, `:date-times` LocalDateTimes and
-   ZonedDateTimes, the latter including an xsd:date written with an offset.
+   ZonedDateTimes.
 
    By java.time TYPE rather than by property name, deliberately. A name list
    would have to be kept in step with the vocabulary, and the one it missed
