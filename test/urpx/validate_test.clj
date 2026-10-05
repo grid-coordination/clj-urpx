@@ -114,6 +114,20 @@
       (is (= [] (findings (plan-json v051 claim)))
           "and stating it in only one place is not a disagreement"))))
 
+(deftest self-contained-disagreement-is-found-on-a-version-with-offset-less-datetimes
+  (let [json (str "{" ctx ",\"@id\":\"x:pkg\",\"@type\":\"urpx:URPXPackage\","
+                  "\"urpx:targetURPXVersion\":\"" v051 "\","
+                  "\"urpx:hasRatePlan\":{\"@id\":\"x:p\",\"@type\":\"urpx:RatePlan\","
+                  "\"urpx:timezoneIdentifier\":\"America/Los_Angeles\","
+                  "\"urpx:hasRatePlanVersion\":{\"@id\":\"x:p-v\",\"@type\":\"urpx:RatePlanVersion\","
+                  "\"urpx:selfContained\":false,"
+                  "\"urpx:hasCoverageClaim\":{\"@type\":\"urpx:CoverageClaim\","
+                  "\"urpx:completenessResult\":{\"@id\":\"urpx:partial\"},"
+                  "\"urpx:selfContained\":true,"
+                  "\"urpx:explainedBy\":{\"@type\":\"urpx:Evaluation\","
+                  "\"urpx:evaluatedOn\":\"2026-09-21T00:00:00\"}}}}}")]
+    (is (= [:self-contained-disagrees] (mapv :rule (findings json))))))
+
 (deftest a-schema-valid-file-can-still-be-nonconformant
   (testing "the whole reason these are findings rather than schema errors: they
             are different claims. One says the document does not match what this

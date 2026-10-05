@@ -336,13 +336,15 @@
 (defn- ldt [y m d] (java.time.LocalDateTime/of y m d 0 0))
 
 (defn- scoped
-  "A version whose claim carries one coverage scope with the given bounds."
+  "A version in America/Los_Angeles whose claim carries one coverage scope with
+   the given bounds."
   [bounds]
   (version {:urpx/completenessResult {:jsonld/id "urpx:partial"}
             :urpx/hasTemporalScope
             [(merge {:jsonld/type "urpx:TemporalScope"
                      :urpx/scopeKind {:jsonld/id "urpx:coverage"}}
-                    bounds)]}))
+                    bounds)]}
+           {:urpx/timezoneIdentifier "America/Los_Angeles"}))
 
 (defn- applies? [bounds from to]
   (cov/verdict-applies? (cov/of-version (scoped bounds)) la
@@ -522,3 +524,90 @@
                                                     :tick/end (zdt 2026 2 1)})]]]
         (let [e (is (thrown? clojure.lang.ExceptionInfo (f)) nm)]
           (is (= :urpx.coverage/zone-required (:reason (ex-data e))) nm))))))
+
+;; ---------------------------------------------------------------------------
+;; Zoning the report
+;; ---------------------------------------------------------------------------
+
+(defn- evaluated
+  "A version whose claim carries an Evaluation and a coverage scope, both
+   written without an offset, plus `extra` on the version."
+  [extra]
+  (version {:urpx/completenessResult {:jsonld/id "urpx:partial"}
+            :urpx/hasTemporalScope
+            [{:jsonld/type "urpx:TemporalScope"
+              :urpx/scopeKind {:jsonld/id "urpx:coverage"}
+              :urpx/startDateTime (ldt 2026 1 1)
+              :urpx/endDate (java.time.LocalDate/of 2026 3 1)}]
+            :urpx/explainedBy [{:jsonld/type "urpx:Evaluation"
+                                :urpx/evaluatedOn (ldt 2026 5 1)}]}
+           extra))
+
+(defn- plan-doc [tz]
+  (cond-> {:jsonld/id "x:p" :jsonld/type "urpx:RatePlan"}
+    tz (assoc :urpx/timezoneIdentifier tz)))
+
+(deftest offset-less-datetimes-are-zoned-by-the-document
+  (let [r (cov/of-version (evaluated nil) (plan-doc "America/Los_Angeles"))
+        w (:urpx.coverage/coverage-window r)]
+    (is (= (zdt 2026 5 1) (-> r :urpx.coverage/evaluations first :evaluated-on)))
+    (is (= (zdt 2026 1 1) (:urpx/startDateTime w)))
+    (is (= (java.time.LocalDate/of 2026 3 1) (:urpx/endDate w))
+        "a date bound stays a calendar date")))
+
+(deftest offset-less-datetimes-are-zoned-by-the-version
+  (let [r (cov/of-version (evaluated {:urpx/timezoneIdentifier "America/Los_Angeles"}))]
+    (is (= (zdt 2026 5 1) (-> r :urpx.coverage/evaluations first :evaluated-on)))
+    (is (= (zdt 2026 1 1) (get-in r [:urpx.coverage/coverage-window :urpx/startDateTime])))))
+
+(deftest offset-less-datetimes-are-zoned-by-the-caller
+  (let [r (cov/of-version (evaluated nil) nil la)]
+    (is (= (zdt 2026 5 1) (-> r :urpx.coverage/evaluations first :evaluated-on)))
+    (is (= (zdt 2026 1 1) (get-in r [:urpx.coverage/coverage-window :urpx/startDateTime]))))
+  (testing "and a caller's zone agreeing with the document's is accepted"
+    (is (= (zdt 2026 5 1)
+           (-> (cov/of-version (evaluated nil) (plan-doc "America/Los_Angeles") la)
+               :urpx.coverage/evaluations first :evaluated-on)))))
+
+(deftest an-offset-less-datetime-with-no-zone-refuses
+  (doseq [[property v] [["urpx:evaluatedOn"
+                         (update-in (evaluated nil) [:urpx/hasCoverageClaim]
+                                    dissoc :urpx/hasTemporalScope)]
+                        ["urpx:startDateTime"
+                         (update-in (evaluated nil) [:urpx/hasCoverageClaim]
+                                    dissoc :urpx/explainedBy)]]]
+    (let [e (is (thrown? clojure.lang.ExceptionInfo
+                         (cov/of-version v (plan-doc nil))))]
+      (is (= :urpx.coverage/zone-required (:reason (ex-data e))) property)
+      (is (= property (:property (ex-data e))))))
+  (testing "while a claim with nothing to zone needs no zone"
+    (is (= "urpx:partial"
+           (:urpx.coverage/completeness
+            (cov/of-version (version {:urpx/completenessResult {:jsonld/id "urpx:partial"}})))))))
+
+(deftest disagreeing-zones-refuse
+  (doseq [[nm f] [["caller and document"
+                   #(cov/of-version (evaluated nil) (plan-doc "America/Los_Angeles")
+                                    java.time.ZoneOffset/UTC)]
+                  ["version and document"
+                   #(cov/of-version (evaluated {:urpx/timezoneIdentifier "America/New_York"})
+                                    (plan-doc "America/Los_Angeles"))]]]
+    (let [e (is (thrown? clojure.lang.ExceptionInfo (f)) nm)]
+      (is (= :urpx.coverage/conflicting-timezone (:reason (ex-data e))) nm)))
+  (testing "while a claim with nothing to zone reads in neither"
+    (is (= "urpx:partial"
+           (:urpx.coverage/completeness
+            (cov/of-version (version {:urpx/completenessResult {:jsonld/id "urpx:partial"}})
+                            (plan-doc "America/Los_Angeles") java.time.ZoneOffset/UTC))))))
+
+(deftest a-model-part-is-zoned-by-its-own-document
+  (let [mv    (assoc (evaluated nil) :jsonld/id "x:m-v"
+                     :jsonld/type "urpx:RatePlanModifierVersion")
+        model {:urpx.scenario-cost-model/version (evaluated nil)
+               :urpx.scenario-cost-model/rate-plan (plan-doc "America/Los_Angeles")
+               :urpx.scenario-cost-model/modifier-versions [mv]
+               :urpx.scenario-cost-model/modifiers [(plan-doc "America/New_York")]}]
+    (is (= [(zdt 2026 5 1)
+            (java.time.ZonedDateTime/of 2026 5 1 0 0 0 0 (java.time.ZoneId/of "America/New_York"))]
+           (mapv #(-> % :urpx.coverage/evaluations first :evaluated-on)
+                 (:urpx.coverage/parts (cov/of-model model)))))))

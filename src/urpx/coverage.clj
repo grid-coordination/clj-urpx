@@ -24,7 +24,8 @@
   shape requires, so a verdict with no scope is conformant and a consumer
   publishing a horizon cannot assume a verdict covers it."
   (:require [urpx.index :as index]
-            [urpx.schema :as schema]))
+            [urpx.schema :as schema])
+  (:import [java.time LocalDateTime ZoneId]))
 
 (def completeness-results
   "The six urpx:CompletenessResultValue members, from
@@ -148,6 +149,43 @@
      :urpx.coverage/self-contained-disagrees?
      (and (some? claimed) (some? on-ver) (not= claimed on-ver))}))
 
+(defn- zone-for
+  "The zone `version`'s dateTimes written without an offset are read in: `zone`
+   and the urpx:timezoneIdentifier on `version` and on `doc`, which must agree.
+   Nil when none states one.
+
+   REFUSES `:urpx.coverage/conflicting-timezone` when they name different zones."
+  ^ZoneId [version doc ^ZoneId zone]
+  (let [zones (cond-> (into #{} (comp (keep :urpx/timezoneIdentifier) (map #(ZoneId/of %)))
+                            [version doc])
+                zone (conj zone))]
+    (when (> (count zones) 1)
+      (throw (ex-info (str "Cannot zone the coverage claim on "
+                           (pr-str (:jsonld/id version)) ": "
+                           (pr-str (sort (map str zones))) " are all stated for it, "
+                           "and its wall-clock dateTimes name a different moment "
+                           "in each.")
+                      {:reason :urpx.coverage/conflicting-timezone
+                       :version-id (:jsonld/id version)
+                       :zones (vec (sort (map str zones)))})))
+    (first zones)))
+
+(defn- zoned
+  "`v` as a ZonedDateTime in the zone `zone` delivers when it is a
+   LocalDateTime, else unchanged. REFUSES `:urpx.coverage/zone-required` for a
+   LocalDateTime when `zone` delivers nil."
+  [v zone version-id property]
+  (cond
+    (not (instance? LocalDateTime v)) v
+    @zone (schema/in-zone v @zone)
+    :else (throw (ex-info (str "The coverage claim on " (pr-str version-id) " writes "
+                               property " " v " without an offset, and neither "
+                               "the version, its document nor the caller states "
+                               "the zone it is read in.")
+                          {:reason :urpx.coverage/zone-required
+                           :version-id version-id
+                           :property property}))))
+
 (defn- evaluations-of
   "The Evaluations a claim is explained by, flattened to what a reader wants.
 
@@ -155,15 +193,24 @@
    VERDICT is still readable without its rationale. It is reported as
    `{:unresolved-ref id}` so the gap is visible rather than silent. Refuse when
    the verdict cannot be read; flag when only the reason for it cannot."
-  [c doc]
+  [c doc zone vid]
   (mapv (fn [e]
           (let [node (deref-node e doc)]
             (if (= ::unresolved node)
               {:unresolved-ref (:jsonld/id e)}
               {:kind        (get-in node [:urpx/evaluationKind :jsonld/id])
-               :evaluated-on (:urpx/evaluatedOn node)
+               :evaluated-on (zoned (:urpx/evaluatedOn node) zone vid "urpx:evaluatedOn")
                :description (:urpx/description node)})))
         (index/as-vec (:urpx/explainedBy c))))
+
+(defn- zone-window
+  "`window` with its dateTime bounds zoned. Its date bounds stay calendar dates."
+  [window zone vid]
+  (reduce (fn [w [k property]]
+            (if (contains? w k) (update w k zoned zone vid property) w))
+          window
+          [[:urpx/startDateTime "urpx:startDateTime"]
+           [:urpx/endDateTime "urpx:endDateTime"]]))
 
 (defn- coverage-window-of
   "The TemporalScope whose scopeKind is urpx:coverage, or nil.
@@ -206,12 +253,19 @@
       :urpx.coverage/stale           true / false / nil
       :urpx.coverage/fallback-sourced             true / false / nil
       :urpx.coverage/scope-stated?   a urpx:coverage TemporalScope is present
-      :urpx.coverage/coverage-window that scope node, raw, or nil
+      :urpx.coverage/coverage-window that scope node, or nil, with its
+                                     dateTimes as ZonedDateTime
       :urpx.coverage/evaluations     [{:kind :evaluated-on :description}], or
                                      {:unresolved-ref id} for one that cannot
                                      be followed. :evaluated-on is a
-                                     ZonedDateTime when the document wrote an
-                                     offset, else a LocalDateTime
+                                     ZonedDateTime
+
+   `zone`, a java.time.ZoneId, is the zone a dateTime written without an
+   offset is read in. Omitted, it is the urpx:timezoneIdentifier on `version`
+   or on `doc`. A dateTime written with an offset keeps it.
+   When such a dateTime is present, REFUSES `:urpx.coverage/zone-required` if
+   no zone is stated, and `:urpx.coverage/conflicting-timezone` if `zone`, the
+   version and `doc` state different ones.
 
    ABSENT IS NOT UNKNOWN. A version with no claim reports `stated? false` and
    `completeness nil`, never `\"urpx:unknown\"`. urpx:unknown is itself a
@@ -232,8 +286,9 @@
    on a TemporalScope, so a scope may name its role and give no bounds. A caller
    deciding whether a verdict covers a window must read `coverage-window` rather
    than trusting `scope-stated?`."
-  ([version] (of-version version nil))
-  ([version doc]
+  ([version] (of-version version nil nil))
+  ([version doc] (of-version version doc nil))
+  ([version doc ^ZoneId zone]
    (let [vid (:jsonld/id version)
          c   (claim version doc)]
      (if (= ::absent c)
@@ -250,7 +305,8 @@
         :urpx.coverage/scope-stated? false
         :urpx.coverage/coverage-window nil
         :urpx.coverage/evaluations []}
-       (let [window (coverage-window-of c doc vid)]
+       (let [zone   (delay (zone-for version doc zone))
+             window (some-> (coverage-window-of c doc vid) (zone-window zone vid))]
          (merge {:urpx.coverage/version-id vid
                  :urpx.coverage/version-type (:jsonld/type version)
                  :urpx.coverage/stated? true
@@ -260,7 +316,7 @@
                  :urpx.coverage/fallback-sourced (:urpx/fallbackSourced c)
                  :urpx.coverage/scope-stated? (some? window)
                  :urpx.coverage/coverage-window window
-                 :urpx.coverage/evaluations (evaluations-of c doc)}
+                 :urpx.coverage/evaluations (evaluations-of c doc zone vid)}
                 (self-contained-of c version)))))))
 
 ;; ---------------------------------------------------------------------------
@@ -314,7 +370,8 @@
 
    Each part is read against ITS OWN document, the one the model bound to
    it, so a claim recorded as a bare reference resolves correctly rather than
-   against whichever document happened to be at hand."
+   against whichever document happened to be at hand, and its dateTimes are
+   zoned by the urpx:timezoneIdentifier the model declared on that document."
   [model]
   (let [parts (into [(assoc (of-version (:urpx.scenario-cost-model/version model)
                                         (:urpx.scenario-cost-model/rate-plan model))
@@ -389,10 +446,7 @@
 
    `zone` is a java.time.ZoneId. A rate plan usually declares one as
    `urpx:timezoneIdentifier`, which is what `urpx.schedule` resolves for the
-   same purpose; a caller that has already built a horizon has it in hand. This
-   namespace does not read it for you, because the plan carrying it is not
-   always the document a version came from and guessing which is the caller's
-   call rather than this reader's.
+   same purpose; a caller that has already built a horizon has it in hand.
 
    TICK INTERVALS IN FACT, not only in shape. `tick.alpha.interval`'s functions
    read any map carrying those two keys, so `(ti/relation window segment)`

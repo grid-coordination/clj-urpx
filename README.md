@@ -764,9 +764,10 @@ Every `urpx:RatePlanVersion` and `urpx:RatePlanModifierVersion` carries a `urpx:
 ```clojure
 (require '[urpx.coverage :as cov])
 
-(cov/of-version version)        ; => a report map, keys under :urpx.coverage/
-(cov/of-version version doc)    ; doc only needed to follow a bare @id reference
-(cov/claim version)             ; => the raw CoverageClaim node, or ::absent
+(cov/of-version version)          ; => a report map, keys under :urpx.coverage/
+(cov/of-version version doc)      ; doc follows a bare @id reference and may state the zone
+(cov/of-version version doc zone) ; zone reads dateTimes written without an offset
+(cov/claim version)               ; => the raw CoverageClaim node, or ::absent
 
 (cov/of-model model)            ; => every part's report, plus counts
 (cov/descriptions model-report) ; => the Evaluation prose, in part order

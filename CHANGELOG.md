@@ -15,6 +15,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 - **An unrecognized `urpx:holidayRule` refuses with `:reason :urpx.holidays/unknown-holiday-rule`, and an unrecognized `urpx:observanceRule` with `:urpx.holidays/unknown-observance-rule`.**
 - **`urpx.schema/Holiday` closes `urpx:observanceRule` to the `urpx:ObservanceRuleValue` members through the new `urpx.schema/ObservanceRule`**, so the validate CLI and `coerce/validate` reject any other IRI.
+- **`coverage/of-version` returns `:evaluated-on` and the coverage window's `urpx:startDateTime` and `urpx:endDateTime` as `ZonedDateTime`.** One written without an offset is read in the zone given as its new optional third argument, else the `urpx:timezoneIdentifier` on the version or on its document. With none it refuses `:urpx.coverage/zone-required`; with two that differ, `:urpx.coverage/conflicting-timezone`. `coverage/of-model` reads each part in the zone on its model document.
 
 ### Added
 
