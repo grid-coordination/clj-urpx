@@ -28,6 +28,9 @@
        `urpx.holidays/derive-predicate`.
     3. Fallback: every date treated as a non-holiday.
 
+  A modifier's brackets read the modifier's own calendar at step 2, and in a
+  composition fall back to the base plan's before step 3.
+
   Plans without a HolidayCalendar and called without `:holiday?` retain the
   pre-existing 'every date is a non-holiday' fallback — so brackets that
   opt out of non-holidays (urpx:includeNonHolidays = false) will never match."
@@ -2238,6 +2241,11 @@
                            (make-member-status by-id base-period-num query-date
                                                own-rules season-status alt-status))
          own-season    (season-of own-seasons query-date)
+         ;; `holiday?` is the inherited predicate: the base plan's when
+         ;; composing, nil standing alone.
+         holiday?      (or (:holiday? opts)
+                           (holidays/derive-predicate modifier version)
+                           holiday?)
          ;; holiday? or a predicate, never (holiday? query-date):
          ;; find-tou-period takes the PREDICATE and applies it per bracket.
          ;; Passing the boolean made holiday-status-matches? call `true` as a
@@ -2407,13 +2415,14 @@
    way that's programmatically interpretable. Filter the returned :tiers
    vector on :urpx.resolved/price-id when needed.
 
+   Holidays are read from the modifier's own urpx:HolidayCalendar, and every
+   date is a non-holiday when it declares none.
+
    `opts` takes the same keys as `resolve-prices`, and four of them change an
-   answer here rather than only saving work. :holiday? is the one that used to
-   be a WRONG number rather than a withheld one: this path defaults it to
-   (constantly false), so a modifier carrying its own urpx:TOUSchedule with
-   holiday-sensitive TimeBrackets resolved the weekday period on a holiday and
-   said nothing. :profile-alternatives lets a cell-scoped urpx:ServiceBracket's
-   bounds be determined at all, which no caller could do here before.
+   answer here rather than only saving work. :holiday? overrides the
+   modifier's calendar. :profile-alternatives lets a cell-scoped
+   urpx:ServiceBracket's bounds be determined at all, which no caller could do
+   here before.
    :by-id supplies a urpx:Season the modifier names but does not declare, which
    is otherwise unevaluable, and which a urpx:TimeBracket naming it refuses
    `:unresolvable-season-ref` without. :version chooses among several snapshots.
@@ -2433,7 +2442,7 @@
    ;; zone rather than in as many as the documents happen to declare.
    (let [^ZonedDateTime zdt (.withZoneSameInstant zdt (require-zone modifier))]
      {:urpx.resolved/ledgers
-      (modifier-ledger-results modifier zdt nil (:holiday? opts) opts)})))
+      (modifier-ledger-results modifier zdt nil nil opts)})))
 
 (defn resolve-prices-with-modifiers
   "Resolve prices for `rate-plan` at `zdt` and append ledger results for
@@ -2445,7 +2454,10 @@
    by the modifier ledgers. The result-level season and TOU keys are the base
    plan's. A modifier ledger carries its modifier's own season and period as
    `resolve-modifier-prices` describes; a modifier gated by the base plan's
-   period carries none of its own."
+   period carries none of its own.
+
+   A modifier's brackets read its own urpx:HolidayCalendar, and the base
+   plan's when it declares none. A caller's `:holiday?` overrides both."
   ([rate-plan modifiers ^ZonedDateTime zdt] (resolve-prices-with-modifiers rate-plan modifiers zdt nil))
   ([rate-plan modifiers ^ZonedDateTime zdt opts]
    (let [;; ONE ZONE FOR THE WHOLE COMPOSITION, the base plan's. A modifier may

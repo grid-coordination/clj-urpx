@@ -492,6 +492,68 @@
       (is (= ["test:adj-offpeak"] (ids {:holiday? (constantly true)}))
           "told it IS a holiday: the holiday bracket, which no caller could reach before"))))
 
+;; ---------------------------------------------------------------------------
+;; A modifier's own urpx:HolidayCalendar (URPX-lcf)
+;; ---------------------------------------------------------------------------
+
+(defn- calendar
+  "A urpx:HolidayCalendar declaring one literal holiday on `date`."
+  [^LocalDate date]
+  {:jsonld/type "urpx:HolidayCalendar"
+   :urpx/hasHoliday [{:jsonld/type "urpx:Holiday"
+                      :urpx/holidayName "Test holiday"
+                      :urpx/holidayDate date}]})
+
+(defn- with-calendar [doc version-key date]
+  (assoc-in doc [version-key :urpx/hasPlanElements :urpx/hasHolidayCalendar]
+            (calendar date)))
+
+(def ^:private july-15 (LocalDate/of 2026 7 15))
+(def ^:private july-16 (LocalDate/of 2026 7 16))
+
+(defn- modifier-pd-ids [resolved]
+  (->> (:urpx.resolved/ledgers resolved)
+       (filter #(= "test:ledger-adj" (:urpx.resolved/ledger-id %)))
+       (mapcat :urpx.resolved/tiers)
+       (map :urpx.resolved/price-definition-id)
+       sort vec))
+
+(deftest a-modifier-resolved-alone-reads-its-own-holiday-calendar
+  (let [m (with-calendar (tou-modifier) :urpx/hasRatePlanModifierVersion july-15)]
+    (is (= ["test:adj-offpeak"]
+           (modifier-pd-ids (price/resolve-modifier-prices m (at 2026 7 15)))))
+    (is (= ["test:adj-peak"]
+           (modifier-pd-ids (price/resolve-modifier-prices m (at 2026 7 16)))))
+    (is (= ["test:adj-peak"]
+           (modifier-pd-ids (price/resolve-modifier-prices
+                             m (at 2026 7 15) {:holiday? (constantly false)})))
+        "a caller's predicate overrides the modifier's calendar")
+    (let [bad (assoc-in m [:urpx/hasRatePlanModifierVersion :urpx/hasPlanElements
+                           :urpx/hasHolidayCalendar :urpx/hasHoliday 0 :urpx/observanceRule]
+                        {:jsonld/id "urpx:sundayOnlyObservance"})]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unrecognized urpx:observanceRule"
+                            (price/resolve-modifier-prices bad (at 2026 7 15)))
+          "its calendar refuses an unrecognized observance rule")
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unrecognized urpx:observanceRule"
+                            (price/resolve-prices-with-modifiers (base-plan) [bad] (at 2026 7 15)))
+          "composed, too"))))
+
+(deftest a-composed-modifier-reads-its-own-calendar-else-the-base-plans
+  (let [compose (fn [base m opts]
+                  (modifier-pd-ids (price/resolve-prices-with-modifiers
+                                    base [m] (at 2026 7 15) opts)))
+        base-hol (with-calendar (base-plan) :urpx/hasRatePlanVersion july-15)
+        mod-hol  (with-calendar (tou-modifier) :urpx/hasRatePlanModifierVersion july-15)
+        mod-not  (with-calendar (tou-modifier) :urpx/hasRatePlanModifierVersion july-16)]
+    (is (= ["test:adj-offpeak"] (compose (base-plan) mod-hol nil))
+        "its own calendar, where the base plan declares none")
+    (is (= ["test:adj-peak"] (compose base-hol mod-not nil))
+        "its own calendar over the base plan's")
+    (is (= ["test:adj-offpeak"] (compose base-hol (tou-modifier) nil))
+        "the base plan's calendar, where it declares none")
+    (is (= ["test:adj-peak"] (compose base-hol mod-hol {:holiday? (constantly false)}))
+        "a caller's predicate overrides both")))
+
 (deftest a-cell-selection-reaches-a-modifier-resolved-alone
   (testing "URPX-crk. A cell-scoped urpx:ServiceBracket's bounds could not be
             determined standalone at all, because no selection could arrive, so
