@@ -566,6 +566,8 @@ Each model is the composition a `urpx:ScenarioCostModel` prices.
 
 `resolve-at` binds each document to its own version and passes the model's selections through as `:profile-alternatives`, so an opt cannot reach a document it does not belong to. Those two keys are **refused** rather than merged if a caller passes them: a caller who wants a different version or a different selection wants a different model.
 
+Computing the set at runtime starts with walking the corpus, which is the caller's job: the corpus's own walker, or its `corpus.json`. Load what the walk finds with [`urpx.load/documents`](#loading-documents-and-who-walks-the-corpus), which takes any `clojure.java.io/reader` source including classpath URLs, and pass the documents to `scm/enumerate`; `scm/node` makes each model a `urpx:ScenarioCostModel` node, and `scm/rate-plans-iri` and `scm/rate-plans-name` give it the `@id` and `urpx:name` urpx-rate-plans uses.
+
 ### A model has no verdict of its own
 
 `of-model` returns every part's report, a frequency map of the verdicts, and conjunction predicates. It returns **no rolled-up `completeness`**, and the absence is the design rather than an omission — a test pins the exact key set so that adding one fails.
