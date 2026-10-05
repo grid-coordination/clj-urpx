@@ -41,6 +41,17 @@
          :target "target"
          :src-dirs ["src"]))
 
+(def ^:private changelog-entry
+  (format "docs/%s/%s/guides/CHANGELOG.md" (namespace lib) (name lib)))
+
+(defn- check-jar-docs!
+  "Throw unless the jar carries CHANGELOG.md beside the doc/ guides."
+  [{:keys [jar-file]}]
+  (with-open [z (ZipFile. (io/file jar-file))]
+    (when-not (.getEntry z changelog-entry)
+      (throw (ex-info (str jar-file " lacks " changelog-entry)
+                      {:jar-file jar-file :entry changelog-entry})))))
+
 (defn ci "Run the CI pipeline of tests (and build the JAR)." [opts]
   (test opts)
   (b/delete {:path "target"})
@@ -52,13 +63,16 @@
                         :description (:description opts)
                         :source-uri (str (get-in opts [:scm :url])
                                          "/blob/{git-commit}/{filepath}#L{line}")})
+    (b/copy-file {:src "CHANGELOG.md"
+                  :target (str "target/doc-resources/" changelog-entry)})
     (println "\nCopying source...")
     (b/copy-dir {:src-dirs ["resources" "src" "target/doc-resources"]
                  :target-dir class-dir})
     (println "\nWriting build provenance...")
     (bp/write! {:lib lib :version version :class-dir class-dir})
     (println "\nBuilding JAR...")
-    (b/jar opts))
+    (b/jar opts)
+    (check-jar-docs! opts))
   opts)
 
 ;; ---------------------------------------------------------------------------

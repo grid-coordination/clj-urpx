@@ -62,7 +62,7 @@ markdownlint-cli2 README.md CHANGELOG.md 'doc/*.md'
 
 ## What lands in the jar
 
-Beyond the sources: Markdown API docs for every namespace plus the `doc/` guides, under `docs/energy.grid-coordination/clj-urpx/`, and build provenance at `META-INF/energy.grid-coordination/clj-urpx/build-provenance.{json,edn}`. Both are produced by `ci`, which is the other reason `deploy` alone is not a release.
+Beyond the sources: Markdown API docs for every namespace plus the `doc/` guides and `CHANGELOG.md`, under `docs/energy.grid-coordination/clj-urpx/`, and build provenance at `META-INF/energy.grid-coordination/clj-urpx/build-provenance.{json,edn}`. Both are produced by `ci`, which is the other reason `deploy` alone is not a release.
 
 To read the provenance of a published artifact:
 

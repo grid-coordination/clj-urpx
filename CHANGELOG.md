@@ -26,6 +26,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 - **`corpus-sweep` with no `--layout` reads the `corpus.json` at the corpus root when there is one**, including in a corpus fetched by git URL, and globs `**/*.jsonld` when there is none. Reading one needs the `:corpus` alias, as `clojure -M:dev:corpus -m corpus-sweep`.
 - **`corpus/urpx.corpus.json` declares the layout of urpx-org/urpx's `test-cases/`.** The `urpx-upstream` walker reads it.
 - **`scenario-cost-model/rate-plans-name`, the `urpx:name` urpx-rate-plans gives a model's `urpx:ScenarioCostModel`**, to pass `node` as its `:name`: each consumed version's plan or modifier name with the version's `@id` in brackets, then any selected alternatives' names. A component with no `urpx:name` refuses `:urpx.scenario-cost-model/unnamed-component`; one named two ways refuses `:urpx.scenario-cost-model/conflicting-name`.
+- **The jar carries `CHANGELOG.md` at `docs/energy.grid-coordination/clj-urpx/guides/CHANGELOG.md`**, beside the `doc/` guides.
 
 ### Fixed
 
