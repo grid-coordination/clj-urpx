@@ -22,6 +22,7 @@
             [urpx.index :as index]
             [urpx.load :as load]
             [urpx.price :as price]
+            [urpx.schedule :as schedule]
             [urpx.schema :as schema]
             [urpx.test-fixtures :as fixtures])
   (:import [java.io StringReader]
@@ -558,8 +559,6 @@
 ;; Horizons
 ;; ---------------------------------------------------------------------------
 
-(defn- inst [y m d h] (.toInstant (at y m d h)))
-
 (deftest segments-for-derives-boundaries-from-the-documents
   (testing "the price-server shape: the interval containing an instant and the
             ones after it, with boundaries where the tariff actually changes
@@ -567,11 +566,11 @@
             so a day must come back as several segments, contiguous and
             covering the window exactly."
     (let [a    (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
-          segs (scm/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0))]
+          segs (scm/segments-for a (at 2026 7 15 0) (at 2026 7 16 0))]
       (is (< 1 (count segs)) "a TOU day is not one segment")
-      (is (= (.toInstant ^ZonedDateTime (:tick/beginning (first segs))) (inst 2026 7 15 0))
+      (is (= (:tick/beginning (first segs)) (at 2026 7 15 0))
           "starts where asked")
-      (is (= (.toInstant ^ZonedDateTime (:tick/end (last segs))) (inst 2026 7 16 0))
+      (is (= (:tick/end (last segs)) (at 2026 7 16 0))
           "ends where asked")
       (is (every? true? (map (fn [x y] (= (:tick/end x) (:tick/beginning y)))
                              segs (rest segs)))
@@ -615,7 +614,7 @@
           doc  (scope-pd-to plan [alt])
           a    (first (filter #(= {(:jsonld/id pas) alt} (:urpx.scenario-cost-model/selections %))
                               (scm/enumerate [doc])))
-          segs (scm/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0))]
+          segs (scm/segments-for a (at 2026 7 15 0) (at 2026 7 16 0))]
       (is (some? a) "there is a model that chose the scoped cell")
       (is (not-any? :urpx.interval/refused segs) "no segment refuses")
       (is (= [] (->> segs
@@ -632,7 +631,7 @@
     (let [a  (update (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
                      :urpx.scenario-cost-model/selections assoc "x:no-such-container" "x:whatever")
           rs (keep #(get-in % [:urpx.interval/refused :reason])
-                   (scm/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0)))]
+                   (scm/segments-for a (at 2026 7 15 0) (at 2026 7 16 0)))]
       (is (= :unknown-profile-alternatives-container
              (try (scm/resolve-at a (at)) nil
                   (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))))
@@ -650,8 +649,7 @@
             binding urpx.price cannot choose between the nested snapshots and
             every segment comes back refused."
     (let [a    (first (scm/enumerate [(two-version-plan)] {:at (at 2026 3 1 12)}))
-          segs (scm/segments-for a (inst 2026 2 1 0) (inst 2026 2 2 0)
-                                 (java.time.ZoneId/of "America/Los_Angeles"))]
+          segs (scm/segments-for a (at 2026 2 1 0) (at 2026 2 2 0))]
       (is (seq segs))
       (is (not-any? :urpx.interval/refused segs)
           "unbound, urpx.price refuses a document carrying two snapshots and
@@ -662,8 +660,8 @@
             second entry point is a second chance to forget it. One builder
             serves all three, so this also pins that they share it."
     (let [a (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))]
-      (doseq [[nm f] [["segments-for" #(scm/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0) nil %)]
-                      ["schedule-for" #(scm/schedule-for a (inst 2026 7 15 0) (inst 2026 7 16 0) nil %)]]
+      (doseq [[nm f] [["segments-for" #(scm/segments-for a (at 2026 7 15 0) (at 2026 7 16 0) %)]
+                      ["schedule-for" #(scm/schedule-for a (at 2026 7 15 0) (at 2026 7 16 0) %)]]
               k       [:version :profile-alternatives]]
         (let [e (is (thrown? clojure.lang.ExceptionInfo (f {k {}})) (str nm " " k))]
           (is (= :urpx.scenario-cost-model/opt-determined-by-model (:reason (ex-data e)))
@@ -674,11 +672,11 @@
             agree with segments-for about the price at a given instant; the two
             differ in where boundaries fall, not in what anything costs."
     (let [a     (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
-          sched (scm/schedule-for a (inst 2026 7 15 0) (inst 2026 7 16 0))
+          sched (scm/schedule-for a (at 2026 7 15 0) (at 2026 7 16 0))
           rate  #(some-> (:urpx.interval/resolved %) price/marginal-unit-rate)]
       (is (seq sched))
       (is (= (set (keep rate sched))
-             (set (keep rate (scm/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0)))))
+             (set (keep rate (scm/segments-for a (at 2026 7 15 0) (at 2026 7 16 0)))))
           "same set of prices over the same day, reached two different ways"))))
 
 
@@ -699,15 +697,15 @@
             difference between a schedule that is right and one that is right
             only because its step happened to be fine enough."
     (let [a     (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
-          start (inst 2026 7 15 0)
-          end   (inst 2026 7 16 0)
+          start (at 2026 7 15 0)
+          end   (at 2026 7 16 0)
           coarse {:step (java.time.Duration/ofHours 6)}
           hhmm  (fn [xs] (mapv #(+ (* 100 (.getHour ^ZonedDateTime (:tick/beginning %)))
                                    (.getMinute ^ZonedDateTime (:tick/beginning %))) xs))]
-      (is (= [0 1600 2100] (hhmm (scm/segments-for a start end nil coarse)))
+      (is (= [0 1600 2100] (hhmm (scm/segments-for a start end coarse)))
           "the real transitions, found at a six-hour step because they are read
            rather than sampled")
-      (is (= [0 1800] (hhmm (scm/schedule-for a start end nil coarse)))
+      (is (= [0 1800] (hhmm (scm/schedule-for a start end coarse)))
           "while the stepped walk sees only what it lands on, putting a
            boundary at 18:00 that is not a transition and missing both that
            are"))))
@@ -720,7 +718,7 @@
     (let [by-mods (into {} (map (juxt :urpx.scenario-cost-model/modifier-version-ids identity))
                         (scm/enumerate (sce-docs)))
           rates   (fn [a] (set (map #(price/marginal-unit-rate (:urpx.interval/resolved %))
-                                    (scm/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0)))))]
+                                    (scm/segments-for a (at 2026 7 15 0) (at 2026 7 16 0)))))]
       (is (= #{0.31085M} (rates (by-mods []))) "base alone over the whole day")
       (is (= #{0.19804875M} (rates (by-mods ["sce:care-2026-03-20"])))
           "and CARE priced across the horizon, not just at an instant"))))
@@ -905,7 +903,7 @@
       (is (= ["sce:d-2026-03-20"] (mapv :jsonld/id (scm/plan-versions docs {:at (at)}))))
       (is (= 0.31085M (rate a))
           "and resolve-at prices it, the same rate as the nested filing")
-      (is (seq (scm/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0)))
+      (is (seq (scm/segments-for a (at 2026 7 15 0) (at 2026 7 16 0)))
           "and a horizon walks it"))))
 
 (deftest a-top-level-modifier-version-is-zoned-by-its-identity-document
@@ -1070,8 +1068,13 @@
 
 (deftest a-horizon-is-bounded-in-the-packages-zone
   (let [docs (load/documents [(source (package "x:pkg" ny {:urpx/hasRatePlan (raw-plan)}))])
-        segs (scm/segments-for (first (scm/enumerate docs)) (inst 2026 7 15 0) (inst 2026 7 16 0))]
+        a    (first (scm/enumerate docs))
+        in   #(ZonedDateTime/of 2026 7 % 0 0 0 0 (ZoneId/of %2))
+        segs (scm/segments-for a (in 15 ny) (in 16 ny))]
     (is (seq segs))
+    (is (= :urpx.schedule/zone-disagrees-with-plan
+           (:reason (refusal #(scm/segments-for a (at 2026 7 15 0) (at 2026 7 16 0)))))
+        "bounds in a zone other than the package's are refused")
     (is (every? #(and (instance? ZonedDateTime (:tick/beginning %))
                       (= (ZoneId/of ny) (.getZone ^ZonedDateTime (:tick/beginning %)))
                       (= (ZoneId/of ny) (.getZone ^ZonedDateTime (:tick/end %))))
@@ -1373,3 +1376,64 @@
             :node-id      "x:model"
             :alternatives {"x:shared" ["x:c1" "x:c2"]}}
            (node-refusal docs (scm-node "x:p-v1" ["x:m-v"] ["x:shared"]))))))
+
+;; ---------------------------------------------------------------------------
+;; Zoned horizon bounds
+;; ---------------------------------------------------------------------------
+
+(defn- in-zone [^ZoneId zone y m d] (ZonedDateTime/of y m d 0 0 0 0 zone))
+
+(deftest zoned-bounds-answer-what-urpx-schedule-answers-for-their-instants
+  (testing "the horizon functions bind the model and hand the bounds' instants
+            and zone to urpx.schedule, so over every fixture model they agree
+            with urpx.schedule called on Instants, across an ordinary day and a
+            day a daylight transition lengthens"
+    (doseq [m          (fixture-models)
+            :let [rp   (:urpx.scenario-cost-model/rate-plan m)
+                  mods (:urpx.scenario-cost-model/modifiers m)
+                  zone (price/require-zone rp)
+                  opts (#'scm/bound-opts m nil)]
+            [y mo d]   [[2026 7 15] [2026 11 1]]
+            :let [s  (in-zone zone y mo d)
+                  e  (.plusDays ^ZonedDateTime s 1)
+                  id (scm/identity-tuple m)]]
+      (is (= (schedule/price-segments rp mods (.toInstant s) (.toInstant e) nil opts)
+             (scm/segments-for m s e))
+          (str "segments-for " id " " s))
+      (is (= (schedule/price-schedule-with-modifiers rp mods (.toInstant s) (.toInstant e) nil opts)
+             (scm/schedule-for m s e))
+          (str "schedule-for " id " " s)))))
+
+(deftest a-horizon-across-a-daylight-transition-covers-the-wall-clock-day
+  (testing "a local day from midnight to midnight is 23 hours in spring and 25
+            in autumn in Los Angeles; the horizon covers exactly that, starting
+            and ending on the bounds as given"
+    (let [a     (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
+          mins  #(.toMinutes (java.time.Duration/between ^ZonedDateTime %1 ^ZonedDateTime %2))]
+      (doseq [[nm f] [["segments-for" scm/segments-for] ["schedule-for" scm/schedule-for]]
+              [d n]  [[(at 2026 3 8 0) 23] [(at 2026 11 1 0) 25]]
+              :let [e    (.plusDays ^ZonedDateTime d 1)
+                    segs (f a d e)]]
+        (is (= (* 60 n) (mins d e)) "the window itself")
+        (is (= d (:tick/beginning (first segs))) (str nm " starts on the bound " d))
+        (is (= e (:tick/end (last segs))) (str nm " ends on the bound " e))
+        (is (every? true? (map #(= (:tick/end %1) (:tick/beginning %2)) segs (rest segs)))
+            (str nm " is contiguous across the transition " d))
+        (is (= (* 60 n) (reduce + (map #(mins (:tick/beginning %) (:tick/end %)) segs)))
+            (str nm " covers " n " hours on " d))
+        (is (not-any? :urpx.interval/refused segs) (str nm " prices the whole day " d))))))
+
+(deftest horizon-bounds-in-another-zone-are-refused
+  (let [a   (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
+        s   (at 2026 7 15 0)
+        e   (at 2026 7 16 0)
+        utc #(.withZoneSameInstant ^ZonedDateTime % java.time.ZoneOffset/UTC)]
+    (doseq [[nm f] [["segments-for" scm/segments-for] ["schedule-for" scm/schedule-for]]]
+      (is (= {:reason :urpx.scenario-cost-model/bounds-in-different-zones
+              :start  s
+              :end    (utc e)}
+             (select-keys (refusal #(f a s (utc e))) [:reason :start :end]))
+          (str nm ": the same instants, stated in two zones, name no one zone"))
+      (is (= :urpx.schedule/zone-disagrees-with-plan
+             (:reason (refusal #(f a (utc s) (utc e)))))
+          (str nm ": one zone, but not the plan's")))))

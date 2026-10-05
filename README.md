@@ -625,7 +625,7 @@ One further refusal is about the caller rather than the corpus. `resolve-at`, `s
 (scm/schedule-for  model start end)   ; a stepped grid
 ```
 
-`start` and `end` are `Instant`s and `zone` may be `nil` when the plan declares `urpx:timezoneIdentifier`, matching `urpx.schedule` rather than `resolve-at`, so a caller mixing the two namespaces over one horizon is not converting at every call.
+`start` and `end` are `ZonedDateTime`s, as `resolve-at` takes, in the zone the model resolves in. Bounds in another zone refuse with `:urpx.schedule/zone-disagrees-with-plan`, and bounds in two different zones refuse with `:urpx.scenario-cost-model/bounds-in-different-zones`. A window from local midnight to local midnight is 23 or 25 hours across a daylight transition, and the segments cover exactly that.
 
 **Prefer `segments-for`.** Its boundaries are read out of the documents rather than discovered by sampling, so a segment ends where the tariff actually changes. A stepped walk can only find a boundary it lands on: over one July day of PG&E E-TOU-C with a six-hour step, `segments-for` returns boundaries at 00:00, 16:00 and 21:00, while `schedule-for` returns 00:00 and 18:00, inventing a boundary that is not a transition and missing both that are. For a consumer handing intervals to an optimizer that is the difference between a schedule that is right and one that is right only because its step happened to be fine enough.
 

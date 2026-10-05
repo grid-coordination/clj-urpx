@@ -29,7 +29,7 @@
             [urpx.schedule :as schedule])
   (:import [java.nio.charset StandardCharsets]
            [java.security MessageDigest]
-           [java.time Instant ZonedDateTime ZoneId]))
+           [java.time ZonedDateTime ZoneId]))
 
 ;; ---------------------------------------------------------------------------
 ;; Versions and currency
@@ -1221,10 +1221,23 @@
 ;; `resolve-at` exists to prevent and the defect class this library has fixed
 ;; three times.
 ;;
-;; `start` and `end` are Instants and `zone` may be nil, matching urpx.schedule
-;; rather than `resolve-at`'s ZonedDateTime. A caller mixing the two namespaces
-;; over one horizon should not have to convert between them at every call.
+;; `start` and `end` are ZonedDateTimes, as `resolve-at` takes, and their zone
+;; is the zone the walk is asked for. urpx.schedule walks only in the plan's
+;; declared zone and refuses any other, so bounds in another zone refuse.
+;; Bounds in two different zones ask for no single zone, and refuse here.
 ;; ---------------------------------------------------------------------------
+
+(defn- bounds-zone
+  "The zone `start` and `end` share, or a refusal naming both."
+  ^ZoneId [model ^ZonedDateTime start ^ZonedDateTime end]
+  (let [zone (.getZone start)]
+    (when-not (= zone (.getZone end))
+      (throw (ex-info (str "Horizon bounds are in two zones, " zone " and " (.getZone end))
+                      {:reason :urpx.scenario-cost-model/bounds-in-different-zones
+                       :start start
+                       :end end
+                       :identity-tuple (identity-tuple model)})))
+    zone))
 
 (defn segments-for
   "Exact price segments for `model` across `[start, end)`, as
@@ -1243,15 +1256,14 @@
    and not one per candidate instant. That is what lets a publisher emit the
    part of a window it can price and say plainly what it cannot.
 
-   `zone` may be nil when the plan declares `urpx:timezoneIdentifier`. Extra
+   `start` and `end` must share a zone, the one the plan resolves in. Extra
    `opts` are as `resolve-at`: merged, except the two the model
    determines, which are refused."
-  ([model start end] (segments-for model start end nil nil))
-  ([model start end zone] (segments-for model start end zone nil))
-  ([model ^Instant start ^Instant end zone opts]
+  ([model start end] (segments-for model start end nil))
+  ([model ^ZonedDateTime start ^ZonedDateTime end opts]
    (schedule/price-segments (:urpx.scenario-cost-model/rate-plan model)
                             (:urpx.scenario-cost-model/modifiers model)
-                            start end zone
+                            (.toInstant start) (.toInstant end) (bounds-zone model start end)
                             (bound-opts model opts))))
 
 (defn schedule-for
@@ -1263,12 +1275,11 @@
    `segments-for` when they want the truth about where prices change, which for
    a price server is almost always the question.
 
-   Same `zone` and `opts` handling as `segments-for`."
-  ([model start end] (schedule-for model start end nil nil))
-  ([model start end zone] (schedule-for model start end zone nil))
-  ([model ^Instant start ^Instant end zone opts]
+   Same bounds and `opts` handling as `segments-for`."
+  ([model start end] (schedule-for model start end nil))
+  ([model ^ZonedDateTime start ^ZonedDateTime end opts]
    (schedule/price-schedule-with-modifiers
     (:urpx.scenario-cost-model/rate-plan model)
     (:urpx.scenario-cost-model/modifiers model)
-    start end zone
+    (.toInstant start) (.toInstant end) (bounds-zone model start end)
     (bound-opts model opts))))

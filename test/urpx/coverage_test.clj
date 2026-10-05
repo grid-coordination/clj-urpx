@@ -489,7 +489,7 @@
             README already forbade: ZonedDateTime end-to-end at output
             boundaries."
     (let [a    (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
-          segs (scm/segments-for a (.toInstant (zdt 2026 7 15)) (.toInstant (zdt 2026 7 16)))
+          segs (scm/segments-for a (zdt 2026 7 15) (zdt 2026 7 16))
           seg  (select-keys (first segs) [:tick/beginning :tick/end])
           ;; a verdict covering all of July, stated as the publisher would
           r    (cov/of-version (scoped {:urpx/startDateTime (ldt 2026 7 1)
