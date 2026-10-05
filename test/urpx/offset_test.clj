@@ -288,8 +288,8 @@
                                   (OffsetTime/of 16 0 0 0 (ZoneOffset/of "-05:00"))
                                   %)
                                (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01"))
-          start (.toInstant (la-at 2026 7 15 0 0))
-          segs  (schedule/price-segments plan [] start (.plus start (Duration/ofHours 48)) la)
+          start (la-at 2026 7 15 0 0)
+          segs  (schedule/price-segments plan [] start (.plus start (Duration/ofHours 48)))
           interior (set (map #(.toLocalTime ^ZonedDateTime (:tick/beginning %)) (rest segs)))]
       (is (= #{(LocalTime/of 14 0) (LocalTime/of 21 0)} interior))
       (is (not= (price/marginal-unit-rate (price/resolve-prices plan (la-at 2026 7 15 13 59)))

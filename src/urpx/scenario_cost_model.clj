@@ -1295,11 +1295,10 @@
    `opts` are as `resolve-at`: merged, except the two the model
    determines, which are refused."
   ([model start end] (segments-for model start end nil))
-  ([model ^ZonedDateTime start ^ZonedDateTime end opts]
+  ([model start end opts]
    (schedule/price-segments (:urpx.scenario-cost-model/rate-plan model)
                             (:urpx.scenario-cost-model/modifiers model)
-                            (.toInstant start) (.toInstant end) nil
-                            (bound-opts model opts))))
+                            start end (bound-opts model opts))))
 
 (defn schedule-for
   "A stepped price schedule for `model` across `[start, end)`, as
@@ -1314,9 +1313,8 @@
    resolution throws becomes an interval carrying `:urpx.interval/refused`,
    and equal refusals merge."
   ([model start end] (schedule-for model start end nil))
-  ([model ^ZonedDateTime start ^ZonedDateTime end opts]
+  ([model start end opts]
    (schedule/price-schedule-with-modifiers
     (:urpx.scenario-cost-model/rate-plan model)
     (:urpx.scenario-cost-model/modifiers model)
-    (.toInstant start) (.toInstant end) nil
-    (bound-opts model opts))))
+    start end (bound-opts model opts))))

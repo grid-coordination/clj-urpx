@@ -87,8 +87,7 @@
   (let [doc  (with-prices @plan victim
                {:jsonld/id "x:from-1600" :urpx/unitPrice 9.99M
                 :urpx/startDateTime (LocalDateTime/of 2026 7 15 16 0)})
-        segs (schedule/price-segments doc [] (.toInstant (at 2026 7 15 0 0))
-                                      (.toInstant (at 2026 7 16 0 0)) la)
+        segs (schedule/price-segments doc [] (at 2026 7 15 0 0) (at 2026 7 16 0 0))
         pd-price #(price-on (:urpx.interval/resolved %) @pd)]
     (is (some #(= (at 2026 7 15 16 0) (:tick/beginning %)) segs)
         "a segment begins at 16:00")

@@ -365,10 +365,10 @@
     (let [base (fixtures/load-rate-plan "sce-d-2025-11-15")
           care (fixtures/load-modifier "sce-care-2026-03-20")
           la   (java.time.ZoneId/of "America/Los_Angeles")
-          from (.toInstant (.atStartOfDay (java.time.LocalDate/of 2026 1 1) la))
-          to   (.toInstant (.atStartOfDay (java.time.LocalDate/of 2026 2 1) la))
-          ivs  (schedule/price-schedule-with-modifiers base [care] from to la)
-          segs (schedule/price-segments base [care] from to la)]
+          from (.atStartOfDay (java.time.LocalDate/of 2026 1 1) la)
+          to   (.atStartOfDay (java.time.LocalDate/of 2026 2 1) la)
+          ivs  (schedule/price-schedule-with-modifiers base [care] from to)
+          segs (schedule/price-segments base [care] from to)]
       (is (seq (filter :urpx.resolved/outside-version-window
                        (:urpx.resolved/ledgers
                         (price/resolve-prices-with-modifiers base [care] (zdt 2026 1 15 17)))))
@@ -439,9 +439,9 @@
             segments across January for a filing effective 2026-03-20, each one
             holding the same prices."
     (let [la   (java.time.ZoneId/of "America/Los_Angeles")
-          from (.toInstant (.atStartOfDay (java.time.LocalDate/of 2026 1 1) la))
-          to   (.toInstant (.atStartOfDay (java.time.LocalDate/of 2026 2 1) la))
-          segs (schedule/price-segments (sce-d) [] from to la)]
+          from (.atStartOfDay (java.time.LocalDate/of 2026 1 1) la)
+          to   (.atStartOfDay (java.time.LocalDate/of 2026 2 1) la)
+          segs (schedule/price-segments (sce-d) [] from to)]
       (is (some? (:urpx.resolved/outside-version-window
                   (price/resolve-prices (sce-d) (zdt 2026 1 15 17))))
           "sanity: this filing really is outside its window in January")
@@ -580,12 +580,12 @@
             kept for the span after expiry, which is a wrong number rather than
             a wrong refusal."
     (let [la   (java.time.ZoneId/of "America/Los_Angeles")
-          from (.toInstant (.atStartOfDay (java.time.LocalDate/of 2026 3 1) la))
-          to   (.toInstant (.atStartOfDay (java.time.LocalDate/of 2026 4 1) la))
+          from (.atStartOfDay (java.time.LocalDate/of 2026 3 1) la)
+          to   (.atStartOfDay (java.time.LocalDate/of 2026 4 1) la)
           rate (fn [r] (try (price/marginal-unit-rate r)
                             (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))
-          ivs  (schedule/price-schedule (sce-d) from to la)
-          segs (schedule/price-segments (sce-d) [] from to la)]
+          ivs  (schedule/price-schedule (sce-d) from to)
+          segs (schedule/price-segments (sce-d) [] from to)]
       (is (= 2 (count ivs))
           "the window splits at the effective instant, not collapsing to one")
       (is (= [:outside-version-window 0.31085M]
@@ -602,12 +602,12 @@
 (deftest an-expiring-version-does-not-carry-its-rate-past-the-bound
   (testing "the wrong-number direction of the same defect."
     (let [la   (java.time.ZoneId/of "America/Los_Angeles")
-          from (.toInstant (.atStartOfDay (java.time.LocalDate/of 2026 7 1) la))
-          to   (.toInstant (.atStartOfDay (java.time.LocalDate/of 2026 8 1) la))
+          from (.atStartOfDay (java.time.LocalDate/of 2026 7 1) la)
+          to   (.atStartOfDay (java.time.LocalDate/of 2026 8 1) la)
           plan (bound-plan-version (sce-d) (ldt 2026 7 15 12 0))
           rate (fn [r] (try (price/marginal-unit-rate r)
                             (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))
-          ivs  (schedule/price-schedule plan from to la)]
+          ivs  (schedule/price-schedule plan from to)]
       (is (= 2 (count ivs)))
       (is (= [0.31085M :outside-version-window]
              (mapv #(rate (:urpx.interval/resolved %)) ivs))

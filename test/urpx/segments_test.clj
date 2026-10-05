@@ -33,8 +33,8 @@
             It now rests on something stronger. urpx.price anchors the query in
             the plan's declared zone before reading anything, so resolution is a
             pure function of the INSTANT and the plan's zone, and urpx.schedule
-            derives candidates in that same zone because resolve-zone refuses
-            one that disagrees. The two frames cannot diverge, which is what a
+            derives candidates in that same zone whatever zone the bounds are
+            in. The two frames cannot diverge, which is what a
             superset argument needs.
 
             Still no read of the offset or the instant line: a resolver doing
@@ -50,17 +50,12 @@
       (is (not (re-find #"\.toInstant|\.getOffset" src))
           "price.clj must not read the instant line or the offset")))
   (testing "and the two zones are forced equal rather than merely expected to
-            agree: walking a plan in a zone it does not declare refuses."
-    (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]
-      (is (= :urpx.schedule/zone-disagrees-with-plan
-             (try (schedule/price-segments plan [] (.toInstant (zdt 2026 7 15 0 0))
-                                           (.toInstant (zdt 2026 7 16 0 0))
-                                           (ZoneId/of "UTC") nil)
-                  nil
-                  (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))
-          "a UTC walk of an LA plan put the peak boundary an hour late and lost
-           the 21:00 transition entirely, returning two segments where three are
-           right, so it refuses rather than returning them"))))
+            agree: bounds in UTC still walk an LA plan in Los Angeles."
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          utc  #(.withZoneSameInstant ^ZonedDateTime % (ZoneId/of "UTC"))
+          segs (schedule/price-segments plan [] (utc (zdt 2026 7 15 0 0)) (utc (zdt 2026 7 16 0 0)))]
+      (is (= [(zdt 2026 7 15 0 0) (zdt 2026 7 15 16 0) (zdt 2026 7 15 21 0)]
+             (mapv :tick/beginning segs))))))
 
 (deftest dst-gap-is-clamped-not-pushed-forward
   (testing "2026-03-08T02:30 does not exist in Los Angeles. ZonedDateTime/of
@@ -153,13 +148,13 @@
             COMPOSED horizon, which is the path a price server actually needs."
     (let [base  (fixtures/load-rate-plan "sce-d-2026-03-20")
           care  (fixtures/load-modifier "sce-care-2026-03-20")
-          start (.toInstant (zdt 2026 7 15 0 0))
+          start (zdt 2026 7 15 0 0)
           end   (.plus start (Duration/ofHours 72))
-          alone (schedule/price-segments base [] start end la)
-          with  (schedule/price-segments base [care] start end la)]
+          alone (schedule/price-segments base [] start end)
+          with  (schedule/price-segments base [care] start end)]
       (is (seq alone))
       (is (seq with) "the composed horizon must segment, not throw")
-      (is (= (.atZone end la) (:tick/end (last with))))
+      (is (= end (:tick/end (last with))))
       (is (= (map :tick/beginning (rest with)) (map :tick/end (butlast with)))
           "and still tile"))))
 
@@ -197,12 +192,11 @@
   (testing "a 72-hour horizon from an off-grid start"
     (let [plan  (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
           beg   (zdt 2026 7 15 17 23)
-          start (.toInstant beg)
-          end   (.plus start (Duration/ofHours 72))
-          segs  (schedule/price-segments plan [] start end la)]
+          end   (.plus beg (Duration/ofHours 72))
+          segs  (schedule/price-segments plan [] beg end)]
       (is (seq segs))
       (is (= beg (:tick/beginning (first segs))) "begins exactly at the window start")
-      (is (= (.atZone end la) (:tick/end (last segs))) "ends exactly at the window end")
+      (is (= end (:tick/end (last segs))) "ends exactly at the window end")
       (is (= (map :tick/beginning (rest segs)) (map :tick/end (butlast segs)))
           "tiles with no gap and no overlap")
       (is (every? #(.isBefore ^ZonedDateTime (:tick/beginning %) ^ZonedDateTime (:tick/end %)) segs)
@@ -228,8 +222,7 @@
           b    (fixtures/load-rate-plan "sce-d-2026-03-20")
           bare (dissoc b :urpx/hasRatePlanVersion)
           opts {:versions-by-plan (index/versions-by-plan [a b])}
-          segs (schedule/price-segments bare [] (.toInstant (zdt 2025 11 13 0 0))
-                                        (.toInstant (zdt 2025 11 18 0 0)) la opts)]
+          segs (schedule/price-segments bare [] (zdt 2025 11 13 0 0) (zdt 2025 11 18 0 0) opts)]
       (is (seq segs))
       (is (some :urpx.interval/refused segs) "the uncovered stretch is reported")
       (is (some :urpx.interval/resolved segs) "and the covered stretch still resolves")
@@ -246,10 +239,10 @@
           b     (fixtures/load-rate-plan "sce-d-2026-03-20")
           bare  (dissoc b :urpx/hasRatePlanVersion)
           opts  {:versions-by-plan (index/versions-by-plan [a b])}
-          start (.toInstant (zdt 2025 11 13 0 0))
-          end   (.toInstant (zdt 2025 11 18 0 0))
-          ivs   (schedule/price-schedule bare start end la opts)
-          segs  (schedule/price-segments bare [] start end la opts)
+          start (zdt 2025 11 13 0 0)
+          end   (zdt 2025 11 18 0 0)
+          ivs   (schedule/price-schedule bare start end opts)
+          segs  (schedule/price-segments bare [] start end opts)
           shape (partial mapv (juxt :tick/beginning :tick/end
                                     #(get-in % [:urpx.interval/refused :reason])))]
       (is (= :no-version-in-effect (get-in (first ivs) [:urpx.interval/refused :reason])))
@@ -296,8 +289,7 @@
                        :urpx/hasRatePlanVersion
                        #(-> % (dissoc :urpx/effectiveDate)
                             (assoc :urpx/effectiveDateTime (LocalDateTime/of 2026 3 8 2 30))))
-          segs (schedule/price-segments plan [] (.toInstant (zdt 2026 3 8 0 0))
-                                        (.toInstant (zdt 2026 3 9 0 0)) la)]
+          segs (schedule/price-segments plan [] (zdt 2026 3 8 0 0) (zdt 2026 3 9 0 0))]
       (is (= (zdt 2026 3 8 3 0)
              (:tick/beginning (first (remove #(get-in % [:urpx.interval/resolved
                                                           :urpx.resolved/outside-version-window])

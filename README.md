@@ -155,8 +155,8 @@ That covers the consume side end-to-end. For emit and authoring, jump to [Writin
 (price/marginal-unit-rate *1)
 
 ;; 4. Generate a day's worth of natural TOU intervals
-(def start (.toInstant (.atStartOfDay (LocalDate/of 2026 7 15) la)))
-(schedule/price-schedule-days plan start 1 la)
+(def start (.atStartOfDay (LocalDate/of 2026 7 15) la))
+(schedule/price-schedule-days plan start 1)
 ;; =>
 ;; [{:tick/beginning <ZDT 2026-07-15T00:00-07:00[America/Los_Angeles]>
 ;;   :tick/end       <ZDT 2026-07-15T16:00-07:00[America/Los_Angeles]>
@@ -171,7 +171,7 @@ Which `urpx:ServiceBracket` states those bounds is selected per `urpx:serviceTie
 
 ### Time and timezones
 
-The library uses `java.time.ZonedDateTime` end-to-end internally and at output boundaries — DST-correct under daylight transitions because every step of the walk preserves zone, no `Instant`-to-local-time conversions in the middle of the schedule.
+The library uses `java.time.ZonedDateTime` end-to-end internally and at its input and output boundaries — DST-correct under daylight transitions because every step of the walk preserves zone, no `Instant`-to-local-time conversions in the middle of the schedule.
 
 **Everything resolves in the plan's own zone.** A URPX document usually writes its bounds — `urpx:effectiveDateTime`, `urpx:expirationDateTime`, every TOU bracket — as naive wall-clock readings with no offset. They are wall-clock *in the zone the plan declares*, so reading them in any other zone reads a different moment. `resolve-prices` therefore anchors the query in `urpx:timezoneIdentifier` before comparing anything.
 
@@ -184,27 +184,27 @@ That makes **one moment cost one price, however it is spelled**. It did not used
 **Inputs and outputs:**
 
 - `resolve-prices` takes a `ZonedDateTime`. Its **zone is not used to interpret the document** — only the instant is. Pass whatever zone you have
-- `price-schedule` / `price-segments` and friends take an `Instant`-shaped `[start, end)` window plus an optional `ZoneId`, which must be the plan's own or is refused: candidates are derived in the zone resolution happens in, and a walk in another drops true transitions rather than failing
-- The schedule output's `:tick/beginning` and `:tick/end` are `ZonedDateTime` in that zone. Callers wanting a plain `java.time.Instant` invoke `.toInstant` themselves
+- `price-schedule` / `price-segments` and friends take a `[start, end)` window bounded by two `ZonedDateTime`s in any zone, including two different zones. Their instants bound the window, and the walk happens in the plan's zone, where resolution happens, so candidate boundaries are derived in the same frame. A bound of any other type refuses `:urpx.schedule/bound-not-zoned-date-time`, and `opts` that are not a map refuse `:urpx.schedule/opts-not-a-map`
+- The schedule output's `:tick/beginning` and `:tick/end` are `ZonedDateTime` in the plan's zone. Callers wanting a plain `java.time.Instant` invoke `.toInstant` themselves
+- The `-days` forms cover `days` periods of exactly 24 hours from `start`
 
 ```clojure
-(schedule/price-schedule-days plan start 1)            ; the plan's declared zone
-(schedule/price-schedule-days plan start 1 la)         ; the same, stated
-(schedule/price-schedule-days plan start 1 utc)        ; refused: the plan is not in UTC
+(schedule/price-schedule-days plan start 1)                                          ; walked in the plan's zone
+(schedule/price-schedule-days plan (.withZoneSameInstant start (ZoneId/of "UTC")) 1) ; the same intervals
 ```
 
 **A plan declaring no `urpx:timezoneIdentifier` is refused**, with `:reason :urpx.price/no-timezone`. Its bounds anchor to no moment, so whether an instant falls inside one has no answer; falling back to the caller's zone or the system default is what this replaces.
 
 **Standing rule:** pass an IANA `ZoneId` like `(ZoneId/of "America/Los_Angeles")` — never a fixed offset, never the system default.
 
-**Inference fallback:** for documents that omit `urpx:timezoneIdentifier`, the optional `urpx.tz-inference/infer-zone` helper does best-effort inference from the publishing utility's `urpx:legalName` (and a caller-supplied `urpx:eiaId` table when available). It returns `nil` for unknown or multi-zone utilities so the caller fails loudly rather than silently picking one. Inference is **opt-in** — `price-schedule` does not call it automatically; compose at the call site:
+**Inference fallback:** for documents that omit `urpx:timezoneIdentifier`, the optional `urpx.tz-inference/infer-zone` helper does best-effort inference from the publishing utility's `urpx:legalName` (and a caller-supplied `urpx:eiaId` table when available). It returns `nil` for unknown or multi-zone utilities so the caller fails loudly rather than silently picking one. Inference is **opt-in** — `price-schedule` does not call it automatically; compose at the call site by stating the inferred zone on the plan:
 
 ```clojure
 (require '[urpx.tz-inference :as tz])
 (let [zone (or (some-> plan :urpx/timezoneIdentifier ZoneId/of)
                (:zone (tz/infer-zone plan))
                (throw (ex-info "no timezone for this plan" {})))]
-  (schedule/price-schedule plan start end zone))
+  (schedule/price-schedule (assoc plan :urpx/timezoneIdentifier (str zone)) start end))
 ```
 
 The shipped lookup tables only cover utilities used by the test suite; production deployments should supply their own (`:eia-id->zone` / `:legal-name->zone` opts).
@@ -235,7 +235,7 @@ A caller-supplied `:holiday?` overrides any embedded calendar — useful when yo
     (LocalDate/of 2026 12 25)})  ; Christmas
 
 (price/resolve-prices plan zdt {:holiday? us-federal-2026})
-(schedule/price-schedule plan start end la {:holiday? us-federal-2026})
+(schedule/price-schedule plan start end {:holiday? us-federal-2026})
 ```
 
 A plain set of `LocalDate`s works because sets are functions; you can also pass any `(LocalDate -> bool)` function — e.g. one that delegates to an external calendar service.
@@ -333,7 +333,7 @@ Note that this is a second, independent way to express CARE and FERA. The `urpx:
 `price-segments` derives that from the documents:
 
 ```clojure
-(schedule/price-segments plan modifiers start end zone opts)
+(schedule/price-segments plan modifiers start end opts)
 ;; => [{:tick/beginning ZonedDateTime
 ;;      :tick/end       ZonedDateTime
 ;;      :urpx.interval/resolved {...}}   ; or :urpx.interval/refused
@@ -539,7 +539,7 @@ The guard is scoped to prices that would actually be summed. Export prices in ne
 
 ```clojure
 (import '[java.time Duration])
-(schedule/price-schedule plan start end la {:step (Duration/ofMinutes 15)})
+(schedule/price-schedule plan start end {:step (Duration/ofMinutes 15)})
 ```
 
 Adjacent steps with identical resolved ledgers are still merged, so a quarter-hour walk across an hour-aligned plan produces the same merged intervals as the hourly walk.

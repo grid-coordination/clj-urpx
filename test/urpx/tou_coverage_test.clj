@@ -221,8 +221,8 @@
   (testing "price-segments carries the refusal as :urpx.interval/refused, and
             the gap's equal refusals merge into one segment"
     (let [segs (schedule/price-segments (base-plan :schedule peak-gap) []
-                                        (.toInstant (at 2026 7 15 0))
-                                        (.toInstant (at 2026 7 16 0)))]
+                                        (at 2026 7 15 0)
+                                        (at 2026 7 16 0))]
       (is (= [[0 nil] [16 :urpx.price/no-tou-period] [21 nil]]
              (mapv (juxt #(.getHour ^ZonedDateTime (:tick/beginning %))
                          #(get-in % [:urpx.interval/refused :reason]))
@@ -233,8 +233,8 @@
             refusal as :urpx.interval/refused and continue past it, and the
             gap's equal hourly refusals merge into one interval"
     (let [p     (base-plan :schedule peak-gap)
-          start (.toInstant (at 2026 7 15 0))
-          end   (.toInstant (at 2026 7 16 0))
+          start (at 2026 7 15 0)
+          end   (at 2026 7 16 0)
           shape (partial mapv (juxt #(.getHour ^ZonedDateTime (:tick/beginning %))
                                     #(get-in % [:urpx.interval/refused :reason])
                                     #(contains? % :urpx.interval/resolved)))]

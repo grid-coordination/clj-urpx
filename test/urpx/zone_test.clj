@@ -90,24 +90,17 @@
 (deftest a-walk-happens-in-the-plans-zone
   (testing "resolution anchors in the plan's zone, so candidate boundaries must
             be derived there too or the candidate set stops being a superset of
-            true transitions. Measured before this refused: a UTC walk of this
-            LA plan put the peak boundary at 17:00 Pacific instead of 16:00 and
-            lost the 21:00 transition, returning two segments where three are
-            right."
+            true transitions. Bounds in another zone name the same instants."
     (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
-          s    (.toInstant (ZonedDateTime/of 2026 7 15 0 0 0 0 la))
-          e    (.toInstant (ZonedDateTime/of 2026 7 16 0 0 0 0 la))]
-      (is (= 3 (count (schedule/price-segments plan [] s e la {:profile-alternatives {}})))
+          s    (ZonedDateTime/of 2026 7 15 0 0 0 0 la)
+          e    (ZonedDateTime/of 2026 7 16 0 0 0 0 la)
+          utc  #(.withZoneSameInstant ^ZonedDateTime % (ZoneId/of "UTC"))
+          hours #(mapv (fn [seg] (.getHour ^ZonedDateTime (:tick/beginning seg))) %)]
+      (is (= [0 16 21] (hours (schedule/price-segments plan [] s e {:profile-alternatives {}})))
           "the plan's own zone walks")
-      (is (= 3 (count (schedule/price-segments plan [] s e nil {:profile-alternatives {}})))
-          "and so does nil, which means the plan's own")
-      (is (= :urpx.schedule/zone-disagrees-with-plan
-             (try (schedule/price-segments plan [] s e (ZoneId/of "UTC")
-                                           {:profile-alternatives {}})
-                  nil
-                  (catch clojure.lang.ExceptionInfo ex (:reason (ex-data ex)))))
-          "while a zone the plan does not declare refuses rather than dropping
-           transitions"))))
+      (is (= [0 16 21] (hours (schedule/price-segments plan [] (utc s) (utc e)
+                                                       {:profile-alternatives {}})))
+          "and so do bounds in UTC"))))
 
 (deftest a-modifier-resolves-in-its-own-zone-too
   (testing "the base plan is not the only document with bounds. A modifier

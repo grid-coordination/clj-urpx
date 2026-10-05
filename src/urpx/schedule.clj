@@ -1,9 +1,10 @@
 (ns urpx.schedule
   "Generate contiguous price-interval schedules from a coerced URPX rate plan.
 
-  `price-schedule` walks a [start, end) instant window in the rate plan's
-  local timezone, calls `urpx.price/resolve-prices` at each step, and
-  merges adjacent steps whose ledger resolutions are identical.
+  `price-schedule` walks a [start, end) window, bounded by two ZonedDateTimes
+  in any zone, in the rate plan's local timezone, calls
+  `urpx.price/resolve-prices` at each step, and merges adjacent steps whose
+  ledger resolutions are identical.
 
   Output is a vector of interval maps each carrying `:tick/beginning` and
   `:tick/end` (java.time.ZonedDateTime in the resolved zone — DST-correct
@@ -24,37 +25,32 @@
            [java.time.temporal ChronoUnit]
            [java.time.zone ZoneRules]))
 
-(defn- resolve-zone
-  "THE ZONE THE WALK HAPPENS IN, which is the plan's own and not the caller's.
+(defn- walk-zone
+  "THE ZONE THE WALK HAPPENS IN: the plan's own, whatever zone the bounds are in.
 
-   It used to be the explicit `zone` if given, falling back to the plan's. That
-   was coherent only while resolution was a pure function of the caller's wall
-   clock. It no longer is: urpx.price anchors every query in the plan's declared
-   zone, because that is the frame the document's bounds are written in.
+   urpx.price anchors every query in the plan's declared zone, because that is
+   the frame the document's bounds are written in. A walk in any other zone
+   derives its candidate boundaries in one frame while resolution happens in
+   another, so the candidate set stops being a superset of true transitions."
+  ^ZoneId [rate-plan]
+  (price/require-zone rate-plan))
 
-   So a walk in any other zone derives its candidate boundaries in one frame
-   while resolution happens in another, and the candidate set stops being a
-   superset of true transitions. Measured on PG&E E-TOU-C over one July day: an
-   explicit UTC walk put the peak boundary at 17:00 PT instead of 16:00 and lost
-   the 21:00 transition entirely, returning two segments where three are right.
-
-   An explicit `zone` that AGREES is accepted, so existing callers passing the
-   plan's own zone are unaffected. One that disagrees refuses rather than
-   silently returning the wrong boundaries."
-  ^ZoneId [rate-plan ^ZoneId zone]
-  (let [declared (price/require-zone rate-plan)]
-    (when (and zone (not= zone declared))
-      (throw (ex-info (str "Cannot walk " (pr-str (:jsonld/id rate-plan)) " in " zone
-                           ": it declares urpx:timezoneIdentifier " declared
-                           ", and urpx.price resolves every query in that zone. "
-                           "Walking in another derives boundaries in one frame "
-                           "while resolution happens in the other, which drops "
-                           "true transitions rather than failing.")
-                      {:reason :urpx.schedule/zone-disagrees-with-plan
-                       :plan-id (:jsonld/id rate-plan)
-                       :requested (str zone)
-                       :declared (str declared)})))
-    declared))
+(defn- window
+  "`[start end]` as Instants. Refuses a bound that is not a ZonedDateTime, and
+   `opts` that are neither nil nor a map."
+  [start end opts]
+  (doseq [[k v] [[:start start] [:end end]]]
+    (when-not (instance? ZonedDateTime v)
+      (throw (ex-info (str "urpx.schedule takes ZonedDateTime bounds; " (name k)
+                           " is " (if (nil? v) "nil" (.getName (class v))))
+                      {:reason :urpx.schedule/bound-not-zoned-date-time
+                       :bound k
+                       :value v}))))
+  (when-not (or (nil? opts) (map? opts))
+    (throw (ex-info (str "urpx.schedule opts must be a map; got " (.getName (class opts)))
+                    {:reason :urpx.schedule/opts-not-a-map
+                     :value opts})))
+  [(.toInstant ^ZonedDateTime start) (.toInstant ^ZonedDateTime end)])
 
 (defn- hour-start
   ^ZonedDateTime [^ZonedDateTime zdt]
@@ -188,8 +184,9 @@
    matches `urpx.schedule`'s end-to-end ZonedDateTime pipeline (DST-correct
    under daylight transitions because the wall-clock walk preserves zone).
    Callers that want plain `Instant` call `.toInstant` themselves."
-  [rate-plan ^Instant start ^Instant end zone opts resolve-fn]
-  (let [zone    (resolve-zone rate-plan zone)
+  [rate-plan start end opts resolve-fn]
+  (let [[^Instant start ^Instant end] (window start end opts)
+        zone    (walk-zone rate-plan)
         step    (or (:step opts) (Duration/ofHours 1))
         win-beg (.atZone start zone)
         win-end (.atZone end zone)
@@ -218,9 +215,11 @@
       :tick/end                 ZonedDateTime
       :urpx.interval/resolved   <price/resolve-prices result>}
 
-   `:tick/*` are ZonedDateTimes in the resolved zone (callers wanting
-   plain Instants invoke `.toInstant` themselves). Adjacent steps with
-   identical ledger resolution are merged.
+   `start` and `end` are ZonedDateTimes in any zone. Their instants bound the
+   window; the walk happens in the plan's declared `urpx:timezoneIdentifier`,
+   and `:tick/*` are in that zone. A bound of any other type refuses
+   `:urpx.schedule/bound-not-zoned-date-time`. Adjacent steps with identical
+   ledger resolution are merged.
 
    A merged interval carries `:urpx.resolved/season-name`,
    `:urpx.resolved/tou-period-name` and `:urpx.resolved/tou-period-number`
@@ -236,30 +235,31 @@
    when they differ only in temporal detail and message, as in
    `price-segments`.
 
-   `zone` (a java.time.ZoneId) is optional when `rate-plan` declares
-   `urpx:timezoneIdentifier`; pass `nil` to use the plan's declared
-   timezone. An ex-info is thrown when neither is available.
-
-   Optional `opts` map:
+   Optional `opts` map, refused as `:urpx.schedule/opts-not-a-map` when it is
+   anything else:
      :step      java.time.Duration — granularity at which the window is
                 walked. Default: `(Duration/ofHours 1)`. Use a smaller
                 step for plans with sub-hour TOU bracket transitions.
      :holiday?  predicate `(LocalDate -> bool)` passed through to
                 `urpx.price/resolve-prices`."
-  ([rate-plan start end] (price-schedule rate-plan start end nil nil))
-  ([rate-plan start end zone] (price-schedule rate-plan start end zone nil))
-  ([rate-plan ^Instant start ^Instant end zone opts]
-   (schedule-with-resolver rate-plan start end zone opts
+  ([rate-plan start end] (price-schedule rate-plan start end nil))
+  ([rate-plan start end opts]
+   (schedule-with-resolver rate-plan start end opts
                            (fn [zdt] (price/resolve-prices rate-plan zdt opts)))))
 
+(defn- plus-days
+  "`start` plus `days` days of exactly 24 hours, after `window` has checked it."
+  [start days opts]
+  (window start start opts)
+  (.plus ^ZonedDateTime start (Duration/ofDays days)))
+
 (defn price-schedule-days
-  "Convenience: generate a `price-schedule` covering `days` days starting from
-   `start`. Accepts the same `opts` as `price-schedule` and the same
-   plan-or-explicit zone resolution."
-  ([rate-plan start days] (price-schedule-days rate-plan start days nil nil))
-  ([rate-plan start days zone] (price-schedule-days rate-plan start days zone nil))
-  ([rate-plan ^Instant start days zone opts]
-   (price-schedule rate-plan start (.plus start (Duration/ofDays days)) zone opts)))
+  "Convenience: generate a `price-schedule` covering `days` days of 24 hours
+   starting from the ZonedDateTime `start`. Accepts the same `opts` as
+   `price-schedule`."
+  ([rate-plan start days] (price-schedule-days rate-plan start days nil))
+  ([rate-plan start days opts]
+   (price-schedule rate-plan start (plus-days start days opts) opts)))
 
 (defn price-schedule-with-modifiers
   "Like `price-schedule`, but per step calls
@@ -268,30 +268,26 @@
    base plan's. Modifiers whose `:urpx/applicableToRatePlan` does not
    include the base plan's `@id` are silently skipped (delegated behavior).
 
-   Same merge-adjacent / refusal / step / zone-resolution semantics as
+   Same bounds, merge-adjacent, refusal and step semantics as
    `price-schedule`. Same `opts` (`:step`, `:holiday?`, plus any other keys
    that `resolve-prices-with-modifiers` consumes, such as
    `:profile-alternatives`)."
   ([rate-plan modifiers start end]
-   (price-schedule-with-modifiers rate-plan modifiers start end nil nil))
-  ([rate-plan modifiers start end zone]
-   (price-schedule-with-modifiers rate-plan modifiers start end zone nil))
-  ([rate-plan modifiers ^Instant start ^Instant end zone opts]
+   (price-schedule-with-modifiers rate-plan modifiers start end nil))
+  ([rate-plan modifiers start end opts]
    (schedule-with-resolver
-    rate-plan start end zone opts
+    rate-plan start end opts
     (fn [zdt] (price/resolve-prices-with-modifiers rate-plan modifiers zdt opts)))))
 
 (defn price-schedule-days-with-modifiers
   "Convenience: generate a `price-schedule-with-modifiers` covering `days`
-   days starting from `start`. Same `opts` and zone resolution as
+   days of 24 hours starting from the ZonedDateTime `start`. Same `opts` as
    `price-schedule-with-modifiers`."
   ([rate-plan modifiers start days]
-   (price-schedule-days-with-modifiers rate-plan modifiers start days nil nil))
-  ([rate-plan modifiers start days zone]
-   (price-schedule-days-with-modifiers rate-plan modifiers start days zone nil))
-  ([rate-plan modifiers ^Instant start days zone opts]
+   (price-schedule-days-with-modifiers rate-plan modifiers start days nil))
+  ([rate-plan modifiers start days opts]
    (price-schedule-with-modifiers
-    rate-plan modifiers start (.plus start (Duration/ofDays days)) zone opts)))
+    rate-plan modifiers start (plus-days start days opts) opts)))
 
 ;; ---------------------------------------------------------------------------
 ;; Exact segments
@@ -449,12 +445,13 @@
    with the ex-data, rather than aborting the window. Equal refusals merge, so
    an uncovered stretch is one segment and not one per candidate.
 
-   Optional `opts` are passed through to the resolver, and `:holiday?` is
-   worth supplying when the plan has no embedded calendar."
-  ([rate-plan modifiers start end] (price-segments rate-plan modifiers start end nil nil))
-  ([rate-plan modifiers start end zone] (price-segments rate-plan modifiers start end zone nil))
-  ([rate-plan modifiers ^Instant start ^Instant end zone opts]
-   (let [zone    (resolve-zone rate-plan zone)
+   Same bounds as `price-schedule`: ZonedDateTimes in any zone, segments in
+   the plan's. Optional `opts` are passed through to the resolver, and
+   `:holiday?` is worth supplying when the plan has no embedded calendar."
+  ([rate-plan modifiers start end] (price-segments rate-plan modifiers start end nil))
+  ([rate-plan modifiers start end opts]
+   (let [[^Instant start ^Instant end] (window start end opts)
+         zone    (walk-zone rate-plan)
          docs    (cons rate-plan (seq modifiers))
          cands   (candidate-instants docs start end zone)
          win-end (.atZone end zone)

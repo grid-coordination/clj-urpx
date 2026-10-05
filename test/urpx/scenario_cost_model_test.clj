@@ -1460,10 +1460,10 @@
             :let [s  (in-zone zone y mo d)
                   e  (.plusDays ^ZonedDateTime s 1)
                   id (scm/identity-tuple m)]]
-      (is (= (schedule/price-segments rp mods (.toInstant s) (.toInstant e) nil opts)
+      (is (= (schedule/price-segments rp mods s e opts)
              (scm/segments-for m s e))
           (str "segments-for " id " " s))
-      (is (= (schedule/price-schedule-with-modifiers rp mods (.toInstant s) (.toInstant e) nil opts)
+      (is (= (schedule/price-schedule-with-modifiers rp mods s e opts)
              (scm/schedule-for m s e))
           (str "schedule-for " id " " s)))))
 
@@ -1505,3 +1505,12 @@
             "2026-07-15T21:00-07:00[America/Los_Angeles]"]
            (mapv (comp str :tick/beginning) (scm/segments-for a (in s "UTC") (in e "UTC"))))
         "UTC bounds find the plan's local transitions")))
+
+(deftest a-horizon-bound-that-is-not-a-zoned-date-time-is-refused
+  (let [a (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
+        s (at 2026 7 15 0)
+        e (at 2026 7 16 0)]
+    (doseq [[nm f] [["segments-for" scm/segments-for] ["schedule-for" scm/schedule-for]]]
+      (is (= :urpx.schedule/bound-not-zoned-date-time
+             (:reason (refusal #(f a (.toInstant ^ZonedDateTime s) e))))
+          nm))))

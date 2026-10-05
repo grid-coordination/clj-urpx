@@ -4,7 +4,7 @@
             [urpx.schedule :as schedule]
             [urpx.test-fixtures :as fixtures])
   (:import [java.math BigDecimal]
-           [java.time Duration Instant LocalDate ZoneId ZonedDateTime]))
+           [java.time Duration LocalDate ZoneId ZonedDateTime]))
 
 (def la-zone (ZoneId/of "America/Los_Angeles"))
 
@@ -12,9 +12,7 @@
   ^ZonedDateTime [year month day]
   (.atStartOfDay (LocalDate/of year month day) la-zone))
 
-(defn- start-of-day
-  ^Instant [year month day]
-  (.toInstant (start-of-day-zdt year month day)))
+(def ^:private start-of-day start-of-day-zdt)
 
 (deftest hourly-schedule-summer-day-pge-e-tou-c
   (testing "a 24h PG&E E-TOU-C summer day collapses into 3 contiguous TOU intervals
@@ -23,9 +21,7 @@
           start-zdt (start-of-day-zdt 2026 7 15)
           end-zdt   (start-of-day-zdt 2026 7 16)
           sch       (schedule/price-schedule plan
-                                             (.toInstant start-zdt)
-                                             (.toInstant end-zdt)
-                                             la-zone)]
+                                             start-zdt end-zdt)]
       (testing "intervals cover the full 24 hours with no gaps. URPX-906:
                 :tick/beginning and :tick/end are ZonedDateTimes."
         (is (= start-zdt (:tick/beginning (first sch))))
@@ -52,9 +48,7 @@
           start-zdt (start-of-day-zdt 2026 8 1)
           end-zdt   (start-of-day-zdt 2026 8 2)
           sch       (schedule/price-schedule plan
-                                             (.toInstant start-zdt)
-                                             (.toInstant end-zdt)
-                                             la-zone)]
+                                             start-zdt end-zdt)]
       (is (= 1 (count sch)) "no period changes -> one merged span")
       (let [iv (first sch)]
         (is (= start-zdt (:tick/beginning iv)))
@@ -68,13 +62,13 @@
 (deftest schedule-days-convenience
   (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
         start (start-of-day 2026 7 15)
-        sch1  (schedule/price-schedule-days plan start 1 la-zone)
-        sch2  (schedule/price-schedule plan start (.plus start (Duration/ofDays 1)) la-zone)]
+        sch1  (schedule/price-schedule-days plan start 1)
+        sch2  (schedule/price-schedule plan start (.plus start (Duration/ofDays 1)))]
     (is (= sch1 sch2))))
 
 (deftest no-empty-intervals-or-overlapping
   (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
-        sch  (schedule/price-schedule-days plan (start-of-day 2026 7 15) 1 la-zone)]
+        sch  (schedule/price-schedule-days plan (start-of-day 2026 7 15) 1)]
     (testing "every interval has a positive duration"
       (doseq [{b :tick/beginning e :tick/end} sch]
         (is (.isBefore ^ZonedDateTime b ^ZonedDateTime e))))
@@ -93,8 +87,8 @@
           start (start-of-day 2026 7 15)
           end   (start-of-day 2026 7 16)
           opts  {:step (Duration/ofMinutes 15)}
-          hourly-sch  (schedule/price-schedule plan start end la-zone)
-          quarter-sch (schedule/price-schedule plan start end la-zone opts)]
+          hourly-sch  (schedule/price-schedule plan start end)
+          quarter-sch (schedule/price-schedule plan start end opts)]
       (is (= (count hourly-sch) (count quarter-sch)))
       (is (= (mapv :tick/beginning hourly-sch) (mapv :tick/beginning quarter-sch)))
       (is (= (mapv :tick/end hourly-sch) (mapv :tick/end quarter-sch))))))
@@ -107,9 +101,9 @@
           ;; Wed July 15 2026 is a normal weekday — peak window applies.
           start (start-of-day 2026 7 15)
           end   (start-of-day 2026 7 16)
-          sch-no-holiday (schedule/price-schedule plan start end la-zone
+          sch-no-holiday (schedule/price-schedule plan start end
                                                   {:holiday? (constantly false)})
-          sch-holiday    (schedule/price-schedule plan start end la-zone
+          sch-holiday    (schedule/price-schedule plan start end
                                                   {:holiday? #{(LocalDate/of 2026 7 15)}})]
       (testing "without holiday flag, Summer Peak (period 1) appears"
         (is (some #(= 1 (get-in % [:urpx.interval/resolved
@@ -120,21 +114,11 @@
                                        :urpx.resolved/tou-period-number]))
                       sch-holiday))))))
 
-(deftest schedule-defaults-zone-from-plan-timezone-identifier
-  (testing "When the rate plan declares urpx:timezoneIdentifier, callers can omit
-            the zone arg and the schedule walks in that zone."
-    (let [plan      (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
-          start     (start-of-day 2026 7 15)
-          end       (start-of-day 2026 7 16)
-          from-plan (schedule/price-schedule plan start end)
-          explicit  (schedule/price-schedule plan start end la-zone)]
-      (is (= explicit from-plan)))))
-
 (deftest schedule-throws-when-no-zone-and-plan-has-none
   (testing "Plan without urpx:timezoneIdentifier raises rather than silently
-            picking a default. An explicit zone no longer rescues it: resolution
-            anchors every query in the PLAN's declared zone, so a plan that
-            declares none cannot be resolved in any."
+            picking a default: resolution anchors every query in the PLAN's
+            declared zone, so a plan that declares none cannot be resolved in
+            any."
     (let [plan-base (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
           plan      (dissoc plan-base :urpx/timezoneIdentifier)
           start     (start-of-day 2026 7 15)
@@ -146,21 +130,14 @@
            resolve at all rather than only to walk: a document stating none
            states no moment"))))
 
-(deftest schedule-days-also-defaults-zone-from-plan
-  (testing "price-schedule-days mirrors price-schedule's zone defaulting"
-    (let [plan  (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
-          start (start-of-day 2026 7 15)]
-      (is (= (schedule/price-schedule-days plan start 1 la-zone)
-             (schedule/price-schedule-days plan start 1))))))
-
 ;; ---------------------------------------------------------------------------
 ;; price-schedule-with-modifiers (URPX-21n)
 ;; ---------------------------------------------------------------------------
 ;; Mirror of price-schedule that calls resolve-prices-with-modifiers per step.
 ;; Verifies (a) modifier ledgers are folded into each interval's resolved
-;; output, (b) the merge-adjacent + step + zone-resolution semantics match
-;; price-schedule, and (c) modifiers whose applicableToRatePlan doesn't
-;; include the base plan are silently skipped (delegated behavior).
+;; output, (b) the merge-adjacent + step semantics match price-schedule, and
+;; (c) modifiers whose applicableToRatePlan doesn't include the base plan are
+;; silently skipped (delegated behavior).
 
 (deftest schedule-with-modifiers-folds-modifier-ledgers-per-step
   (testing "URPX-21n: every interval includes the vintage-PCIA modifier ledger
@@ -170,7 +147,7 @@
           start    (start-of-day 2026 7 15)
           end      (start-of-day 2026 7 16)
           sch      (schedule/price-schedule-with-modifiers
-                    plan [modifier] start end la-zone)]
+                    plan [modifier] start end)]
       (testing "every interval has the Vintaged-PCIA ledger present"
         (is (every? (fn [iv]
                       (some #(= "Vintaged Power Charge Indifference Adjustment"
@@ -197,21 +174,11 @@
           modifier (fixtures/load-modifier  "pge-e-1-2026-03-01")
           start    (start-of-day 2026 7 15)
           end      (start-of-day 2026 7 16)
-          sch-base (schedule/price-schedule plan start end la-zone)
+          sch-base (schedule/price-schedule plan start end)
           sch-mod  (schedule/price-schedule-with-modifiers
-                    plan [modifier] start end la-zone)]
+                    plan [modifier] start end)]
       (is (= (count sch-base) (count sch-mod))
           "modifier addition doesn't change the day's TOU/merge structure"))))
-
-(deftest schedule-with-modifiers-defaults-zone-from-plan
-  (testing "URPX-21n: zone defaulting via plan's urpx:timezoneIdentifier
-            mirrors price-schedule"
-    (let [plan     (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
-          modifier (fixtures/load-modifier  "pge-e-tou-c-2026-03-01")
-          start    (start-of-day 2026 7 15)
-          end      (start-of-day 2026 7 16)]
-      (is (= (schedule/price-schedule-with-modifiers plan [modifier] start end la-zone)
-             (schedule/price-schedule-with-modifiers plan [modifier] start end))))))
 
 (deftest schedule-with-modifiers-skips-non-applicable
   (testing "URPX-21n: modifiers whose applicableToRatePlan doesn't include
@@ -226,8 +193,8 @@
           start     (start-of-day 2026 7 15)
           end       (start-of-day 2026 7 16)
           sch-with  (schedule/price-schedule-with-modifiers
-                     plan [modifier] start end la-zone)
-          sch-base  (schedule/price-schedule plan start end la-zone)]
+                     plan [modifier] start end)
+          sch-base  (schedule/price-schedule plan start end)]
       (is (= sch-base sch-with)
           "non-applicable modifier produces the same schedule as the base plan"))))
 
@@ -238,9 +205,9 @@
           modifier (fixtures/load-modifier  "pge-e-1-2026-03-01")
           start    (start-of-day 2026 7 15)]
       (is (= (schedule/price-schedule-with-modifiers
-              plan [modifier] start (.plus start (Duration/ofDays 1)) la-zone)
+              plan [modifier] start (.plus start (Duration/ofDays 1)))
              (schedule/price-schedule-days-with-modifiers
-              plan [modifier] start 1 la-zone))))))
+              plan [modifier] start 1))))))
 
 (deftest intervals-are-clipped-to-the-requested-window
   (testing "the step grid is anchored to the start of `start`'s hour so interior
@@ -253,7 +220,7 @@
     (let [plan  (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
           beg   (ZonedDateTime/of 2026 7 15 17 23 0 0 la-zone)
           fin   (ZonedDateTime/of 2026 7 16 6 47 0 0 la-zone)
-          sched (schedule/price-schedule plan (.toInstant beg) (.toInstant fin) la-zone)]
+          sched (schedule/price-schedule plan beg fin)]
       (is (seq sched))
       (is (= beg (:tick/beginning (first sched)))
           "the first interval begins exactly at the requested start")
@@ -280,7 +247,7 @@
     (let [plan  (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
           beg   (start-of-day-zdt 2026 7 15)
           fin   (.plusDays beg 1)
-          sched (schedule/price-schedule plan (.toInstant beg) (.toInstant fin) la-zone)]
+          sched (schedule/price-schedule plan beg fin)]
       (is (= beg (:tick/beginning (first sched))))
       (is (= fin (:tick/end (last sched))))
       (is (= 3 (count sched)) "off-peak, peak, off-peak"))))
@@ -298,8 +265,8 @@
     (let [plan (fixtures/load-rate-plan "sce-d-2026-03-20")
           beg  (start-of-day 2026 5 1)
           fin  (start-of-day 2026 10 1)
-          sch  (schedule/price-schedule plan beg fin la-zone)
-          segs (schedule/price-segments plan [] beg fin la-zone)]
+          sch  (schedule/price-schedule plan beg fin)
+          segs (schedule/price-segments plan [] beg fin)]
       (is (= 1 (count sch)) "still one interval: steps merge on ledgers")
       (is (not (contains? (:urpx.interval/resolved (first sch))
                           :urpx.resolved/season-name))
@@ -318,15 +285,14 @@
     (let [sch (schedule/price-schedule-with-modifiers
                (fixtures/load-rate-plan "sce-d-2026-03-20")
                [(fixtures/load-modifier "sce-care-2026-03-20")]
-               (start-of-day 2026 5 1) (start-of-day 2026 10 1) la-zone)]
+               (start-of-day 2026 5 1) (start-of-day 2026 10 1))]
       (is (= 1 (count sch)))
       (is (not (contains? (:urpx.interval/resolved (first sch))
                           :urpx.resolved/season-name)))))
 
   (testing "a uniform season is kept"
     (let [sch (schedule/price-schedule (fixtures/load-rate-plan "sce-d-2026-03-20")
-                                       (start-of-day 2026 6 1) (start-of-day 2026 7 1)
-                                       la-zone)]
+                                       (start-of-day 2026 6 1) (start-of-day 2026 7 1))]
       (is (= 1 (count sch)))
       (is (= "Summer" (get-in (first sch) [:urpx.interval/resolved
                                            :urpx.resolved/season-name])))))
@@ -338,8 +304,87 @@
     (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
           beg  (start-of-day 2026 2 3)
           fin  (start-of-day 2026 2 4)
-          sch  (schedule/price-schedule plan beg fin la-zone)]
+          sch  (schedule/price-schedule plan beg fin)]
       (is (= 1 (count sch)))
       (is (= {:urpx.resolved/season-name "Winter"} (labels (first sch))))
-      (is (< 1 (count (distinct (map labels (schedule/price-segments plan [] beg fin la-zone)))))
+      (is (< 1 (count (distinct (map labels (schedule/price-segments plan [] beg fin)))))
           "sanity: the period really does change across this day"))))
+
+;; ---------------------------------------------------------------------------
+;; ZonedDateTime bounds
+;; ---------------------------------------------------------------------------
+
+(defn- refusal [f]
+  (try (f) nil (catch clojure.lang.ExceptionInfo e (ex-data e))))
+
+(def ^:private horizon-fns
+  "Every public walk, as `(fn [plan start end opts])`."
+  [["price-schedule" schedule/price-schedule]
+   ["price-schedule-with-modifiers" #(schedule/price-schedule-with-modifiers %1 [] %2 %3 %4)]
+   ["price-segments" #(schedule/price-segments %1 [] %2 %3 %4)]
+   ["price-schedule-days" (fn [p s _ o] (schedule/price-schedule-days p s 1 o))]
+   ["price-schedule-days-with-modifiers"
+    (fn [p s _ o] (schedule/price-schedule-days-with-modifiers p [] s 1 o))]])
+
+(deftest zoned-date-time-bounds-price-the-day
+  (testing "PG&E E-TOU-C 2026-03-01 over 2026-07-15..16 America/Los_Angeles,
+            bounded by ZonedDateTimes"
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          s    (start-of-day-zdt 2026 7 15)
+          e    (start-of-day-zdt 2026 7 16)]
+      (doseq [[nm segs] [["price-segments" (schedule/price-segments plan [] s e)]
+                         ["price-schedule" (schedule/price-schedule plan s e)]]]
+        (is (= ["2026-07-15T00:00-07:00[America/Los_Angeles]"
+                "2026-07-15T16:00-07:00[America/Los_Angeles]"
+                "2026-07-15T21:00-07:00[America/Los_Angeles]"]
+               (mapv (comp str :tick/beginning) segs))
+            nm)
+        (is (= e (:tick/end (last segs))) nm)
+        (is (not-any? :urpx.interval/refused segs) nm)))))
+
+(deftest bounds-in-any-zone-walk-in-the-plans-zone
+  (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+        s    (start-of-day-zdt 2026 7 15)
+        e    (start-of-day-zdt 2026 7 16)
+        in   #(.withZoneSameInstant ^ZonedDateTime %1 (ZoneId/of %2))]
+    (doseq [[nm f] horizon-fns
+            [zs ze] [["UTC" "UTC"] ["-07:00" "-07:00"] ["Asia/Kolkata" "Asia/Kolkata"]
+                     ["UTC" "America/New_York"]]
+            :let [segs (f plan (in s zs) (in e ze) nil)]]
+      (is (= (f plan s e nil) segs)
+          (str nm ": bounds in " zs " and " ze " are the same instants"))
+      (is (every? #(= la-zone (.getZone ^ZonedDateTime (:tick/beginning %))
+                      (.getZone ^ZonedDateTime (:tick/end %)))
+                  segs)
+          (str nm ": bounds in " zs " and " ze " give intervals in the plan's zone")))))
+
+(deftest a-bound-that-is-not-a-zoned-date-time-is-refused
+  (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+        s    (start-of-day-zdt 2026 7 15)
+        e    (start-of-day-zdt 2026 7 16)]
+    (doseq [[nm f] horizon-fns
+            [label bs be] [["an Instant start" (.toInstant s) e]
+                           ["an Instant end" s (.toInstant e)]
+                           ["a LocalDateTime start" (.toLocalDateTime s) e]
+                           ["a nil start" nil e]]
+            :when (not (and (re-find #"-days" nm) (= label "an Instant end")))]
+      (is (= :urpx.schedule/bound-not-zoned-date-time
+             (:reason (refusal #(f plan bs be nil))))
+          (str nm ": " label)))))
+
+(deftest opts-that-are-not-a-map-are-refused
+  (testing "a ZoneId where the zone argument used to go"
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          s    (start-of-day-zdt 2026 7 15)
+          e    (start-of-day-zdt 2026 7 16)]
+      (doseq [[nm f] horizon-fns]
+        (is (= :urpx.schedule/opts-not-a-map
+               (:reason (refusal #(f plan s e la-zone))))
+            nm)))))
+
+(deftest a-day-is-24-hours-across-a-daylight-transition
+  (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+        s    (start-of-day-zdt 2026 3 8)]
+    (doseq [sch [(schedule/price-schedule-days plan s 1)
+                 (schedule/price-schedule-days-with-modifiers plan [] s 1)]]
+      (is (= (ZonedDateTime/of 2026 3 9 1 0 0 0 la-zone) (:tick/end (last sch)))))))

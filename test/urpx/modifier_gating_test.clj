@@ -714,12 +714,12 @@
       (is (= {} (select-keys (ledger r "test:ledger-adj") ledger-labels))))))
 
 (deftest a-modifiers-period-labels-follow-the-schedule-merge-rules
-  (let [start (.toInstant (ZonedDateTime/of 2026 7 15 0 0 0 0 la))
-        end   (.toInstant (ZonedDateTime/of 2026 7 16 0 0 0 0 la))
+  (let [start (ZonedDateTime/of 2026 7 15 0 0 0 0 la)
+        end   (ZonedDateTime/of 2026 7 16 0 0 0 0 la)
         mods  [(flat-day-evening-modifier)]]
     (testing "price-schedule merges across a modifier period change with equal
               prices, and keeps a ledger label only where every step agrees"
-      (let [ivs (schedule/price-schedule-with-modifiers (base-plan) mods start end nil)]
+      (let [ivs (schedule/price-schedule-with-modifiers (base-plan) mods start end)]
         (is (= 1 (count ivs)))
         (is (= {:urpx.resolved/season-name "Summer"}
                (select-keys (ledger (:urpx.interval/resolved (first ivs)) "test:ledger-adj")
@@ -727,12 +727,12 @@
     (testing "an interval inside one period keeps that period"
       (let [ivs (schedule/price-schedule-with-modifiers
                  (base-plan) mods start
-                 (.toInstant (ZonedDateTime/of 2026 7 15 12 0 0 0 la)) nil)]
+                 (ZonedDateTime/of 2026 7 15 12 0 0 0 la))]
         (is (= 1 (count ivs)))
         (is (= 1 (:urpx.resolved/tou-period-number
                   (ledger (:urpx.interval/resolved (first ivs)) "test:ledger-adj"))))))
     (testing "price-segments splits where the modifier's period changes"
-      (let [segs (schedule/price-segments (base-plan) mods start end nil)]
+      (let [segs (schedule/price-segments (base-plan) mods start end)]
         (is (= [[0 "Day" 1] [16 "Evening" 2]]
                (mapv #(let [l (ledger (:urpx.interval/resolved %) "test:ledger-adj")]
                         [(.getHour ^ZonedDateTime (:tick/beginning %))
