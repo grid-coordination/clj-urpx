@@ -120,21 +120,59 @@
                (mapv #(agree %1 %2 ledger-labels)
                      (:urpx.resolved/ledgers a) (:urpx.resolved/ledgers b))))))
 
+(defn- refusal-key
+  "The part of a refusal that identifies WHICH refusal it is, with the
+   time-varying detail stripped.
+
+   A refusal's ex-data names the instant it was raised at, and its message
+   embeds it. Merging on the raw map therefore never merges: an uncovered
+   stretch fragments into one segment per candidate, which reports a boundary
+   at every midnight where there is really only one. Temporal values and the
+   message are dropped so equal refusals collapse, while the retained keys
+   still separate genuinely different ones."
+  [refused]
+  (when refused
+    (into {} (remove (fn [[k v]]
+                       (or (= :message k)
+                           (instance? java.time.temporal.Temporal v)
+                           (and (sequential? v)
+                                (some #(instance? java.time.temporal.Temporal %) v))))
+                     refused))))
+
+(defn- resolve-or-refuse
+  "`{:urpx.interval/resolved (resolve-fn)}`, or, when it throws ExceptionInfo,
+   `{:urpx.interval/refused <ex-data with :message>}`."
+  [resolve-fn]
+  (try {:urpx.interval/resolved (resolve-fn)}
+       (catch clojure.lang.ExceptionInfo e
+         {:urpx.interval/refused (assoc (ex-data e) :message (.getMessage e))})))
+
+(defn- mergeable?
+  "True when interval `b` may merge into the interval `a` before it: two
+   refusals with equal `refusal-key`s, or two resolutions that are
+   `same-ledgers?`."
+  [a b]
+  (let [ra (:urpx.interval/refused a)
+        rb (:urpx.interval/refused b)]
+    (if (or ra rb)
+      (boolean (and ra rb (= (refusal-key ra) (refusal-key rb))))
+      (same-ledgers? (:urpx.interval/resolved a) (:urpx.interval/resolved b)))))
+
 (defn- merge-adjacent
-  "Merge consecutive intervals whose resolved ledger structure matches.
+  "Merge consecutive intervals that are `mergeable?`.
    The merged interval keeps the earlier `:tick/beginning` and the later
-   `:tick/end`; its resolved value keeps the entries every merged step agrees
-   on."
+   `:tick/end`; a merged resolved value keeps the entries every merged step
+   agrees on, and a merged refusal keeps the earlier step's."
   [intervals]
   (reduce
    (fn [acc iv]
-     (let [prev (peek acc)
-           a    (:urpx.interval/resolved prev)
-           b    (:urpx.interval/resolved iv)]
-       (if (and prev (same-ledgers? a b))
-         (conj (pop acc) (assoc prev
-                                :tick/end (:tick/end iv)
-                                :urpx.interval/resolved (agreeing a b)))
+     (let [prev (peek acc)]
+       (if (and prev (mergeable? prev iv))
+         (conj (pop acc) (cond-> (assoc prev :tick/end (:tick/end iv))
+                           (:urpx.interval/resolved prev)
+                           (assoc :urpx.interval/resolved
+                                  (agreeing (:urpx.interval/resolved prev)
+                                            (:urpx.interval/resolved iv)))))
          (conj acc iv))))
    []
    intervals))
@@ -142,7 +180,7 @@
 (defn- schedule-with-resolver
   "Walk [start, end) at `step`, building one interval per step via
    `resolve-fn` (a `(ZonedDateTime -> resolved)` callback), then merge
-   adjacent intervals whose ledger resolution matches. Used by both
+   adjacent `mergeable?` intervals. Used by both
    `price-schedule` (per-step `resolve-prices`) and
    `price-schedule-with-modifiers` (per-step `resolve-prices-with-modifiers`).
 
@@ -165,10 +203,10 @@
                           ;; interval ran past `end` by up to one step. Both
                           ;; attributed prices to instants the caller did not
                           ;; ask about, on either side of their window.
-                          {:tick/beginning         (if (.isBefore zdt win-beg) win-beg zdt)
-                           :tick/end               (let [e (.plus zdt step)]
-                                                     (if (.isAfter e win-end) win-end e))
-                           :urpx.interval/resolved (resolve-fn zdt)})
+                          (merge {:tick/beginning (if (.isBefore zdt win-beg) win-beg zdt)
+                                  :tick/end       (let [e (.plus zdt step)]
+                                                    (if (.isAfter e win-end) win-end e))}
+                                 (resolve-or-refuse #(resolve-fn zdt))))
                         steps)]
     (merge-adjacent intervals)))
 
@@ -191,6 +229,12 @@
    modifier ledger, which name the modifier's own season and period.
    `price-segments` splits on those labels instead, so use it when they
    matter.
+
+   A step whose resolution throws ExceptionInfo becomes an interval carrying
+   `:urpx.interval/refused`, the ex-data plus `:message`, in place of
+   `:urpx.interval/resolved`, and the walk continues. Adjacent refusals merge
+   when they differ only in temporal detail and message, as in
+   `price-segments`.
 
    `zone` (a java.time.ZoneId) is optional when `rate-plan` declares
    `urpx:timezoneIdentifier`; pass `nil` to use the plan's declared
@@ -224,7 +268,7 @@
    base plan's. Modifiers whose `:urpx/applicableToRatePlan` does not
    include the base plan's `@id` are silently skipped (delegated behavior).
 
-   Same merge-adjacent / step / zone-resolution semantics as
+   Same merge-adjacent / refusal / step / zone-resolution semantics as
    `price-schedule`. Same `opts` (`:step`, `:holiday?`, plus any other keys
    that `resolve-prices-with-modifiers` consumes, such as
    `:profile-alternatives`)."
@@ -371,25 +415,6 @@
          sort
          vec)))
 
-(defn- refusal-key
-  "The part of a refusal that identifies WHICH refusal it is, with the
-   time-varying detail stripped.
-
-   A refusal's ex-data names the instant it was raised at, and its message
-   embeds it. Merging on the raw map therefore never merges: an uncovered
-   stretch fragments into one segment per candidate, which reports a boundary
-   at every midnight where there is really only one. Temporal values and the
-   message are dropped so equal refusals collapse, while the retained keys
-   still separate genuinely different ones."
-  [refused]
-  (when refused
-    (into {} (remove (fn [[k v]]
-                       (or (= :message k)
-                           (instance? java.time.temporal.Temporal v)
-                           (and (sequential? v)
-                                (some #(instance? java.time.temporal.Temporal %) v))))
-                     refused))))
-
 (defn price-segments
   "A piecewise-constant price schedule across `[start, end)`, with EXACT
    boundaries derived from the documents rather than discovered by sampling.
@@ -438,12 +463,10 @@
                          (let [zdt (.atZone a zone)]
                            (merge {:tick/beginning zdt
                                    :tick/end       (.atZone ^Instant b zone)}
-                                  (try {:urpx.interval/resolved
-                                        (if (seq modifiers)
-                                          (price/resolve-prices-with-modifiers rate-plan modifiers zdt opts)
-                                          (price/resolve-prices rate-plan zdt opts))}
-                                       (catch clojure.lang.ExceptionInfo e
-                                         {:urpx.interval/refused (assoc (ex-data e) :message (.getMessage e))})))))
+                                  (resolve-or-refuse
+                                   #(if (seq modifiers)
+                                      (price/resolve-prices-with-modifiers rate-plan modifiers zdt opts)
+                                      (price/resolve-prices rate-plan zdt opts))))))
                        cands ends)]
      (->> segs
           (reduce (fn [acc iv]

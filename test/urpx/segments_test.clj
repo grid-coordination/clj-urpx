@@ -239,6 +239,40 @@
       (is (= (map :tick/beginning (rest segs)) (map :tick/end (butlast segs)))
           "and it still tiles"))))
 
+(deftest a-refusal-becomes-a-schedule-interval-rather-than-aborting-the-window
+  (testing "price-schedule reports an uncovered stretch the way price-segments
+            does: one :urpx.interval/refused interval, then the covered stretch"
+    (let [a     (fixtures/load-rate-plan "sce-d-2025-11-15")
+          b     (fixtures/load-rate-plan "sce-d-2026-03-20")
+          bare  (dissoc b :urpx/hasRatePlanVersion)
+          opts  {:versions-by-plan (index/versions-by-plan [a b])}
+          start (.toInstant (zdt 2025 11 13 0 0))
+          end   (.toInstant (zdt 2025 11 18 0 0))
+          ivs   (schedule/price-schedule bare start end la opts)
+          segs  (schedule/price-segments bare [] start end la opts)
+          shape (partial mapv (juxt :tick/beginning :tick/end
+                                    #(get-in % [:urpx.interval/refused :reason])))]
+      (is (= :no-version-in-effect (get-in (first ivs) [:urpx.interval/refused :reason])))
+      (is (= 1 (count (filter :urpx.interval/refused ivs))))
+      (is (some :urpx.interval/resolved ivs))
+      (is (= (shape (take 1 segs)) (shape (take 1 ivs)))
+          "the refused stretch has the same bounds in both")
+      (is (= (map :tick/beginning (rest ivs)) (map :tick/end (butlast ivs)))
+          "and it still tiles"))))
+
+(deftest only-equal-refusals-merge-in-a-schedule
+  (let [iv       (fn [r] {:urpx.interval/refused r})
+        merge?   #'schedule/mergeable?
+        no-ver   {:reason :no-version-in-effect :plan-id "p" :message "at 01:00"}
+        resolved {:urpx.interval/resolved {:urpx.resolved/ledgers []}}]
+    (is (true? (merge? (iv no-ver) (iv (assoc no-ver :message "at 02:00")))))
+    (is (true? (merge? (iv (assoc no-ver :at (zdt 2025 11 13 1 0)))
+                       (iv (assoc no-ver :at (zdt 2025 11 13 2 0))))))
+    (is (false? (merge? (iv no-ver) (iv (assoc no-ver :reason :ambiguous-version)))))
+    (is (false? (merge? (iv no-ver) (iv (assoc no-ver :plan-id "q")))))
+    (is (false? (merge? (iv no-ver) resolved)))
+    (is (false? (merge? resolved (iv no-ver))))))
+
 (deftest the-candidate-count-is-bounded-and-small
   (testing "derived candidates are cheaper than hourly sampling on a real plan,
             though cost is not the argument for them: exactness is."

@@ -630,13 +630,14 @@
             a horizon alike."
     (let [a  (update (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
                      :urpx.scenario-cost-model/selections assoc "x:no-such-container" "x:whatever")
-          rs (keep #(get-in % [:urpx.interval/refused :reason])
-                   (scm/segments-for a (at 2026 7 15 0) (at 2026 7 16 0)))]
+          rs (fn [f] (keep #(get-in % [:urpx.interval/refused :reason])
+                           (f a (at 2026 7 15 0) (at 2026 7 16 0))))]
       (is (= :unknown-profile-alternatives-container
              (try (scm/resolve-at a (at)) nil
                   (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))))
-      (is (seq rs))
-      (is (every? #{:unknown-profile-alternatives-container} rs)))))
+      (doseq [[nm f] [["segments-for" scm/segments-for] ["schedule-for" scm/schedule-for]]]
+        (is (= [:unknown-profile-alternatives-container] (rs f))
+            (str nm " reports the whole horizon as one refused interval"))))))
 
 (deftest a-horizon-binds-each-document-to-its-own-version
   (testing "the reason these functions exist rather than letting a caller reach

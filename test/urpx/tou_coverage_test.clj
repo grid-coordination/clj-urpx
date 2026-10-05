@@ -228,6 +228,20 @@
                          #(get-in % [:urpx.interval/refused :reason]))
                    segs))))))
 
+(deftest a-gap-is-one-refused-schedule-interval
+  (testing "price-schedule and price-schedule-with-modifiers carry the
+            refusal as :urpx.interval/refused and continue past it, and the
+            gap's equal hourly refusals merge into one interval"
+    (let [p     (base-plan :schedule peak-gap)
+          start (.toInstant (at 2026 7 15 0))
+          end   (.toInstant (at 2026 7 16 0))
+          shape (partial mapv (juxt #(.getHour ^ZonedDateTime (:tick/beginning %))
+                                    #(get-in % [:urpx.interval/refused :reason])
+                                    #(contains? % :urpx.interval/resolved)))]
+      (is (= [[0 nil true] [16 :urpx.price/no-tou-period false] [21 nil true]]
+             (shape (schedule/price-schedule p start end))
+             (shape (schedule/price-schedule-with-modifiers p [] start end)))))))
+
 (deftest no-schedule-is-unaffected
   (testing "a base plan with no schedule resolves with no period"
     (let [r (price/resolve-prices (base-plan) (at 2026 7 15 17))]

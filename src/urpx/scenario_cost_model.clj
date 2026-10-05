@@ -1262,7 +1262,9 @@
    `segments-for` when they want the truth about where prices change, which for
    a price server is almost always the question.
 
-   Same bounds and `opts` handling as `segments-for`."
+   Same bounds, `opts` and refusal handling as `segments-for`: a step whose
+   resolution throws becomes an interval carrying `:urpx.interval/refused`,
+   and equal refusals merge."
   ([model start end] (schedule-for model start end nil))
   ([model ^ZonedDateTime start ^ZonedDateTime end opts]
    (schedule/price-schedule-with-modifiers
