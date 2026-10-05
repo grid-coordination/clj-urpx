@@ -9,6 +9,55 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Changed
+
+- **`urpx.arrangements` is now `urpx.scenario-cost-model`**, named for `urpx:ScenarioCostModel` from urpx-org/urpx#72. No deprecated aliases remain; every other function and option keeps its name.
+
+  | 0.35.0 | Now |
+  |---|---|
+  | `urpx.arrangements` | `urpx.scenario-cost-model` |
+  | `arrangements` | `enumerate` |
+  | `arrangement-pairs` | `enumerate-pairs` |
+  | `arrangement-id` | `identity-tuple` |
+  | `urpx.coverage/of-arrangement` | `urpx.coverage/of-model` |
+  | `:urpx.arrangement/*` result keys and refusals | `:urpx.scenario-cost-model/*`, same local names |
+  | `:urpx.arrangement/opt-determined-by-arrangement` | `:urpx.scenario-cost-model/opt-determined-by-model` |
+  | `:arrangement-id` in refusal ex-data | `:identity-tuple` |
+
+- **`identity-tuple` keys a model by its alternatives alone:** `[base-version-iri (sorted modifier-version iris) (sorted alternative iris)]`, the values a `urpx:ScenarioCostModel` carries. `arrangement-id` ended in `[[container alternative] ...]`. `enumerate` sorts by the new tuple, and each model's `:urpx.scenario-cost-model/selections` still maps every container to its alternative.
+- **`segments-for` and `schedule-for` take ZonedDateTime bounds**, as `[model start end]` or `[model start end opts]`, in the zone the model resolves in. The Instant arities and the `zone` argument are gone. Bounds in another zone refuse `:urpx.schedule/zone-disagrees-with-plan`; bounds in two different zones refuse `:urpx.scenario-cost-model/bounds-in-different-zones`.
+- **`load/documents` and `load/scan` return a package shell for every `urpx:URPXPackage` or `urpx:URPXDocument` wrapper:** the wrapper's own properties, with each embedded payload under `hasRatePlan`, `hasRatePlanModifier`, `hasTariffPublication` and `packages` replaced by a `{:jsonld/id id}` reference. README gives the predicate that drops the shells. Both also return any `urpx:ScenarioCostModel` among the coerced documents.
+- **New refusals.**
+
+  | Reason | When |
+  |---|---|
+  | `:urpx.price/no-tou-period` | a plan or modifier has a `urpx:TOUSchedule` and no period covers the instant, including a holiday no bracket covers. The period resolved to nil and every period's Price was admitted. `price-segments` and `segments-for` report it as `:urpx.interval/refused`; `resolve-at` and `price-schedule` propagate it |
+  | `:unknown-profile-alternatives-container` | a `:profile-alternatives` key names no container in any version being resolved. The prices it was meant to select were withheld. The ex-data lists the known containers under `:containers` |
+  | `:urpx.scenario-cost-model/shared-alternative` | two containers in one composition's versions list the same `urpx:ProfileAlternative`, in `enumerate` and `from-node` |
+  | `:urpx.scenario-cost-model/unknown-package-zones` | a `:package-zones` value other than `:agree`, `:fallback` or `:ignore` |
+  | `:urpx.load/payload-without-id` | a wrapper embeds a payload with no `@id` |
+  | `:urpx.schema/malformed-datetime`, `-date`, `-time` | a malformed or out-of-range temporal literal. `load` and `scan` propagate it and the validate CLI reports REFUSED |
+
+- **Temporal literals with an offset decode to what they name.** An xsd:dateTime written with `Z` or an offset decodes to a ZonedDateTime in that offset, and one without stays a LocalDateTime. An xsd:time with an offset decodes to an OffsetTime. An xsd:date with an offset decodes to the LocalDate it names, so a version or coverage bound written with one starts at midnight in the plan zone; the offset is kept in the map's metadata under `:urpx.schema/date-offsets` and emitted as written. The `DateTime` and `Time` schemas accept the zoned forms. Times and date-times encode in XSD canonical form with seconds, where `"16:00:00"` had been written as `"16:00"`. A typed-literal object `{"@value" v "@type" t}` decodes like the plain string, and `emit/default-context` types every temporal property the schema decodes. `urpx.coverage/of-version`'s `:evaluated-on` is a ZonedDateTime when the document wrote an offset.
+- **A modifier's ledgers carry its own matched season and TOU period** as `:urpx.resolved/season-name`, `tou-period-name` and `tou-period-number`. A modifier gated by the base plan's period carries no period keys, and the result-level keys remain the base plan's. `price-segments` now splits where a modifier's own season or period changes.
+
+### Added
+
+- **`urpx.schema/ScenarioCostModel`**, transcribing `ScenarioCostModelShape` as amended by urpx-org/urpx#72, closed, with `urpx:name` and `urpx:description` admitted. Its 0..N properties decode a bare value to a vector of one. `coerce-doc` and the validate CLI take a model, `emit/write-scenario-cost-model` writes one, a model under `urpx:packages` is encoded through its schema, and `dsl/scenario-cost-model` builds one.
+- **`scm/node`** writes a model as one `urpx:ScenarioCostModel` node with absolute `@id`s. It takes a required `iri-fn`, and `:context`, `:name` and `:description` as options. An `@id` the context cannot expand refuses `:urpx.scenario-cost-model/unexpandable-iri`, and a prefix bound two ways `conflicting-prefix`.
+- **`scm/rate-plans-iri`** mints the IRI urpx-rate-plans derives from the identity tuple, for use as `iri-fn`. It refuses `:urpx.scenario-cost-model/iri-outside-namespace` and `iri-local-name`.
+- **`scm/from-node`** reads a `urpx:ScenarioCostModel` node, raw or coerced, into the map `enumerate` yields for it, so `resolve-at`, `segments-for`, `schedule-for` and `node` take it unchanged. It takes `:compatibility`, `:repeated-ids`, `:package-zones` and `:context`, and refuses `not-a-reference`, `no-version`, `unknown-version`, `inapplicable-modifier`, `shared-alternative`, `unknown-alternative`, `dimension-selected-twice` and `dimension-unselected`, each under `:urpx.scenario-cost-model/`.
+- **`:package-zones`** on `enumerate`, `plan-versions`, `applicable-modifiers` and `from-node` decides what a package's `urpx:timezoneIdentifier` counts for: `:agree` (default) counts it as one more declaration that must agree, `:fallback` reads it only when nothing else declares a zone, and `:ignore` reads none. Packages are indexed by `hasRatePlan` and `hasRatePlanModifier` as well as `packages`.
+- **`urpx.schema/in-zone`, `wall-time`, `date-offsets-decoder` and `date-offsets-encoder`.**
+
+### Fixed
+
+- **A nested `@graph` was loaded as one untyped node.** `parse-graph` unwrapped only a top-level `@graph`, so upstream `test-cases/pge-e-tou-c` lost its package, plan, version, vintage-PCIA modifier and that modifier's version. It now flattens graph objects at any depth.
+- **A modifier summed a superseded dated Price with the one replacing it.** The modifier path now keeps the latest started Price per cell, as the base path does. With no selection, each `urpx:PriceSetAlternative` is reduced on its own.
+- **`load/scan` reported a by-reference package payload as uncoercible**, as `{:jsonld/type nil}`. The package shell keeps the reference, and the referenced entity loads where it is stated.
+
 ## [0.35.0] — 2026-10-04
 
 ### Fixed
