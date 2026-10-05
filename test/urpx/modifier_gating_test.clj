@@ -848,3 +848,28 @@
       (is (= -0.03M (:urpx.resolved/unit-price
                      (discount (price/resolve-prices-with-modifiers
                                 (base-plan) [m] (at 2026 1 15)))))))))
+
+(deftest a-standalone-modifiers-period-bound-summary-members-are-unknown
+  (let [m (-> (modifier [(assoc (pd "test:adj-a" "A") :urpx/touPeriodNumber 7)
+                         (pd "test:adj-flat" "Flat")])
+              (update-in [:urpx/hasRatePlanModifierVersion :urpx/hasPlanElements
+                          :urpx/hasBillingModel :urpx/hasPriceDefinition]
+                         conj (pd "test:adj-disc" "Discount"))
+              (with-summary "test:own-summary" ["test:adj-a-price" "test:adj-flat-price"]))]
+    (testing "resolved alone with no TOUSchedule, the summary refuses"
+      (let [disc (discount (price/resolve-modifier-prices m (at 2026 7 15)))]
+        (is (nil? (:urpx.resolved/unit-price disc)))
+        (is (= :summary-member-unselected (:reason (:urpx.resolved/unvaluable disc))))))
+    (testing "composed over a base plan in period 7, the member applies"
+      (is (= -0.03M (:urpx.resolved/unit-price
+                     (discount (price/resolve-prices-with-modifiers
+                                (base-with-schedule) [m] (at 2026 7 15))))))))
+  (testing "a period-bound member out of its months stays inactive"
+    (let [m (-> (modifier [(assoc (pd "test:adj-a" "A" :months [12 1 2]) :urpx/touPeriodNumber 7)
+                           (pd "test:adj-flat" "Flat")])
+                (update-in [:urpx/hasRatePlanModifierVersion :urpx/hasPlanElements
+                            :urpx/hasBillingModel :urpx/hasPriceDefinition]
+                           conj (pd "test:adj-disc" "Discount"))
+                (with-summary "test:own-summary" ["test:adj-a-price" "test:adj-flat-price"]))]
+      (is (= -0.02M (:urpx.resolved/unit-price
+                     (discount (price/resolve-modifier-prices m (at 2026 7 15)))))))))

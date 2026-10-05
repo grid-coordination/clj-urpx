@@ -1329,38 +1329,45 @@
    generation definition to an alternative and choosing a different one left
    the CARE discount at -0.10070125 against a correct -0.06247800, and the
    marginal rate came back 0.08043875 against 0.11866200, a third low with
-   nothing in the result to say so."
+   nothing in the result to say so.
+
+   `period-num` ::no-period means there is no TOU period to match, so a member
+   whose PriceDefinition names one is :unknown."
   [by-id period-num ^LocalDate date rules-by-id season-status alt-status]
-  (fn [member]
-    (let [pd (get by-id (get-in member [:urpx/referencesPriceDefinition :jsonld/id]))]
-      ;; The member's OWN urpx:touPeriodNumber gates first, and independently of
-      ;; whether it has a PriceDefinition. URPX puts that property on Price as
-      ;; well as PriceDefinition, and only the PD was read: six TOU variants of
-      ;; one charge, sharing an undifferentiated PD, all counted toward the
-      ;; subtotal at every instant. SDG&E EV-TOU's CARE discount came out
-      ;; -0.9255435 against a correct -0.2999885, overstated 3.09x.
-      (cond
-        (not (and (price-active-at-tou? member period-num)
-                  (or (nil? pd)
-                      (and (pd-active-at-tou? pd period-num)
-                           (pd-active-in-month? pd date rules-by-id)
-                           (not= :out-of-season (season-status pd))))))
-        :inactive
+  (let [no-period? (= ::no-period period-num)
+        period-num (when-not no-period? period-num)]
+    (fn [member]
+      (let [pd (get by-id (get-in member [:urpx/referencesPriceDefinition :jsonld/id]))]
+        ;; The member's OWN urpx:touPeriodNumber gates first, and independently of
+        ;; whether it has a PriceDefinition. URPX puts that property on Price as
+        ;; well as PriceDefinition, and only the PD was read: six TOU variants of
+        ;; one charge, sharing an undifferentiated PD, all counted toward the
+        ;; subtotal at every instant. SDG&E EV-TOU's CARE discount came out
+        ;; -0.9255435 against a correct -0.2999885, overstated 3.09x.
+        (cond
+          (not (and (price-active-at-tou? member period-num)
+                    (or (nil? pd)
+                        (and (or no-period? (pd-active-at-tou? pd period-num))
+                             (pd-active-in-month? pd date rules-by-id)
+                             (not= :out-of-season (season-status pd))))))
+          :inactive
 
-        (nil? pd) :active
+          (nil? pd) :active
 
-        ;; A season gate that could not be evaluated leaves this member's
-        ;; applicability UNKNOWN, and a subtotal has a state for that where a
-        ;; boolean filter does not. Excluding it understates the subtotal and
-        ;; including it overstates it, which is the same reasoning the
-        ;; unselected-alternative case below already follows.
-        (= :not-evaluable (season-status pd)) :unknown
+          (and no-period? (some? (:urpx/touPeriodNumber pd))) :unknown
 
-        :else
-        (case (alt-status pd)
-          :not-selected :inactive
-          :unselected   :unknown
-          :active)))))
+          ;; A season gate that could not be evaluated leaves this member's
+          ;; applicability UNKNOWN, and a subtotal has a state for that where a
+          ;; boolean filter does not. Excluding it understates the subtotal and
+          ;; including it overstates it, which is the same reasoning the
+          ;; unselected-alternative case below already follows.
+          (= :not-evaluable (season-status pd)) :unknown
+
+          :else
+          (case (alt-status pd)
+            :not-selected :inactive
+            :unselected   :unknown
+            :active))))))
 
 (defn- price-value
   "The unit price for `price`, and when it cannot be determined, why.
@@ -2273,8 +2280,14 @@
          gate?       (or (seq own-schedules) (some? base-period-num))
          ;; A urpx:PriceSummary member is gated in the document it lives in:
          ;; this modifier's own context for its own Prices, and the composing
-         ;; base plan's (:member-status) for any other.
-         own-status  (make-member-status by-id gate-period query-date
+         ;; base plan's (:member-status) for any other. Resolved alone with no
+         ;; TOUSchedule, there is no period to match.
+         own-status  (make-member-status by-id
+                                         (if (and (nil? (:member-status opts))
+                                                  (empty? own-schedules))
+                                           ::no-period
+                                           gate-period)
+                                         query-date
                                          own-rules season-status alt-status)
          member-status (if-let [other-status (:member-status opts)]
                          (let [own-ids (index/build-index version)]
