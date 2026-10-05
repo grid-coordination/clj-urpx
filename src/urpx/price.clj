@@ -1295,6 +1295,17 @@
     (cond-> (vec bare)
       (seq tiered) (conj (first (sort-by tier-of tiered))))))
 
+(defn- lowest-rung-ties
+  "The members of `xs` at the lowest tier number, when there are two or more of
+   them, else nil. `additive-plus-lowest-rung` takes one of these, and which one
+   is arbitrary."
+  [xs tier-of]
+  (let [tiered (filter #(some? (tier-of %)) xs)]
+    (when (seq tiered)
+      (let [lowest (apply min (map tier-of tiered))
+            at     (filterv #(= lowest (tier-of %)) tiered)]
+        (when (< 1 (count at)) at)))))
+
 (defn- make-member-status
   "Return a predicate deciding whether a urpx:PriceSummary member is in effect
    at the instant being resolved.
@@ -2625,13 +2636,16 @@
    Useful for price signaling: when you don't know a customer's usage but want
    a single $/kWh number, this is the marginal rate at zero baseline usage.
 
-   REFUSES, rather than returning a number, in six cases, each carrying a
+   REFUSES, rather than returning a number, in these cases, each carrying a
    named `:reason` in its ex-data so a sweeping consumer can classify:
 
      :no-energy-ledger            this plan prices nothing per kWh, so the
                                   question does not apply to it. 0M would be
                                   indistinguishable from a plan whose energy
                                   ledgers genuinely sum to zero
+     :ambiguous-marginal-tier     an energy ledger carries two or more entries
+                                  at the lowest tier number of its ladder, so
+                                  which one is the marginal rung is undefined
      :unvaluable-marginal-tier    a marginal tier could not be valued. A nil
                                   unit price reads to a consumer as free, and
                                   for a discount that is the worst available
@@ -2743,6 +2757,13 @@
          marginal   (mapcat #(-> (remove exclude-tier? (:urpx.resolved/tiers %))
                                  (additive-plus-lowest-rung :urpx.resolved/tier-number))
                             energy)
+         ambiguous  (keep (fn [l]
+                            (when-let [ts (-> (remove exclude-tier? (:urpx.resolved/tiers l))
+                                              (lowest-rung-ties :urpx.resolved/tier-number))]
+                              {:urpx.resolved/ledger-id (:urpx.resolved/ledger-id l)
+                               :tier-number (:urpx.resolved/tier-number (first ts))
+                               :price-ids (mapv :urpx.resolved/price-id ts)}))
+                          energy)
          unvaluable (filter :urpx.resolved/unvaluable marginal)
         ;; Only tiers that would actually ENTER the sum: `marginal` is already
         ;; import-energy-only and already past exclude-tier?, so a gated export
@@ -2858,6 +2879,13 @@
                         :ledgers (mapv #(select-keys % [:urpx.resolved/ledger-id
                                                         :urpx.resolved/unselected-alternatives])
                                        unselected)})))
+     (when (seq ambiguous)
+       (throw (ex-info (str "Cannot compute a marginal rate: " (count ambiguous)
+                            " energy ledger(s) carry two or more prices at the lowest "
+                            "tier number of a block-tier ladder, so the marginal rung "
+                            "is undefined. Inspect :ledgers in ex-data.")
+                       {:reason :ambiguous-marginal-tier
+                        :ledgers (vec ambiguous)})))
     ;; Refuse rather than sum around a price this library could not value.
     ;; Skipping would silently under-report the rate, which for a discount
     ;; means reporting the undiscounted price as though it were the real one.
