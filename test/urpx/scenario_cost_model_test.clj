@@ -1250,3 +1250,126 @@
     (is (= ["E-1" "Residential"] [(:urpx/name n) (:urpx/description n)]))
     (is (= (dissoc n :urpx/name :urpx/description) (scm/node m scm/rate-plans-iri {:context ctx})))
     (is (nil? (coerce/explain schema/ScenarioCostModel n)))))
+
+(defn- outcome
+  "What calling `f` gives: its value, or the ex-data it throws."
+  [f]
+  (try [:value (f)] (catch clojure.lang.ExceptionInfo e [:refused (ex-data e)])))
+
+(deftest from-node-reads-back-every-model-node-writes
+  (let [docs   (load/documents (fixture-files))
+        ctx    (written-contexts)
+        opts   {:context ctx :compatibility scm/named-versions-add}
+        models (fixture-models)]
+    (doseq [m models
+            :let [n (scm/node m scm/rate-plans-iri {:context ctx})]]
+      (testing (pr-str (scm/identity-tuple m))
+        (is (= m (scm/from-node docs n opts)) "a coerced node")
+        (is (= m (scm/from-node docs (core/parse-rate-plan
+                                      (StringReader. (emit/write-scenario-cost-model n {:context nil})))
+                                opts))
+            "the same node written and parsed back, raw")))))
+
+(deftest a-model-read-from-its-node-prices-as-the-enumerated-one
+  (let [docs (load/documents (fixture-files))
+        ctx  (written-contexts)]
+    (doseq [m (fixture-models)
+            :let [read (scm/from-node docs (scm/node m scm/rate-plans-iri {:context ctx})
+                                      {:context ctx :compatibility scm/named-versions-add})]]
+      (testing (pr-str (scm/identity-tuple m))
+        (is (= (outcome #(scm/resolve-at m (at))) (outcome #(scm/resolve-at read (at)))))))))
+
+(defn- scm-node
+  "A urpx:ScenarioCostModel node consuming `base`, the modifier versions `mods`
+   and the alternatives `alts`, each written as a list only when non-empty."
+  [base mods alts]
+  (cond-> {:jsonld/id "x:model" :jsonld/type "urpx:ScenarioCostModel"}
+    base       (assoc :urpx/consumesVersion {:jsonld/id base})
+    (seq mods) (assoc :urpx/consumesModifierVersion (mapv #(hash-map :jsonld/id %) mods))
+    (seq alts) (assoc :urpx/selectsProfileAlternative (mapv #(hash-map :jsonld/id %) alts))))
+
+(defn- from-node-docs
+  "A plan whose version offers c1 {z1 z2}, and a modifier compatible with it
+   offering c2 {a1}."
+  []
+  [(plan-doc "x:p" "x:p-v1" (ldt 2026 1 1) (containers {"x:c1" ["x:z1" "x:z2"]}))
+   (modifier-doc "x:m" "x:m-v" (ldt 2026 1 1)
+                 (merge {:urpx/applicableToRatePlan [{:jsonld/id "x:p"}]}
+                        (containers {"x:c2" ["x:a1"]})))])
+
+(defn- node-refusal [docs n] (refusal #(scm/from-node docs n)))
+
+(deftest from-node-keys-each-selection-by-its-container
+  (let [m (scm/from-node (from-node-docs) (scm-node "x:p-v1" ["x:m-v"] ["x:z2" "x:a1"]))]
+    (is (= {"x:c1" "x:z2" "x:c2" "x:a1"} (:urpx.scenario-cost-model/selections m)))
+    (is (= ["x:p-v1" ["x:m-v"] ["x:a1" "x:z2"]] (scm/identity-tuple m)))
+    (is (= [m] (filter #(= (scm/identity-tuple m) (scm/identity-tuple %))
+                       (scm/enumerate (from-node-docs)))))))
+
+(deftest from-node-reads-a-bare-value-as-a-list-of-one
+  (let [n (-> (scm-node "x:p-v1" ["x:m-v"] ["x:z1" "x:a1"])
+              (assoc :urpx/consumesVersion [{:jsonld/id "x:p-v1"}]
+                     :urpx/consumesModifierVersion {:jsonld/id "x:m-v"}))]
+    (is (= ["x:p-v1" ["x:m-v"] ["x:a1" "x:z1"]]
+           (scm/identity-tuple (scm/from-node (from-node-docs) n))))))
+
+(deftest from-node-refuses-a-value-that-is-not-a-reference
+  (are [k v] (= {:reason :urpx.scenario-cost-model/not-a-reference :property k :value "x:v"}
+                (select-keys (node-refusal (from-node-docs)
+                                           (assoc (scm-node "x:p-v1" ["x:m-v"] ["x:z1" "x:a1"]) k v))
+                             [:reason :property :value]))
+    :urpx/consumesVersion           "x:v"
+    :urpx/consumesModifierVersion   ["x:v"]
+    :urpx/selectsProfileAlternative [{:jsonld/id "x:z1"} "x:v"]))
+
+(deftest from-node-refuses-a-node-with-no-version
+  (is (= :urpx.scenario-cost-model/no-version
+         (:reason (node-refusal (from-node-docs) (scm-node nil [] []))))))
+
+(deftest from-node-refuses-a-version-the-documents-do-not-carry
+  (are [n id] (= {:reason :urpx.scenario-cost-model/unknown-version :id id}
+                 (select-keys (node-refusal (from-node-docs) n) [:reason :id]))
+    (scm-node "x:p-v9" [] ["x:z1"])         "x:p-v9"
+    (scm-node "x:p-v1" ["x:m-v9"] ["x:z1"]) "x:m-v9"
+    (scm-node "x:m-v" [] [])                "x:m-v"
+    (scm-node "x:p-v1" ["x:p-v1"] ["x:z1"]) "x:p-v1"))
+
+(deftest from-node-refuses-a-modifier-the-compatibility-policy-rejects
+  (let [docs [(plan-doc "x:p" "x:p-v1" (ldt 2026 1 1))
+              (modifier-doc "x:m" "x:m-v" (ldt 2026 1 1)
+                            {:urpx/applicableToRatePlan        [{:jsonld/id "x:p"}]
+                             :urpx/applicableToRatePlanVersion [{:jsonld/id "x:q-v1"}]})]
+        n    (scm-node "x:p-v1" ["x:m-v"] [])]
+    (is (= {:reason :urpx.scenario-cost-model/inapplicable-modifier
+            :modifier-version-ids ["x:m-v"]}
+           (select-keys (node-refusal docs n) [:reason :modifier-version-ids]))
+        "named-versions-narrow by default")
+    (is (= ["x:p-v1" ["x:m-v"] []]
+           (scm/identity-tuple (scm/from-node docs n {:compatibility scm/named-versions-add}))))))
+
+(deftest from-node-refuses-an-alternative-no-consumed-version-offers
+  (is (= {:reason :urpx.scenario-cost-model/unknown-alternative :alternative "x:a1"}
+         (select-keys (node-refusal (from-node-docs) (scm-node "x:p-v1" [] ["x:z1" "x:a1"]))
+                      [:reason :alternative]))
+      "x:a1 is offered by the modifier the node does not consume"))
+
+(deftest from-node-refuses-two-alternatives-from-one-container
+  (is (= {:reason :urpx.scenario-cost-model/dimension-selected-twice
+          :selections {"x:c1" ["x:z1" "x:z2"]}}
+         (select-keys (node-refusal (from-node-docs) (scm-node "x:p-v1" [] ["x:z2" "x:z1"]))
+                      [:reason :selections]))))
+
+(deftest from-node-refuses-a-container-left-unselected
+  (is (= {:reason :urpx.scenario-cost-model/dimension-unselected :containers ["x:c2"]}
+         (select-keys (node-refusal (from-node-docs) (scm-node "x:p-v1" ["x:m-v"] ["x:z1"]))
+                      [:reason :containers]))))
+
+(deftest from-node-refuses-an-alternative-two-containers-list
+  (let [docs [(plan-doc "x:p" "x:p-v1" (ldt 2026 1 1) (containers {"x:c1" ["x:a" "x:shared"]}))
+              (modifier-doc "x:m" "x:m-v" (ldt 2026 1 1)
+                            (merge {:urpx/applicableToRatePlan [{:jsonld/id "x:p"}]}
+                                   (containers {"x:c2" ["x:shared"]})))]]
+    (is (= {:reason       :urpx.scenario-cost-model/shared-alternative
+            :node-id      "x:model"
+            :alternatives {"x:shared" ["x:c1" "x:c2"]}}
+           (node-refusal docs (scm-node "x:p-v1" ["x:m-v"] ["x:shared"]))))))

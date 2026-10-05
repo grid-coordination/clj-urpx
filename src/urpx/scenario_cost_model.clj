@@ -553,27 +553,29 @@
 
    The identity tuple and urpx:selectsProfileAlternative name the alternative
    alone, so its container must be recoverable from it. Every offender is
-   named in one refusal."
-  [dimss]
-  (let [shared (->> (for [dims dimss
-                          :let [by-alt (reduce (fn [m [cid alts]]
-                                                 (reduce #(update %1 %2 (fnil conj (sorted-set)) cid)
-                                                         m alts))
-                                               {} dims)]
-                          [a cids] by-alt
-                          :when (< 1 (count cids))]
-                      {a cids})
-                    (apply merge-with into (sorted-map))
-                    (into (sorted-map) (map (fn [[a cids]] [a (vec cids)]))))]
-    (when (seq shared)
-      (throw (ex-info (str "Cannot enumerate: "
-                           (str/join "; " (for [[a cids] shared]
-                                            (str (pr-str a) " is listed by "
-                                                 (str/join " and " (map pr-str cids)))))
-                           ". A selection names the alternative alone, so each alternative "
-                           "must belong to one container.")
-                      {:reason :urpx.scenario-cost-model/shared-alternative
-                       :alternatives shared})))))
+   named in one refusal, which opens with `lead` and carries `data`."
+  ([dimss] (refuse-shared-alternatives! dimss "Cannot enumerate" nil))
+  ([dimss lead data]
+   (let [shared (->> (for [dims dimss
+                           :let [by-alt (reduce (fn [m [cid alts]]
+                                                  (reduce #(update %1 %2 (fnil conj (sorted-set)) cid)
+                                                          m alts))
+                                                {} dims)]
+                           [a cids] by-alt
+                           :when (< 1 (count cids))]
+                       {a cids})
+                     (apply merge-with into (sorted-map))
+                     (into (sorted-map) (map (fn [[a cids]] [a (vec cids)]))))]
+     (when (seq shared)
+       (throw (ex-info (str lead ": "
+                            (str/join "; " (for [[a cids] shared]
+                                             (str (pr-str a) " is listed by "
+                                                  (str/join " and " (map pr-str cids)))))
+                            ". A selection names the alternative alone, so each alternative "
+                            "must belong to one container.")
+                       (merge {:reason :urpx.scenario-cost-model/shared-alternative
+                               :alternatives shared}
+                              data)))))))
 
 (defn- selection-combinations
   "Every way of choosing one alternative per open dimension. One combination
@@ -958,19 +960,24 @@
           {}
           (mapcat #(when (map? %) %) (if (sequential? context) context [context]))))
 
-(defn- absolute-iri
-  "`iri` absolute: an http(s) IRI as it is, a compact IRI expanded through
-   `prefixes`. Anything else refuses `:urpx.scenario-cost-model/unexpandable-iri`."
+(defn- expand-iri
+  "`iri` absolute when it is http(s) or its prefix is in `prefixes`, else nil."
   [prefixes iri]
   (if (or (str/starts-with? iri "http://") (str/starts-with? iri "https://"))
     iri
     (let [[p local] (str/split iri #":" 2)]
-      (if-let [n (and local (get prefixes p))]
-        (str n local)
-        (throw (ex-info (str "Cannot expand " (pr-str iri) ": no prefix in :context binds "
-                             (pr-str p) ".")
-                        {:reason :urpx.scenario-cost-model/unexpandable-iri
-                         :iri iri :prefixes (vec (sort (keys prefixes)))}))))))
+      (when-let [n (and local (get prefixes p))]
+        (str n local)))))
+
+(defn- absolute-iri
+  "`iri` absolute: an http(s) IRI as it is, a compact IRI expanded through
+   `prefixes`. Anything else refuses `:urpx.scenario-cost-model/unexpandable-iri`."
+  [prefixes iri]
+  (or (expand-iri prefixes iri)
+      (throw (ex-info (str "Cannot expand " (pr-str iri) ": no prefix in :context binds "
+                           (pr-str (first (str/split iri #":" 2))) ".")
+                      {:reason :urpx.scenario-cost-model/unexpandable-iri
+                       :iri iri :prefixes (vec (sort (keys prefixes)))}))))
 
 (defn node
   "`model` as one urpx:ScenarioCostModel node, in the coerced shape
@@ -1012,6 +1019,141 @@
        (:description opts) (assoc :urpx/description (:description opts))
        (seq mods)          (assoc :urpx/consumesModifierVersion (mapv ref (second tuple)))
        (seq alts)          (assoc :urpx/selectsProfileAlternative (mapv ref (nth tuple 2)))))))
+
+(defn- refuse-node
+  [node reason msg data]
+  (throw (ex-info (str "Cannot read " (pr-str (:jsonld/id node)) ": " msg)
+                  (merge {:reason (keyword "urpx.scenario-cost-model" (name reason))
+                          :node-id (:jsonld/id node)}
+                         data))))
+
+(defn from-node
+  "The model the urpx:ScenarioCostModel `node` names in `documents`, as the map
+   `enumerate` yields for it, so `resolve-at`, `segments-for`, `schedule-for`
+   and `node` take it as they take an enumerated one.
+
+   `node` is keyword-keyed, as `urpx.core/parse-graph` yields it, either raw or
+   coerced through `urpx.schema/ScenarioCostModel`: each property is read bare
+   or as a list. Its urpx:consumesVersion, urpx:consumesModifierVersion and
+   urpx:selectsProfileAlternative are read by @id. `documents` is what
+   `enumerate` takes.
+
+   An @id matches a document's @id when the two are equal, or with `:context`
+   when they expand to one IRI, so a node `node` wrote reads back against
+   documents that write compact IRIs. The model carries the documents' @ids.
+
+   Options:
+     :context        as `node` takes it
+     :compatibility  as `enumerate` takes it
+     :repeated-ids   as `enumerate` takes it
+     :package-zones  as `enumerate` takes it
+
+   Refusals, each under :urpx.scenario-cost-model and carrying :node-id:
+     not-a-reference           a property value is not a node with an @id
+     no-version                urpx:consumesVersion is absent
+     unknown-version           a version or modifier version @id names no
+                               version snapshot of its kind in `documents`
+     inapplicable-modifier     `:compatibility` rejects a modifier version for
+                               the base version
+     shared-alternative        as `enumerate` refuses it
+     unknown-alternative       an alternative is in no container of the
+                               consumed versions
+     dimension-selected-twice  two alternatives are in one container
+     dimension-unselected      a container has no alternative selected"
+  ([documents node] (from-node documents node nil))
+  ([documents node opts]
+   (let [_        (check-coerced! documents "urpx.scenario-cost-model/from-node")
+         compat   (or (:compatibility opts) named-versions-narrow)
+         repeated (or (:repeated-ids opts) repeated-ids-refuse)
+         find-zone (zone-finder documents (package-zone-mode opts))
+         prefixes (prefix-bindings (:context opts))
+         key-of   #(or (expand-iri prefixes %) %)
+         merged   (repeated {"urpx:RatePlanVersion"
+                             (mapcat #(versions-in % "urpx:RatePlanVersion") documents)
+                             "urpx:RatePlanModifierVersion"
+                             (mapcat #(versions-in % "urpx:RatePlanModifierVersion") documents)})
+         by-key   (fn [kind]
+                    (reduce (fn [m tr]
+                              (let [k (key-of (:jsonld/id (second tr)))]
+                                (cond-> m (not (contains? m k)) (assoc k tr))))
+                            {} (get merged kind)))
+         ids      (fn [k]
+                    (->> (index/as-vec (get node k))
+                         (map #(or (when (map? %) (:jsonld/id %))
+                                   (refuse-node node :not-a-reference
+                                                (str (pr-str %) " under urpx:" (name k)
+                                                     " is not a node reference.")
+                                                {:property k :value %})))
+                         distinct
+                         vec))
+         _        (index/single (:urpx/consumesVersion node) "urpx:consumesVersion")
+         base-id  (first (ids :urpx/consumesVersion))
+         _        (when-not base-id
+                    (refuse-node node :no-version
+                                 "it has no urpx:consumesVersion, and a model prices one version."
+                                 {}))
+         find-triple
+         (fn [index kind id]
+           (or (index (key-of id))
+               (refuse-node node :unknown-version
+                            (str (pr-str id) " names no " kind " in the documents.")
+                            {:id id :kind kind})))
+         btriple  (find-triple (by-key "urpx:RatePlanVersion") "urpx:RatePlanVersion" base-id)
+         [plan-id bv] btriple
+         mod-index (by-key "urpx:RatePlanModifierVersion")
+         mtriples (->> (ids :urpx/consumesModifierVersion)
+                       (map #(find-triple mod-index "urpx:RatePlanModifierVersion" %))
+                       distinct
+                       (sort-by #(:jsonld/id (second %)))
+                       vec)
+         mvs      (mapv second mtriples)
+         _        (when-let [bad (seq (remove #(compat % bv plan-id) mvs))]
+                    (refuse-node node :inapplicable-modifier
+                                 (str "the :compatibility policy rejects "
+                                      (str/join ", " (map (comp pr-str :jsonld/id) bad))
+                                      " for " (pr-str (:jsonld/id bv)) ".")
+                                 {:version-id (:jsonld/id bv)
+                                  :modifier-version-ids (mapv :jsonld/id bad)}))
+         dims     (open-dimensions (cons bv mvs))
+         _        (refuse-shared-alternatives! [dims] (str "Cannot read " (pr-str (:jsonld/id node)))
+                                               {:node-id (:jsonld/id node)})
+         dim-of   (into {} (for [[cid alts] dims, a alts] [(key-of a) [cid a]]))
+         chosen   (distinct
+                   (map (fn [a]
+                          (or (dim-of (key-of a))
+                              (refuse-node node :unknown-alternative
+                                           (str (pr-str a) " is in no urpx:ProfileAlternatives"
+                                                " of the versions it consumes.")
+                                           {:alternative a
+                                            :containers (vec (sort (keys dims)))})))
+                        (ids :urpx/selectsProfileAlternative)))
+         twice    (into (sorted-map)
+                        (keep (fn [[cid pairs]]
+                                (when (< 1 (count pairs)) [cid (vec (sort (map second pairs)))])))
+                        (group-by first chosen))
+         _        (when (seq twice)
+                    (refuse-node node :dimension-selected-twice
+                                 (str (str/join "; " (for [[cid as] twice]
+                                                       (str (pr-str cid) " is selected as "
+                                                            (str/join " and " (map pr-str as)))))
+                                      ". A model selects one alternative per container.")
+                                 {:selections twice}))
+         sel      (into {} chosen)
+         unselected (vec (sort (remove sel (keys dims))))
+         _        (when (seq unselected)
+                    (refuse-node node :dimension-unselected
+                                 (str "it selects nothing in "
+                                      (str/join ", " (map pr-str unselected))
+                                      ". A model selects one alternative per container.")
+                                 {:containers unselected}))]
+     {:urpx.scenario-cost-model/rate-plan            (zoned-doc find-zone btriple)
+      :urpx.scenario-cost-model/version              bv
+      :urpx.scenario-cost-model/version-id           (:jsonld/id bv)
+      :urpx.scenario-cost-model/plan-id              plan-id
+      :urpx.scenario-cost-model/modifiers            (mapv #(zoned-doc find-zone %) mtriples)
+      :urpx.scenario-cost-model/modifier-versions    mvs
+      :urpx.scenario-cost-model/modifier-version-ids (mapv :jsonld/id mvs)
+      :urpx.scenario-cost-model/selections           sel})))
 
 (defn- bound-opts
   "The opts that bind `model` to its own documents, merged under `opts`.
