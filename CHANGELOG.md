@@ -61,6 +61,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 - **A nested `@graph` was loaded as one untyped node.** `parse-graph` unwrapped only a top-level `@graph`, so upstream `test-cases/pge-e-tou-c` lost its package, plan, version, vintage-PCIA modifier and that modifier's version. It now flattens graph objects at any depth.
 - **A modifier summed a superseded dated Price with the one replacing it.** The modifier path now keeps the latest started Price per cell, as the base path does. With no selection, each `urpx:PriceSetAlternative` is reduced on its own.
+- **A Price stating `urpx:startDateTime` took effect at the start of its plan-zone day.** It now takes effect at that instant, an offset-bearing value at the instant it names, and `price-segments` begins a segment there. A `urpx:startDate` still takes effect at midnight of that day in the plan zone.
 - **A modifier admitted every period's Price where its own `urpx:TOUSchedule` covers no period**, such as `smud:pev-credit` outside 00:00-06:00. There its Prices carrying `urpx:touPeriodNumber` now contribute nothing, and those carrying none still apply.
 - **A modifier's `urpx:TimeBracket` naming a `urpx:Season` only the base plan declares matched nothing**, so every period's Price was admitted. It now resolves that Season through the composition and matches by its months.
 - **`load/scan` reported a by-reference package payload as uncoercible**, as `{:jsonld/type nil}`. The package shell keeps the reference, and the referenced entity loads where it is stated.

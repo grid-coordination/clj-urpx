@@ -241,9 +241,10 @@
 ;; Active-price lookup
 ;; ---------------------------------------------------------------------------
 
-(defn- not-after?
-  [^LocalDate a ^ZonedDateTime q]
-  (not (.isAfter a (.toLocalDate q))))
+(defn- started?
+  "True when `start`, an instant or nil for no start constraint, is not after `q`."
+  [^ZonedDateTime start ^ZonedDateTime q]
+  (or (nil? start) (not (.isAfter start q))))
 
 (defn- price-set-alternative-for
   "Within a PriceSetAlternatives, find the alternative whose
@@ -256,39 +257,16 @@
               psa))
           (:urpx/hasPriceSetAlternative psas))))
 
-(def ^:private undated
-  "Stand-in start date for a Price that states none.
-
-   LocalDate/MIN rather than nil so an undated Price sorts BEHIND any dated
-   one in the latest-wins dedupe: an explicitly dated Price supersedes an
-   undated sibling on the same PriceDefinition, which is the only ordering
-   that reads as intentional."
-  LocalDate/MIN)
-
 (defn- price-start
-  "The date in `zone` from which `price` is in effect, falling back to
-   `container-date` (a PriceSet's) and then to `undated`.
+  "The instant in `zone` from which `price` is in effect, falling back to
+   `container-start` (a PriceSet's). Nil means no start constraint.
 
    urpx:startDateTime is preferred over urpx:startDate when both are stated,
-   mirroring how version-effective-at prefers effectiveDateTime. The schema
-   accepts startDateTime, urpx.emit writes it, and nothing here read it: a
-   filing stating its date that way priced as though it had no date at all.
-
-   ABSENT MEANS NO START CONSTRAINT, not `drop this price`. The four scoping
-   sites used when-let on urpx:startDate and silently discarded anything
-   without one, while the PriceSet gate immediately above them treats a nil
-   date as permissive. Two readings of the same absence, three lines apart,
-   and the discarding one deleted content: a shipped PG&E baseline-tier
-   modifier carries four Prices and no dates at all, resolved to zero ledgers,
-   and composing it with its base plan changed nothing and said nothing.
-   sh:minCount 0 on both PriceShape and PriceSetShape is the vocabulary
-   agreeing that absence is legal rather than defective."
-  ^LocalDate [price ^LocalDate container-date ^ZoneId zone]
-  (or (some-> (or (:urpx/startDateTime price) (:urpx/startDate price))
-              (schema/in-zone zone)
-              (.toLocalDate))
-      container-date
-      undated))
+   mirroring how version-effective-at prefers effectiveDateTime. A startDateTime
+   gates at its instant; a startDate gates from midnight of that day in `zone`."
+  ^ZonedDateTime [price ^ZonedDateTime container-start ^ZoneId zone]
+  (or (schema/in-zone (or (:urpx/startDateTime price) (:urpx/startDate price)) zone)
+      container-start))
 
 (defn- prices-from-alternatives
   "Walk `Prices.hasPriceSetAlternatives`. For each PriceSetAlternatives,
@@ -296,7 +274,7 @@
    ProfileAlternatives in `selection` (a {:jsonld/id of ProfileAlternatives
    → :jsonld/id of chosen ProfileAlternative} map). The matching
    PriceSetAlternative's hasPrice list contributes to the active-prices
-   stream, gated by start-date as usual.
+   stream, gated by its start as usual.
 
    When the caller hasn't supplied a selection for a given
    PriceSetAlternatives, that set is silently skipped — prices for the
@@ -311,19 +289,19 @@
               (when picked
                 (keep (fn [p]
                         (let [sd (price-start p nil (.getZone q))]
-                          (when (not-after? sd q) [p sd])))
+                          (when (started? sd q) [p sd])))
                       (:urpx/hasPrice picked)))))
           (:urpx/hasPriceSetAlternatives prices)))
 
 (defn- scoped-prices
-  "Return a seq of [price effective-start-date] pairs for every Price under
-   `prices` whose effective start-date is <= the date of `q`. Walks the flat
+  "Return a seq of [price start] pairs for every Price under `prices` that
+   has started at `q` (see `price-start`). Walks the flat
    :urpx/hasPrice list, PriceSet-nested prices, and PriceSetAlternatives-
    nested prices when the caller supplies an explicit
    `:profile-alternatives` selection in opts.
 
    Per URPX SHACL, PriceSet.startDate is optional (sh:minCount 0). When the
-   PriceSet carries one it acts as the date floor for any contained Price that
+   PriceSet carries one it acts as the start for any contained Price that
    does not declare its own; when neither states one the Price carries no start
    constraint and is in effect, which is what `price-start` settles."
   [prices ^ZonedDateTime q opts]
@@ -332,14 +310,14 @@
     (concat
      (keep (fn [p]
              (let [sd (price-start p nil zone)]
-               (when (not-after? sd q) [p sd])))
+               (when (started? sd q) [p sd])))
            (:urpx/hasPrice prices))
      (mapcat (fn [ps]
                (let [ps-sd (price-start ps nil zone)]
-                 (when (not-after? ps-sd q)
+                 (when (started? ps-sd q)
                    (keep (fn [p]
-                           (let [sd (price-start p (when-not (= undated ps-sd) ps-sd) zone)]
-                             (when (not-after? sd q) [p sd])))
+                           (let [sd (price-start p ps-sd zone)]
+                             (when (started? sd q) [p sd])))
                          (:urpx/hasPrice ps)))))
              (:urpx/hasPriceSet prices))
      (prices-from-alternatives prices q selection))))
@@ -368,7 +346,7 @@
     (or (nil? n) (nil? resolved-period-num) (= n resolved-period-num))))
 
 (defn- latest-by-pd
-  "Group [price start-date] pairs into a map from PriceDefinition id to a
+  "Group [price start] pairs into a map from PriceDefinition id to a
    vector of pairs, keeping only the latest-starting Price per cell. A cell is
    the composite key `(price-definition-id, serviceTierNumber,
    touPeriodNumber)`, so two distinct concrete patterns coexist without
@@ -378,7 +356,8 @@
        multiple Prices, each carrying its own urpx:serviceTierNumber. Every
        tier's Price surfaces under one PD because the keys differ.
      - Temporal versioning: a single cell with multiple Prices over time. The
-       one with the latest effective start-date wins.
+       one with the latest start wins. An undated Price sorts behind any dated
+       one, so an explicitly dated Price supersedes an undated sibling.
 
    For non-tiered ledgers (one PD, one Price, no serviceTierNumber) the
    vector has a single entry."
@@ -393,8 +372,10 @@
                   (let [k [(get-in price [:urpx/referencesPriceDefinition :jsonld/id])
                            (:urpx/serviceTierNumber price)
                            (:urpx/touPeriodNumber price)]
-                        [_ existing-sd] (acc k)]
-                    (if (or (nil? existing-sd) (.isAfter ^LocalDate sd existing-sd))
+                        [_ existing-sd :as existing] (acc k)]
+                    (if (or (nil? existing)
+                            (and sd (or (nil? existing-sd)
+                                        (.isAfter ^ZonedDateTime sd existing-sd))))
                       (assoc acc k [price sd])
                       acc)))
                 {} pairs)]
@@ -404,7 +385,7 @@
 
 (defn- active-prices-by-pd
   "Build a map from PriceDefinition id to a vector of currently-active
-   [price start-date] pairs, the latest per cell (see `latest-by-pd`)."
+   [price start] pairs, the latest per cell (see `latest-by-pd`)."
   ([prices ^ZonedDateTime q opts] (active-prices-by-pd prices q opts nil))
   ([prices ^ZonedDateTime q opts resolved-period-num]
    (latest-by-pd (filter #(price-active-at-tou? (first %) resolved-period-num)
@@ -412,7 +393,7 @@
 
 (defn- all-prices-from-alternatives
   "Walk Prices.hasPriceSetAlternatives and return the active [price
-   start-date] pairs of EVERY PriceSetAlternative, one seq per alternative:
+   start] pairs of EVERY PriceSetAlternative, one seq per alternative:
    the matrix-modifier surface-all contract (e.g. PG&E Vintage-PCIA's
    per-departure-vintage-year prices). Kept apart because each alternative is
    its own set of cells; its siblings are alternatives to it, not earlier or
@@ -423,12 +404,12 @@
         psa  (:urpx/hasPriceSetAlternative psas)]
     (keep (fn [p]
             (let [sd (price-start p nil (.getZone q))]
-              (when (not-after? sd q) [p sd])))
+              (when (started? sd q) [p sd])))
           (:urpx/hasPrice psa))))
 
 (defn- all-active-prices-by-pd
-  "Build a map from PriceDefinition id to a vector of [price start-date]
-   pairs for every active Price referencing that PD, the latest per cell (see
+  "Build a map from PriceDefinition id to a vector of [price start] pairs
+   for every active Price referencing that PD, the latest per cell (see
    `latest-by-pd`) within the flat and PriceSet prices and within each
    PriceSetAlternative. Used by modifier resolution where matrix-style pricing
    surfaces multiple concurrent prices that the caller selects from. Walks both
