@@ -171,3 +171,19 @@
       (is (true? (report clean)) "a clean file reports true")
       (is (false? (report (assoc clean :findings [{:rule :self-contained-disagrees}])))
           "and a nonconformant one reports false even with no schema error"))))
+
+(deftest check-file-validates-a-scenario-cost-model
+  (let [f (java.io.File/createTempFile "scm" ".jsonld")]
+    (try
+      (spit f fixtures/scenario-cost-model-example)
+      (let [{:keys [checked skipped]} (validate/check-file (.getPath f))]
+        (is (= [{:type "urpx:ScenarioCostModel"
+                 :id "sce:scm-tou-d-prime-care-cca-crs-v2020"
+                 :error nil}]
+               checked))
+        (is (empty? skipped)))
+      (spit f (str/replace fixtures/scenario-cost-model-example
+                           "\"@type\""
+                           "\"urpx:hasCustomerProfile\": {\"@id\": \"sce:cp\"}, \"@type\""))
+      (is (some? (:error (first (:checked (validate/check-file (.getPath f)))))))
+      (finally (.delete f)))))

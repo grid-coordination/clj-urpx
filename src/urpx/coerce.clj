@@ -78,13 +78,19 @@
   [raw]
   (coerce schema/URPXPackage raw))
 
+(defn coerce-scenario-cost-model
+  "Coerce a raw urpx:ScenarioCostModel node into the typed shape described by
+   `urpx.schema/ScenarioCostModel`."
+  [raw]
+  (coerce schema/ScenarioCostModel raw))
+
 (defn coerce-doc
   "Dispatch on the document's :jsonld/type and coerce as a RatePlan,
    RatePlanModifier, wrapper (urpx:URPXDocument in v0.2.x, urpx:URPXPackage
-   from v0.3.0 on), or a top-level version snapshot (urpx:RatePlanVersion /
+   from v0.3.0 on), a top-level version snapshot (urpx:RatePlanVersion /
    urpx:RatePlanModifierVersion, which v0.5.1 documents may carry as siblings
-   of the identity entity rather than nested inside it). Returns nil for
-   unknown types."
+   of the identity entity rather than nested inside it), or a
+   urpx:ScenarioCostModel. Returns nil for unknown types."
   [raw]
   (case (:jsonld/type raw)
     "urpx:RatePlan"         (coerce-rate-plan raw)
@@ -93,6 +99,7 @@
     "urpx:URPXPackage"      (coerce-urpx-package raw)
     "urpx:RatePlanVersion"         (coerce-rate-plan-version raw)
     "urpx:RatePlanModifierVersion" (coerce-rate-plan-modifier-version raw)
+    "urpx:ScenarioCostModel"       (coerce-scenario-cost-model raw)
     nil))
 
 (def ^:private uncoerced-re #"^(\d{2}:\d{2}|\d{4}-\d{2}-\d{2})")

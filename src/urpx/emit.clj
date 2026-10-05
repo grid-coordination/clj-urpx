@@ -3,8 +3,8 @@
 
   Symmetric to the existing parse + coerce path. Given a coerced
   urpx:RatePlan / urpx:RatePlanModifier / urpx:URPXDocument / urpx:URPXPackage
-  (or an EDN map shaped like one with namespaced-keyword keys + already-string
-  values),
+  / urpx:ScenarioCostModel (or an EDN map shaped like one with
+  namespaced-keyword keys + already-string values),
   emit a SHACL-valid JSON-LD string ready to write to disk or send to a
   consumer.
 
@@ -202,12 +202,22 @@
   ([modifier opts]
    (emit-via-schema schema/RatePlanModifier modifier opts)))
 
+(defn write-scenario-cost-model
+  "Serialize a coerced urpx:ScenarioCostModel to a JSON-LD string. Inverse of
+   urpx.coerce/coerce-scenario-cost-model.
+
+   See `write-rate-plan` for `opts`."
+  ([model] (write-scenario-cost-model model nil))
+  ([model opts]
+   (emit-via-schema schema/ScenarioCostModel model opts)))
+
 (def ^:private payload-schemas
   "@type → schema for the payload entities a wrapper can embed under the
    heterogeneous urpx:packages pointer. Entries of any other type (or bare
    @id refs, which carry no @type) are passed through unencoded."
-  {"urpx:RatePlan"         schema/RatePlan
-   "urpx:RatePlanModifier" schema/RatePlanModifier})
+  {"urpx:RatePlan"          schema/RatePlan
+   "urpx:RatePlanModifier"  schema/RatePlanModifier
+   "urpx:ScenarioCostModel" schema/ScenarioCostModel})
 
 (defn- pre-encode-payloads
   "A wrapper's payload-pointer schemas are deliberately loose ([:vector :map])
@@ -257,8 +267,8 @@
   "Serialize a coerced urpx:URPXPackage wrapper to a JSON-LD string. Inverse of
    urpx.coerce/coerce-urpx-package. Embedded urpx:hasRatePlan /
    urpx:hasRatePlanModifier payloads are pre-encoded through their own schemas,
-   as are urpx:packages entries typed urpx:RatePlan or urpx:RatePlanModifier;
-   other urpx:packages entries are emitted as-is.
+   as are urpx:packages entries typed urpx:RatePlan, urpx:RatePlanModifier or
+   urpx:ScenarioCostModel; other urpx:packages entries are emitted as-is.
 
    See `write-rate-plan` for `opts`."
   ([package] (write-urpx-package package nil))

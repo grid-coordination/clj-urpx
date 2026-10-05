@@ -275,3 +275,20 @@
         (let [[original re-coerced] (roundtrip-rate-plan-modifier fixture-name)]
           (is (= original re-coerced)
               (str "RatePlanModifier round-trip failed for fixture " fixture-name)))))))
+
+(deftest the-urpx-72-scenario-cost-model-example-round-trips
+  (let [raw     (core/parse-rate-plan (java.io.StringReader. fixtures/scenario-cost-model-example))
+        model   (coerce/coerce-doc raw)
+        reread  #(-> % java.io.StringReader. core/parse-rate-plan coerce/coerce-doc)]
+    (is (nil? (coerce/explain schema/ScenarioCostModel model)))
+    (is (= [{:jsonld/id "sce:cca-crs-2026-03-20-pa-vintage-2020"}]
+           (:urpx/selectsProfileAlternative model)))
+    (is (= model (reread (emit/write-scenario-cost-model model))))
+    (testing "packaged in a urpx:URPXPackage"
+      (let [pkg {:jsonld/type "urpx:URPXPackage"
+                 :jsonld/id   "x:pkg"
+                 :urpx/targetURPXVersion "https://example.com/urpx-v0.5.1"
+                 :urpx/packages [(dissoc model :jsonld/context)]}
+            back (reread (emit/write-urpx-package pkg {:context nil}))]
+        (is (= pkg back))
+        (is (nil? (coerce/explain schema/URPXPackage back)))))))

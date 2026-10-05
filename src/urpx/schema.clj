@@ -1755,6 +1755,47 @@
    [:urpx/hasRatePlanModifierVersion {:optional true} [:or RatePlanModifierVersion [:vector RatePlanModifierVersion]]]])
 
 ;; ---------------------------------------------------------------------------
+;; Scenario cost models
+;; ---------------------------------------------------------------------------
+
+(defn- at-most-one
+  "A 0..1 object property: one value, bare or as a list of at most one, the
+   two forms urpx.index/single reads."
+  [value-schema]
+  [:or value-schema [:vector {:max 1} value-schema]])
+
+(def ScenarioCostModel
+  "urpx-shacl:ScenarioCostModelShape as amended by urpx-org/urpx#72: sh:closed,
+   with urpx:hasTemporalScope admitted through sh:ignoredProperties.
+
+   :jsonld/context is admitted so a model published as a document of its own
+   validates. urpx:ScenarioCostResult is not modeled, so producesResult stays a
+   loose map."
+  [:map {:closed true}
+   [:jsonld/type [:= "urpx:ScenarioCostModel"]]
+   [:jsonld/id {:optional true} :string]
+   [:jsonld/context {:optional true} Context]
+   [:urpx/name        {:optional true} :string]
+   [:urpx/description {:optional true} :string]
+   [:urpx/forScenario {:optional true} (at-most-one [:or Scenario ExclusiveRef])]
+   [:urpx/hasCoverageClaim
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or CoverageClaim ExclusiveRef]]]
+   [:urpx/consumesVersion
+    {:optional true}
+    (at-most-one [:or RatePlanVersion ExclusiveRef])]
+   [:urpx/consumesModifierVersion
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or RatePlanModifierVersion ExclusiveRef]]]
+   [:urpx/selectsProfileAlternative
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or ProfileAlternative ExclusiveRef]]]
+   [:urpx/producesResult {:optional true} (at-most-one :map)]
+   [:urpx/hasTemporalScope
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or TemporalScope ExclusiveRef]]]])
+
+;; ---------------------------------------------------------------------------
 ;; Top-level wrappers carrying ontology-version metadata
 ;;
 ;; urpx:URPXDocument (v0.2.x) was renamed urpx:URPXPackage in v0.3.0. Both are

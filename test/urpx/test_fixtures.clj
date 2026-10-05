@@ -49,3 +49,21 @@
    why plans worked and modifiers did not."
   [name]
   (coerce/coerce-rate-plan-modifier (core/load-rate-plan-modifier (fixture-path name))))
+
+(def scenario-cost-model-example
+  "The urpx:ScenarioCostModel example in the description of urpx-org/urpx#72,
+   verbatim."
+  "{
+  \"@context\": [
+    \"https://urpx.org/ns/context/releases/v0.5.1/jsonld/urpx-context.jsonld\",
+    { \"sce\": \"https://rate-plans.grid-coordination.energy/sce/\" }
+  ],
+  \"@id\": \"sce:scm-tou-d-prime-care-cca-crs-v2020\",
+  \"@type\": \"urpx:ScenarioCostModel\",
+  \"urpx:consumesVersion\": { \"@id\": \"sce:tou-d-prime-2026-03-20\" },
+  \"urpx:consumesModifierVersion\": [
+    { \"@id\": \"sce:care-2026-03-20\" },
+    { \"@id\": \"sce:cca-crs-2026-03-20\" }
+  ],
+  \"urpx:selectsProfileAlternative\": { \"@id\": \"sce:cca-crs-2026-03-20-pa-vintage-2020\" }
+}")

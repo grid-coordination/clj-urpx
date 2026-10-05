@@ -335,3 +335,6 @@
 (def rate-plan-modifier             (make-builder schema/RatePlanModifier))
 (def urpx-document                  (make-builder schema/URPXDocument))
 (def urpx-package                   (make-builder schema/URPXPackage))
+
+;; Scenario cost model
+(def scenario-cost-model            (make-builder schema/ScenarioCostModel))

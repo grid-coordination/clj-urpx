@@ -997,3 +997,45 @@
           "a single scope arrives as a vector of one")
       (is (= "urpx:coverage" (-> coerced :urpx/hasTemporalScope first
                                  :urpx/scopeKind :jsonld/id))))))
+
+(def ^:private scm-zero-to-n
+  {:urpx/hasCoverageClaim          {:jsonld/type "urpx:CoverageClaim"
+                                    :urpx/completenessResult {:jsonld/id "urpx:partial"}}
+   :urpx/consumesModifierVersion   {:jsonld/id "x:care-v1"}
+   :urpx/selectsProfileAlternative {:jsonld/id "x:vintage-2020"}
+   :urpx/hasTemporalScope          {:jsonld/type "urpx:TemporalScope"
+                                    :urpx/scopeKind {:jsonld/id "urpx:coverage"}}})
+
+(def ^:private scm-base
+  {:jsonld/type "urpx:ScenarioCostModel"
+   :jsonld/id "x:scm"
+   :urpx/consumesVersion {:jsonld/id "x:plan-v1"}})
+
+(deftest scenario-cost-model-decodes-a-bare-value-like-a-list
+  (doseq [[k v] scm-zero-to-n
+          :let [bare (coerce/coerce s/ScenarioCostModel (assoc scm-base k v))
+                listed (coerce/coerce s/ScenarioCostModel (assoc scm-base k [v]))]]
+    (testing (str k)
+      (is (= listed bare))
+      (is (= [v] (get bare k)))
+      (is (nil? (coerce/explain s/ScenarioCostModel bare))))))
+
+(deftest scenario-cost-model-is-closed
+  (let [ok? #(nil? (coerce/explain s/ScenarioCostModel
+                                   (coerce/coerce s/ScenarioCostModel %)))]
+    (is (ok? scm-base))
+    (is (ok? (merge scm-base scm-zero-to-n)))
+    (testing "urpx-org/urpx#72 admits one name and one description"
+      (is (ok? (assoc scm-base :urpx/name "TOU-D-PRIME with CARE"
+                      :urpx/description "Base plan with the CARE discount")))
+      (is (not (ok? (assoc scm-base :urpx/name ["a" "b"]))))
+      (is (not (ok? (assoc scm-base :urpx/name 1)))))
+    (testing "a property of urpx:Scenario is refused here"
+      (is (not (ok? (assoc scm-base :urpx/hasCustomerProfile {:jsonld/id "x:cp"})))))
+    (testing "consumesVersion is at most one, bare or listed"
+      (is (ok? (assoc scm-base :urpx/consumesVersion [{:jsonld/id "x:plan-v1"}])))
+      (is (not (ok? (assoc scm-base :urpx/consumesVersion
+                           [{:jsonld/id "x:plan-v1"} {:jsonld/id "x:plan-v2"}])))))
+    (testing "an inline node of another type is refused in a reference slot"
+      (is (not (ok? (assoc scm-base :urpx/selectsProfileAlternative
+                           {:jsonld/id "x:pa" :jsonld/type "urpx:ProfileAlternatives"})))))))
