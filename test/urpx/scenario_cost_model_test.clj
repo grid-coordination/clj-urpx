@@ -970,6 +970,20 @@
         (is (= :urpx.scenario-cost-model/conflicting-timezone (:reason (ex-data e)))
             "without :at too, since the model must carry one zone to resolve in")))))
 
+(deftest zones-with-the-same-rules-agree-across-nodes
+  (let [[identity version] (un-nest (fixtures/load-rate-plan "sce-d-2026-03-20"))
+        pkg (fn [tz] {:jsonld/id "x:pkg" :jsonld/type "urpx:URPXPackage"
+                      :urpx/timezoneIdentifier tz
+                      :urpx/packages [{:jsonld/id (:jsonld/id version)}]})]
+    (doseq [[nm docs] [["version against plan"
+                        [identity (assoc version :urpx/timezoneIdentifier "US/Pacific")]]
+                       ["package against plan" [identity version (pkg "US/Pacific")]]]]
+      (is (= 0.31085M (rate (first (scm/enumerate docs {:at (at)})))) nm))
+    (let [utc #(assoc % :urpx/timezoneIdentifier "UTC")
+          [a] (scm/enumerate [(utc identity) version (pkg "Etc/UTC")] {:at (at)})]
+      (is (= "UTC" (:urpx/timezoneIdentifier (:urpx.scenario-cost-model/rate-plan a)))
+          "UTC and Etc/UTC"))))
+
 ;; ---------------------------------------------------------------------------
 ;; A version zoned by the package carrying it, through the loader
 ;; ---------------------------------------------------------------------------

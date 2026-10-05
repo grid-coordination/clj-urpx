@@ -150,16 +150,17 @@
      (and (some? claimed) (some? on-ver) (not= claimed on-ver))}))
 
 (defn- zone-for
-  "The zone `version`'s dateTimes written without an offset are read in: `zone`
-   and the urpx:timezoneIdentifier on `version` and on `doc`, which must agree.
-   Nil when none states one.
+  "The zone `version`'s dateTimes written without an offset are read in: the
+   first of the urpx:timezoneIdentifier on `version`, on `doc`, and `zone`.
+   They must have the same rules. Nil when none states one.
 
-   REFUSES `:urpx.coverage/conflicting-timezone` when they name different zones."
+   REFUSES `:urpx.coverage/conflicting-timezone` when their rules differ."
   ^ZoneId [version doc ^ZoneId zone]
-  (let [zones (cond-> (into #{} (comp (keep :urpx/timezoneIdentifier) (map #(ZoneId/of %)))
-                            [version doc])
-                zone (conj zone))]
-    (when (> (count zones) 1)
+  (let [stated (cond-> (into [] (comp (keep :urpx/timezoneIdentifier) (map #(ZoneId/of %)))
+                             [version doc])
+                 zone (conj zone))
+        zones  (set stated)]
+    (when (> (count (into #{} (map #(.getRules ^ZoneId %)) zones)) 1)
       (throw (ex-info (str "Cannot zone the coverage claim on "
                            (pr-str (:jsonld/id version)) ": "
                            (pr-str (sort (map str zones))) " are all stated for it, "
@@ -168,7 +169,7 @@
                       {:reason :urpx.coverage/conflicting-timezone
                        :version-id (:jsonld/id version)
                        :zones (vec (sort (map str zones)))})))
-    (first zones)))
+    (first stated)))
 
 (defn- zoned
   "`v` as a ZonedDateTime in the zone `zone` delivers when it is a
@@ -265,7 +266,7 @@
    or on `doc`. A dateTime written with an offset keeps it.
    When such a dateTime is present, REFUSES `:urpx.coverage/zone-required` if
    no zone is stated, and `:urpx.coverage/conflicting-timezone` if `zone`, the
-   version and `doc` state different ones.
+   version and `doc` state zones whose rules differ.
 
    ABSENT IS NOT UNKNOWN. A version with no claim reports `stated? false` and
    `completeness nil`, never `\"urpx:unknown\"`. urpx:unknown is itself a

@@ -258,10 +258,10 @@
 (defn- refuse-zones
   [v pid declared]
   (throw (ex-info (str "Cannot zone " (pr-str (:jsonld/id v)) ": the nodes it "
-                       "belongs to declare different urpx:timezoneIdentifier "
-                       "values, " (pr-str (vec declared)) ", so its wall-clock "
-                       "bounds name different moments in each and nothing "
-                       "says which is meant.")
+                       "belongs to declare urpx:timezoneIdentifier values "
+                       "with different rules, " (pr-str (vec declared))
+                       ", so its wall-clock bounds name different moments in "
+                       "each and nothing says which is meant.")
                   {:reason     :urpx.scenario-cost-model/conflicting-timezone
                    :version-id (:jsonld/id v)
                    :plan-id    pid
@@ -273,6 +273,13 @@
   (into (sorted-set)
         (keep #(when-let [tz (:urpx/timezoneIdentifier %)] [(:jsonld/id %) tz]))
         nodes))
+
+(defn- zone-rules
+  "The ZoneRules urpx:timezoneIdentifier `tz` names, or `tz` itself when it
+   names none, so it equals no other value's."
+  [tz]
+  (try (.getRules (ZoneId/of tz))
+       (catch java.time.DateTimeException _ tz)))
 
 (defn- same-instant?
   "True if ZonedDateTimes `a` and `b` name one instant, or are both nil. `=`
@@ -293,8 +300,8 @@
 
    `mode` decides what a package zone counts for; see `:package-zones` on
    `enumerate`. Under every mode, the non-package nodes must agree among
-   themselves and the packages must agree among themselves. Values that
-   disagree refuse: the documents state two frames for one set of bounds and
+   themselves and the packages must agree among themselves. Zones whose rules
+   differ refuse: the documents state two frames for one set of bounds and
    nothing says which is meant."
   [documents mode]
   (let [by-id     (group-by :jsonld/id documents)
@@ -314,14 +321,14 @@
             pkg?     #(package-types (:jsonld/type %))
             own      (declared-zones (remove pkg? nodes))
             pkgs     (declared-zones (filter pkg? nodes))
-            zones-of #(into (sorted-set) (map second) %)
             declared (case mode
                        :agree    (into own pkgs)
                        :fallback (if (seq own) own pkgs)
                        :ignore   own)]
         (doseq [d [own pkgs declared]]
-          (when (> (count (zones-of d)) 1) (refuse-zones v pid d)))
-        (some-> (first (zones-of declared)) ZoneId/of)))))
+          (when (> (count (into #{} (map (comp zone-rules second)) d)) 1)
+            (refuse-zones v pid d)))
+        (some-> (first declared) second ZoneId/of)))))
 
 (defn- zone-requirer
   "`find-zone`, refusing `:urpx.price/no-timezone` where it finds nothing."
@@ -755,9 +762,10 @@
                             `:urpx.scenario-cost-model/conflicting-timezone`.
                  :fallback  read only when none of those declares a zone.
                  :ignore    packages contribute no zone.
-               Under every mode, two packages declaring different zones for one
-               version refuse, as do a version and its identity. Any other
-               value refuses `:urpx.scenario-cost-model/unknown-package-zones`.
+               Under every mode, two packages declaring zones with different
+               rules for one version refuse, as do a version and its
+               identity. Any other value refuses
+               `:urpx.scenario-cost-model/unknown-package-zones`.
 
    THE COMBINING POLICY IS THE CALLER'S BECAUSE URPX CANNOT STATE IT. Nothing
    in the ontology expresses exclusivity or combinability between modifiers,

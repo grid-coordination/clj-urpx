@@ -17,7 +17,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 - **An unrecognized `urpx:holidayRule` refuses with `:reason :urpx.holidays/unknown-holiday-rule`, and an unrecognized `urpx:observanceRule` with `:urpx.holidays/unknown-observance-rule`.**
 - **A `urpx:Holiday` carrying neither `urpx:holidayDate` nor `urpx:holidayRule` refuses with `:reason :urpx.holidays/no-date-or-rule`.**
 - **`urpx.schema/Holiday` closes `urpx:observanceRule` to the `urpx:ObservanceRuleValue` members through the new `urpx.schema/ObservanceRule`**, so the validate CLI and `coerce/validate` reject any other IRI.
-- **`coverage/of-version` returns `:evaluated-on` and the coverage window's `urpx:startDateTime` and `urpx:endDateTime` as `ZonedDateTime`.** One written without an offset is read in the zone given as its new optional third argument, else the `urpx:timezoneIdentifier` on the version or on its document. With none it refuses `:urpx.coverage/zone-required`; with two that differ, `:urpx.coverage/conflicting-timezone`. `coverage/of-model` reads each part in the zone on its model document.
+- **`coverage/of-version` returns `:evaluated-on` and the coverage window's `urpx:startDateTime` and `urpx:endDateTime` as `ZonedDateTime`.** One written without an offset is read in the zone given as its new optional third argument, else the `urpx:timezoneIdentifier` on the version or on its document. With none it refuses `:urpx.coverage/zone-required`; with two whose rules differ, `:urpx.coverage/conflicting-timezone`. Zones with the same rules, such as `UTC`, `Etc/UTC` and `ZoneOffset/UTC`, agree, and the version's zone is used, else the document's, else the given one. `coverage/of-model` reads each part in the zone on its model document.
 
 ### Added
 
@@ -35,6 +35,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 - **A `urpx:PriceSummary` whose members in effect shared the lowest tier number of a block-tier ladder summed one of them, chosen arbitrarily.** A Price derived from it is now unvaluable with `:summary-ambiguous-tier`, and its detail names the members, as `marginal-unit-rate` refuses `:ambiguous-marginal-tier` for a ledger.
 - **`clojure -M:validate` and `urpx.validate/check-file` schema-checked a `urpx:URPXPackage` or `urpx:URPXDocument` wrapper's payloads but not the wrapper.** The wrapper is now checked against its own schema too, so a package missing `urpx:targetURPXVersion` fails, and `:checked` lists it.
 - **An xsd:date whose schema is `urpx.schema/Date` inside a `:maybe`, `:or`, `:orn`, `:and` or `:ref`, or named by a registry key, lost its written offset on emit.** `urpx.coerce/coerce` now keeps it in `:urpx.schema/date-offsets` and `urpx.coerce/encode` writes it back, as for a direct `Date` entry.
+- **`urpx.scenario-cost-model` compared the zones declared for one version as identifiers**, so `UTC` and `Etc/UTC`, or `America/Los_Angeles` and `US/Pacific`, refused as `:urpx.scenario-cost-model/conflicting-timezone`. Zones with the same rules now agree, and the model is zoned by the declaration with the lowest `@id`.
 
 ## [0.36.0] — 2026-10-05
 

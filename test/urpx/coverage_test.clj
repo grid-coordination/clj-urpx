@@ -600,6 +600,24 @@
             (cov/of-version (version {:urpx/completenessResult {:jsonld/id "urpx:partial"}})
                             (plan-doc "America/Los_Angeles") java.time.ZoneOffset/UTC))))))
 
+(deftest zones-with-the-same-rules-agree
+  (doseq [[nm f stated] [["caller ZoneOffset/UTC and document UTC"
+                          #(cov/of-version (evaluated nil) (plan-doc "UTC")
+                                           java.time.ZoneOffset/UTC)
+                          "UTC"]
+                         ["version Etc/UTC and document UTC"
+                          #(cov/of-version (evaluated {:urpx/timezoneIdentifier "Etc/UTC"})
+                                           (plan-doc "UTC"))
+                          "Etc/UTC"]
+                         ["version US/Pacific and document America/Los_Angeles"
+                          #(cov/of-version (evaluated {:urpx/timezoneIdentifier "US/Pacific"})
+                                           (plan-doc "America/Los_Angeles") la)
+                          "US/Pacific"]]]
+    (let [^java.time.ZonedDateTime on (-> (f) :urpx.coverage/evaluations first :evaluated-on)]
+      (is (= (.toLocalDateTime (zdt 2026 5 1)) (.toLocalDateTime on)) nm)
+      (is (= (java.time.ZoneId/of stated) (.getZone on))
+          (str nm ": read in the version's zone, else the document's")))))
+
 (deftest a-model-part-is-zoned-by-its-own-document
   (let [mv    (assoc (evaluated nil) :jsonld/id "x:m-v"
                      :jsonld/type "urpx:RatePlanModifierVersion")
