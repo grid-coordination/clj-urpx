@@ -610,6 +610,7 @@ Enumeration answers a question about a whole corpus, so a corpus that does not d
 | `:urpx.scenario-cost-model/conflicting-version-id` | one version `@id` names two snapshots that differ. An `@id` identifies a thing, so this is a contradiction, and every offending `@id` is named at once |
 | `:urpx.scenario-cost-model/ambiguous-version` | two distinct snapshots of one identity share the latest effective instant, the same input `urpx.price` refuses with `:ambiguous-version` |
 | `:urpx.scenario-cost-model/conflicting-timezone` | the nodes a version belongs to (the version, its plan or modifier, the document it came from, a `urpx:URPXPackage` naming any of them) declare different `urpx:timezoneIdentifier` values. One value, or several that agree, is the zone the model resolves in. `:package-zones` decides what a package's value counts for |
+| `:urpx.scenario-cost-model/shared-alternative` | one `urpx:ProfileAlternative` is listed by two containers across one composition's versions. A selection names the alternative alone, so its container must follow from it. Every offending alternative is named at once |
 
 Publishing one `@id` twice with byte-identical content is *not* refused: that is one version appearing in two filings, and it is deduplicated.
 

@@ -109,7 +109,7 @@
              (scm/identity-tuple
               (first (filter #(= ["sce:care-2026-03-20"]
                                  (:urpx.scenario-cost-model/modifier-version-ids %)) as))))
-          "base version, sorted modifier versions, sorted selections"))))
+          "base version, sorted modifier versions, sorted alternatives"))))
 
 (deftest currency-drops-superseded-versions
   (testing "a superseded version is not a scenario cost model: nobody takes
@@ -488,6 +488,67 @@
           "and the same modifier set, so the id has nothing else to go on")
       (is (= 3 (count (distinct ids)))
           "three distinct ids, which holds only if selections are in the id"))))
+
+(defn- containers
+  "A urpx:PlanElements carrying one urpx:ProfileAlternatives per entry of
+   `cells`, a map of container @id to its alternative @ids."
+  [cells]
+  {:urpx/hasPlanElements
+   {:jsonld/type "urpx:PlanElements"
+    :urpx/hasProfileAlternatives
+    (vec (for [[cid alts] cells]
+           {:jsonld/id cid :jsonld/type "urpx:ProfileAlternatives"
+            :urpx/hasProfileAlternative
+            (mapv (fn [a] {:jsonld/id a :jsonld/type "urpx:ProfileAlternative"}) alts)}))}})
+
+(deftest identity-tuple-names-alternatives-sorted-by-their-own-iris
+  (testing "the tuple is the three values a urpx:ScenarioCostModel carries:
+            consumesVersion, consumesModifierVersion and
+            selectsProfileAlternative. The last names alternatives without
+            their containers, so the tuple sorts the alternatives themselves.
+            Here container order and alternative order disagree."
+    (let [plan (plan-doc "x:p" "x:p-v1" (ldt 2026 1 1)
+                         (containers {"x:c1" ["x:z1" "x:z2"]}))
+          m    (modifier-doc "x:m" "x:m-v" (ldt 2026 1 1)
+                             (merge {:urpx/applicableToRatePlan [{:jsonld/id "x:p"}]}
+                                    (containers {"x:c2" ["x:a1"]})))
+          as   (scm/enumerate [plan m])]
+      (is (= [["x:p-v1" []        ["x:z1"]]
+              ["x:p-v1" []        ["x:z2"]]
+              ["x:p-v1" ["x:m-v"] ["x:a1" "x:z1"]]
+              ["x:p-v1" ["x:m-v"] ["x:a1" "x:z2"]]]
+             (mapv scm/identity-tuple as))
+          "base version, sorted modifier versions, sorted alternatives, and
+           enumerate returns the models in tuple order")
+      (is (= {"x:c1" "x:z1" "x:c2" "x:a1"}
+             (:urpx.scenario-cost-model/selections (nth as 2)))
+          "the selections keep each alternative's container"))))
+
+(deftest an-alternative-listed-by-two-containers-is-refused
+  (testing "a selection names the alternative alone, so an alternative two
+            containers list has no single container to price under.
+            urpx-rate-plans refuses the same case."
+    (let [plan (plan-doc "x:p" "x:p-v1" (ldt 2026 1 1)
+                         (containers {"x:c1" ["x:a" "x:shared"]}))
+          m    (modifier-doc "x:m" "x:m-v" (ldt 2026 1 1)
+                             (merge {:urpx/applicableToRatePlan [{:jsonld/id "x:p"}]}
+                                    (containers {"x:c2" ["x:shared"]})))
+          e    (is (thrown? clojure.lang.ExceptionInfo (scm/enumerate [plan m])))]
+      (is (= {:reason       :urpx.scenario-cost-model/shared-alternative
+              :alternatives {"x:shared" ["x:c1" "x:c2"]}}
+             (ex-data e))
+          "naming the alternative and both containers")
+      (is (= 2 (count (scm/enumerate [plan m] {:combine (constantly [[]])})))
+          "the base version alone lists it once, so a policy that never
+           composes the modifier enumerates")
+      (let [m2 (modifier-doc "x:m2" "x:m2-v" (ldt 2026 1 1)
+                             (merge {:urpx/applicableToRatePlan [{:jsonld/id "x:p"}]}
+                                    (containers {"x:c3" ["x:shared"]})))]
+        (is (= {"x:shared" ["x:c1" "x:c2" "x:c3"]}
+               (:alternatives (ex-data (is (thrown? clojure.lang.ExceptionInfo
+                                                    (scm/enumerate [plan m m2]))))))
+            "each composition shares it with a different container, and
+             every container that lists it is named")))))
 
 
 ;; ---------------------------------------------------------------------------

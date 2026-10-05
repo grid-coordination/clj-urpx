@@ -544,6 +544,35 @@
               :when (seq alts)]
           [cid alts])))
 
+(defn- refuse-shared-alternatives!
+  "Refuse when one urpx:ProfileAlternative @id is listed by two containers
+   across the versions of any composition in `dimss`, a seq of
+   `open-dimensions` results.
+
+   The identity tuple and urpx:selectsProfileAlternative name the alternative
+   alone, so its container must be recoverable from it. Every offender is
+   named in one refusal."
+  [dimss]
+  (let [shared (->> (for [dims dimss
+                          :let [by-alt (reduce (fn [m [cid alts]]
+                                                 (reduce #(update %1 %2 (fnil conj (sorted-set)) cid)
+                                                         m alts))
+                                               {} dims)]
+                          [a cids] by-alt
+                          :when (< 1 (count cids))]
+                      {a cids})
+                    (apply merge-with into (sorted-map))
+                    (into (sorted-map) (map (fn [[a cids]] [a (vec cids)]))))]
+    (when (seq shared)
+      (throw (ex-info (str "Cannot enumerate: "
+                           (str/join "; " (for [[a cids] shared]
+                                            (str (pr-str a) " is listed by "
+                                                 (str/join " and " (map pr-str cids)))))
+                           ". A selection names the alternative alone, so each alternative "
+                           "must belong to one container.")
+                      {:reason :urpx.scenario-cost-model/shared-alternative
+                       :alternatives shared})))))
+
 (defn- selection-combinations
   "Every way of choosing one alternative per open dimension. One combination
    when nothing is open, which is the model itself rather than none."
@@ -572,7 +601,7 @@
                       (mapcat #(versions-in % "urpx:RatePlanVersion") documents)}
                      repeated (get "urpx:RatePlanVersion"))]
      (->> (current-versions triples t (zone-requirer
-                                        (zone-finder documents (package-zone-mode opts))))
+                                       (zone-finder documents (package-zone-mode opts))))
           vals
           (mapcat #(map second %))
           (sort-by :jsonld/id)
@@ -629,7 +658,7 @@
                       (mapcat #(versions-in % "urpx:RatePlanModifierVersion") documents)}
                      repeated (get "urpx:RatePlanModifierVersion"))]
      (->> (current-versions triples t (zone-requirer
-                                        (zone-finder documents (package-zone-mode opts))))
+                                       (zone-finder documents (package-zone-mode opts))))
           vals
           (mapcat #(map second %))
           (filter #(compat % base-version plan-id))
@@ -673,7 +702,11 @@
 (defn identity-tuple
   "The intrinsic identity of `model`:
 
-     [base-version-iri [modifier-version-iris sorted] [[container alternative] sorted]]
+     [base-version-iri [modifier-version-iris sorted] [alternative-iris sorted]]
+
+   The values of urpx:consumesVersion, urpx:consumesModifierVersion and
+   urpx:selectsProfileAlternative on the urpx:ScenarioCostModel it describes.
+   Each alternative's container is in the model's selections.
 
    Computable from the documents alone, stable across regeneration, external
    nothing. Two models are the same when this matches and different
@@ -683,7 +716,7 @@
   [model]
   [(:urpx.scenario-cost-model/version-id model)
    (vec (sort (:urpx.scenario-cost-model/modifier-version-ids model)))
-   (vec (sort-by first (:urpx.scenario-cost-model/selections model)))])
+   (vec (sort (vals (:urpx.scenario-cost-model/selections model))))])
 
 (defn enumerate
   "Every scenario cost model `documents` expresses, as a vector.
@@ -743,6 +776,9 @@
      modifier-version-ids their @ids
      selections           {container-@id alternative-@id}
 
+   A urpx:ProfileAlternative listed by two containers across one
+   composition's versions refuses `:urpx.scenario-cost-model/shared-alternative`.
+
    Deterministic: sorted by `identity-tuple`, so regenerating the same
    documents gives the same order. Nothing here consults wall-clock time."
   ([documents] (enumerate documents nil))
@@ -759,31 +795,38 @@
          find-zone  (zone-finder documents (package-zone-mode opts))
          zone-of    (zone-requirer find-zone)
          live-plans (current-versions (get merged "urpx:RatePlanVersion") t zone-of)
-         live-mods  (current-versions (get merged "urpx:RatePlanModifierVersion") t zone-of)]
-     ;; Base version and modifier versions are carried as [id version doc]
-     ;; triples the whole way, so the document attached to a model is
-     ;; the one the snapshot was read out of rather than one looked up by @id.
-     (->> (for [[plan-id bvs] live-plans
-                [_ bv _ :as btriple] bvs
-                :let [ctriples (vec (sort-by #(:jsonld/id (second %))
-                                             (for [[_ cands] live-mods
-                                                   [_ mv _ :as tr] cands
-                                                   :when (compat mv bv plan-id)]
-                                               tr)))
-                      ;; `combine` is a CALLER-SUPPLIED policy and sees version
-                      ;; nodes, never the [id version doc] triples this
-                      ;; namespace carries internally. Mapping the chosen nodes
-                      ;; back to their triples is by NODE, not by @id: by @id is
-                      ;; the lookup that bound 641 modifier snapshots to the
-                      ;; wrong document. Nodes are distinct within this list -
-                      ;; the :repeated-ids policy has already refused or
-                      ;; merged one @id naming two different nodes, and
-                      ;; deduplicated exact repeats, so the map is total.
-                      by-node (into {} (map (fn [tr] [(second tr) tr])) ctriples)]
-                mvs (combine (mapv second ctriples))
-                :let [mvs      (vec (sort-by :jsonld/id mvs))
-                      mtriples (mapv by-node mvs)
-                      dims     (open-dimensions (cons bv mvs))]
+         live-mods  (current-versions (get merged "urpx:RatePlanModifierVersion") t zone-of)
+         ;; Base version and modifier versions are carried as [id version doc]
+         ;; triples the whole way, so the document attached to a model is
+         ;; the one the snapshot was read out of rather than one looked up by @id.
+         compositions
+         (vec (for [[plan-id bvs] live-plans
+                    [_ bv _ :as btriple] bvs
+                    :let [ctriples (vec (sort-by #(:jsonld/id (second %))
+                                                 (for [[_ cands] live-mods
+                                                       [_ mv _ :as tr] cands
+                                                       :when (compat mv bv plan-id)]
+                                                   tr)))
+                          ;; `combine` is a CALLER-SUPPLIED policy and sees version
+                          ;; nodes, never the [id version doc] triples this
+                          ;; namespace carries internally. Mapping the chosen nodes
+                          ;; back to their triples is by NODE, not by @id: by @id is
+                          ;; the lookup that bound 641 modifier snapshots to the
+                          ;; wrong document. Nodes are distinct within this list -
+                          ;; the :repeated-ids policy has already refused or
+                          ;; merged one @id naming two different nodes, and
+                          ;; deduplicated exact repeats, so the map is total.
+                          by-node (into {} (map (fn [tr] [(second tr) tr])) ctriples)]
+                    mvs (combine (mapv second ctriples))
+                    :let [mvs (vec (sort-by :jsonld/id mvs))]]
+                {:plan-id  plan-id
+                 :btriple  btriple
+                 :mvs      mvs
+                 :mtriples (mapv by-node mvs)
+                 :dims     (open-dimensions (cons bv mvs))}))]
+     (refuse-shared-alternatives! (map :dims compositions))
+     (->> (for [{:keys [plan-id btriple mvs mtriples dims]} compositions
+                :let [bv (second btriple)]
                 sel (selection-combinations dims)]
             {:urpx.scenario-cost-model/rate-plan            (zoned-doc find-zone btriple)
              :urpx.scenario-cost-model/version              bv
