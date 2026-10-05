@@ -746,10 +746,10 @@ Nothing guarantees a discarded type is never a version. `scan` does the same wor
 
 ```bash
 clojure -M:dev:corpus -m corpus-sweep <path-to-urpx> --layout urpx-upstream
-clojure -M:dev:corpus -m corpus-sweep <path-to-corpus> --layout <path-to-corpus>/corpus.json
+clojure -M:dev:corpus -m corpus-sweep <path-to-corpus-or-git-url> [rev]
 ```
 
-`--layout` takes a `corpus.json`, a directory holding one, or a namespace, which it requires from the classpath and calls `<ns>/sources`; a walker for another corpus can live with that corpus, and [corpus/README.md](corpus/README.md) shows how to add one with `-Sdeps`.
+With no `--layout`, `corpus-sweep` reads the `corpus.json` at the corpus root, else globs `**/*.jsonld`. `--layout` takes a `corpus.json`, a directory holding one, or a namespace, which it requires from the classpath and calls `<ns>/sources`; a walker for another corpus can live with that corpus, and [corpus/README.md](corpus/README.md) shows how to add one with `-Sdeps`.
 
 A walker exists because a glob looks equivalent to a walk and is not. Over a URPX checkout older than upstream `ebde5871`, a naive `**/*.jsonld` **crashes**, because `dev-docs/samples` carried an instant written `2026-01-01T06:00:00Z` that coercion refuses, and the error names no file. Those samples moved to urpx-org/urpx-dev at `ebde5871`.
 

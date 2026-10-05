@@ -45,8 +45,10 @@
                    :main-opts ["-m" "nrepl.cmdline"
                                "--middleware" "[cider.nrepl/cider-middleware]"]}
 
-           ;; corpus/ for its walker tests.
-           :test {:extra-paths ["test" "test/resources" "corpus"]
+           ;; corpus/ and dev/ for the walker and corpus-sweep tests.
+           :test {:extra-paths ["test" "test/resources" "corpus" "dev"]
                   :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}
-                               com.networknt/json-schema-validator {:mvn/version "1.5.7"}}
+                               com.networknt/json-schema-validator {:mvn/version "1.5.7"}
+                               babashka/fs {:mvn/version "0.5.22"}
+                               org.clojure/tools.gitlibs {:mvn/version "2.5.197"}}
                   :main-opts ["-m" "kaocha.runner" "--config-file" "tests.edn"]}}}

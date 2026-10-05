@@ -8,7 +8,7 @@
   filesystem dependency, so walking a tree is the caller's job. This is what
   that job looks like.
 
-      clojure -M:dev -m corpus-sweep <locator> [rev]
+      clojure -M:dev:corpus -m corpus-sweep <locator> [rev]
 
   NO CORPUS IS NAMED HERE. `locator` is either a filesystem path or a git URL,
   and there is no default: this library reads a standard, so privileging one
@@ -17,8 +17,8 @@
   caches under ~/.gitlibs and writes nothing into this repo: a corpus is
   something this library is pointed at, never something it vendors or tracks.
 
-      clojure -M:dev -m corpus-sweep ../some-corpus
-      clojure -M:dev -m corpus-sweep git@github.com:org/some-corpus.git main
+      clojure -M:dev:corpus -m corpus-sweep ../some-corpus
+      clojure -M:dev:corpus -m corpus-sweep git@github.com:org/some-corpus.git main
 
   A GIT URL IS CITABLE AND A WORKING TREE IS NOT, but that does not make the
   pinned number the right one: a clone may be legitimately newer than its
@@ -99,6 +99,12 @@
                       (when (pos? dirty) (str " " dirty " uncommitted change(s);"))
                       " the remote does not have what was measured")))))
 
+(defn own-layout
+  "The corpus.json at `root`, or nil."
+  [root]
+  (let [f (io/file root "corpus.json")]
+    (when (.isFile f) f)))
+
 (defn load-corpus
   "Every coerced RatePlan and RatePlanModifier under `root`, and whatever was
    discarded getting there.
@@ -109,24 +115,26 @@
    job and turning what it finds into documents is the library's.
 
    `layout` is a corpus.json, a directory holding one, or a walker namespace
-   providing `sources`."
+   providing `sources`. With none, it is the root's own corpus.json, and with
+   neither, every **/*.jsonld."
   ([root] (load-corpus root nil))
   ([root layout]
-   (load/scan
-    ;; A layout knows what a glob cannot: which subtrees hold filings and
-    ;; which hold something else. See corpus/README.md.
-    (cond
-      (nil? layout)
-      (map fs/file (fs/glob root "**/*.jsonld"))
+   (let [layout (or layout (own-layout root))]
+     (load/scan
+      ;; A layout knows what a glob cannot: which subtrees hold filings and
+      ;; which hold something else. See corpus/README.md.
+      (cond
+        (nil? layout)
+        (map fs/file (fs/glob root "**/*.jsonld"))
 
-      (fs/exists? layout)
-      ((requiring-resolve 'corpus-json/sources)
-       root ((requiring-resolve 'corpus-json/read-layout) layout))
+        (fs/exists? layout)
+        ((requiring-resolve 'corpus-json/sources)
+         root ((requiring-resolve 'corpus-json/read-layout) layout))
 
-      :else
-      (let [ns-sym (symbol layout)]
-        (require ns-sym)
-        ((resolve (symbol layout "sources")) root))))))
+        :else
+        (let [ns-sym (symbol layout)]
+          (require ns-sym)
+          ((resolve (symbol layout "sources")) root)))))))
 
 (defn coverage-census
   "What the corpus claims about its own coverage, counted.
@@ -166,14 +174,15 @@
   (when-not locator
     (binding [*out* *err*]
       (println "REFUSED: no corpus given. Pass a path or a git URL:")
-      (println "  clojure -M:dev -m corpus-sweep ../some-corpus")
-      (println "  clojure -M:dev -m corpus-sweep git@github.com:org/some-corpus.git [rev]"))
+      (println "  clojure -M:dev:corpus -m corpus-sweep ../some-corpus")
+      (println "  clojure -M:dev:corpus -m corpus-sweep git@github.com:org/some-corpus.git [rev]"))
     (System/exit 2))
   (let [layout      (second (drop-while #(not= "--layout" %) (cons rev more)))
         rev         (when (and rev (not= "--layout" rev)) rev)
         [root prov] (corpus-root locator (or rev "main"))
+        layout      (or layout (own-layout root))
         scanned     (load-corpus root layout)
-        _           (println "layout          :" (or layout "(naive glob of **/*.jsonld)"))
+        _           (println "layout          :" (or (some-> layout str) "(naive glob of **/*.jsonld)"))
         docs        (:urpx.load/documents scanned)
         dropped     (:urpx.load/uncoercible scanned)
         _           (println "corpus          :" (provenance-line root prov))

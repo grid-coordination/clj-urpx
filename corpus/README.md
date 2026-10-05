@@ -20,10 +20,11 @@ Globbing every `.jsonld` under a corpus root looks equivalent and is not. In a U
 
 ## A corpus.json
 
-A corpus that ships a `corpus.json` needs no Clojure walker. Pass it, or the directory holding it, to `--layout`:
+A corpus that ships a `corpus.json` at its root needs no Clojure walker and no `--layout`: `corpus-sweep` reads it, whether the corpus is a path or a git URL. A `corpus.json` kept elsewhere, or the directory holding one, goes to `--layout`:
 
 ```bash
-clojure -M:dev:corpus -m corpus-sweep <path-to-corpus> --layout <path-to-corpus>/corpus.json
+clojure -M:dev:corpus -m corpus-sweep <path-to-corpus>
+clojure -M:dev:corpus -m corpus-sweep <git-url-of-corpus> [rev]
 clojure -M:dev:corpus -m corpus-sweep <path-to-urpx> --layout corpus/urpx.corpus.json
 ```
 
