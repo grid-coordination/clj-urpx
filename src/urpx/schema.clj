@@ -161,7 +161,8 @@
 (def date-offsets-decoder
   "A `:map` decoder that keeps the offset written on each xsd:date the map
    holds, in the map's metadata under `:urpx.schema/date-offsets` as
-   `{property offset}`, the offset exactly as written (\"Z\", \"-08:00\").
+   `{property {:date LocalDate :offset offset}}`, the offset exactly as
+   written (\"Z\", \"-08:00\").
    A LocalDate cannot carry metadata, so the map holding it does. Map equality
    ignores metadata, so a date written with or without an offset compares
    equal."
@@ -176,12 +177,13 @@
               (let [written (for [k ks
                                   :let [v (literal-value (get x k))]
                                   :when (string? v)]
-                              [k (second (re-find offset-suffix v))])]
+                              [k (when-let [[_ off] (re-find offset-suffix v)]
+                                   {:date (->date v) :offset off})])]
                 (if (empty? written)
                   x
                   (vary-meta x (fn [md]
-                                 (let [offs (reduce (fn [acc [k off]]
-                                                      (if off (assoc acc k off) (dissoc acc k)))
+                                 (let [offs (reduce (fn [acc [k rec]]
+                                                      (if rec (assoc acc k rec) (dissoc acc k)))
                                                     (::date-offsets md)
                                                     written)]
                                    (if (seq offs)
@@ -190,7 +192,8 @@
 
 (def date-offsets-encoder
   "A `:map` encoder that writes each xsd:date back with the offset
-   `date-offsets-decoder` kept for it."
+   `date-offsets-decoder` kept for it, while the map still holds the date
+   that offset was written on."
   {:compile
    (fn [schema _]
      (let [ks (date-keys schema)]
@@ -198,10 +201,10 @@
          {:enter
           (fn [x]
             (if-let [offs (and (map? x) (::date-offsets (meta x)))]
-              (reduce-kv (fn [acc k off]
+              (reduce-kv (fn [acc k {:keys [date offset]}]
                            (let [d (get acc k)]
-                             (if (and (contains? ks k) (instance? LocalDate d))
-                               (assoc acc k (str d off))
+                             (if (and (contains? ks k) (instance? LocalDate d) (= date d))
+                               (assoc acc k (str d offset))
                                acc)))
                          x offs)
               x))})))})

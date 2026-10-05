@@ -132,7 +132,7 @@
         without (coerce/coerce-rate-plan (parse-json (plan-json "")))]
     (is (coerce/validate schema/RatePlan with))
     (is (= (LocalDate/of 2026 3 1) (:urpx/effectiveDate (version-of with))))
-    (is (= {:urpx/effectiveDate "-08:00"}
+    (is (= {:urpx/effectiveDate {:date (LocalDate/of 2026 3 1) :offset "-08:00"}}
            (:urpx.schema/date-offsets (meta (version-of with)))))
     (testing "a map whose dates carry no offset keeps none"
       (is (nil? (:urpx.schema/date-offsets (meta with))))
@@ -153,6 +153,18 @@
         (let [again (coerce/coerce-rate-plan (parse-json emitted))]
           (is (= plan again))
           (is (= (meta (version-of plan)) (meta (version-of again)))))))))
+
+(deftest a-replaced-date-emits-without-the-old-offset
+  (let [pkg     (coerce/coerce-urpx-package
+                 (parse-json "{\"@type\": \"urpx:URPXPackage\",
+                               \"urpx:targetURPXVersion\": \"0.5.1\",
+                               \"urpx:dateCreated\": \"2026-03-01-08:00\"}"))
+        written (fn [p] (get (json/read-str (emit/write-urpx-package p {:context nil}))
+                             "urpx:dateCreated"))]
+    (is (= "2027-01-01" (written (assoc pkg :urpx/dateCreated (LocalDate/of 2027 1 1)))))
+    (testing "the same date assoc'd back keeps its offset"
+      (is (= "2026-03-01-08:00"
+             (written (assoc pkg :urpx/dateCreated (LocalDate/of 2026 3 1))))))))
 
 (deftest a-package-date-emits-exactly-as-written
   (let [pkg (coerce/coerce-urpx-package
