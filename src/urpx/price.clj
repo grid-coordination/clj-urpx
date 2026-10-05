@@ -324,87 +324,90 @@
   (let [n (:urpx/touPeriodNumber price)]
     (or (nil? n) (nil? resolved-period-num) (= n resolved-period-num))))
 
-(defn- active-prices-by-pd
-  "Build a map from PriceDefinition id to a vector of currently-active
-   [price start-date] pairs. Within each PD, prices are deduped by the
-   composite key `(price-definition-id, serviceTierNumber)` so that two
-   distinct concrete patterns coexist without conflict:
+(defn- latest-by-pd
+  "Group [price start-date] pairs into a map from PriceDefinition id to a
+   vector of pairs, keeping only the latest-starting Price per cell. A cell is
+   the composite key `(price-definition-id, serviceTierNumber,
+   touPeriodNumber)`, so two distinct concrete patterns coexist without
+   conflict:
 
      - Tier-stratified pricing (PG&E E-1 CIA): one PriceDefinition with
        multiple Prices, each carrying its own urpx:serviceTierNumber. Every
        tier's Price surfaces under one PD because the keys differ.
-     - Temporal versioning: a single (PD, serviceTierNumber) key with
-       multiple Prices over time — the one with the latest effective
-       start-date wins.
+     - Temporal versioning: a single cell with multiple Prices over time. The
+       one with the latest effective start-date wins.
 
    For non-tiered ledgers (one PD, one Price, no serviceTierNumber) the
-   returned vector has a single entry."
-  ([prices ^ZonedDateTime q opts] (active-prices-by-pd prices q opts nil))
-  ([prices ^ZonedDateTime q opts resolved-period-num]
-   (let [latest-per-key
-         (reduce (fn [acc [price sd]]
+   vector has a single entry."
+  [pairs]
+  (let [latest-per-key
+        (reduce (fn [acc [price sd]]
                   ;; Keyed on the TOU period too. Without it, six TOU variants
                   ;; of one charge sharing a PriceDefinition collide and five
-                  ;; are discarded; the Price-level gate above removes the
+                  ;; are discarded; the Price-level gate removes the
                   ;; non-matching ones first, and this keeps them separable if
                   ;; there is no resolved period to gate against.
-                   (let [k [(get-in price [:urpx/referencesPriceDefinition :jsonld/id])
-                            (:urpx/serviceTierNumber price)
-                            (:urpx/touPeriodNumber price)]
-                         [_ existing-sd] (acc k)]
-                     (if (or (nil? existing-sd) (.isAfter sd existing-sd))
-                       (assoc acc k [price sd])
-                       acc)))
-                 {} (filter #(price-active-at-tou? (first %) resolved-period-num)
-                            (scoped-prices prices q opts)))]
-     (reduce-kv (fn [acc [pd-id _ _] pair]
-                  (update acc pd-id (fnil conj []) pair))
-                {} latest-per-key))))
+                  (let [k [(get-in price [:urpx/referencesPriceDefinition :jsonld/id])
+                           (:urpx/serviceTierNumber price)
+                           (:urpx/touPeriodNumber price)]
+                        [_ existing-sd] (acc k)]
+                    (if (or (nil? existing-sd) (.isAfter ^LocalDate sd existing-sd))
+                      (assoc acc k [price sd])
+                      acc)))
+                {} pairs)]
+    (reduce-kv (fn [acc [pd-id _ _] pair]
+                 (update acc pd-id (fnil conj []) pair))
+               {} latest-per-key)))
+
+(defn- active-prices-by-pd
+  "Build a map from PriceDefinition id to a vector of currently-active
+   [price start-date] pairs, the latest per cell (see `latest-by-pd`)."
+  ([prices ^ZonedDateTime q opts] (active-prices-by-pd prices q opts nil))
+  ([prices ^ZonedDateTime q opts resolved-period-num]
+   (latest-by-pd (filter #(price-active-at-tou? (first %) resolved-period-num)
+                         (scoped-prices prices q opts)))))
 
 (defn- all-prices-from-alternatives
-  "Walk Prices.hasPriceSetAlternatives and return [price start-date] pairs
-   for EVERY active Price across EVERY PriceSetAlternative — the matrix-
-   modifier surface-all contract (e.g. PG&E Vintage-PCIA's per-departure-
-   vintage-year prices). Distinct from `prices-from-alternatives`, which
-   only surfaces the caller-selected alternative for the base RatePlan
-   resolution path."
+  "Walk Prices.hasPriceSetAlternatives and return the active [price
+   start-date] pairs of EVERY PriceSetAlternative, one seq per alternative:
+   the matrix-modifier surface-all contract (e.g. PG&E Vintage-PCIA's
+   per-departure-vintage-year prices). Kept apart because each alternative is
+   its own set of cells; its siblings are alternatives to it, not earlier or
+   later versions of it. Distinct from `prices-from-alternatives`, which only
+   surfaces the caller-selected alternative."
   [prices ^ZonedDateTime q]
-  (mapcat (fn [psas]
-            (mapcat (fn [psa]
-                      (keep (fn [p]
-                              (let [sd (price-start p nil (.getZone q))]
-                                (when (not-after? sd q) [p sd])))
-                            (:urpx/hasPrice psa)))
-                    (:urpx/hasPriceSetAlternative psas)))
-          (:urpx/hasPriceSetAlternatives prices)))
+  (for [psas (:urpx/hasPriceSetAlternatives prices)
+        psa  (:urpx/hasPriceSetAlternative psas)]
+    (keep (fn [p]
+            (let [sd (price-start p nil (.getZone q))]
+              (when (not-after? sd q) [p sd])))
+          (:urpx/hasPrice psa))))
 
 (defn- all-active-prices-by-pd
   "Build a map from PriceDefinition id to a vector of [price start-date]
-   pairs for every active Price referencing that PD. Used by modifier
-   resolution where matrix-style pricing surfaces multiple concurrent
-   prices that the caller selects from. Walks both the flat hasPrice list
-   (CPAU E-HRA shape) and hasPriceSetAlternatives nesting (PG&E Vintage-PCIA
-   shape — per-departure-vintage-year prices in PriceSetAlternative)."
+   pairs for every active Price referencing that PD, the latest per cell (see
+   `latest-by-pd`) within the flat and PriceSet prices and within each
+   PriceSetAlternative. Used by modifier resolution where matrix-style pricing
+   surfaces multiple concurrent prices that the caller selects from. Walks both
+   the flat hasPrice list (CPAU E-HRA shape) and hasPriceSetAlternatives
+   nesting (PG&E Vintage-PCIA shape: per-departure-vintage-year prices in
+   PriceSetAlternative)."
   ([prices ^ZonedDateTime q] (all-active-prices-by-pd prices q nil nil))
   ([prices ^ZonedDateTime q opts] (all-active-prices-by-pd prices q opts nil))
   ([prices ^ZonedDateTime q opts resolved-period-num]
-   (let [selection (:profile-alternatives opts)]
-     (reduce (fn [acc [price :as pair]]
-               (let [pd-id (get-in price [:urpx/referencesPriceDefinition :jsonld/id])]
-                 (update acc pd-id (fnil conj []) pair)))
-             {}
-             (filter
-              #(price-active-at-tou? (first %) resolved-period-num)
-              (concat (scoped-prices prices q nil)
-                     ;; With a selection, surface only the chosen alternative,
-                     ;; exactly as the base plan path does. Without one, keep the
-                     ;; surface-all contract so a caller reading tiers directly
-                     ;; still sees every vintage; `unselected-alternative-ids`
-                     ;; then marks the ledger so an AGGREGATE cannot silently
-                     ;; pick one of them.
-                      (if (seq selection)
-                        (prices-from-alternatives prices q selection)
-                        (all-prices-from-alternatives prices q))))))))
+   ;; With a selection, surface only the chosen alternative, exactly as the
+   ;; base plan path does. Without one, keep the surface-all contract so a
+   ;; caller reading tiers directly still sees every vintage;
+   ;; `unselected-alternative-ids` then marks the ledger so an AGGREGATE cannot
+   ;; silently pick one of them.
+   (if (seq (:profile-alternatives opts))
+     (active-prices-by-pd prices q opts resolved-period-num)
+     (let [cells (fn [pairs]
+                   (latest-by-pd
+                    (filter #(price-active-at-tou? (first %) resolved-period-num) pairs)))]
+       (apply merge-with into
+              (cells (scoped-prices prices q nil))
+              (map cells (all-prices-from-alternatives prices q)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Service-tier lookup (block tiers, e.g. CPAU E-1 baseline / over-baseline)
