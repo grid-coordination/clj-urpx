@@ -1184,6 +1184,9 @@
 ;; nested under the plan
 ;; ---------------------------------------------------------------------------
 
+(defn- refusal-ex [f] (try (f) nil (catch clojure.lang.ExceptionInfo e e)))
+(defn- refusal [f] (some-> (refusal-ex f) ex-data))
+
 (defn- un-nest
   "Split a v0.2.x coerced plan into the v0.5.1 shape: an identity shell with no
    nested version, plus a top-level snapshot pointing back via forRatePlan."
@@ -1207,8 +1210,38 @@
       (is (= nested explicit) "explicit :version must match the nested result")
       (is (= nested indexed)  "the back-pointer index must match the nested result")
       (testing "and the index really is what resolved it: the bare shell alone
-                yields nothing, so the equality above is not accidental"
-        (is (empty? (:urpx.resolved/ledgers (price/resolve-prices shell when-zdt))))))))
+                refuses, so the equality above is not accidental"
+        (is (= :urpx.price/no-version
+               (:reason (refusal #(price/resolve-prices shell when-zdt)))))))))
+
+(deftest a-plan-with-no-reachable-version-refuses
+  (testing "an identity document with nothing nested and no snapshot supplied
+            has no version to read prices from. It used to return empty
+            ledgers, which is a plan that prices nothing."
+    (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
+          modi (fixtures/load-modifier "pge-e-tou-c-2026-03-01")
+          [shell] (un-nest plan :urpx/hasRatePlanVersion :urpx/forRatePlan)
+          [mshell] (un-nest modi :urpx/hasRatePlanModifierVersion
+                            :urpx/forRatePlanModifier)
+          t (zdt 2026 7 15 17)
+          e (refusal-ex #(price/resolve-prices shell t))]
+      (is (= {:reason :urpx.price/no-version :plan-id (:jsonld/id plan)} (ex-data e)))
+      (testing "and the message names both remedies"
+        (is (str/includes? (ex-message e) ":versions-by-plan"))
+        (is (str/includes? (ex-message e) "urpx.index/versions-by-plan"))
+        (is (str/includes? (ex-message e) "urpx.load/documents"))
+        (is (str/includes? (ex-message e) "urpx.scenario-cost-model")))
+      (testing "an index that files nothing under the plan is no version either"
+        (is (= :urpx.price/no-version
+               (:reason (refusal #(price/resolve-prices
+                                   shell t {:versions-by-plan {"x:other" []}}))))))
+      (testing "the modifier equivalent"
+        (is (= {:reason :urpx.price/no-version :plan-id (:jsonld/id modi)}
+               (refusal #(price/resolve-modifier-prices mshell t)))))
+      (testing "and a composition, rather than dropping the modifier as
+                inapplicable"
+        (is (= {:reason :urpx.price/no-version :plan-id (:jsonld/id modi)}
+               (refusal #(price/resolve-prices-with-modifiers plan [mshell] t))))))))
 
 (deftest versions-by-plan-keys-on-the-back-pointer
   (testing "index/versions-by-plan finds a snapshot by the @id it points back at,

@@ -246,13 +246,12 @@
    v0.5.1 un-nests the version: a document may carry the snapshot as a sibling
    of the identity urpx:RatePlan rather than nested under
    urpx:hasRatePlanVersion, with the link stated upward as urpx:forRatePlan.
-   All three v0.5.1 examples shipped with urpx-org/urpx do exactly this, and
-   none asserts the down-pointer.
 
    `load-rate-plan` discards such a snapshot, since it filters for
-   urpx:RatePlan; this is its counterpart. Use `urpx.index/versions-by-plan`
-   when a document carries several snapshots and you need them keyed by the
-   plan they belong to.
+   urpx:RatePlan; this is its counterpart. To resolve prices for such a
+   document, load it with `urpx.load/documents`, then either pass
+   `:versions-by-plan` from `urpx.index/versions-by-plan` to
+   `urpx.price/resolve-prices`, or resolve through `urpx.scenario-cost-model`.
 
    Zero or more than one urpx:RatePlanVersion is an error."
   [src]

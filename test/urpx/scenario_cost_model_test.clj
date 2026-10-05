@@ -25,7 +25,7 @@
             [urpx.schedule :as schedule]
             [urpx.schema :as schema]
             [urpx.test-fixtures :as fixtures])
-  (:import [java.io StringReader]
+  (:import [java.io File StringReader]
            [java.time ZoneId ZonedDateTime]))
 
 (def ^:private la (ZoneId/of "America/Los_Angeles"))
@@ -1050,6 +1050,29 @@
     (is (not-any? :urpx/timezoneIdentifier (remove #(= "x:pkg" (:jsonld/id %)) docs))
         "only the package declares a zone")
     (is (= 0.31085M (rate (first (scm/enumerate docs {:at (at)})))))))
+
+(deftest an-un-nested-file-resolves-through-the-loader-and-a-model
+  (let [doc  (json/read-str (slurp (fixtures/fixture-resource "sce-d-2026-03-20")))
+        plan (get doc "urpx:hasRatePlan")
+        f    (doto (File/createTempFile "sce-d-un-nested" ".jsonld") .deleteOnExit)
+        _    (spit f (json/write-str
+                      {"@context" (get doc "@context")
+                       "@graph"   [(-> (dissoc doc "@context")
+                                       (assoc "urpx:hasRatePlan"
+                                              (dissoc plan "urpx:hasRatePlanVersion")))
+                                   (get plan "urpx:hasRatePlanVersion")]}))
+        docs (load/documents [f])
+        identity (first (filter #(= "urpx:RatePlan" (:jsonld/type %)) docs))]
+    (is (nil? (:urpx/hasRatePlanVersion identity)) "the version is not nested")
+    (is (= :urpx.price/no-version
+           (:reason (refusal #(price/resolve-prices identity (at)))))
+        "the identity alone has no version to resolve")
+    (is (= 0.31085M (rate (first (scm/enumerate docs {:at (at)}))))
+        "a model resolves it, at the nested filing's rate")
+    (is (= 0.31085M (price/marginal-unit-rate
+                     (price/resolve-prices identity (at)
+                                           {:versions-by-plan (index/versions-by-plan docs)})))
+        "and so does :versions-by-plan")))
 
 (deftest two-packages-zoning-one-plan-differently-are-refused
   (let [a (source (package "x:pkg-a" la-tz {:urpx/hasRatePlan (raw-plan)}))

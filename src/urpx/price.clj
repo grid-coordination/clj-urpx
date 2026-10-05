@@ -1787,8 +1787,9 @@
    can be assumed present.
 
      1. `:version` in `opts`   an explicitly resolved snapshot always wins
-     2. one candidate          used as-is, whether nested or back-pointed
-     3. several candidates     the one in effect at `zdt`, or a refusal
+     2. no candidate           refuses `:urpx.price/no-version`
+     3. one candidate          used as-is, whether nested or back-pointed
+     4. several candidates     the one in effect at `zdt`, or a refusal
 
    Candidates are the nested snapshot together with everything
    `urpx.index/versions-by-plan` has filed under this plan's @id, deduplicated.
@@ -1813,7 +1814,14 @@
             ;; refused instead.
             candidates (distinct (remove nil? (cons nested indexed)))]
         (case (count candidates)
-          0 nil
+          0 (throw (ex-info (str "No version snapshot for " (pr-str plan-id) ": none is "
+                                 "nested under it and none was supplied. Pass "
+                                 ":versions-by-plan, built by urpx.index/versions-by-plan "
+                                 "over urpx.load/documents, or load the documents with "
+                                 "urpx.load/documents and resolve through "
+                                 "urpx.scenario-cost-model.")
+                            {:reason  :urpx.price/no-version
+                             :plan-id plan-id}))
           ;; ONE candidate is used whatever the instant, and whether it COVERS
           ;; the instant is reported separately by `version-covers?` rather than
           ;; refused here. With several candidates and none in effect there is
@@ -1993,7 +2001,10 @@
 
    The TOU period keys are nil only for a version with no urpx:TOUSchedule. A
    version with one that no period covers at `zdt` refuses
-   `:urpx.price/no-tou-period`."
+   `:urpx.price/no-tou-period`.
+
+   A plan with no version snapshot, neither nested nor supplied through
+   `:version` or `:versions-by-plan`, refuses `:urpx.price/no-version`."
   ([rate-plan zdt] (resolve-prices rate-plan zdt nil))
   ([rate-plan ^ZonedDateTime zdt opts]
    ;; PROJECT INTO THE PLAN'S ZONE, ONCE, HERE. A bound in a URPX document
@@ -2440,6 +2451,9 @@
 
    Holidays are read from the modifier's own urpx:HolidayCalendar, and every
    date is a non-holiday when it declares none.
+
+   A modifier with no version snapshot refuses `:urpx.price/no-version`, as
+   `resolve-prices` does.
 
    `opts` takes the same keys as `resolve-prices`, and four of them change an
    answer here rather than only saving work. :holiday? overrides the
