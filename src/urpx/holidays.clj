@@ -227,7 +227,7 @@
   ([plan] (derive-predicate plan nil))
   ([plan version]
   (when-let [calendar (plan-calendar plan version)]
-    (let [year-fns (->> (:urpx/hasHoliday calendar)
+    (let [year-fns (->> (index/as-vec (:urpx/hasHoliday calendar))
                         (mapv holiday->year-fn))
           cache    (ConcurrentHashMap.)]
       (fn ^Boolean [^LocalDate d]

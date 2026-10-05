@@ -9,6 +9,12 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Fixed
+
+- **A document assembled in code without `urpx.coerce` that wrote a lone value of a 0..N property bare, rather than as a one-element list, could resolve to a different answer or throw.** Resolution, composition and holiday derivation now read the bare and list forms alike for every property `urpx.schema` decodes to a vector, including `urpx:hasPrice`, `urpx:hasPriceSet`, `urpx:hasTOUSchedule`, `urpx:hasServiceTiers`, `urpx:hasApplicabilityRule`, `urpx:referencesMetricInput` and `urpx:month`.
+
 ## [0.37.0] — 2026-10-05
 
 ### Changed

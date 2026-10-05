@@ -115,7 +115,7 @@
    or nil if no season matches."
   [seasons ^LocalDate date]
   (let [m (.getMonthValue date)]
-    (some (fn [s] (when (some #{m} (:urpx/month s)) s)) seasons)))
+    (some (fn [s] (when (some #{m} (index/as-vec (:urpx/month s))) s)) seasons)))
 
 (defn- season-refs
   "`node`'s urpx:appliesInSeason refs as a sequence, empty when it names none.
@@ -161,10 +161,11 @@
                 (and (in-season? (season-refs bracket))
                      (bracket-matches-day? bracket (.toLocalDate q) (.getDayOfWeek q) holiday?)
                      (time-in-bracket? q bracket)))
-              (:urpx/hasTimeBracket period))
+              (index/as-vec (:urpx/hasTimeBracket period)))
          period))
      (mapcat (fn [schedule]
-               (mapcat :urpx/hasTOUPeriod (:urpx/hasTOUTier schedule)))
+               (mapcat (comp index/as-vec :urpx/hasTOUPeriod)
+                       (index/as-vec (:urpx/hasTOUTier schedule))))
              tou-schedules))))
 
 (defn- modifier-season-matcher
@@ -183,9 +184,9 @@
                      (let [n (get by-id sid)]
                        (when (= "urpx:Season" (:jsonld/type n)) n)))
         unresolved (->> tou-schedules
-                        (mapcat :urpx/hasTOUTier)
-                        (mapcat :urpx/hasTOUPeriod)
-                        (mapcat :urpx/hasTimeBracket)
+                        (mapcat (comp index/as-vec :urpx/hasTOUTier))
+                        (mapcat (comp index/as-vec :urpx/hasTOUPeriod))
+                        (mapcat (comp index/as-vec :urpx/hasTimeBracket))
                         (mapcat season-refs)
                         (map :jsonld/id)
                         (remove #(or (own-ids %) (resolved %)))
@@ -207,7 +208,7 @@
         (boolean (some (fn [{sid :jsonld/id}]
                          (if (own-ids sid)
                            (= own-id sid)
-                           (some #{m} (:urpx/month (resolved sid)))))
+                           (some #{m} (index/as-vec (:urpx/month (resolved sid))))))
                        refs))))))
 
 (defn- require-tou-period
@@ -255,7 +256,7 @@
     (some (fn [psa]
             (when (= chosen-pa-id (get-in psa [:urpx/referencesProfileAlternative :jsonld/id]))
               psa))
-          (:urpx/hasPriceSetAlternative psas))))
+          (index/as-vec (:urpx/hasPriceSetAlternative psas)))))
 
 (defn- price-start
   "The instant in `zone` from which `price` is in effect, falling back to
@@ -290,8 +291,8 @@
                 (keep (fn [p]
                         (let [sd (price-start p nil (.getZone q))]
                           (when (started? sd q) [p sd])))
-                      (:urpx/hasPrice picked)))))
-          (:urpx/hasPriceSetAlternatives prices)))
+                      (index/as-vec (:urpx/hasPrice picked))))))
+          (index/as-vec (:urpx/hasPriceSetAlternatives prices))))
 
 (defn- scoped-prices
   "Return a seq of [price start] pairs for every Price under `prices` that
@@ -311,15 +312,15 @@
      (keep (fn [p]
              (let [sd (price-start p nil zone)]
                (when (started? sd q) [p sd])))
-           (:urpx/hasPrice prices))
+           (index/as-vec (:urpx/hasPrice prices)))
      (mapcat (fn [ps]
                (let [ps-sd (price-start ps nil zone)]
                  (when (started? ps-sd q)
                    (keep (fn [p]
                            (let [sd (price-start p ps-sd zone)]
                              (when (started? sd q) [p sd])))
-                         (:urpx/hasPrice ps)))))
-             (:urpx/hasPriceSet prices))
+                         (index/as-vec (:urpx/hasPrice ps))))))
+             (index/as-vec (:urpx/hasPriceSet prices)))
      (prices-from-alternatives prices q selection))))
 
 (defn- price-active-at-tou?
@@ -396,11 +397,11 @@
    `psas-seq`, a seq of urpx:PriceSetAlternatives, one seq per alternative."
   [psas-seq ^ZonedDateTime q]
   (for [psas psas-seq
-        psa  (:urpx/hasPriceSetAlternative psas)]
+        psa  (index/as-vec (:urpx/hasPriceSetAlternative psas))]
     (keep (fn [p]
             (let [sd (price-start p nil (.getZone q))]
               (when (started? sd q) [p sd])))
-          (:urpx/hasPrice psa))))
+          (index/as-vec (:urpx/hasPrice psa)))))
 
 (defn- all-prices-from-alternatives
   "Walk Prices.hasPriceSetAlternatives and return the active [price
@@ -411,7 +412,7 @@
    later versions of it. Distinct from `prices-from-alternatives`, which only
    surfaces the caller-selected alternative."
   [prices ^ZonedDateTime q]
-  (alternative-price-pairs (:urpx/hasPriceSetAlternatives prices) q))
+  (alternative-price-pairs (index/as-vec (:urpx/hasPriceSetAlternatives prices)) q))
 
 (defn- period-cells
   "`latest-by-pd` over the [price start] `pairs` that may apply at
@@ -479,7 +480,7 @@
    `withheld-price-entry`."
   [prices selection ^ZonedDateTime q resolved-period-num]
   (let [unselected (remove #(get selection (get-in % [:urpx/referencesProfileAlternatives :jsonld/id]))
-                           (:urpx/hasPriceSetAlternatives prices))]
+                           (index/as-vec (:urpx/hasPriceSetAlternatives prices)))]
     (-> (apply merge-with into {}
                (map #(period-cells % resolved-period-num)
                     (alternative-price-pairs unselected q)))
@@ -548,9 +549,9 @@
    container. A filing stating a per-season or per-cell container is the case
    this grouping is for."
   [billing-model]
-  (->> (for [container (:urpx/hasServiceTiers billing-model)
-             tier      (:urpx/hasServiceTier container)
-             bracket   (or (seq (:urpx/hasServiceBracket tier)) [nil])]
+  (->> (for [container (index/as-vec (:urpx/hasServiceTiers billing-model))
+             tier      (index/as-vec (:urpx/hasServiceTier container))
+             bracket   (or (seq (index/as-vec (:urpx/hasServiceBracket tier))) [nil])]
          {:container container :tier tier :bracket bracket})
        (group-by #(:urpx/serviceTierNumber (:tier %)))))
 
@@ -822,7 +823,7 @@
   [plan-elements]
   (reduce (fn [acc pas]
             (let [cid  (:jsonld/id pas)
-                  aids (keep :jsonld/id (:urpx/hasProfileAlternative pas))]
+                  aids (keep :jsonld/id (index/as-vec (:urpx/hasProfileAlternative pas)))]
               (-> acc
                   (assoc-in [:cells cid] (set aids))
                   (update :dim-of
@@ -830,7 +831,7 @@
                                      (update m a (fn [v] (vec (distinct (conj (or v []) cid))))))
                                    % aids)))))
           {:cells {} :dim-of {}}
-          (:urpx/hasProfileAlternatives plan-elements)))
+          (index/as-vec (:urpx/hasProfileAlternatives plan-elements))))
 
 (defn- pd-alternative-status
   "How `pd`'s urpx:referencesProfileAlternative stands against the caller's
@@ -944,7 +945,7 @@
   (reduce (fn [idx psas]
             (let [cid  (get-in psas [:urpx/referencesProfileAlternatives :jsonld/id])
                   aids (keep #(get-in % [:urpx/referencesProfileAlternative :jsonld/id])
-                             (:urpx/hasPriceSetAlternative psas))]
+                             (index/as-vec (:urpx/hasPriceSetAlternative psas)))]
               (if (and cid (seq aids))
                 (-> idx
                     (update-in [:cells cid] (fnil into #{}) aids)
@@ -954,7 +955,7 @@
                                      % aids)))
                 idx)))
           alt-index
-          (:urpx/hasPriceSetAlternatives prices)))
+          (index/as-vec (:urpx/hasPriceSetAlternatives prices))))
 
 (defn- validate-selection!
   "Refuse a `:profile-alternatives` entry whose value is not a cell of the
@@ -1028,7 +1029,7 @@
    energy ledger from a per-meter or per-household service-charge ledger."
   [plan-elements]
   (into {} (map (juxt :jsonld/id identity))
-        (:urpx/hasMetricInput plan-elements)))
+        (index/as-vec (:urpx/hasMetricInput plan-elements))))
 
 (defn- ledger-metric-info
   "Return the resolved-shape keys that describe `ledger`'s referenced
@@ -1037,7 +1038,7 @@
    omitted; consumers that need a particular dimension (e.g. energy-only
    marginal sums) test on what's present."
   [ledger mi-index]
-  (let [mi-id (some-> ledger :urpx/referencesMetricInput first :jsonld/id)
+  (let [mi-id (some-> ledger :urpx/referencesMetricInput index/as-vec first :jsonld/id)
         mi    (when mi-id (mi-index mi-id))
         spec  (index/single (:urpx/hasMetricSpecification mi)
                             "hasMetricSpecification nodes on one MetricInput")]
@@ -1071,14 +1072,14 @@
    names. That is a wrong answer rather than an error, which is why the
    dereference happens here rather than being left to the caller."
   [pd ^java.time.LocalDate date rules-by-id]
-  (let [rules (:urpx/hasApplicabilityRule pd)]
+  (let [rules (index/as-vec (:urpx/hasApplicabilityRule pd))]
     (or (empty? rules)
         (let [m (.getMonthValue date)]
           (every? (fn [rule]
                     (let [rule   (if (:urpx/month rule)
                                    rule
                                    (or (get rules-by-id (:jsonld/id rule)) rule))
-                          months (:urpx/month rule)]
+                          months (index/as-vec (:urpx/month rule))]
                       (or (empty? months)
                           (some #{m} months))))
                   rules)))))
@@ -1121,8 +1122,8 @@
                              (or (get by-id (:jsonld/id r)) r)))
         gates (for [[owner src] [[price :price] [pd :price-definition]]
                     :when owner
-                    rule  (concat (map deref-rule (:urpx/hasApplicabilityRule owner))
-                                  (:urpx/hasApplicabilityGroup owner))
+                    rule  (concat (map deref-rule (index/as-vec (:urpx/hasApplicabilityRule owner)))
+                                  (index/as-vec (:urpx/hasApplicabilityGroup owner)))
                     :when (:urpx/hasConditionExpression rule)]
                 (cond-> {:urpx.resolved/gate-on src}
                   (:jsonld/id rule)   (assoc :urpx.resolved/gate-id (:jsonld/id rule))
@@ -1209,12 +1210,12 @@
                                            :node-type (:jsonld/type node)})))))
                           refs)]
         (cond
-          (some (fn [s] (some #{m} (:urpx/month s))) seasons) :in-season
+          (some (fn [s] (some #{m} (index/as-vec (:urpx/month s)))) seasons) :in-season
           ;; A monthless Season among the refs leaves the gate unevaluated, so
           ;; the answer is unknown rather than no, even when a sibling ref
           ;; carries months that exclude this one. An absent declaration is
           ;; unknown for the same reason and reports the same way.
-          (some (fn [s] (or (::absent s) (empty? (:urpx/month s)))) seasons) :not-evaluable
+          (some (fn [s] (or (::absent s) (empty? (index/as-vec (:urpx/month s))))) seasons) :not-evaluable
           :else                                               :out-of-season)))))
 
 (defn- make-season-status
@@ -1448,7 +1449,7 @@
             (cond
 
               (= "urpx:PriceSummary" (:jsonld/type target))
-              (let [members (:urpx/includesPrice target)
+              (let [members (index/as-vec (:urpx/includesPrice target))
                     nodes   (mapv member-node members)]
                 (cond
                   (some nil? nodes)
@@ -2020,10 +2021,10 @@
    (let [^ZonedDateTime zdt (.withZoneSameInstant zdt (require-zone rate-plan))
          version       (plan-version rate-plan opts :urpx/hasRatePlanVersion zdt)
          plan-elements (:urpx/hasPlanElements version)
-         seasons       (:urpx/hasSeasons plan-elements)
+         seasons       (index/as-vec (:urpx/hasSeasons plan-elements))
          billing       (:urpx/hasBillingModel plan-elements)
-         ledgers       (:urpx/hasLedger billing)
-         tou-schedules (:urpx/hasTOUSchedule billing)
+         ledgers       (index/as-vec (:urpx/hasLedger billing))
+         tou-schedules (index/as-vec (:urpx/hasTOUSchedule billing))
          tier-cands    (service-tier-candidates billing)
          prices        (:urpx/hasPrices version)
          holiday?      (or (:holiday? opts)
@@ -2037,7 +2038,7 @@
          period-num    (:urpx/touPeriodNumber tou-period)
 
          pd->prices    (active-prices-by-pd prices zdt opts period-num)
-         pds           (:urpx/hasPriceDefinition billing)
+         pds           (index/as-vec (:urpx/hasPriceDefinition billing))
          pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
          mi-index      (mi-by-id plan-elements)
          ;; ApplicabilityRules may be referenced by bare @id from a PD; index
@@ -2224,7 +2225,7 @@
          by-id         (or (:by-id opts) (index/build-index version))
          plan-elts     (:urpx/hasPlanElements version)
          billing       (:urpx/hasBillingModel plan-elts)
-         ledgers       (:urpx/hasLedger billing)
+         ledgers       (index/as-vec (:urpx/hasLedger billing))
          prices        (:urpx/hasPrices version)
          alt-index     (or (:alt-index opts)
                            (-> (profile-alternative-index plan-elts)
@@ -2234,8 +2235,8 @@
                                                 (delay (declared-containers
                                                         opts [[modifier :urpx/hasRatePlanModifierVersion]]))))
          alt-status    #(pd-alternative-status % (:profile-alternatives opts) alt-index)
-         own-schedules (:urpx/hasTOUSchedule billing)
-         own-seasons   (:urpx/hasSeasons plan-elts)
+         own-schedules (index/as-vec (:urpx/hasTOUSchedule billing))
+         own-seasons   (index/as-vec (:urpx/hasSeasons plan-elts))
          query-date    (.toLocalDate zdt)
          own-rules     (or (:rules-by-id opts)
                            (index/entities-of-type version "urpx:ApplicabilityRule"))
@@ -2310,7 +2311,7 @@
                                (other-status member))))
                          own-status)
          pd->prices  (all-active-prices-by-pd prices zdt opts gate-period)
-         pds         (:urpx/hasPriceDefinition billing)
+         pds         (index/as-vec (:urpx/hasPriceDefinition billing))
          pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
         ;; A modifier's PriceDefinitions are scoped by urpx:referencesProfileAlternative
         ;; exactly as the base plan's are (alt-status, above). This path ignored
@@ -2568,7 +2569,7 @@
                                      (or (:rules-by-id opts)
                                          (index/entities-of-type base-version "urpx:ApplicabilityRule"))
                                      (make-season-status
-                                      (get-in base-version [:urpx/hasPlanElements :urpx/hasSeasons])
+                                      (index/as-vec (get-in base-version [:urpx/hasPlanElements :urpx/hasSeasons]))
                                       (:by-id opts)
                                       (.toLocalDate zdt))
                                      #(pd-alternative-status

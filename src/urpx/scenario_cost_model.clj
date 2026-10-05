@@ -549,7 +549,7 @@
   (into {}
         (for [v versions
               [cid pas] (index/entities-of-type v "urpx:ProfileAlternatives")
-              :let [alts (into [] (keep :jsonld/id) (:urpx/hasProfileAlternative pas))]
+              :let [alts (into [] (keep :jsonld/id) (index/as-vec (:urpx/hasProfileAlternative pas)))]
               :when (seq alts)]
           [cid alts])))
 
