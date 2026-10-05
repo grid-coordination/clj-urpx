@@ -187,3 +187,39 @@
                            "\"urpx:hasCustomerProfile\": {\"@id\": \"sce:cp\"}, \"@type\""))
       (is (some? (:error (first (:checked (validate/check-file (.getPath f)))))))
       (finally (.delete f)))))
+
+(deftest check-file-validates-the-wrapper-itself
+  (testing "a wrapper's own properties are schema-checked alongside its payloads"
+    (doseq [t ["urpx:URPXPackage" "urpx:URPXDocument"]]
+      (let [doc (fn [extra]
+                  (str "{" ctx ",\"@id\":\"x:pkg\",\"@type\":\"" t "\"," extra
+                       "\"urpx:hasRatePlan\":{\"@id\":\"x:p\",\"@type\":\"urpx:RatePlan\"}}"))
+            wrapper (fn [r] (first (filter #(= t (:type %)) (:checked r))))]
+        (testing (str t " missing urpx:targetURPXVersion")
+          (let [w (wrapper (validate/check-file (tmp-doc (doc ""))))]
+            (is (= "x:pkg" (:id w)))
+            (is (some #(= [:urpx/targetURPXVersion] (:in %)) (:errors (:error w))))))
+        (testing (str t " with a numeric urpx:timezoneIdentifier")
+          (let [w (wrapper (validate/check-file
+                            (tmp-doc (doc (str "\"urpx:targetURPXVersion\":\"" v051 "\","
+                                               "\"urpx:timezoneIdentifier\":42,")))))]
+            (is (some #(= [:urpx/timezoneIdentifier] (:in %)) (:errors (:error w)))))))))
+  (testing "a valid wrapped fixture checks its package and passes"
+    (let [{:keys [checked]} (validate/check-file
+                             (.getPath (fixtures/fixture-resource "sce-d-2026-03-20")))]
+      (is (= [nil] (map :error (filter #(= "urpx:URPXPackage" (:type %)) checked)))))))
+
+(deftest a-wrapper-alone-is-refused
+  (testing "a wrapper whose payload is a reference checks no plan, so -main refuses it"
+    (doseq [t ["urpx:URPXPackage" "urpx:URPXDocument"]]
+      (let [r (validate/check-file
+               (tmp-doc (str "{" ctx ",\"@id\":\"x:pkg\",\"@type\":\"" t "\","
+                             "\"urpx:targetURPXVersion\":\"" v051 "\","
+                             "\"urpx:hasRatePlan\":{\"@id\":\"x:p\"}}")))]
+        (is (= [t] (map :type (:checked r))))
+        (is (#'validate/refused? r) t))))
+  (testing "a wrapper with a plan inside is not"
+    (is (not (#'validate/refused? (validate/check-file
+                                   (.getPath (fixtures/fixture-resource "sce-d-2026-03-20")))))))
+  (testing "a bare plan is not"
+    (is (not (#'validate/refused? {:checked [{:type "urpx:RatePlan"}]})))))

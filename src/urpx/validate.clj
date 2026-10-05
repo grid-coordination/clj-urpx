@@ -12,10 +12,10 @@
       0  every entity in every file coerced and validated
       1  at least one entity failed validation
       2  refused: a path was unreadable, or a file yielded no typed entity
+         beyond a wrapper
 
-  Wrappers are descended, so a urpx:URPXDocument or urpx:URPXPackage is
-  checked through to the urpx:RatePlan inside it rather than at the wrapper
-  metadata alone."
+  A urpx:URPXDocument or urpx:URPXPackage is checked at its own metadata and
+  through to the urpx:RatePlan inside it."
   (:require [clojure.string :as str]
             [urpx.coerce :as coerce]
             [urpx.core :as core]
@@ -121,7 +121,9 @@
    ignored, so a file that yields nothing recognizable is visible as such."
   [path]
   (let [top      (core/load-graph path)
-        entities (mapcat core/expand-document-entities top)
+        entities (mapcat #(cond->> (core/expand-document-entities %)
+                            (core/wrapper-types (:jsonld/type %)) (cons %))
+                         top)
         ;; Version nodes are nested inside their identity entity, and the
         ;; target version lives on the wrapper that expansion descends past, so
         ;; the conformance walk sees the whole graph rather than the expansion.
@@ -163,6 +165,12 @@
                        (str/replace why #"\s+" " "))))
     (and (empty? bad) (empty? findings))))
 
+(defn- refused?
+  "True when `result` names an unreadable path or checked nothing beyond a
+   wrapper."
+  [{:keys [refused checked]}]
+  (boolean (or refused (every? #(core/wrapper-types (:type %)) checked))))
+
 (defn -main [& paths]
   (when (empty? paths)
     (println "usage: clojure -M:validate <file.jsonld> [...]")
@@ -173,7 +181,7 @@
                     (catch Exception e
                       {:path p :checked [] :skipped [] :findings [] :refused (.getMessage e)})))
         results (vec results)
-        refused (filter #(or (:refused %) (empty? (:checked %))) results)]
+        refused (filter refused? results)]
     (doseq [r results]
       (if-let [why (:refused r)]
         (println (format "%-58s REFUSED: %s" (:path r) why))
@@ -181,7 +189,7 @@
     (println)
     (cond
       (seq refused)
-      (do (println (format "REFUSED %d of %d file(s): unreadable, or no entity this library models."
+      (do (println (format "REFUSED %d of %d file(s): unreadable, or no entity this library models beyond a wrapper."
                            (count refused) (count results)))
           (println "Refusing to report success over nothing checked.")
           (System/exit 2))
