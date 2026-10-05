@@ -27,7 +27,9 @@
             [urpx.index :as index]
             [urpx.price :as price]
             [urpx.schedule :as schedule])
-  (:import [java.time Instant ZonedDateTime ZoneId]))
+  (:import [java.nio.charset StandardCharsets]
+           [java.security MessageDigest]
+           [java.time Instant ZonedDateTime ZoneId]))
 
 ;; ---------------------------------------------------------------------------
 ;; Versions and currency
@@ -866,6 +868,150 @@
          (map (juxt :urpx.scenario-cost-model/version-id
                     (comp set :urpx.scenario-cost-model/modifier-version-ids)))
          (enumerate documents opts))))
+
+;; ---------------------------------------------------------------------------
+;; urpx:ScenarioCostModel nodes
+;; ---------------------------------------------------------------------------
+
+(def ^:private rate-plans-root "https://rate-plans.grid-coordination.energy/")
+
+(def ^:private rate-plans-local-name #"[a-z0-9]+(-[a-z0-9]+)*")
+
+(defn- sha-256-hex [^String s]
+  (let [digest (.digest (MessageDigest/getInstance "SHA-256")
+                        (.getBytes s StandardCharsets/UTF_8))]
+    (apply str (map #(format "%02x" (bit-and % 0xff)) digest))))
+
+(defn rate-plans-iri
+  "The IRI urpx-rate-plans mints for the scenario cost model whose identity
+   tuple is `[base-version-iri modifier-version-iris alternative-iris]`, every
+   IRI absolute. A function to pass `node` as its `iri-fn`.
+
+   The rule is the IRIs section of urpx-rate-plans doc/scenario-cost-models.md:
+
+     N      https://rate-plans.grid-coordination.energy/<utility>/, the
+            utility being the base version IRI's first path segment there
+     slug   scm-<base>, then --<modifier> per modifier in code-point order,
+            then --<hash> when there is any alternative, each <name> being
+            the local name after N
+     hash   the first 12 lower-case hex characters of SHA-256 over the UTF-8
+            lines `base <iri>`, `modifier <iri>` sorted and `alternative <iri>`
+            sorted, joined by LF with no trailing LF
+     IRI    N followed by the slug
+
+   A base outside the root, a modifier or alternative outside N, or a local
+   name other than lower-case ASCII words joined by single hyphens refuses
+   `:urpx.scenario-cost-model/iri-outside-namespace` or
+   `:urpx.scenario-cost-model/iri-local-name`."
+  [[base mods alts]]
+  (when-not (str/starts-with? base rate-plans-root)
+    (throw (ex-info (str "Cannot mint an IRI: base version " (pr-str base)
+                         " is not under " rate-plans-root ".")
+                    {:reason :urpx.scenario-cost-model/iri-outside-namespace
+                     :iri base :namespace rate-plans-root})))
+  (let [utility (first (str/split (subs base (count rate-plans-root)) #"/" 2))
+        n       (str rate-plans-root utility "/")
+        mods    (sort mods)
+        alts    (sort alts)
+        local   (fn [iri]
+                  (when-not (str/starts-with? iri n)
+                    (throw (ex-info (str "Cannot mint an IRI: " (pr-str iri) " is outside "
+                                         n ", the namespace of base version " (pr-str base) ".")
+                                    {:reason :urpx.scenario-cost-model/iri-outside-namespace
+                                     :iri iri :namespace n})))
+                  (let [nm (subs iri (count n))]
+                    (when-not (re-matches rate-plans-local-name nm)
+                      (throw (ex-info (str "Cannot mint an IRI: the local name " (pr-str nm)
+                                           " of " (pr-str iri) " is not lower-case words"
+                                           " joined by single hyphens.")
+                                      {:reason :urpx.scenario-cost-model/iri-local-name
+                                       :iri iri :local-name nm})))
+                    nm))
+        names   (mapv local (cons base mods))
+        _       (run! local alts)
+        hash    (when (seq alts)
+                  (subs (sha-256-hex
+                         (str/join "\n" (concat [(str "base " base)]
+                                                (map #(str "modifier " %) mods)
+                                                (map #(str "alternative " %) alts))))
+                        0 12))]
+    (str n "scm-" (str/join "--" (cond-> names hash (conj hash))))))
+
+(defn- prefix-bindings
+  "Prefix -> namespace IRI for every prefix `context` binds to a string.
+   `context` is a JSON-LD @context, a map or a vector, keyed as parsed or as
+   written. A remote context binds nothing here, and a prefix bound two ways
+   refuses `:urpx.scenario-cost-model/conflicting-prefix`."
+  [context]
+  (reduce (fn [m [k v]]
+            (let [p (if (keyword? k)
+                      (when-not (namespace k) (name k))
+                      (when-not (str/includes? k ":") k))]
+              (cond
+                (not (and p (string? v)))  m
+                (= v (get m p v))          (assoc m p v)
+                :else
+                (throw (ex-info (str "Prefix " (pr-str p) " is bound to both "
+                                     (pr-str (get m p)) " and " (pr-str v) ".")
+                                {:reason :urpx.scenario-cost-model/conflicting-prefix
+                                 :prefix p :namespaces [(get m p) v]})))))
+          {}
+          (mapcat #(when (map? %) %) (if (sequential? context) context [context]))))
+
+(defn- absolute-iri
+  "`iri` absolute: an http(s) IRI as it is, a compact IRI expanded through
+   `prefixes`. Anything else refuses `:urpx.scenario-cost-model/unexpandable-iri`."
+  [prefixes iri]
+  (if (or (str/starts-with? iri "http://") (str/starts-with? iri "https://"))
+    iri
+    (let [[p local] (str/split iri #":" 2)]
+      (if-let [n (and local (get prefixes p))]
+        (str n local)
+        (throw (ex-info (str "Cannot expand " (pr-str iri) ": no prefix in :context binds "
+                             (pr-str p) ".")
+                        {:reason :urpx.scenario-cost-model/unexpandable-iri
+                         :iri iri :prefixes (vec (sort (keys prefixes)))}))))))
+
+(defn node
+  "`model` as one urpx:ScenarioCostModel node, in the coerced shape
+   `urpx.schema/ScenarioCostModel` describes, for `urpx.emit` to write.
+
+   Every @id on the node is absolute. Compact @ids are expanded through
+   `:context`, so a model read from documents that write compact IRIs needs
+   the @context of the files they came from.
+
+   `iri-fn` mints the node's @id from the absolute identity tuple
+   `[base-version-iri modifier-version-iris alternative-iris]`, both lists
+   sorted. The IRI scheme is the caller's; `rate-plans-iri` is urpx-rate-plans'.
+
+   urpx:consumesVersion is one reference. urpx:consumesModifierVersion and
+   urpx:selectsProfileAlternative are vectors of references, absent when the
+   model has none.
+
+   Options:
+     :context      the JSON-LD @context to expand compact IRIs through, a map
+                   or a vector, keyed as parsed or as written. A prefix bound
+                   two ways refuses `:urpx.scenario-cost-model/conflicting-prefix`;
+                   an @id it cannot expand refuses
+                   `:urpx.scenario-cost-model/unexpandable-iri`.
+     :name         the node's urpx:name
+     :description  the node's urpx:description"
+  ([model iri-fn] (node model iri-fn nil))
+  ([model iri-fn opts]
+   {:pre [(ifn? iri-fn)]}
+   (let [absolute       (partial absolute-iri (prefix-bindings (:context opts)))
+         [base mods alts] (identity-tuple model)
+         tuple          [(absolute base)
+                         (vec (sort (map absolute mods)))
+                         (vec (sort (map absolute alts)))]
+         ref            (fn [iri] {:jsonld/id iri})]
+     (cond-> {:jsonld/type          "urpx:ScenarioCostModel"
+              :jsonld/id            (iri-fn tuple)
+              :urpx/consumesVersion (ref (first tuple))}
+       (:name opts)        (assoc :urpx/name (:name opts))
+       (:description opts) (assoc :urpx/description (:description opts))
+       (seq mods)          (assoc :urpx/consumesModifierVersion (mapv ref (second tuple)))
+       (seq alts)          (assoc :urpx/selectsProfileAlternative (mapv ref (nth tuple 2)))))))
 
 (defn- bound-opts
   "The opts that bind `model` to its own documents, merged under `opts`.

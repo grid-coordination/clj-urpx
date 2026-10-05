@@ -14,12 +14,15 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.walk]
-            [clojure.test :refer [deftest is testing]]
+            [clojure.test :refer [are deftest is testing]]
             [urpx.scenario-cost-model :as scm]
+            [urpx.coerce :as coerce]
             [urpx.core :as core]
+            [urpx.emit :as emit]
             [urpx.index :as index]
             [urpx.load :as load]
             [urpx.price :as price]
+            [urpx.schema :as schema]
             [urpx.test-fixtures :as fixtures])
   (:import [java.io StringReader]
            [java.time ZoneId ZonedDateTime]))
@@ -1106,3 +1109,144 @@
           e    (is (thrown? clojure.lang.ExceptionInfo
                             (scm/enumerate docs {:at (at 2026 6 1 12)})))]
       (is (= :urpx.scenario-cost-model/ambiguous-version (:reason (ex-data e)))))))
+
+;; ---------------------------------------------------------------------------
+;; urpx:ScenarioCostModel nodes
+;; ---------------------------------------------------------------------------
+
+(def ^:private pge "https://rate-plans.grid-coordination.energy/pge/")
+(defn- pge-iri [local] (str pge local))
+
+(deftest rate-plans-iri-matches-the-urpx-rate-plans-vectors
+  (testing "the Vectors table of urpx-rate-plans doc/scenario-cost-models.md"
+    (are [tuple iri] (= (pge-iri iri) (scm/rate-plans-iri tuple))
+      [(pge-iri "e-1-2026-03-01") [] []]
+      "scm-e-1-2026-03-01"
+
+      [(pge-iri "e-1-2026-03-01") [(pge-iri "e-1-vintage-pcia-2026-03-01")] []]
+      "scm-e-1-2026-03-01--e-1-vintage-pcia-2026-03-01"
+
+      [(pge-iri "e-elec-2026-03-27") [] [(pge-iri "e-elec-2026-03-27-pa-income-tier-care")]]
+      "scm-e-elec-2026-03-27--291186d914f7"
+
+      [(pge-iri "e-1-2026-03-01")
+       [(pge-iri "e-1-vintage-pcia-2026-03-01")]
+       [(pge-iri "e-1-2026-03-01-pa-tc-w-b") (pge-iri "e-1-vintage-pcia-2026-03-01-pa-vintage-2020")]]
+      "scm-e-1-2026-03-01--e-1-vintage-pcia-2026-03-01--deed42bdeaaa")))
+
+(deftest rate-plans-iri-sorts-its-own-input
+  (let [mods [(pge-iri "z-mod") (pge-iri "a-mod")]
+        alts [(pge-iri "z-alt") (pge-iri "a-alt")]
+        iri  (scm/rate-plans-iri [(pge-iri "base") mods alts])]
+    (is (= iri (scm/rate-plans-iri [(pge-iri "base") (reverse mods) (reverse alts)])))
+    (is (str/starts-with? iri (pge-iri "scm-base--a-mod--z-mod--")))))
+
+(deftest rate-plans-iri-refuses-what-it-cannot-mint
+  (let [reason #(:reason (refusal (fn [] (scm/rate-plans-iri %))))
+        base   (pge-iri "e-1-2026-03-01")]
+    (testing "a base outside the root, and a component outside the base's utility"
+      (are [tuple] (= :urpx.scenario-cost-model/iri-outside-namespace (reason tuple))
+        ["https://example.com/pge/e-1" [] []]
+        ["pge:e-1-2026-03-01" [] []]
+        [base ["https://rate-plans.grid-coordination.energy/sce/care-2026-03-20"] []]
+        [base [] ["https://rate-plans.grid-coordination.energy/sce/pa-x"]]))
+    (testing "a local name other than lower-case words joined by single hyphens"
+      (are [tuple] (= :urpx.scenario-cost-model/iri-local-name (reason tuple))
+        [(pge-iri "E-1") [] []]
+        [(pge-iri "") [] []]
+        [base [(pge-iri "care--2026")] []]
+        [base [] [(pge-iri "pa-x/2020")]]
+        [base [] [(pge-iri "pa-x\n")]]))))
+
+(defn- fixture-files []
+  (sort (filter #(str/ends-with? (str %) ".jsonld")
+                (file-seq (io/file (io/resource "urpx-fixtures"))))))
+
+(defn- fixture-models []
+  (scm/enumerate (load/documents (fixture-files))
+                 {:at (at) :compatibility scm/named-versions-add}))
+
+(defn- written-contexts
+  "Each fixture's @context as written, string-keyed."
+  []
+  (mapv #(get (json/read-str (slurp %)) "@context") (fixture-files)))
+
+(deftest a-node-states-each-property-only-when-it-has-a-value
+  (let [models (fixture-models)
+        ctx    (written-contexts)
+        shape  (fn [[_ mods alts]] [(boolean (seq mods)) (boolean (seq alts))])]
+    (is (= #{[false false] [true false] [false true] [true true]}
+           (set (map (comp shape scm/identity-tuple) models)))
+        "the fixtures exercise base alone, modifiers only, alternatives only and both")
+    (doseq [m models
+            :let [[_ mods alts] (scm/identity-tuple m)
+                  n (scm/node m scm/rate-plans-iri {:context ctx})
+                  written (json/read-str (emit/write-scenario-cost-model n {:context nil}))]]
+      (testing (pr-str (scm/identity-tuple m))
+        (is (nil? (coerce/explain schema/ScenarioCostModel n)))
+        (is (map? (get written "urpx:consumesVersion")))
+        (is (= (boolean (seq mods)) (contains? written "urpx:consumesModifierVersion")))
+        (is (= (boolean (seq alts)) (contains? written "urpx:selectsProfileAlternative")))
+        (is (every? #(str/starts-with? % "https://rate-plans.grid-coordination.energy/")
+                    (cons (:jsonld/id n)
+                          (keep :jsonld/id (concat [(:urpx/consumesVersion n)]
+                                                   (:urpx/consumesModifierVersion n)
+                                                   (:urpx/selectsProfileAlternative n))))))
+        (is (= [(count mods) (count alts)]
+               [(count (:urpx/consumesModifierVersion n))
+                (count (:urpx/selectsProfileAlternative n))]))))))
+
+(deftest a-node-carries-the-pge-vintage-model-at-the-iri-urpx-rate-plans-mints
+  (let [m (first (filter #(= ["pge:ev2-2026-03-27" ["pge:ev2-vintage-pcia-2026-03-27"]
+                              ["pge:ev2-2026-03-27-pa-income-tier-care"
+                               "pge:ev2-vintage-pcia-2026-03-27-pa-vintage-2020"]]
+                             (scm/identity-tuple %))
+                         (fixture-models)))]
+    (is (= {:jsonld/type "urpx:ScenarioCostModel"
+            :jsonld/id   (pge-iri "scm-ev2-2026-03-27--ev2-vintage-pcia-2026-03-27--d086bfc4da3c")
+            :urpx/consumesVersion {:jsonld/id (pge-iri "ev2-2026-03-27")}
+            :urpx/consumesModifierVersion [{:jsonld/id (pge-iri "ev2-vintage-pcia-2026-03-27")}]
+            :urpx/selectsProfileAlternative
+            [{:jsonld/id (pge-iri "ev2-2026-03-27-pa-income-tier-care")}
+             {:jsonld/id (pge-iri "ev2-vintage-pcia-2026-03-27-pa-vintage-2020")}]}
+           (scm/node m scm/rate-plans-iri {:context (written-contexts)})))))
+
+(deftest a-node-takes-its-iri-from-the-callers-fn
+  (let [m    (first (filter #(seq (second (scm/identity-tuple %))) (fixture-models)))
+        seen (atom nil)
+        n    (scm/node m (fn [t] (reset! seen t) "urn:x:model") {:context (written-contexts)})
+        [base mods alts] (scm/identity-tuple m)]
+    (is (= "urn:x:model" (:jsonld/id n)))
+    (is (= [(count mods) (count alts)] [(count (second @seen)) (count (nth @seen 2))]))
+    (is (every? #(str/starts-with? % "https://") (cons (first @seen) (concat (second @seen) (nth @seen 2))))
+        "the tuple it is handed is absolute")
+    (is (str/ends-with? (first @seen) (str "/" (second (str/split base #":" 2)))))
+    (testing "and has no default"
+      (is (thrown? AssertionError (scm/node m nil {:context (written-contexts)}))))))
+
+(deftest a-node-expands-through-a-parsed-context-as-through-a-written-one
+  (let [models (fixture-models)
+        parsed (mapv #(:jsonld/context (core/parse-rate-plan %)) (fixture-files))]
+    (is (= (mapv #(scm/node % scm/rate-plans-iri {:context (written-contexts)}) models)
+           (mapv #(scm/node % scm/rate-plans-iri {:context parsed}) models)))))
+
+(deftest a-node-refuses-an-iri-it-cannot-expand
+  (let [m (first (fixture-models))]
+    (is (= :urpx.scenario-cost-model/unexpandable-iri
+           (:reason (refusal #(scm/node m scm/rate-plans-iri)))))
+    (is (= :urpx.scenario-cost-model/unexpandable-iri
+           (:reason (refusal #(scm/node m scm/rate-plans-iri
+                                        {:context ["https://urpx.org/ns/context/releases/v0.5.1/jsonld/urpx-context.jsonld"]}))))
+        "a remote context binds no prefix here")
+    (is (= :urpx.scenario-cost-model/conflicting-prefix
+           (:reason (refusal #(scm/node m scm/rate-plans-iri
+                                        {:context [{"cpau" "https://a.example/"}
+                                                   {"cpau" "https://b.example/"}]})))))))
+
+(deftest a-node-carries-a-name-and-description-outside-its-identity
+  (let [m   (first (fixture-models))
+        ctx (written-contexts)
+        n   (scm/node m scm/rate-plans-iri {:context ctx :name "E-1" :description "Residential"})]
+    (is (= ["E-1" "Residential"] [(:urpx/name n) (:urpx/description n)]))
+    (is (= (dissoc n :urpx/name :urpx/description) (scm/node m scm/rate-plans-iri {:context ctx})))
+    (is (nil? (coerce/explain schema/ScenarioCostModel n)))))
