@@ -445,9 +445,10 @@
           "sanity: the correct id selects")
       (is (= :unknown-profile-alternative (composed-rate modi {vintage-dim "pge:pa-vintage-2009x"}))
           "a stale or mistyped id is refused, where it used to return 0.46886")
-      (is (= :unselected-alternatives (composed-rate modi {"x:unrelated-dimension" "x:whatever"}))
-          "while a key no document here declares is left alone, so this reads as
-           no selection and withholds"))))
+      (is (= :unknown-profile-alternatives-container
+             (composed-rate modi {"x:unrelated-dimension" "x:whatever"}))
+          "and so is a key no document here declares, which read as no
+           selection withheld the ledger it was meant to select"))))
 
 (deftest an-ambiguous-alternative-is-refused-on-the-modifier-path-too
   (let [doc (clojure.walk/postwalk
@@ -738,6 +739,59 @@
           "pointed at a different plan, it contributes no prices and its
            containers never reach the index, so the same document does not
            collide and the base plan answers alone"))))
+
+(deftest a-container-key-is-known-if-any-resolved-document-declares-it
+  (testing "one selection map is passed to the base plan and to every modifier,
+            so a key declared by only one of them is legitimate. Only a key
+            that names no container in any document being resolved refuses."
+    (let [plan (add-container (base-fixture) "zz:dim" ["zz:a" "zz:b"])
+          sel  {"zz:dim" "zz:a" vintage-dim "pge:pa-vintage-2020"}
+          ex   (fn [f] (try (f) nil (catch clojure.lang.ExceptionInfo e (ex-data e))))]
+      (is (= 0.50518M (pair-rate plan (modifier-fixture) sel))
+          "composed, a key only the base declares and a key only the modifier
+           declares are both accepted")
+      (is (= {:reason     :unknown-profile-alternatives-container
+              :dimension  "zz:typo"
+              :chosen     "zz:a"
+              :containers [vintage-dim "pge:pa-income-tier" "zz:dim"]}
+             (ex #(price/resolve-prices-with-modifiers
+                   plan [(modifier-fixture)] (at)
+                   {:profile-alternatives (assoc sel "zz:typo" "zz:a")})))
+          "composed, a key neither declares refuses, listing every container
+           across both documents")
+      (is (= :unknown-profile-alternatives-container
+             (:reason (ex #(price/resolve-prices plan (at) {:profile-alternatives sel}))))
+          "the base plan resolved alone does not declare the modifier's container")
+      (is (= :unknown-profile-alternatives-container
+             (:reason (ex #(price/resolve-modifier-prices (modifier-fixture) (at)
+                                                          {:profile-alternatives sel}))))
+          "the modifier resolved alone does not declare the base plan's container"))))
+
+(deftest an-un-nested-document-knows-the-containers-of-every-version-it-is-handed
+  (testing "a version handed in through :version or :versions-by-plan rather
+            than nested in the document is as much a part of what is being
+            resolved, so a key its containers declare is accepted exactly as
+            it is for the nested form."
+    (let [plan  (base-fixture)
+          shell (dissoc plan :urpx/hasRatePlanVersion)
+          v1    (assoc (:urpx/hasRatePlanVersion plan)
+                       :urpx/forRatePlan {:jsonld/id (:jsonld/id plan)})
+          v2    (-> (add-container v1 "zz:later" ["zz:a"])
+                    (assoc :jsonld/id "zz:v2"))
+          opts  {:version v1 :versions-by-plan {(:jsonld/id plan) [v1 v2]}}
+          ex    (fn [sel] (try (price/resolve-prices shell (at)
+                                                     (assoc opts :profile-alternatives sel))
+                               nil
+                               (catch clojure.lang.ExceptionInfo e (ex-data e))))]
+      (is (nil? (ex {"zz:later" "zz:a"}))
+          "a key only another supplied version declares is accepted")
+      (is (= {:reason     :unknown-profile-alternatives-container
+              :dimension  "zz:typo"
+              :chosen     "zz:a"
+              :containers ["pge:pa-income-tier" "zz:later"]}
+             (ex {"zz:typo" "zz:a"}))
+          "and a key none declares refuses, listing the containers of the
+           versions handed in"))))
 
 (deftest a-container-listing-one-alternative-twice-is-one-dimension
   (testing "duplicate entries in urpx:hasProfileAlternative are a redundancy in

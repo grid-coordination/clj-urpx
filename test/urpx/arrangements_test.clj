@@ -562,6 +562,20 @@
           "every segment yields a rate; without the selection reaching
            urpx.price each refuses :unselected-alternatives"))))
 
+(deftest an-arrangement-selection-naming-no-container-is-refused
+  (testing "an arrangement hands its selections to urpx.price, so a key naming no
+            container in its documents refuses there, at an instant and across
+            a horizon alike."
+    (let [a  (update (first (arr/arrangements [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
+                     :urpx.arrangement/selections assoc "x:no-such-container" "x:whatever")
+          rs (keep #(get-in % [:urpx.interval/refused :reason])
+                   (arr/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0)))]
+      (is (= :unknown-profile-alternatives-container
+             (try (arr/resolve-at a (at)) nil
+                  (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))))
+      (is (seq rs))
+      (is (every? #{:unknown-profile-alternatives-container} rs)))))
+
 (deftest a-horizon-binds-each-document-to-its-own-version
   (testing "the reason these functions exist rather than letting a caller reach
             for urpx.schedule directly. Going through urpx.schedule means

@@ -1165,18 +1165,18 @@
                    {:profile-alternatives {"test:bsc-income-tier" "test:bsc-care"}})
                   "Basic Service Charge"))
           "while a real cell still selects, unchanged")
-      (let [l (ledger-by-name
-               (price/resolve-prices
-                plan (zdt 2026 7 15 17)
-                {:profile-alternatives {"test:other-dimension" "test:whatever"}})
-               "Basic Service Charge")]
-        (is (some? l)
-            "a key for a container this document does not declare is left alone,
-             because one selection map is passed to a plan and to every modifier
-             composed with it")
-        (is (seq (:urpx.resolved/unselected-alternatives l))
-            "so this dimension is simply unselected: withheld and marked, which
-             is what a caller can act on, rather than refused or elided")))))
+      (is (= {:reason     :unknown-profile-alternatives-container
+              :dimension  "test:other-dimension"
+              :chosen     "test:whatever"
+              :containers ["test:bsc-income-tier"]}
+             (try (price/resolve-prices
+                   plan (zdt 2026 7 15 17)
+                   {:profile-alternatives {"test:other-dimension" "test:whatever"}})
+                  nil
+                  (catch clojure.lang.ExceptionInfo e (ex-data e))))
+          "a key naming no container the document declares is refused, listing
+           the containers it does declare; read as no selection it withheld
+           the ledger it was meant to select"))))
 
 (deftest bsc-fixture-round-trips-through-emit
   (testing "URPX-vlf: ProfileAlternatives + PriceSetAlternatives round-trip

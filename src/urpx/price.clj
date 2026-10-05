@@ -928,7 +928,7 @@
 
 (defn- validate-selection!
   "Refuse a `:profile-alternatives` entry whose value is not a cell of the
-   container it is keyed under.
+   container it is keyed under, or whose key names no container at all.
 
    Checked once per document rather than per PriceDefinition, because the
    damage is not confined to the definition-level slot: the SAME typo on the
@@ -937,24 +937,41 @@
    stale departure-vintage id returned 0.46886 where the correct id returns
    0.49859, and the PCIA ledger was simply absent from the result.
 
-   A key naming a container this document does not declare is left alone, not
-   refused: one selection map is passed to the base plan and to every modifier,
-   and a key meant for one of them is meaningless to the others by design."
-  [selection alt-index]
+   A key is checked against `known-containers`, a delay over every container
+   the documents being resolved declare in any version, and is dereferenced
+   only for a key `alt-index` lacks. One selection map is passed to the base
+   plan and to every modifier, and a horizon spans versions, so a key meant for
+   another document or another version is accepted here; a key no document
+   declares is a mistyped container, which withholds every price it was meant
+   to select."
+  [selection alt-index known-containers]
   (doseq [[dim chosen] selection
-          :let [known (get (:cells alt-index) dim)]
-          :when known]
-    (when-not (contains? known chosen)
-      (throw (ex-info (str ":profile-alternatives chooses " (pr-str chosen)
-                           " for " (pr-str dim) ", which does not list it. Name one of "
-                           (pr-str (vec (sort known)))
-                           ", or drop the key. Compared for equality a stale or mistyped id "
-                           "reads as a deliberate choice of some other cell, which silently "
-                           "drops every price in that dimension.")
-                      {:reason :unknown-profile-alternative
-                       :dimension dim
-                       :chosen chosen
-                       :alternatives (vec (sort known))})))))
+          :let [known (get (:cells alt-index) dim)]]
+    (cond
+      known
+      (when-not (contains? known chosen)
+        (throw (ex-info (str ":profile-alternatives chooses " (pr-str chosen)
+                             " for " (pr-str dim) ", which does not list it. Name one of "
+                             (pr-str (vec (sort known)))
+                             ", or drop the key. Compared for equality a stale or mistyped id "
+                             "reads as a deliberate choice of some other cell, which silently "
+                             "drops every price in that dimension.")
+                        {:reason :unknown-profile-alternative
+                         :dimension dim
+                         :chosen chosen
+                         :alternatives (vec (sort known))})))
+
+      (not (contains? @known-containers dim))
+      (let [containers (vec (sort @known-containers))]
+        (throw (ex-info (str ":profile-alternatives is keyed by " (pr-str dim)
+                             ", which names no urpx:ProfileAlternatives container in the "
+                             "documents being resolved. Key the selection by one of "
+                             (pr-str containers) ", or drop the key. A mistyped container "
+                             "selects nothing, so every price it was meant to select is withheld.")
+                        {:reason :unknown-profile-alternatives-container
+                         :dimension dim
+                         :chosen chosen
+                         :containers containers}))))))
 
 (defn- pd-active-at-tou?
   "True if `pd` should be considered active at the resolved TOU period.
@@ -1751,6 +1768,35 @@
           1 (first candidates)
           (select-version-at candidates zdt (.getZone zdt) plan-id)))))
 
+(defn- declared-containers
+  "Every urpx:ProfileAlternatives container @id declared, or referenced from a
+   urpx:PriceSetAlternatives, by any version of the documents in `doc-keys`,
+   pairs of a document and the key that nests its versions. A version counts
+   whether nested in the document, handed in as its `:version`, or filed under
+   it in `:versions-by-plan`, so an un-nested document reaches the same
+   containers as its nested form."
+  [opts doc-keys]
+  (letfn [(walk [acc node]
+            (cond
+              (map? node)
+              (let [ref (get-in node [:urpx/referencesProfileAlternatives :jsonld/id])
+                    acc (cond-> (into acc (keep :jsonld/id)
+                                      (index/as-vec (:urpx/hasProfileAlternatives node)))
+                          (and (= "urpx:ProfileAlternatives" (:jsonld/type node))
+                               (:jsonld/id node))
+                          (conj (:jsonld/id node))
+
+                          ref (conj ref))]
+                (reduce-kv (fn [a _ v] (walk a v)) acc node))
+              (sequential? node) (reduce walk acc node)
+              :else acc))]
+    (reduce walk #{}
+            (for [[doc nested-key] doc-keys
+                  node [doc
+                        (version-opt-for doc opts nested-key)
+                        (get (:versions-by-plan opts) (:jsonld/id doc))]]
+              node))))
+
 ;; ---------------------------------------------------------------------------
 ;; Public API
 ;; ---------------------------------------------------------------------------
@@ -1783,7 +1829,8 @@
                 refuses if withholding them would make its sum short. A value
                 the keyed container does not list is refused outright, since
                 compared for equality a stale id is indistinguishable from a
-                deliberate choice of some other cell.
+                deliberate choice of some other cell. A key naming no
+                container in any document being resolved is refused too.
 
                 Programmatic ConditionExpression evaluation against a customer
                 profile is a future enhancement; a consumer names the cell.
@@ -1943,7 +1990,10 @@
          alt-index     (or (:alt-index opts)
                            (-> (profile-alternative-index plan-elements)
                                (index-with-price-set-alternatives prices)))
-         _             (validate-selection! (:profile-alternatives opts) alt-index)
+         _             (validate-selection! (:profile-alternatives opts) alt-index
+                                            (or (:alt-containers opts)
+                                                (delay (declared-containers
+                                                        opts [[rate-plan :urpx/hasRatePlanVersion]]))))
          alt-status    #(pd-alternative-status % (:profile-alternatives opts) alt-index)
          ;; What a ServiceBracket or ServiceTiers qualifier is read against.
          ;; The version's own hasSeasons first; then :by-id, type-checked.
@@ -2108,7 +2158,10 @@
          alt-index     (or (:alt-index opts)
                            (-> (profile-alternative-index plan-elts)
                                (index-with-price-set-alternatives prices)))
-         _             (validate-selection! (:profile-alternatives opts) alt-index)
+         _             (validate-selection! (:profile-alternatives opts) alt-index
+                                            (or (:alt-containers opts)
+                                                (delay (declared-containers
+                                                        opts [[modifier :urpx/hasRatePlanModifierVersion]]))))
          alt-status    #(pd-alternative-status % (:profile-alternatives opts) alt-index)
          own-schedules (:urpx/hasTOUSchedule billing)
          own-seasons   (:urpx/hasSeasons plan-elts)
@@ -2373,7 +2426,14 @@
                                                (map #(profile-alternative-index
                                                       (:urpx/hasPlanElements %))
                                                     versions))
-                                              versions))))
+                                              versions)))
+                                :alt-containers
+                                (or (:alt-containers opts)
+                                    (delay (declared-containers
+                                            opts
+                                            (cons [rate-plan :urpx/hasRatePlanVersion]
+                                                  (map #(vector % :urpx/hasRatePlanModifierVersion)
+                                                       modifiers))))))
          base            (resolve-prices rate-plan zdt opts)
          base-period-num (:urpx.resolved/tou-period-number base)
          ;; A discount Price in a modifier names a summary whose members live in
