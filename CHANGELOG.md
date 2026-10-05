@@ -9,7 +9,7 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
-## [Unreleased]
+## [0.36.0] — 2026-10-05
 
 ### Changed
 
@@ -26,10 +26,9 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
   | `:urpx.arrangement/opt-determined-by-arrangement` | `:urpx.scenario-cost-model/opt-determined-by-model` |
   | `:arrangement-id` in refusal ex-data | `:identity-tuple` |
 
-- **`identity-tuple` keys a model by its alternatives alone:** `[base-version-iri (sorted modifier-version iris) (sorted alternative iris)]`, the values a `urpx:ScenarioCostModel` carries. `arrangement-id` ended in `[[container alternative] ...]`. `enumerate` sorts by the new tuple, and each model's `:urpx.scenario-cost-model/selections` still maps every container to its alternative.
+- **`identity-tuple` keys a model by its alternatives alone:** `[base-version-iri [modifier-version-iri ...] [alternative-iri ...]]`, both inner vectors sorted, the values a `urpx:ScenarioCostModel` carries. `arrangement-id` ended in `[[container alternative] ...]`. `enumerate` sorts by the new tuple, and each model's `:urpx.scenario-cost-model/selections` still maps every container to its alternative.
 - **`segments-for` and `schedule-for` take ZonedDateTime bounds**, as `[model start end]` or `[model start end opts]`, in any zone. The Instant arities and the `zone` argument are gone. The bounds' instants define the window; segments are computed and returned in the plan's zone, the zone `resolve-at` resolves in.
 - **`load/documents` and `load/scan` return a package shell for every `urpx:URPXPackage` or `urpx:URPXDocument` wrapper:** the wrapper's own properties, with each embedded payload under `hasRatePlan`, `hasRatePlanModifier`, `hasTariffPublication` and `packages` replaced by a `{:jsonld/id id}` reference. README gives the predicate that drops the shells. Both also return any `urpx:ScenarioCostModel` among the coerced documents.
-- **`price-schedule`, `price-schedule-with-modifiers`, their `-days` forms and `schedule-for` report a refused step as an interval carrying `:urpx.interval/refused` and continue**, as `price-segments` and `segments-for` do, where the ExceptionInfo used to abort the whole window. Adjacent equal refusals merge into one interval.
 - **New refusals.**
 
   | Reason | When |
@@ -44,6 +43,9 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
   | `:ambiguous-marginal-tier` | `marginal-unit-rate` finds two or more prices at the lowest tier number of an energy ledger's block-tier ladder. It took one of them. The ex-data lists each ledger with its `:tier-number` and `:price-ids` under `:ledgers` |
   | `Unrecognized urpx:observanceRule` (ex-data `:observance-rule`, `:holiday`) | a `urpx:Holiday` names an observance rule other than `actualDateObservance`, `nearestWeekdayObservance`, `mondayIfWeekendObservance` or `fridayIfWeekendObservance`. The holiday was observed by its rule string's default or on its actual date. `holidays/derive-predicate` throws it, as it does an unrecognized `urpx:holidayRule` |
 
+- **`price-schedule`, `price-schedule-with-modifiers`, their `-days` forms and `schedule-for` report a refused step as an interval carrying `:urpx.interval/refused` and continue**, as `price-segments` and `segments-for` do, where the ExceptionInfo used to abort the whole window. Adjacent equal refusals merge into one interval.
+- **A modifier's Prices carrying `urpx:touPeriodNumber` contribute nothing where its own `urpx:TOUSchedule` covers no period**, such as `smud:pev-credit` outside 00:00-06:00, where every period's Price had been admitted. Those carrying none still apply.
+- **A Price stating `urpx:startDateTime` takes effect at that instant**, an offset-bearing value at the instant it names, where it had taken effect at the start of its plan-zone day. `price-segments` begins a segment there. A `urpx:startDate` still takes effect at midnight of that day in the plan zone.
 - **Temporal literals with an offset decode to what they name.** An xsd:dateTime written with `Z` or an offset decodes to a ZonedDateTime in that offset, and one without stays a LocalDateTime. An xsd:time with an offset decodes to an OffsetTime. An xsd:date with an offset decodes to the LocalDate it names, so a version or coverage bound written with one starts at midnight in the plan zone; the offset is kept with its date in the map's metadata under `:urpx.schema/date-offsets` and emitted as written while the map holds that date. The `DateTime` and `Time` schemas accept the zoned forms. Times and date-times encode in XSD canonical form with seconds, where `"16:00:00"` had been written as `"16:00"`. A typed-literal object `{"@value" v "@type" t}` decodes like the plain string, and `emit/default-context` types every temporal property the schema decodes. `urpx.coverage/of-version`'s `:evaluated-on` is a ZonedDateTime when the document wrote an offset.
 - **A modifier's ledgers carry its own matched season and TOU period** as `:urpx.resolved/season-name`, `tou-period-name` and `tou-period-number`. A modifier gated by the base plan's period carries no period keys, and the result-level keys remain the base plan's. `price-segments` now splits where a modifier's own season or period changes.
 - **A modifier's brackets read the modifier's own `urpx:HolidayCalendar`.** `resolve-modifier-prices` treated every date as a non-holiday without a `:holiday?`, and a composition applied the base plan's calendar to every modifier. A modifier declaring none still inherits the base plan's in a composition, and a caller's `:holiday?` overrides both. A modifier's calendar refuses an unrecognized rule as a base plan's does.
@@ -61,8 +63,6 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 - **A nested `@graph` was loaded as one untyped node.** `parse-graph` unwrapped only a top-level `@graph`, so upstream `test-cases/pge-e-tou-c` lost its package, plan, version, vintage-PCIA modifier and that modifier's version. It now flattens graph objects at any depth.
 - **A modifier summed a superseded dated Price with the one replacing it.** The modifier path now keeps the latest started Price per cell, as the base path does. With no selection, each `urpx:PriceSetAlternative` is reduced on its own.
-- **A Price stating `urpx:startDateTime` took effect at the start of its plan-zone day.** It now takes effect at that instant, an offset-bearing value at the instant it names, and `price-segments` begins a segment there. A `urpx:startDate` still takes effect at midnight of that day in the plan zone.
-- **A modifier admitted every period's Price where its own `urpx:TOUSchedule` covers no period**, such as `smud:pev-credit` outside 00:00-06:00. There its Prices carrying `urpx:touPeriodNumber` now contribute nothing, and those carrying none still apply.
 - **A modifier's `urpx:TimeBracket` naming a `urpx:Season` only the base plan declares matched nothing**, so every period's Price was admitted. It now resolves that Season through the composition and matches by its months.
 - **`load/scan` reported a by-reference package payload as uncoercible**, as `{:jsonld/type nil}`. The package shell keeps the reference, and the referenced entity loads where it is stated.
 
@@ -717,6 +717,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.36.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.36.0
 [0.35.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.35.0
 [0.34.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.34.0
 [0.33.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.33.0
