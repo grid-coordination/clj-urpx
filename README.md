@@ -739,13 +739,14 @@ Nothing guarantees a discarded type is never a version. `scan` does the same wor
 
 ### Example walkers
 
-`corpus/` holds a worked example of the first half for the URPX standard's own `test-cases/` in [urpx-org/urpx](https://github.com/urpx-org/urpx). None of it is library code: `corpus/` is not on the library's `:paths`, nothing in `src/` requires it, and none of it ships in the jar.
+`corpus/` holds worked examples of the first half: `corpus-json`, a walker for any corpus whose layout is declared in a `corpus.json` in the format of [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans), and `urpx.corpus.json`, which declares the layout of the URPX standard's own `test-cases/` in [urpx-org/urpx](https://github.com/urpx-org/urpx). None of it is library code: `corpus/` is not on the library's `:paths`, nothing in `src/` requires it, and none of it ships in the jar.
 
 ```bash
 clojure -M:dev:corpus -m corpus-sweep <path-to-urpx> --layout urpx-upstream
+clojure -M:dev:corpus -m corpus-sweep <path-to-corpus> --layout <path-to-corpus>/corpus.json
 ```
 
-`--layout <ns>` requires `<ns>` from the classpath and calls `<ns>/sources`, so a walker for another corpus can live with that corpus; [corpus/README.md](corpus/README.md) shows how to add one with `-Sdeps`.
+`--layout` takes a `corpus.json`, a directory holding one, or a namespace, which it requires from the classpath and calls `<ns>/sources`; a walker for another corpus can live with that corpus, and [corpus/README.md](corpus/README.md) shows how to add one with `-Sdeps`.
 
 A walker exists because a glob looks equivalent to a walk and is not. Over a URPX checkout older than upstream `ebde5871`, a naive `**/*.jsonld` **crashes**, because `dev-docs/samples` carried an instant written `2026-01-01T06:00:00Z` that coercion refuses, and the error names no file. Those samples moved to urpx-org/urpx-dev at `ebde5871`.
 

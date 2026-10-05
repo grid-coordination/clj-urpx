@@ -106,17 +106,27 @@
    The pipeline itself is `urpx.load/scan`; this only supplies the sources,
    which is the whole division of labour. A corpus layout is a one-off and
    there will never be one everyone adopts, so walking a tree is this script's
-   job and turning what it finds into documents is the library's."
+   job and turning what it finds into documents is the library's.
+
+   `layout` is a corpus.json, a directory holding one, or a walker namespace
+   providing `sources`."
   ([root] (load-corpus root nil))
   ([root layout]
    (load/scan
-    (if layout
-      ;; A layout walker knows what a glob cannot: which subtrees hold filings
-      ;; and which hold something else. See corpus/README.md.
+    ;; A layout knows what a glob cannot: which subtrees hold filings and
+    ;; which hold something else. See corpus/README.md.
+    (cond
+      (nil? layout)
+      (map fs/file (fs/glob root "**/*.jsonld"))
+
+      (fs/exists? layout)
+      ((requiring-resolve 'corpus-json/sources)
+       root ((requiring-resolve 'corpus-json/read-layout) layout))
+
+      :else
       (let [ns-sym (symbol layout)]
         (require ns-sym)
-        ((resolve (symbol layout "sources")) root))
-      (map fs/file (fs/glob root "**/*.jsonld"))))))
+        ((resolve (symbol layout "sources")) root))))))
 
 (defn coverage-census
   "What the corpus claims about its own coverage, counted.

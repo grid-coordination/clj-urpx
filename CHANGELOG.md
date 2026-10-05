@@ -9,6 +9,13 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Added
+
+- **`corpus/corpus_json.clj`, a dev-only walker for any corpus whose layout is declared in a `corpus.json`**, in urpx-rate-plans' format. `corpus-sweep --layout` takes a `corpus.json` or a directory holding one, as well as a walker namespace. As a program it prints the documents, named kinds, or `--all` as `kind<TAB>path`.
+- **`corpus/urpx.corpus.json` declares the layout of urpx-org/urpx's `test-cases/`.** The `urpx-upstream` walker reads it.
+
 ## [0.36.0] — 2026-10-05
 
 ### Changed

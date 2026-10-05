@@ -11,13 +11,30 @@ Each file here finds the URPX filings in one corpus's directory layout and retur
 
 | Walker | Corpus |
 |---|---|
-| `urpx-upstream` | the URPX standard's own `test-cases/` in [urpx-org/urpx](https://github.com/urpx-org/urpx), which exercise shapes no single publisher does |
+| `corpus-json` | any corpus whose layout is declared in a `corpus.json`, in the format of [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans)' `schema/corpus.schema.json` |
+| `urpx-upstream` | the URPX standard's own `test-cases/` in [urpx-org/urpx](https://github.com/urpx-org/urpx), as `urpx.corpus.json` declares them |
 
 ## Why a walker rather than a glob
 
 Globbing every `.jsonld` under a corpus root looks equivalent and is not. In a URPX checkout older than upstream `ebde5871`, or in urpx-org/urpx-dev, a glob **crashes**: `dev-docs/samples` carries an instant written `2026-01-01T06:00:00Z`, coercion refuses it, and the error names no file. In a corpus that keeps test fixtures or deliberately invalid documents beside its filings, a glob counts them too and **nothing errors**: a plausible number rather than a refusal. Neither failure tells you the layout was the problem.
 
-## Adding one
+## A corpus.json
+
+A corpus that ships a `corpus.json` needs no Clojure walker. Pass it, or the directory holding it, to `--layout`:
+
+```bash
+clojure -M:dev:corpus -m corpus-sweep <path-to-corpus> --layout <path-to-corpus>/corpus.json
+clojure -M:dev:corpus -m corpus-sweep <path-to-urpx> --layout corpus/urpx.corpus.json
+```
+
+`corpus-json` is also a walker CLI. Run from the corpus root, or with `--root`, it prints the documents with no arguments, the named kinds otherwise, and every kind as `kind<TAB>path` with `--all`:
+
+```bash
+clojure -M:corpus -m corpus-json --root <path-to-corpus> --all
+clojure -M:corpus -m corpus-json --layout corpus/urpx.corpus.json --root <path-to-urpx>
+```
+
+## Adding a walker namespace
 
 A walker is one function:
 

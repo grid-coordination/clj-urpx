@@ -24,8 +24,7 @@
            ;; Example corpus walkers. Not on the library :paths, never in the
            ;; jar: finding filings is layout-specific, turning them into
            ;; documents is not.
-           :corpus {:extra-paths ["corpus"]
-                    :extra-deps {babashka/fs {:mvn/version "0.5.22"}}}
+           :corpus {:extra-paths ["corpus"]}
 
            :dev {:extra-paths ["dev"]
                  :extra-deps {babashka/fs {:mvn/version "0.5.22"}
@@ -46,6 +45,8 @@
                    :main-opts ["-m" "nrepl.cmdline"
                                "--middleware" "[cider.nrepl/cider-middleware]"]}
 
-           :test {:extra-paths ["test" "test/resources"]
-                  :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
+           ;; corpus/ for its walker tests.
+           :test {:extra-paths ["test" "test/resources" "corpus"]
+                  :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}
+                               com.networknt/json-schema-validator {:mvn/version "1.5.7"}}
                   :main-opts ["-m" "kaocha.runner" "--config-file" "tests.edn"]}}}

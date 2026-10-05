@@ -1,0 +1,29 @@
+{
+  "$schema": "urn:grid-coordination:urpx-rate-plans:schema:corpus:v1",
+  "corpus": "urpx",
+  "roots": ["test-cases"],
+  "kinds": {
+    "instance": {
+      "description": "A test case's URPX documents",
+      "media_type": "application/ld+json",
+      "include": ["*/data/*.jsonld"]
+    },
+    "source": {
+      "description": "Material a test case was modeled from",
+      "include": ["*/assets/*.pdf", "*/assets/*.csv"]
+    },
+    "diagram": {
+      "description": "A test case's diagram, as Graphviz source and rendered SVG",
+      "include": ["*/assets/*.dot", "*/assets/*.svg"]
+    }
+  },
+  "documents": ["instance"],
+  "walkers": [
+    {
+      "language": "clojure",
+      "path": "corpus/corpus_json.clj",
+      "api": "corpus-json/sources",
+      "cli": "clojure -M:corpus -m corpus-json --layout corpus/urpx.corpus.json --root \"$URPX_DIR\""
+    }
+  ]
+}
