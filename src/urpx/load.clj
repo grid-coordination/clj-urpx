@@ -93,8 +93,8 @@
                                 its own properties, with each embedded payload
                                 replaced by a `{:jsonld/id id}` reference. That
                                 is how a zone declared only on the package
-                                reaches `urpx.arrangements`. An embedded payload
-                                with no @id refuses
+                                reaches `urpx.scenario-cost-model`. An
+                                embedded payload with no @id refuses
                                 `:urpx.load/payload-without-id`. A by-reference
                                 payload yields nothing beyond the shell.
     `coerce-doc`                strings become java.time values and BigDecimals.

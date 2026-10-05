@@ -1,11 +1,12 @@
 ;; SPDX-FileCopyrightText: 2026 Clark Communications Corporation
 ;; SPDX-License-Identifier: MIT
 (ns corpus-sweep
-  "Enumerate service arrangements over a corpus of URPX filings.
+  "Enumerate scenario cost models over a corpus of URPX filings.
 
-  Development only, and deliberately NOT part of the library: `urpx.arrangements`
-  takes documents that are already loaded and has no filesystem dependency, so
-  walking a tree is the caller's job. This is what that job looks like.
+  Development only, and deliberately NOT part of the library:
+  `urpx.scenario-cost-model` takes documents that are already loaded and has no
+  filesystem dependency, so walking a tree is the caller's job. This is what
+  that job looks like.
 
       clojure -M:dev -m corpus-sweep <locator> [rev]
 
@@ -31,7 +32,7 @@
             [clojure.java.shell :as shell]
             [clojure.string :as str]
             [clojure.tools.gitlibs :as gitlibs]
-            [urpx.arrangements :as arr]
+            [urpx.scenario-cost-model :as scm]
             [urpx.coverage :as coverage]
             [urpx.load :as load])
   (:import [java.time ZoneId ZonedDateTime]))
@@ -185,7 +186,7 @@
         ;; refusal's own reason and the identifiers it names, not a stack
         ;; trace above a blank report.
         refusal     (fn [f] (try (f) (catch clojure.lang.ExceptionInfo e e)))
-        all         (refusal #(arr/arrangements docs))
+        all         (refusal #(scm/enumerate docs))
         _           (when (instance? clojure.lang.ExceptionInfo all)
                       (println)
                       (println "REFUSED         :" (:reason (ex-data all)))
@@ -193,7 +194,7 @@
                       (doseq [[k v] (dissoc (ex-data all) :reason)]
                         (println "  " k v))
                       (System/exit 3))
-        cur         (refusal #(arr/arrangements docs {:at now}))
+        cur         (refusal #(scm/enumerate docs {:at now}))
         ;; The instant-restricted call can refuse where the all-versions call
         ;; did not: a tie on the latest effective instant is only reachable once
         ;; currency has narrowed the candidates. The upstream test cases carry
@@ -203,17 +204,17 @@
                       (println "REFUSED at" (str now) ":" (:reason (ex-data cur)))
                       (println "  " (ex-message cur))
                       (System/exit 3))
-        pairs       (distinct (map (juxt :urpx.arrangement/version-id
-                                         :urpx.arrangement/modifier-version-ids)
+        pairs       (distinct (map (juxt :urpx.scenario-cost-model/version-id
+                                         :urpx.scenario-cost-model/modifier-version-ids)
                                    cur))]
-    (println "arrangements    :" (count all) "over all versions,"
+    (println "models          :" (count all) "over all versions,"
              (count cur) "current at" (str now))
-    (println "  base versions :" (count (distinct (map :urpx.arrangement/version-id cur))))
+    (println "  base versions :" (count (distinct (map :urpx.scenario-cost-model/version-id cur))))
     (println "  (base, mods)  :" (count pairs) "distinct pairs")
     ;; Over BOTH sets. This printed the check for the :at set only, directly
     ;; beneath the all-versions figure for which it was false at the time: a
     ;; check run where it cannot fail, next to the number it was false for.
     (doseq [[label as] [["all versions" all] ["at instant " cur]]]
       (println (str "  ids unique (" label ") : ")
-               (= (count as) (count (distinct (map arr/arrangement-id as))))))
-    (println "  with a choice :" (count (filter #(seq (:urpx.arrangement/selections %)) cur)))))
+               (= (count as) (count (distinct (map scm/identity-tuple as))))))
+    (println "  with a choice :" (count (filter #(seq (:urpx.scenario-cost-model/selections %)) cur)))))

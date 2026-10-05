@@ -1538,10 +1538,11 @@
    start of that day. Both are sh:minCount 0, so a conformant version may state
    neither, and this returns nil rather than inventing an epoch for it.
 
-   Public as THE SINGLE READER of a version's effective instant. urpx.arrangements
-   re-derived this and got it subtly wrong, requiring urpx:effectiveDateTime and
-   so silently dropping a conformant version that states only urpx:effectiveDate.
-   Two namespaces disagreeing about the same date is the drift this prevents."
+   Public as THE SINGLE READER of a version's effective instant.
+   urpx.scenario-cost-model re-derived this and got it subtly wrong, requiring
+   urpx:effectiveDateTime and so silently dropping a conformant version that
+   states only urpx:effectiveDate. Two namespaces disagreeing about the same
+   date is the drift this prevents."
   [version ^ZoneId zone]
   (schema/in-zone (or (:urpx/effectiveDateTime version) (:urpx/effectiveDate version))
                   zone))

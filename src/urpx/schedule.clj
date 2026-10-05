@@ -276,10 +276,10 @@
    as `urpx.coerce/temporal-signature` groups them.
 
    The walk and the uncoerced-document test both live in `urpx.coerce` now, so
-   this namespace and `urpx.arrangements` cannot drift about what a coerced
-   document is. Throws on a document that was never coerced: raw JSON-LD leaves
-   these as strings, which would harvest nothing and yield a candidate set
-   narrowed to the midnight grid, quietly."
+   this namespace and `urpx.scenario-cost-model` cannot drift about what a
+   coerced document is. Throws on a document that was never coerced: raw
+   JSON-LD leaves these as strings, which would harvest nothing and yield a
+   candidate set narrowed to the midnight grid, quietly."
   [doc]
   (let [sig (coerce/temporal-signature doc)]
     (when (coerce/uncoerced? doc)

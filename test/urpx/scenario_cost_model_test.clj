@@ -1,10 +1,9 @@
-(ns urpx.arrangements-test
-  "Enumerating service arrangements.
+(ns urpx.scenario-cost-model-test
+  "Enumerating scenario cost models.
 
-  A service arrangement is one RatePlanVersion, the modifier versions a
-  customer holds, and one ProfileAlternative per open dimension. The concept is
-  NOT a URPX class: zero occurrences in the ontology and zero in the SHACL, and
-  nothing here writes it into a document.
+  A scenario cost model is one RatePlanVersion, the modifier versions a
+  customer holds, and one ProfileAlternative per open dimension: the
+  composition a urpx:ScenarioCostModel prices.
 
   The split that makes it tractable is what the documents can and cannot say.
   Compatibility, which modifier MAY apply to which plan, is stated, by
@@ -16,7 +15,7 @@
             [clojure.string :as str]
             [clojure.walk]
             [clojure.test :refer [deftest is testing]]
-            [urpx.arrangements :as arr]
+            [urpx.scenario-cost-model :as scm]
             [urpx.core :as core]
             [urpx.index :as index]
             [urpx.load :as load]
@@ -35,20 +34,20 @@
    (fixtures/load-modifier "sce-care-2026-03-20")
    (fixtures/load-modifier "sce-fera-2026-03-20")])
 
-(defn- rate [a] (price/marginal-unit-rate (arr/resolve-at a (at))))
+(defn- rate [a] (price/marginal-unit-rate (scm/resolve-at a (at))))
 
 (deftest discovery-answers-what-may-apply
   (testing "the query a consumer actually wants, and the half URPX can answer.
             urpx:applicableToRatePlan states compatibility with a plan
             identity."
     (let [docs (sce-docs)
-          bv   (first (arr/plan-versions docs))]
-      (is (= ["sce:d-2026-03-20"] (mapv :jsonld/id (arr/plan-versions docs))))
+          bv   (first (scm/plan-versions docs))]
+      (is (= ["sce:d-2026-03-20"] (mapv :jsonld/id (scm/plan-versions docs))))
       (is (= ["sce:care-2026-03-20" "sce:fera-2026-03-20"]
-             (mapv :jsonld/id (arr/applicable-modifiers docs bv)))
+             (mapv :jsonld/id (scm/applicable-modifiers docs bv)))
           "both income-tier programs are compatible with Schedule D")
       (is (= ["org:utility-sce"]
-             (keys (arr/offered-by (arr/applicable-modifiers docs bv))))
+             (keys (scm/offered-by (scm/applicable-modifiers docs bv))))
           "and a broader search by offering organization works, since
            urpx:offeredBy is populated where applicableToRateGroup and
            hasServiceClass are not"))))
@@ -61,95 +60,95 @@
             urpx:modifierType, which might have served, are optional.
 
             So the library states compatibility and the caller states
-            possession. That is why `arrangements` takes a policy rather than
+            possession. That is why `enumerate` takes a policy rather than
             inventing one: inventing it here is the arbitrary pick this library
             removes everywhere else."
     (let [docs (sce-docs)
-          ids  #(mapv :urpx.arrangement/modifier-version-ids %)]
+          ids  #(mapv :urpx.scenario-cost-model/modifier-version-ids %)]
       (is (= [[] ["sce:care-2026-03-20"] ["sce:fera-2026-03-20"]]
-             (ids (arr/arrangements docs)))
+             (ids (scm/enumerate docs)))
           "the default policy is conservative: base alone, or one modifier")
       (is (= [[] ["sce:care-2026-03-20"] ["sce:fera-2026-03-20"]
               ["sce:care-2026-03-20" "sce:fera-2026-03-20"]]
-             (sort (ids (arr/arrangements docs {:combine arr/every-subset}))))
+             (sort (ids (scm/enumerate docs {:combine scm/every-subset}))))
           "every-subset is complete and knowingly wrong: it pairs two
            mutually exclusive programs, because no document forbids it"))))
 
-(deftest each-arrangement-resolves-to-its-own-price
-  (testing "an arrangement is fully determined, so it prices with no further
+(deftest each-model-resolves-to-its-own-price
+  (testing "a model is fully determined, so it prices with no further
             input. These are the filed CARE and FERA discounts on Schedule D."
-    (let [by-mods (into {} (map (juxt :urpx.arrangement/modifier-version-ids identity))
-                        (arr/arrangements (sce-docs)))]
+    (let [by-mods (into {} (map (juxt :urpx.scenario-cost-model/modifier-version-ids identity))
+                        (scm/enumerate (sce-docs)))]
       (is (= 0.31085M    (rate (by-mods []))) "base alone")
       (is (= 0.19804875M (rate (by-mods ["sce:care-2026-03-20"]))) "CARE")
       (is (= 0.2550770M  (rate (by-mods ["sce:fera-2026-03-20"]))) "FERA"))))
 
-(deftest an-open-dimension-makes-several-arrangements
-  (testing "a choice still outstanding is not one arrangement but several, and
-            each is an arrangement in its own right. PG&E E-TOU-C carries a
-            three-cell income-tier container, so its base-alone arrangement is
+(deftest an-open-dimension-makes-several-models
+  (testing "a choice still outstanding is not one model but several, and
+            each is a model in its own right. PG&E E-TOU-C carries a
+            three-cell income-tier container, so its base-alone model is
             three."
     (let [docs [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]
-          as   (arr/arrangements docs)
-          sels (map :urpx.arrangement/selections as)]
+          as   (scm/enumerate docs)
+          sels (map :urpx.scenario-cost-model/selections as)]
       (is (= 3 (count as)))
       (is (every? #(= 1 (count %)) sels) "one choice each")
       (is (= #{"pge:pa-income-tier-care" "pge:pa-income-tier-fera"
                "pge:pa-income-tier-standard"}
              (set (mapcat vals sels)))
-          "one arrangement per cell of the container"))))
+          "one model per cell of the container"))))
 
 (deftest identity-is-intrinsic-and-survives-equal-prices
   (testing "the tuple is computable from the documents alone and requires
-            nothing external. Two arrangements differ when it differs EVEN IF
+            nothing external. Two models differ when it differs EVEN IF
             they resolve to the same price."
-    (let [as (arr/arrangements (sce-docs))]
-      (is (= (count as) (count (distinct (map arr/arrangement-id as))))
-          "distinct arrangements have distinct ids")
+    (let [as (scm/enumerate (sce-docs))]
+      (is (= (count as) (count (distinct (map scm/identity-tuple as))))
+          "distinct models have distinct ids")
       (is (= ["sce:d-2026-03-20" ["sce:care-2026-03-20"] []]
-             (arr/arrangement-id
+             (scm/identity-tuple
               (first (filter #(= ["sce:care-2026-03-20"]
-                                 (:urpx.arrangement/modifier-version-ids %)) as))))
+                                 (:urpx.scenario-cost-model/modifier-version-ids %)) as))))
           "base version, sorted modifier versions, sorted selections"))))
 
 (deftest currency-drops-superseded-versions
-  (testing "a superseded version is not a service arrangement: nobody takes
+  (testing "a superseded version is not a scenario cost model: nobody takes
             service under it. SCE Schedule D holds two versions, effective
             2025-11-15 and 2026-03-20, so an instant after the later one leaves
             one base version and an instant between them leaves the earlier."
     (let [docs [(fixtures/load-rate-plan "sce-d-2025-11-15")
                 (fixtures/load-rate-plan "sce-d-2026-03-20")]]
       (is (= #{"sce:d-2025-11-15" "sce:d-2026-03-20"}
-             (set (map :jsonld/id (arr/plan-versions docs))))
+             (set (map :jsonld/id (scm/plan-versions docs))))
           "both, with no instant: the whole expressed space")
       (is (= ["sce:d-2026-03-20"]
-             (mapv :jsonld/id (arr/plan-versions docs {:at (at)})))
+             (mapv :jsonld/id (scm/plan-versions docs {:at (at)})))
           "the later one in July")
       (is (= ["sce:d-2025-11-15"]
-             (mapv :jsonld/id (arr/plan-versions docs {:at (at 2026 1 15 12)})))
+             (mapv :jsonld/id (scm/plan-versions docs {:at (at 2026 1 15 12)})))
           "and the earlier one in January, before its successor took effect"))))
 
 (deftest resolve-at-binds-each-document-to-its-own-version
   (testing "both :version defects this library fixed were an opt reaching a
-            document it did not belong to. An arrangement binds each piece by
+            document it did not belong to. A model binds each piece by
             construction, so resolve-at passes a per-document :version map and
             the mistake becomes unrepresentable rather than repeatedly fixable.
 
-            Extra opts merge over the arrangement's own."
+            Extra opts merge over the model's own."
     (let [a (first (filter #(= ["sce:care-2026-03-20"]
-                               (:urpx.arrangement/modifier-version-ids %))
-                           (arr/arrangements (sce-docs))))]
+                               (:urpx.scenario-cost-model/modifier-version-ids %))
+                           (scm/enumerate (sce-docs))))]
       (is (= 0.19804875M (rate a)))
       ;; Pass-through is asserted in its own deftest below, on a fixture whose
       ;; resolution actually consults the opt.
       (doseq [k [:version :profile-alternatives]]
-        (is (= :urpx.arrangement/opt-determined-by-arrangement
-               (try (arr/resolve-at a (at) {k {}})
+        (is (= :urpx.scenario-cost-model/opt-determined-by-model
+               (try (scm/resolve-at a (at) {k {}})
                     (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))
                )
-            (str k " is determined by the arrangement, so it is refused rather "
+            (str k " is determined by the model, so it is refused rather "
                  "than merged: letting the caller win restores the very defect "
-                 "this function prevents, and letting the arrangement win "
+                 "this function prevents, and letting the model win "
                  "ignores an opt the caller meant"))))))
 
 (deftest caller-opts-reach-urpx-price
@@ -169,10 +168,10 @@
             PG&E E-TOU-C invokes the holiday predicate exactly once while
             resolving, so a predicate counting its own calls distinguishes an
             opt that arrived from one that was dropped, whatever the number."
-    (let [a      (first (arr/arrangements [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
+    (let [a      (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
           called (atom 0)]
       (price/marginal-unit-rate
-       (arr/resolve-at a (at) {:holiday? (fn [_] (swap! called inc) false)}))
+       (scm/resolve-at a (at) {:holiday? (fn [_] (swap! called inc) false)}))
       (is (pos? @called)
           "resolve-at must forward caller opts: this predicate is invoked only
            if :holiday? reached urpx.price"))))
@@ -213,8 +212,8 @@
             arbitrarily."
     (let [docs [(plan-doc "x:p" "x:p-v1" (ldt 2026 1 1))
                 (plan-doc "x:p" "x:p-v1" (ldt 2026 1 1) {:urpx/version "differs"})]
-          e    (is (thrown? clojure.lang.ExceptionInfo (arr/arrangements docs)))]
-      (is (= :urpx.arrangement/conflicting-version-id (:reason (ex-data e))))
+          e    (is (thrown? clojure.lang.ExceptionInfo (scm/enumerate docs)))]
+      (is (= :urpx.scenario-cost-model/conflicting-version-id (:reason (ex-data e))))
       (is (= ["x:p-v1"] (:ids (ex-data e))) "the message names the offending @id"))))
 
 (deftest every-conflicting-id-is-named-at-once
@@ -225,7 +224,7 @@
                 (plan-doc "x:a" "x:a-v" (ldt 2026 1 1) {:urpx/version "differs"})
                 (plan-doc "x:b" "x:b-v" (ldt 2026 1 1))
                 (plan-doc "x:b" "x:b-v" (ldt 2026 1 1) {:urpx/version "differs"})]
-          e    (is (thrown? clojure.lang.ExceptionInfo (arr/arrangements docs)))]
+          e    (is (thrown? clojure.lang.ExceptionInfo (scm/enumerate docs)))]
       (is (= ["x:a-v" "x:b-v"] (:ids (ex-data e)))
           "both, in one refusal, not one per round trip"))))
 
@@ -233,11 +232,11 @@
   (testing "two filings carrying a byte-identical version node are one version
             published twice. That is benign and must NOT refuse: only differing
             content is a contradiction. Before this deduplicated, a repeat
-            produced duplicate arrangements."
+            produced duplicate models."
     (let [one  [(plan-doc "x:p" "x:p-v1" (ldt 2026 1 1))]
           twice (conj one (plan-doc "x:p" "x:p-v1" (ldt 2026 1 1)))]
-      (is (= 1 (count (arr/arrangements one))))
-      (is (= (arr/arrangements one) (arr/arrangements twice))
+      (is (= 1 (count (scm/enumerate one))))
+      (is (= (scm/enumerate one) (scm/enumerate twice))
           "publishing it twice changes nothing at all"))))
 
 (deftest a-tie-on-the-latest-effective-instant-is-refused
@@ -251,8 +250,8 @@
     (let [docs [(plan-doc "x:p" "x:p-v1" (ldt 2026 1 1))
                 (plan-doc "x:p" "x:p-v2" (ldt 2026 1 1))]
           e    (is (thrown? clojure.lang.ExceptionInfo
-                            (arr/arrangements docs {:at (at 2026 6 1 12)})))]
-      (is (= :urpx.arrangement/ambiguous-version (:reason (ex-data e))))
+                            (scm/enumerate docs {:at (at 2026 6 1 12)})))]
+      (is (= :urpx.scenario-cost-model/ambiguous-version (:reason (ex-data e))))
       (is (= ["x:p-v1" "x:p-v2"] (sort (:ids (ex-data e))))))))
 
 (deftest uncoerced-documents-are-refused-not-answered
@@ -267,9 +266,9 @@
 
             Every public entry point guards, since each is reachable first."
     (let [raw (fixtures/load-graph "sce-d-2026-03-20")]
-      (doseq [[nm f] [["arrangements"         #(arr/arrangements raw)]
-                      ["arrangements :at"     #(arr/arrangements raw {:at (at)})]
-                      ["plan-versions"        #(arr/plan-versions raw)]]]
+      (doseq [[nm f] [["enumerate"            #(scm/enumerate raw)]
+                      ["enumerate :at"        #(scm/enumerate raw {:at (at)})]
+                      ["plan-versions"        #(scm/plan-versions raw)]]]
         (let [e (is (thrown? clojure.lang.ExceptionInfo (f)) nm)]
           (is (= :uncoerced-document (:reason (ex-data e))) nm))))))
 
@@ -279,8 +278,8 @@
             content under an unchanged count as well as moving the count."
     (let [docs (sce-docs)]
       (doseq [perm [[0 1 2] [2 1 0] [1 0 2] [1 2 0] [2 0 1]]]
-        (is (= (arr/arrangements docs {:at (at)})
-               (arr/arrangements (mapv docs perm) {:at (at)}))
+        (is (= (scm/enumerate docs {:at (at)})
+               (scm/enumerate (mapv docs perm) {:at (at)}))
             (str "permutation " perm " must give an identical result"))))))
 
 (deftest at-restricts-to-current-versions
@@ -289,13 +288,13 @@
             before the later one takes effect must not see it."
     (let [docs [(fixtures/load-rate-plan "sce-d-2025-11-15")
                 (fixtures/load-rate-plan "sce-d-2026-03-20")]]
-      (is (= 2 (count (arr/arrangements docs)))
+      (is (= 2 (count (scm/enumerate docs)))
           "both versions with no instant: the whole expressed space")
       (is (= ["sce:d-2026-03-20"]
-             (mapv :urpx.arrangement/version-id (arr/arrangements docs {:at (at)}))))
+             (mapv :urpx.scenario-cost-model/version-id (scm/enumerate docs {:at (at)}))))
       (is (= ["sce:d-2025-11-15"]
-             (mapv :urpx.arrangement/version-id
-                   (arr/arrangements docs {:at (at 2026 1 15 12)})))))))
+             (mapv :urpx.scenario-cost-model/version-id
+                   (scm/enumerate docs {:at (at 2026 1 15 12)})))))))
 
 (deftest a-version-stating-only-effectiveDate-is-not-dropped
   (testing "urpx:effectiveDateTime and urpx:effectiveDate are both sh:minCount 0,
@@ -311,13 +310,13 @@
                  {:jsonld/id "x:p-v" :jsonld/type "urpx:RatePlanVersion"
                   :urpx/forRatePlan {:jsonld/id "x:p"}
                   :urpx/effectiveDate (java.time.LocalDate/of 2026 1 1)}}]]
-      (is (= ["x:p-v"] (mapv :urpx.arrangement/version-id (arr/arrangements docs)))
+      (is (= ["x:p-v"] (mapv :urpx.scenario-cost-model/version-id (scm/enumerate docs)))
           "present with no instant")
-      (is (= ["x:p-v"] (mapv :urpx.arrangement/version-id
-                             (arr/arrangements docs {:at (at)})))
+      (is (= ["x:p-v"] (mapv :urpx.scenario-cost-model/version-id
+                             (scm/enumerate docs {:at (at)})))
           "and in force at an instant after that date"))))
 
-(deftest each-arrangement-carries-the-document-its-snapshot-came-from
+(deftest each-model-carries-the-document-its-snapshot-came-from
   (testing "the 0.28.0 defect class a third time. The document was recovered by
             version @id from an (into {} ...) map, so when two documents publish
             one @id the loser's snapshot was paired with the winner's document.
@@ -325,18 +324,18 @@
             Identity, not @id: the bound document must be the one that literally
             contains this node."
     (let [docs (sce-docs)]
-      (doseq [a (arr/arrangements docs)]
+      (doseq [a (scm/enumerate docs)]
         (letfn [(nodes [d k] (filter #(and (map? %) (= k (:jsonld/type %)))
                                      (tree-seq coll? seq d)))]
-          (is (some #(identical? (:urpx.arrangement/version a) %)
-                    (nodes (:urpx.arrangement/rate-plan a) "urpx:RatePlanVersion"))
+          (is (some #(identical? (:urpx.scenario-cost-model/version a) %)
+                    (nodes (:urpx.scenario-cost-model/rate-plan a) "urpx:RatePlanVersion"))
               "base version must be a node of its own bound document")
           (is (every? true?
                       (map (fn [mv md]
                              (boolean (some #(identical? mv %)
                                             (nodes md "urpx:RatePlanModifierVersion"))))
-                           (:urpx.arrangement/modifier-versions a)
-                           (:urpx.arrangement/modifiers a)))
+                           (:urpx.scenario-cost-model/modifier-versions a)
+                           (:urpx.scenario-cost-model/modifiers a)))
               "and so must each modifier version"))))))
 
 
@@ -368,14 +367,14 @@
      :urpx/forRatePlan {:jsonld/id "x:p"}
      :urpx/effectiveDateTime (ldt 2026 6 1)}]})
 
-(deftest resolve-at-uses-the-arrangements-version-not-urpx-prices-own-choice
+(deftest resolve-at-uses-the-models-version-not-urpx-prices-own-choice
   (testing "the per-document :version map is the whole reason this namespace
             offers resolve-at, and deleting it outright changed no number in
             1382 assertions. It was invisible because every fixture document
             carries exactly ONE version, so urpx.price's own rules could only
             ever reach the same snapshot.
 
-            Made visible with a document carrying two: build the arrangement at
+            Made visible with a document carrying two: build the model at
             an instant only v1 covers, then resolve at an instant only v2
             covers.
 
@@ -383,14 +382,14 @@
             refuses the document outright, \"Multiple nested version snapshots;
             this library reads one. Pass the intended node explicitly.\" So the
             :version map is not an optimization over urpx.price's own rules, it
-            is what makes a multi-version document resolvable at all, and an
-            arrangement supplies it by construction."
+            is what makes a multi-version document resolvable at all, and a
+            model supplies it by construction."
     (let [docs [(two-version-plan)]
-          a    (first (arr/arrangements docs {:at (at 2026 3 1 12)}))
-          res  (try (arr/resolve-at a (at 2026 7 15 17))
+          a    (first (scm/enumerate docs {:at (at 2026 3 1 12)}))
+          res  (try (scm/resolve-at a (at 2026 7 15 17))
                     (catch clojure.lang.ExceptionInfo e
                       {::refused (or (:reason (ex-data e)) (:what (ex-data e)))}))]
-      (is (= "x:p-v1" (:urpx.arrangement/version-id a))
+      (is (= "x:p-v1" (:urpx.scenario-cost-model/version-id a))
           "the March instant selects v1")
       (is (nil? (::refused res))
           "resolution must succeed: unbound, urpx.price cannot choose between
@@ -408,7 +407,7 @@
 
             The default narrows, matching the ontology's wording. The monotone
             reading is sound under RDF, where merging adds triples and never
-            retracts, so a larger corpus cannot yield fewer arrangements.
+            retracts, so a larger corpus cannot yield fewer models.
 
             CONSTRUCTED, because the readings differ only when a modifier names
             some version, about a base version it does not name whose plan it
@@ -418,19 +417,19 @@
                              {:urpx/applicableToRatePlan        [{:jsonld/id "x:p"}]
                               :urpx/applicableToRatePlanVersion [{:jsonld/id "x:other-v"}]})
           bv   (:urpx/hasRatePlanVersion plan)
-          ids  #(mapv :jsonld/id (arr/applicable-modifiers [plan m] bv %))]
+          ids  #(mapv :jsonld/id (scm/applicable-modifiers [plan m] bv %))]
       (is (= [] (ids nil))
           "default: naming a version means those and only those, so naming
            x:other-v excludes this one even though its PLAN is named")
-      (is (= [] (ids {:compatibility arr/named-versions-narrow}))
+      (is (= [] (ids {:compatibility scm/named-versions-narrow}))
           "stated explicitly, same answer")
-      (is (= ["x:m-v"] (ids {:compatibility arr/named-versions-add}))
+      (is (= ["x:m-v"] (ids {:compatibility scm/named-versions-add}))
           "monotone: the version statement adds, so the plan statement still
            applies and the modifier is compatible")
       (is (= [[] ["x:m-v"]]
-             (mapv :urpx.arrangement/modifier-version-ids
-                   (arr/arrangements [plan m] {:compatibility arr/named-versions-add})))
-          "and the policy reaches arrangements, not only applicable-modifiers"))))
+             (mapv :urpx.scenario-cost-model/modifier-version-ids
+                   (scm/enumerate [plan m] {:compatibility scm/named-versions-add})))
+          "and the policy reaches models, not only applicable-modifiers"))))
 
 (deftest a-modifier-naming-no-plan-and-no-version-combines-with-nothing
   (testing "both properties are sh:minCount 0, so a conformant modifier version
@@ -440,11 +439,11 @@
             attach every such modifier to every plan in the corpus."
     (let [plan (plan-doc "x:p" "x:p-v1" (ldt 2026 1 1))
           m    (modifier-doc "x:m" "x:m-v" (ldt 2026 1 1) {})]
-      (is (= [] (mapv :jsonld/id (arr/applicable-modifiers [plan m]
+      (is (= [] (mapv :jsonld/id (scm/applicable-modifiers [plan m]
                                                            (:urpx/hasRatePlanVersion plan)))))
-      (is (= [[]] (mapv :urpx.arrangement/modifier-version-ids
-                        (arr/arrangements [plan m])))
-          "so the plan has exactly one arrangement, itself, and the modifier
+      (is (= [[]] (mapv :urpx.scenario-cost-model/modifier-version-ids
+                        (scm/enumerate [plan m])))
+          "so the plan has exactly one model, itself, and the modifier
            contributes none"))))
 
 (deftest applicable-modifiers-honors-at
@@ -464,28 +463,28 @@
                   :urpx/applicableToRatePlan [{:jsonld/id "x:p"}]}]}
           bv   (:urpx/hasRatePlanVersion plan)]
       (is (= ["x:m-new" "x:m-old"]
-             (sort (mapv :jsonld/id (arr/applicable-modifiers [plan old] bv))))
+             (sort (mapv :jsonld/id (scm/applicable-modifiers [plan old] bv))))
           "both, with no instant: the whole expressed space")
-      (is (= ["x:m-old"] (mapv :jsonld/id (arr/applicable-modifiers [plan old] bv
+      (is (= ["x:m-old"] (mapv :jsonld/id (scm/applicable-modifiers [plan old] bv
                                                                     {:at (at 2026 3 1 12)})))
           "in March only the first has taken effect")
-      (is (= ["x:m-new"] (mapv :jsonld/id (arr/applicable-modifiers [plan old] bv
+      (is (= ["x:m-new"] (mapv :jsonld/id (scm/applicable-modifiers [plan old] bv
                                                                     {:at (at 2026 7 1 12)})))
           "in July the later one supersedes it"))))
 
-(deftest arrangement-id-distinguishes-arrangements-that-differ-only-by-selection
+(deftest identity-tuple-distinguishes-models-that-differ-only-by-selection
   (testing "the selections component of the id was untested: dropping it left
-            three genuinely different PG&E E-TOU-C arrangements sharing one id,
+            three genuinely different PG&E E-TOU-C models sharing one id,
             with the suite green. They have the same base version, the same
             (empty) modifier set, and differ ONLY in which income-tier
             alternative is chosen, so selections are the only thing that can
             tell them apart."
-    (let [as  (arr/arrangements [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")])
-          ids (mapv arr/arrangement-id as)]
+    (let [as  (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")])
+          ids (mapv scm/identity-tuple as)]
       (is (= 3 (count as)))
-      (is (= 1 (count (distinct (map :urpx.arrangement/version-id as))))
+      (is (= 1 (count (distinct (map :urpx.scenario-cost-model/version-id as))))
           "same base version")
-      (is (= 1 (count (distinct (map :urpx.arrangement/modifier-version-ids as))))
+      (is (= 1 (count (distinct (map :urpx.scenario-cost-model/modifier-version-ids as))))
           "and the same modifier set, so the id has nothing else to go on")
       (is (= 3 (count (distinct ids)))
           "three distinct ids, which holds only if selections are in the id"))))
@@ -503,8 +502,8 @@
             rather than where a step grid lands. PG&E E-TOU-C has TOU periods,
             so a day must come back as several segments, contiguous and
             covering the window exactly."
-    (let [a    (first (arr/arrangements [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
-          segs (arr/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0))]
+    (let [a    (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
+          segs (scm/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0))]
       (is (< 1 (count segs)) "a TOU day is not one segment")
       (is (= (.toInstant ^ZonedDateTime (:tick/beginning (first segs))) (inst 2026 7 15 0))
           "starts where asked")
@@ -531,8 +530,8 @@
              n))
    doc))
 
-(deftest a-horizon-carries-the-arrangements-selection
-  (testing "the choice an arrangement makes has to reach the horizon path, not
+(deftest a-horizon-carries-the-models-selection
+  (testing "the choice a model makes has to reach the horizon path, not
             only the instant path.
 
             It cannot be asserted on the bare fixture. Measured: the three
@@ -543,17 +542,17 @@
             and nothing hangs on them.
 
             So scope one, exactly as urpx.pd-alternatives-test does. Then the
-            selection is load-bearing: the arrangement that chose that cell
+            selection is load-bearing: the model that chose that cell
             prices, and with no selection at all the prices are withheld and
             the rate refuses :unselected-alternatives."
     (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
           pas  (first (vals (index/entities-of-type plan "urpx:ProfileAlternatives")))
           alt  (:jsonld/id (first (:urpx/hasProfileAlternative pas)))
           doc  (scope-pd-to plan [alt])
-          a    (first (filter #(= {(:jsonld/id pas) alt} (:urpx.arrangement/selections %))
-                              (arr/arrangements [doc])))
-          segs (arr/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0))]
-      (is (some? a) "there is an arrangement that chose the scoped cell")
+          a    (first (filter #(= {(:jsonld/id pas) alt} (:urpx.scenario-cost-model/selections %))
+                              (scm/enumerate [doc])))
+          segs (scm/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0))]
+      (is (some? a) "there is a model that chose the scoped cell")
       (is (not-any? :urpx.interval/refused segs) "no segment refuses")
       (is (= [] (->> segs
                      (keep #(try (price/marginal-unit-rate (:urpx.interval/resolved %)) nil
@@ -562,16 +561,16 @@
           "every segment yields a rate; without the selection reaching
            urpx.price each refuses :unselected-alternatives"))))
 
-(deftest an-arrangement-selection-naming-no-container-is-refused
-  (testing "an arrangement hands its selections to urpx.price, so a key naming no
+(deftest a-model-selection-naming-no-container-is-refused
+  (testing "a model hands its selections to urpx.price, so a key naming no
             container in its documents refuses there, at an instant and across
             a horizon alike."
-    (let [a  (update (first (arr/arrangements [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
-                     :urpx.arrangement/selections assoc "x:no-such-container" "x:whatever")
+    (let [a  (update (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
+                     :urpx.scenario-cost-model/selections assoc "x:no-such-container" "x:whatever")
           rs (keep #(get-in % [:urpx.interval/refused :reason])
-                   (arr/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0)))]
+                   (scm/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0)))]
       (is (= :unknown-profile-alternatives-container
-             (try (arr/resolve-at a (at)) nil
+             (try (scm/resolve-at a (at)) nil
                   (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))))
       (is (seq rs))
       (is (every? #{:unknown-profile-alternatives-container} rs)))))
@@ -579,43 +578,43 @@
 (deftest a-horizon-binds-each-document-to-its-own-version
   (testing "the reason these functions exist rather than letting a caller reach
             for urpx.schedule directly. Going through urpx.schedule means
-            taking the arrangement apart and rebuilding the per-document
+            taking the model apart and rebuilding the per-document
             :version map by hand, which is the reconstruction resolve-at exists
             to prevent.
 
             Same two-version document as the resolve-at test: without the
             binding urpx.price cannot choose between the nested snapshots and
             every segment comes back refused."
-    (let [a    (first (arr/arrangements [(two-version-plan)] {:at (at 2026 3 1 12)}))
-          segs (arr/segments-for a (inst 2026 2 1 0) (inst 2026 2 2 0)
+    (let [a    (first (scm/enumerate [(two-version-plan)] {:at (at 2026 3 1 12)}))
+          segs (scm/segments-for a (inst 2026 2 1 0) (inst 2026 2 2 0)
                                  (java.time.ZoneId/of "America/Los_Angeles"))]
       (is (seq segs))
       (is (not-any? :urpx.interval/refused segs)
           "unbound, urpx.price refuses a document carrying two snapshots and
            every segment carries :urpx.interval/refused instead of a price"))))
 
-(deftest a-horizon-refuses-the-opts-the-arrangement-determines
+(deftest a-horizon-refuses-the-opts-the-model-determines
   (testing "same discipline as resolve-at, and asserted separately because a
             second entry point is a second chance to forget it. One builder
             serves all three, so this also pins that they share it."
-    (let [a (first (arr/arrangements [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))]
-      (doseq [[nm f] [["segments-for" #(arr/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0) nil %)]
-                      ["schedule-for" #(arr/schedule-for a (inst 2026 7 15 0) (inst 2026 7 16 0) nil %)]]
+    (let [a (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))]
+      (doseq [[nm f] [["segments-for" #(scm/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0) nil %)]
+                      ["schedule-for" #(scm/schedule-for a (inst 2026 7 15 0) (inst 2026 7 16 0) nil %)]]
               k       [:version :profile-alternatives]]
         (let [e (is (thrown? clojure.lang.ExceptionInfo (f {k {}})) (str nm " " k))]
-          (is (= :urpx.arrangement/opt-determined-by-arrangement (:reason (ex-data e)))
+          (is (= :urpx.scenario-cost-model/opt-determined-by-model (:reason (ex-data e)))
               (str nm " " k)))))))
 
 (deftest schedule-for-walks-a-grid-and-agrees-with-segments-on-price
   (testing "the stepped variant, for callers that want a fixed cadence. It must
             agree with segments-for about the price at a given instant; the two
             differ in where boundaries fall, not in what anything costs."
-    (let [a     (first (arr/arrangements [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
-          sched (arr/schedule-for a (inst 2026 7 15 0) (inst 2026 7 16 0))
+    (let [a     (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
+          sched (scm/schedule-for a (inst 2026 7 15 0) (inst 2026 7 16 0))
           rate  #(some-> (:urpx.interval/resolved %) price/marginal-unit-rate)]
       (is (seq sched))
       (is (= (set (keep rate sched))
-             (set (keep rate (arr/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0)))))
+             (set (keep rate (scm/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0)))))
           "same set of prices over the same day, reached two different ways"))))
 
 
@@ -635,29 +634,29 @@
             For a consumer handing intervals to an optimizer that is the
             difference between a schedule that is right and one that is right
             only because its step happened to be fine enough."
-    (let [a     (first (arr/arrangements [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
+    (let [a     (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
           start (inst 2026 7 15 0)
           end   (inst 2026 7 16 0)
           coarse {:step (java.time.Duration/ofHours 6)}
           hhmm  (fn [xs] (mapv #(+ (* 100 (.getHour ^ZonedDateTime (:tick/beginning %)))
                                    (.getMinute ^ZonedDateTime (:tick/beginning %))) xs))]
-      (is (= [0 1600 2100] (hhmm (arr/segments-for a start end nil coarse)))
+      (is (= [0 1600 2100] (hhmm (scm/segments-for a start end nil coarse)))
           "the real transitions, found at a six-hour step because they are read
            rather than sampled")
-      (is (= [0 1800] (hhmm (arr/schedule-for a start end nil coarse)))
+      (is (= [0 1800] (hhmm (scm/schedule-for a start end nil coarse)))
           "while the stepped walk sees only what it lands on, putting a
            boundary at 18:00 that is not a transition and missing both that
            are"))))
 
-(deftest a-horizon-includes-the-arrangements-modifiers
+(deftest a-horizon-includes-the-models-modifiers
   (testing "dropping the modifiers leaves a horizon that prices the base plan
             and publishes it as the customer's, which is the 0.28.0 defect
             reappearing one function along. SCE Schedule D composed with CARE
             is a 36% discount, so the two are not confusable."
-    (let [by-mods (into {} (map (juxt :urpx.arrangement/modifier-version-ids identity))
-                        (arr/arrangements (sce-docs)))
+    (let [by-mods (into {} (map (juxt :urpx.scenario-cost-model/modifier-version-ids identity))
+                        (scm/enumerate (sce-docs)))
           rates   (fn [a] (set (map #(price/marginal-unit-rate (:urpx.interval/resolved %))
-                                    (arr/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0)))))]
+                                    (scm/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0)))))]
       (is (= #{0.31085M} (rates (by-mods []))) "base alone over the whole day")
       (is (= #{0.19804875M} (rates (by-mods ["sce:care-2026-03-20"])))
           "and CARE priced across the horizon, not just at an instant"))))
@@ -671,20 +670,20 @@
 
             Read from the ns forms on disk. A runtime check cannot serve here:
             ns-refers sees :refer only and ns-aliases sees :as only, so a bare
-            (:require [urpx.arrangements]) passes both, and by the time this
+            (:require [urpx.scenario-cost-model]) passes both, and by the time this
             test runs the test suite has loaded the namespace anyway."
     (let [srcs (->> (file-seq (io/file "src"))
                     (filter #(.isFile ^java.io.File %))
                     (filter #(str/ends-with? (.getName ^java.io.File %) ".clj"))
-                    (remove #(= "arrangements.clj" (.getName ^java.io.File %))))
+                    (remove #(= "scenario_cost_model.clj" (.getName ^java.io.File %))))
           mentions (filter (fn [f]
                              (let [form (with-open [r (java.io.PushbackReader. (io/reader f))]
                                           (read r))]
-                               (some #(= 'urpx.arrangements %) (tree-seq coll? seq form))))
+                               (some #(= 'urpx.scenario-cost-model %) (tree-seq coll? seq form))))
                            srcs)]
       (is (seq srcs) "the source tree was found, so an empty result means clean")
       (is (= [] (mapv #(.getPath ^java.io.File %) mentions))
-          "no namespace in src/ may require urpx.arrangements"))))
+          "no namespace in src/ may require urpx.scenario-cost-model"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Repeated @ids, and the pair view
@@ -712,22 +711,22 @@
                           {:urpx/hasModifierOptions [{:jsonld/id "x:m1"}]})
                 (plan-doc "x:p" "x:p-v" (ldt 2026 1 1)
                           {:urpx/hasModifierOptions [{:jsonld/id "x:m2"}]})]]
-      (is (= :urpx.arrangement/conflicting-version-id
-             (try (arr/arrangements docs) nil
+      (is (= :urpx.scenario-cost-model/conflicting-version-id
+             (try (scm/enumerate docs) nil
                   (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))
           "the default still refuses")
-      (let [as (arr/arrangements docs {:repeated-ids arr/repeated-ids-union})]
+      (let [as (scm/enumerate docs {:repeated-ids scm/repeated-ids-union})]
         (is (= 1 (count as)) "merged into one version, not two")
         (is (= ["x:m1" "x:m2"]
                (mapv :jsonld/id
-                     (:urpx/hasModifierOptions (:urpx.arrangement/version (first as)))))
+                     (:urpx/hasModifierOptions (:urpx.scenario-cost-model/version (first as)))))
             "BOTH option lists survive: the union, not whichever came first")))
     (testing "and a property only one occurrence states merges to that value,
               because absence is not an assertion under RDF"
-      (let [as (arr/arrangements (twice {:urpx/hasModifierOptions [{:jsonld/id "x:m2"}]})
-                                 {:repeated-ids arr/repeated-ids-union})]
+      (let [as (scm/enumerate (twice {:urpx/hasModifierOptions [{:jsonld/id "x:m2"}]})
+                                 {:repeated-ids scm/repeated-ids-union})]
         (is (= ["x:m2"] (mapv :jsonld/id
-                              (:urpx/hasModifierOptions (:urpx.arrangement/version (first as))))))))))
+                              (:urpx/hasModifierOptions (:urpx.scenario-cost-model/version (first as))))))))))
 
 (deftest a-merged-version-binds-to-its-own-identity-document
   (testing "a merged node is in NO single document, so one has to be bound, and
@@ -762,9 +761,9 @@
                      {:jsonld/id "x:m" :jsonld/type "urpx:RatePlanModifier" :urpx/timezoneIdentifier "America/Los_Angeles"
                       :urpx/hasRatePlanModifierVersion
                       (mv {:urpx/applicableToRatePlan [{:jsonld/id "x:aaa-plan"} {:jsonld/id "x:q"}]})}}
-          bound     #(->> (arr/arrangements % {:repeated-ids arr/repeated-ids-union})
-                          (filter (comp seq :urpx.arrangement/modifier-version-ids))
-                          first :urpx.arrangement/modifiers first)]
+          bound     #(->> (scm/enumerate % {:repeated-ids scm/repeated-ids-union})
+                          (filter (comp seq :urpx.scenario-cost-model/modifier-version-ids))
+                          first :urpx.scenario-cost-model/modifiers first)]
       (doseq [order [[own-doc bundled] [bundled own-doc]]]
         (let [d (bound order)]
           (is (= "urpx:RatePlanModifier" (:jsonld/type d))
@@ -799,17 +798,17 @@
                              {:urpx/applicableToRatePlan [{:jsonld/id "x:P"} {:jsonld/id "x:Q"}]
                               :urpx/applicableToRatePlanVersion [{:jsonld/id "x:P-v"}]})
           ask  (fn [p pol] (mapv :jsonld/id
-                                 (arr/applicable-modifiers [p m] (:urpx/hasRatePlanVersion p)
+                                 (scm/applicable-modifiers [p m] (:urpx/hasRatePlanVersion p)
                                                            {:compatibility pol})))
           P    (plan "x:P" "x:P-v")
           Q    (plan "x:Q" "x:Q-v")]
-      (is (= ["x:m-v"] (ask P arr/named-versions-narrow))
+      (is (= ["x:m-v"] (ask P scm/named-versions-narrow))
           "P's named version matches, so the default applies it")
-      (is (= [] (ask Q arr/named-versions-narrow))
+      (is (= [] (ask Q scm/named-versions-narrow))
           "but Q loses it, although the modifier names Q at plan level and names
            no version of Q at all. That is retraction ACROSS plans, and nothing
            in Decision #090 argues for it")
-      (is (= ["x:m-v"] (ask Q arr/named-versions-add))
+      (is (= ["x:m-v"] (ask Q scm/named-versions-add))
           "the monotone reading keeps Q, which is the behavior the
            preserves-document-level-properties line supports"))))
 
@@ -835,14 +834,14 @@
             the version's own document root was read."
     (let [[identity version] (un-nest (fixtures/load-rate-plan "sce-d-2026-03-20"))
           docs [identity version]
-          [a :as as] (arr/arrangements docs {:at (at)})]
+          [a :as as] (scm/enumerate docs {:at (at)})]
       (is (nil? (:urpx/timezoneIdentifier version)) "the version declares no zone")
-      (is (= ["sce:d-2026-03-20"] (mapv :urpx.arrangement/version-id as))
+      (is (= ["sce:d-2026-03-20"] (mapv :urpx.scenario-cost-model/version-id as))
           "enumerated at an instant")
-      (is (= ["sce:d-2026-03-20"] (mapv :jsonld/id (arr/plan-versions docs {:at (at)}))))
+      (is (= ["sce:d-2026-03-20"] (mapv :jsonld/id (scm/plan-versions docs {:at (at)}))))
       (is (= 0.31085M (rate a))
           "and resolve-at prices it, the same rate as the nested filing")
-      (is (seq (arr/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0)))
+      (is (seq (scm/segments-for a (inst 2026 7 15 0) (inst 2026 7 16 0)))
           "and a horizon walks it"))))
 
 (deftest a-top-level-modifier-version-is-zoned-by-its-identity-document
@@ -854,10 +853,10 @@
               :urpx/timezoneIdentifier "America/Los_Angeles"}
         p    (plan-doc "x:p" "x:p-v" (ldt 2026 1 1))
         docs [p m mv]]
-    (is (= ["x:m-v"] (mapv :jsonld/id (arr/applicable-modifiers
+    (is (= ["x:m-v"] (mapv :jsonld/id (scm/applicable-modifiers
                                        docs (:urpx/hasRatePlanVersion p) {:at (at)}))))
-    (is (= [[] ["x:m-v"]] (mapv :urpx.arrangement/modifier-version-ids
-                                (arr/arrangements docs {:at (at)}))))))
+    (is (= [[] ["x:m-v"]] (mapv :urpx.scenario-cost-model/modifier-version-ids
+                                (scm/enumerate docs {:at (at)}))))))
 
 (deftest zones-that-agree-across-nodes-are-the-zone
   (let [[identity version] (un-nest (fixtures/load-rate-plan "sce-d-2026-03-20"))
@@ -865,22 +864,22 @@
              :urpx/timezoneIdentifier "America/Los_Angeles"
              :urpx/packages [{:jsonld/id (:jsonld/id version)}]}
         docs [identity (assoc version :urpx/timezoneIdentifier "America/Los_Angeles") pkg]]
-    (is (= 0.31085M (rate (first (arr/arrangements docs {:at (at)})))))))
+    (is (= 0.31085M (rate (first (scm/enumerate docs {:at (at)})))))))
 
 (deftest a-package-naming-the-plan-zones-its-versions
   (let [[identity version] (un-nest (fixtures/load-rate-plan "sce-d-2026-03-20"))
         pkg (fn [tz] {:jsonld/id "x:pkg" :jsonld/type "urpx:URPXPackage"
                       :urpx/timezoneIdentifier tz
                       :urpx/packages [{:jsonld/id (:jsonld/id identity)}]})]
-    (is (= 0.31085M (rate (first (arr/arrangements
+    (is (= 0.31085M (rate (first (scm/enumerate
                                   [(dissoc identity :urpx/timezoneIdentifier) version
                                    (pkg "America/Los_Angeles")]
                                   {:at (at)}))))
         "the only zone is on the package carrying the plan")
     (let [e (is (thrown? clojure.lang.ExceptionInfo
-                         (arr/arrangements [identity version (pkg "America/New_York")]
+                         (scm/enumerate [identity version (pkg "America/New_York")]
                                            {:at (at)})))]
-      (is (= :urpx.arrangement/conflicting-timezone (:reason (ex-data e)))))))
+      (is (= :urpx.scenario-cost-model/conflicting-timezone (:reason (ex-data e)))))))
 
 (deftest zones-that-disagree-across-nodes-are-refused
   (testing "the version, its plan and its package each admit a zone, and the
@@ -899,14 +898,14 @@
                                            {:jsonld/id (:jsonld/id identity)
                                             :jsonld/type "urpx:RatePlan"
                                             :urpx/timezoneIdentifier ny})]]]]
-        (let [e (is (thrown? clojure.lang.ExceptionInfo (arr/arrangements docs {:at (at)})) nm)]
-          (is (= :urpx.arrangement/conflicting-timezone (:reason (ex-data e))) nm)
+        (let [e (is (thrown? clojure.lang.ExceptionInfo (scm/enumerate docs {:at (at)})) nm)]
+          (is (= :urpx.scenario-cost-model/conflicting-timezone (:reason (ex-data e))) nm)
           (is (= "sce:d-2026-03-20" (:version-id (ex-data e))) nm)
           (is (= #{"America/Los_Angeles" ny} (set (map second (:declared (ex-data e))))) nm)))
       (let [e (is (thrown? clojure.lang.ExceptionInfo
-                           (arr/arrangements [identity (assoc version :urpx/timezoneIdentifier ny)])))]
-        (is (= :urpx.arrangement/conflicting-timezone (:reason (ex-data e)))
-            "without :at too, since the arrangement must carry one zone to resolve in")))))
+                           (scm/enumerate [identity (assoc version :urpx/timezoneIdentifier ny)])))]
+        (is (= :urpx.scenario-cost-model/conflicting-timezone (:reason (ex-data e)))
+            "without :at too, since the model must carry one zone to resolve in")))))
 
 ;; ---------------------------------------------------------------------------
 ;; A version zoned by the package carrying it, through the loader
@@ -943,26 +942,26 @@
 
 (deftest a-zone-declared-only-on-the-package-zones-a-loaded-plan
   (let [docs (load/documents [(source (package "x:pkg" la-tz {:urpx/hasRatePlan (raw-plan)}))])
-        [a :as as] (arr/arrangements docs {:at (at)})]
-    (is (= ["sce:d-2026-03-20"] (mapv :urpx.arrangement/version-id as)))
+        [a :as as] (scm/enumerate docs {:at (at)})]
+    (is (= ["sce:d-2026-03-20"] (mapv :urpx.scenario-cost-model/version-id as)))
     (is (= 0.31085M (rate a)) "resolve-at prices it in the package's zone")
-    (is (= ["sce:d-2026-03-20"] (mapv :jsonld/id (arr/plan-versions docs {:at (at)}))))
-    (is (= 0.31085M (rate (first (arr/arrangements docs {:at (at) :package-zones :fallback}))))
+    (is (= ["sce:d-2026-03-20"] (mapv :jsonld/id (scm/plan-versions docs {:at (at)}))))
+    (is (= 0.31085M (rate (first (scm/enumerate docs {:at (at) :package-zones :fallback}))))
         ":fallback reads the package when nothing else declares a zone")
     (is (= :urpx.price/no-timezone
-           (:reason (refusal #(arr/arrangements docs {:at (at) :package-zones :ignore}))))
+           (:reason (refusal #(scm/enumerate docs {:at (at) :package-zones :ignore}))))
         "with packages ignored, nothing declares a zone")))
 
 (deftest a-shell-whose-only-date-shaped-value-is-a-label-is-accepted
   (let [docs (load/documents [(source (package "x:pkg" la-tz {:urpx/version "2026-03-20"
                                                               :urpx/hasRatePlan (raw-plan)}))])]
-    (is (= 0.31085M (rate (first (arr/arrangements docs {:at (at)})))))))
+    (is (= 0.31085M (rate (first (scm/enumerate docs {:at (at)})))))))
 
 (deftest a-package-naming-a-plan-by-reference-zones-it
   (let [pkg (package "x:pkg" la-tz {:urpx/packages {:jsonld/id "sce:d"}})]
     (doseq [[nm srcs] [["one source" #(vector (source (raw-plan) pkg))]
                        ["two sources" #(vector (source pkg) (source (raw-plan)))]]]
-      (is (= 0.31085M (rate (first (arr/arrangements (load/documents (srcs)) {:at (at)}))))
+      (is (= 0.31085M (rate (first (scm/enumerate (load/documents (srcs)) {:at (at)}))))
           nm))))
 
 (deftest a-top-level-version-whose-plan-the-package-carries
@@ -973,7 +972,7 @@
                                           version)])]
     (is (not-any? :urpx/timezoneIdentifier (remove #(= "x:pkg" (:jsonld/id %)) docs))
         "only the package declares a zone")
-    (is (= 0.31085M (rate (first (arr/arrangements docs {:at (at)})))))))
+    (is (= 0.31085M (rate (first (scm/enumerate docs {:at (at)})))))))
 
 (deftest two-packages-zoning-one-plan-differently-are-refused
   (let [a (source (package "x:pkg-a" la-tz {:urpx/hasRatePlan (raw-plan)}))
@@ -983,31 +982,31 @@
     (doseq [[nm docs] [["a then b" (load/documents [a b])]
                        ["b then a" (load/documents [b2 a2])]]
             mode [:agree :fallback :ignore]]
-      (is (= :urpx.arrangement/conflicting-timezone
-             (:reason (refusal #(arr/arrangements docs {:at (at) :package-zones mode}))))
+      (is (= :urpx.scenario-cost-model/conflicting-timezone
+             (:reason (refusal #(scm/enumerate docs {:at (at) :package-zones mode}))))
           (str nm " " mode)))))
 
 (deftest a-package-zone-against-the-plans-own
   (let [docs #(load/documents [(source (package "x:pkg" ny {:urpx/hasRatePlan (raw-plan la-tz)}))])]
-    (is (= :urpx.arrangement/conflicting-timezone
-           (:reason (refusal #(arr/arrangements (docs) {:at (at)}))))
+    (is (= :urpx.scenario-cost-model/conflicting-timezone
+           (:reason (refusal #(scm/enumerate (docs) {:at (at)}))))
         ":agree, the default, refuses")
     (doseq [mode [:fallback :ignore]]
-      (let [[a] (arr/arrangements (docs) {:at (at) :package-zones mode})]
-        (is (= la-tz (:urpx/timezoneIdentifier (:urpx.arrangement/rate-plan a))) (str mode))
+      (let [[a] (scm/enumerate (docs) {:at (at) :package-zones mode})]
+        (is (= la-tz (:urpx/timezoneIdentifier (:urpx.scenario-cost-model/rate-plan a))) (str mode))
         (is (= 0.31085M (rate a)) (str mode " uses the plan's zone"))))))
 
 (deftest a-bare-and-a-wrapped-filing-of-one-plan
   (let [bare    #(source (raw-plan))
         wrapped #(source (package "x:pkg" la-tz {:urpx/hasRatePlan (raw-plan)}))]
     (doseq [[nm srcs] [["bare first" [(bare) (wrapped)]] ["wrapped first" [(wrapped) (bare)]]]]
-      (let [as (arr/arrangements (load/documents srcs) {:at (at)})]
-        (is (= ["sce:d-2026-03-20"] (mapv :urpx.arrangement/version-id as)) nm)
+      (let [as (scm/enumerate (load/documents srcs) {:at (at)})]
+        (is (= ["sce:d-2026-03-20"] (mapv :urpx.scenario-cost-model/version-id as)) nm)
         (is (= 0.31085M (rate (first as))) nm)))))
 
 (deftest a-horizon-is-bounded-in-the-packages-zone
   (let [docs (load/documents [(source (package "x:pkg" ny {:urpx/hasRatePlan (raw-plan)}))])
-        segs (arr/segments-for (first (arr/arrangements docs)) (inst 2026 7 15 0) (inst 2026 7 16 0))]
+        segs (scm/segments-for (first (scm/enumerate docs)) (inst 2026 7 15 0) (inst 2026 7 16 0))]
     (is (seq segs))
     (is (every? #(and (instance? ZonedDateTime (:tick/beginning %))
                       (= (ZoneId/of ny) (.getZone ^ZonedDateTime (:tick/beginning %)))
@@ -1017,20 +1016,20 @@
 (deftest without-at-no-zone-is-read
   (let [docs (load/documents [(source (package "x:pkg-a" la-tz {:urpx/hasRatePlan (raw-plan)}))
                               (source (package "x:pkg-b" ny {:urpx/hasRatePlan (raw-plan)}))])
-        bv   (first (arr/plan-versions docs))]
+        bv   (first (scm/plan-versions docs))]
     (is (= "sce:d-2026-03-20" (:jsonld/id bv)) "plan-versions reads no zone")
-    (is (= [] (arr/applicable-modifiers docs bv)) "nor does applicable-modifiers")
-    (is (= :urpx.arrangement/conflicting-timezone
-           (:reason (refusal #(arr/plan-versions docs {:at (at)}))))
+    (is (= [] (scm/applicable-modifiers docs bv)) "nor does applicable-modifiers")
+    (is (= :urpx.scenario-cost-model/conflicting-timezone
+           (:reason (refusal #(scm/plan-versions docs {:at (at)}))))
         "the same documents refuse once an instant needs a zone")))
 
 (deftest an-unknown-package-zones-value-is-refused
   (let [docs [(fixtures/load-rate-plan "sce-d-2026-03-20")]
         bv   (:urpx/hasRatePlanVersion (first docs))]
-    (doseq [[nm f] [["arrangements" #(arr/arrangements docs {:package-zones :prefer})]
-                    ["plan-versions" #(arr/plan-versions docs {:package-zones :prefer})]
-                    ["applicable-modifiers" #(arr/applicable-modifiers docs bv {:package-zones :prefer})]]]
-      (is (= {:reason :urpx.arrangement/unknown-package-zones :value :prefer}
+    (doseq [[nm f] [["enumerate" #(scm/enumerate docs {:package-zones :prefer})]
+                    ["plan-versions" #(scm/plan-versions docs {:package-zones :prefer})]
+                    ["applicable-modifiers" #(scm/applicable-modifiers docs bv {:package-zones :prefer})]]]
+      (is (= {:reason :urpx.scenario-cost-model/unknown-package-zones :value :prefer}
              (select-keys (refusal f) [:reason :value]))
           nm))))
 
@@ -1044,5 +1043,5 @@
           docs [(bare "x:p-v1" "America/New_York")
                 (bare "x:p-v2" "America/Los_Angeles")]
           e    (is (thrown? clojure.lang.ExceptionInfo
-                            (arr/arrangements docs {:at (at 2026 6 1 12)})))]
-      (is (= :urpx.arrangement/ambiguous-version (:reason (ex-data e)))))))
+                            (scm/enumerate docs {:at (at 2026 6 1 12)})))]
+      (is (= :urpx.scenario-cost-model/ambiguous-version (:reason (ex-data e)))))))

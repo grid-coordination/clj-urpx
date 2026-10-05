@@ -543,37 +543,37 @@ The guard is scoped to prices that would actually be summed. Export prices in ne
 
 Adjacent steps with identical resolved ledgers are still merged, so a quarter-hour walk across an hour-aligned plan produces the same merged intervals as the hourly walk.
 
-## Enumerating service arrangements (optional)
+## Enumerating scenario cost models (optional)
 
-A **service arrangement** is one `urpx:RatePlanVersion`, plus the compatible `urpx:RatePlanModifierVersion`s, plus one `urpx:ProfileAlternative` for each dimension any of them leaves open. It is fully determined: given an instant inside its window it resolves to prices with no further input. If a choice is still outstanding it is not one arrangement but several, and each of those is an arrangement in its own right.
+A **scenario cost model** is one `urpx:RatePlanVersion`, plus the compatible `urpx:RatePlanModifierVersion`s, plus one `urpx:ProfileAlternative` for each dimension any of them leaves open. It is fully determined: given an instant inside its window it resolves to prices with no further input. If a choice is still outstanding it is not one model but several, and each of those is a model in its own right.
 
-`urpx:ServiceArrangement` is **not** a URPX class. It occurs zero times in the ontology and zero times in the SHACL shapes; nothing here writes it into a document or claims a `urpx:` prefix for it.
+Each model is the composition a `urpx:ScenarioCostModel` prices.
 
-`urpx.arrangements` is **optional by construction**. It requires `urpx.price`; `urpx.price` does not require it. A consumer that already knows how to assemble a composition uses `urpx.price` directly and never loads this namespace.
+`urpx.scenario-cost-model` is **optional by construction**. It requires `urpx.price`; `urpx.price` does not require it. A consumer that already knows how to assemble a composition uses `urpx.price` directly and never loads this namespace.
 
 ```clojure
-(require '[urpx.arrangements :as arr])
+(require '[urpx.scenario-cost-model :as scm])
 
 (def docs [schedule-d care fera])
 
-(arr/arrangements docs {:at now})
-;; => a sequence of arrangement maps, each fully determined
+(scm/enumerate docs {:at now})
+;; => a sequence of model maps, each fully determined
 
-(arr/resolve-at (first (arr/arrangements docs)) now)
+(scm/resolve-at (first (scm/enumerate docs)) now)
 ;; => what urpx.price/resolve-prices-with-modifiers returns
 ```
 
-`resolve-at` binds each document to its own version and passes the arrangement's selections through as `:profile-alternatives`, so an opt cannot reach a document it does not belong to. Those two keys are **refused** rather than merged if a caller passes them: a caller who wants a different version or a different selection wants a different arrangement.
+`resolve-at` binds each document to its own version and passes the model's selections through as `:profile-alternatives`, so an opt cannot reach a document it does not belong to. Those two keys are **refused** rather than merged if a caller passes them: a caller who wants a different version or a different selection wants a different model.
 
-### An arrangement has no verdict of its own
+### A model has no verdict of its own
 
-`of-arrangement` returns every part's report, a frequency map of the verdicts, and conjunction predicates. It returns **no rolled-up `completeness`**, and the absence is the design rather than an omission — a test pins the exact key set so that adding one fails.
+`of-model` returns every part's report, a frequency map of the verdicts, and conjunction predicates. It returns **no rolled-up `completeness`**, and the absence is the design rather than an omission — a test pins the exact key set so that adding one fails.
 
-Two reasons, the second decisive. No ordering is stated among the six completeness members, and that absence is meaningful: the same ontology uses `skos:broader` where it *does* mean a hierarchy. More decisively, every definition is relative to "the claimed scope" of its own snapshot, and no snapshot states one, so composing would require knowing each part's scope and that their union equals the arrangement's. Neither is known. Composition is undefined at the *domain* level, not merely unranked, and would stay so even if URPX later imposed an order.
+Two reasons, the second decisive. No ordering is stated among the six completeness members, and that absence is meaningful: the same ontology uses `skos:broader` where it *does* mean a hierarchy. More decisively, every definition is relative to "the claimed scope" of its own snapshot, and no snapshot states one, so composing would require knowing each part's scope and that their union equals the model's. Neither is known. Composition is undefined at the *domain* level, not merely unranked, and would stay so even if URPX later imposed an order.
 
-A minimum would also be positively wrong in a case the vocabulary allows: a modifier claiming `urpx:noCoverage` contributes nothing, so a `complete` base with a `noCoverage` modifier is not a `noCoverage` arrangement.
+A minimum would also be positively wrong in a case the vocabulary allows: a modifier claiming `urpx:noCoverage` contributes nothing, so a `complete` base with a `noCoverage` modifier is not a `noCoverage` model.
 
-Every derived boolean is named for the **parts** — `every-part-complete?`, never `complete?`. A conjunction of per-part facts needs no ordering; a verdict does. Note `every-part-complete?` still does not mean the arrangement is complete: each claim covers its own snapshot's required elements, and nothing claims the elements a composition needs and neither part carries.
+Every derived boolean is named for the **parts** — `every-part-complete?`, never `complete?`. A conjunction of per-part facts needs no ordering; a verdict does. Note `every-part-complete?` still does not mean the model is complete: each claim covers its own snapshot's required elements, and nothing claims the elements a composition needs and neither part carries.
 
 What a caller does instead is decide its own publication policy over `completeness-counts` — and for that, `descriptions` is usually the thing to read rather than the verdict. A completeness result says *that* something is missing; the linked Evaluation says *what*, specifically enough to act on. One filing's prose names the five customer groups whose exemptions it does not represent and states plainly that a consumer applying it to any of them "will charge components the tariff exempts".
 
@@ -607,21 +607,21 @@ Enumeration answers a question about a whole corpus, so a corpus that does not d
 | `:reason` | When |
 |---|---|
 | `:uncoerced-document` | a document still carries date-shaped strings and no `java.time` values. Reading one does not fail loudly on its own: it answers a different question |
-| `:urpx.arrangement/conflicting-version-id` | one version `@id` names two snapshots that differ. An `@id` identifies a thing, so this is a contradiction, and every offending `@id` is named at once |
-| `:urpx.arrangement/ambiguous-version` | two distinct snapshots of one identity share the latest effective instant, the same input `urpx.price` refuses with `:ambiguous-version` |
-| `:urpx.arrangement/conflicting-timezone` | the nodes a version belongs to (the version, its plan or modifier, the document it came from, a `urpx:URPXPackage` naming any of them) declare different `urpx:timezoneIdentifier` values. One value, or several that agree, is the zone the arrangement resolves in. `:package-zones` decides what a package's value counts for |
+| `:urpx.scenario-cost-model/conflicting-version-id` | one version `@id` names two snapshots that differ. An `@id` identifies a thing, so this is a contradiction, and every offending `@id` is named at once |
+| `:urpx.scenario-cost-model/ambiguous-version` | two distinct snapshots of one identity share the latest effective instant, the same input `urpx.price` refuses with `:ambiguous-version` |
+| `:urpx.scenario-cost-model/conflicting-timezone` | the nodes a version belongs to (the version, its plan or modifier, the document it came from, a `urpx:URPXPackage` naming any of them) declare different `urpx:timezoneIdentifier` values. One value, or several that agree, is the zone the model resolves in. `:package-zones` decides what a package's value counts for |
 
 Publishing one `@id` twice with byte-identical content is *not* refused: that is one version appearing in two filings, and it is deduplicated.
 
-One further refusal is about the caller rather than the corpus. `resolve-at`, `segments-for` and `schedule-for` all reject `:version` and `:profile-alternatives` in their `opts` with `:reason :urpx.arrangement/opt-determined-by-arrangement`, because the arrangement determines both. Letting the caller's value win would restore the defect these functions exist to prevent; letting the arrangement win silently would ignore an opt the caller meant. Every other opt is merged and passes through.
+One further refusal is about the caller rather than the corpus. `resolve-at`, `segments-for` and `schedule-for` all reject `:version` and `:profile-alternatives` in their `opts` with `:reason :urpx.scenario-cost-model/opt-determined-by-model`, because the model determines both. Letting the caller's value win would restore the defect these functions exist to prevent; letting the model win silently would ignore an opt the caller meant. Every other opt is merged and passes through.
 
 ### Horizons: prices over a window
 
-`resolve-at` answers one instant. A price server publishes a window: the interval containing now and some number of them forward. Two functions take an arrangement and do that, binding each document to its own version the same way `resolve-at` does.
+`resolve-at` answers one instant. A price server publishes a window: the interval containing now and some number of them forward. Two functions take a model and do that, binding each document to its own version the same way `resolve-at` does.
 
 ```clojure
-(arr/segments-for  arrangement start end)   ; exact boundaries, from the documents
-(arr/schedule-for  arrangement start end)   ; a stepped grid
+(scm/segments-for  model start end)   ; exact boundaries, from the documents
+(scm/schedule-for  model start end)   ; a stepped grid
 ```
 
 `start` and `end` are `Instant`s and `zone` may be `nil` when the plan declares `urpx:timezoneIdentifier`, matching `urpx.schedule` rather than `resolve-at`, so a caller mixing the two namespaces over one horizon is not converting at every call.
@@ -637,9 +637,9 @@ The library answers the first; only the caller can answer the second. `urpx:appl
 So the discovery functions are queryable on their own, without enumerating anything:
 
 ```clojure
-(arr/plan-versions docs)                    ; every version snapshot, or {:at t} for current ones
-(arr/applicable-modifiers docs plan-version) ; what may apply to this plan version
-(arr/offered-by modifier-versions)           ; group by urpx:offeredBy, for a broader search
+(scm/plan-versions docs)                    ; every version snapshot, or {:at t} for current ones
+(scm/applicable-modifiers docs plan-version) ; what may apply to this plan version
+(scm/offered-by modifier-versions)           ; group by urpx:offeredBy, for a broader search
 ```
 
 Nothing in URPX expresses exclusivity or combinability **between** modifiers, so how many a customer may hold at once is a caller policy, passed as `:combine`:
@@ -669,7 +669,7 @@ Byte-identical repeats are never a conflict under either: one version published 
 
 `repeated-ids-union` has two costs worth knowing. **RDF merges triples, not meanings**: merging a copy that states `applicableToRatePlanVersion` with one that omits it yields a node that *has* the property, which under `named-versions-narrow` restricts the modifier to exactly those versions — while the omitting copy meant no restriction at all. And it silently reconciles a version `@id` whose content is time-varying, which is a defect on any reading. Only vector-valued properties union; two differing scalars refuse `:unmergeable-property`, since URPX gives many of those `sh:maxCount 1`.
 
-**What a zone on a package counts for is a fourth policy**, `:package-zones`, taken by `arrangements`, `plan-versions` and `applicable-modifiers`. `urpx:timezoneIdentifier` is admitted on the version, its plan or modifier, and the `urpx:URPXPackage` containing it, and URPX gives no precedence among them. A package counts when it names the version, its identity or its source document by `urpx:packages`, `urpx:hasRatePlan` or `urpx:hasRatePlanModifier`.
+**What a zone on a package counts for is a fourth policy**, `:package-zones`, taken by `enumerate`, `plan-versions` and `applicable-modifiers`. `urpx:timezoneIdentifier` is admitted on the version, its plan or modifier, and the `urpx:URPXPackage` containing it, and URPX gives no precedence among them. A package counts when it names the version, its identity or its source document by `urpx:packages`, `urpx:hasRatePlan` or `urpx:hasRatePlanModifier`.
 
 | `:package-zones` | A package's zone is |
 |--------|--------|
@@ -677,17 +677,17 @@ Byte-identical repeats are never a conflict under either: one version published 
 | `:fallback` | read only when none of those declares a zone |
 | `:ignore` | not read |
 
-Under every mode, two packages declaring different zones for one version refuse, as do a version and its identity. Any other value refuses `:urpx.arrangement/unknown-package-zones`. Zones are read only to place a version against `:at` and to zone an arrangement's documents, so `plan-versions` and `applicable-modifiers` without `:at` read none.
+Under every mode, two packages declaring different zones for one version refuse, as do a version and its identity. Any other value refuses `:urpx.scenario-cost-model/unknown-package-zones`. Zones are read only to place a version against `:at` and to zone a model's documents, so `plan-versions` and `applicable-modifiers` without `:at` read none.
 
 ### Comparing two enumerators
 
 ```clojure
-(arr/arrangement-pairs documents opts)
+(scm/enumerate-pairs documents opts)
 ;; => #{["sce:d-2026-03-20" #{}]
 ;;      ["sce:d-2026-03-20" #{"sce:care-2026-03-20"}] ...}
 ```
 
-One row per composition, with `ProfileAlternative` choices **not** expanded — a coarser question than `arrangements` answers and deliberately a different one. An arrangement with an open dimension is several arrangements and one pair.
+One row per composition, with `ProfileAlternative` choices **not** expanded — a coarser question than `enumerate` answers and deliberately a different one. A model with an open dimension is several models and one pair.
 
 It exists so two independent enumerators can be compared on *what composes with what*, without disagreeing about whether a pending choice is one row or several. **Pin every policy explicitly** when the result is a gate's expected value: `:at`, `:combine`, `:compatibility`, `:repeated-ids` and `:package-zones` each change the answer, and matching defaults across two implementations is agreement by coincidence rather than by construction.
 
@@ -710,7 +710,7 @@ A **source** is anything `clojure.java.io/reader` coerces: a `File`, `URL`, `Rea
 `document-xf` is three steps, and each is a way to be wrong by hand:
 
 - **`mapcat`, not `map`, over `load-graph`.** One source can carry several top-level entities. Mapping yields a collection per source, and a collection survives a `tree-seq` walk, so getting this wrong returns an answer rather than an error.
-- **`expand-document-entities`** descends a `urpx:URPXPackage` wrapper. Without it a wrapped filing contributes nothing. The wrapper follows its payloads as a **shell**: its own properties, with each embedded payload replaced by a `{:jsonld/id id}` reference. That is how a `urpx:timezoneIdentifier` declared only on the package reaches `urpx.arrangements`. An embedded payload with no `@id` refuses `:urpx.load/payload-without-id`.
+- **`expand-document-entities`** descends a `urpx:URPXPackage` wrapper. Without it a wrapped filing contributes nothing. The wrapper follows its payloads as a **shell**: its own properties, with each embedded payload replaced by a `{:jsonld/id id}` reference. That is how a `urpx:timezoneIdentifier` declared only on the package reaches `urpx.scenario-cost-model`. An embedded payload with no `@id` refuses `:urpx.load/payload-without-id`.
 - **`coerce-doc`** turns strings into `java.time` values. Without it `urpx:effectiveDateTime` is still a string: anything comparing dates throws from deep inside, and anything that does *not* compare them quietly answers a different question.
 
 That list is not hypothetical. A consumer composing these by hand from an earlier version of this section used `mapv` for `mapcat` and omitted the coercion step, and got a plausible count instead of a refusal. The pipeline is named so that composition is unavailable to make rather than documented against.
@@ -763,8 +763,8 @@ Every `urpx:RatePlanVersion` and `urpx:RatePlanModifierVersion` carries a `urpx:
 (cov/of-version version doc)    ; doc only needed to follow a bare @id reference
 (cov/claim version)             ; => the raw CoverageClaim node, or ::absent
 
-(cov/of-arrangement arrangement)     ; => every part's report, plus counts
-(cov/descriptions arrangement-report) ; => the Evaluation prose, in part order
+(cov/of-model model)            ; => every part's report, plus counts
+(cov/descriptions model-report) ; => the Evaluation prose, in part order
 
 (cov/coverage-interval report zone)        ; => {:tick/beginning .. :tick/end ..}
 (cov/verdict-applies? report zone interval) ; => does the verdict cover that window?
@@ -772,7 +772,7 @@ Every `urpx:RatePlanVersion` and `urpx:RatePlanModifierVersion` carries a `urpx:
 
 The verdict is **not this library's judgement**. Per the ontology, claims "are produced by an implementation or publishing workflow", so a claim says what the *publisher* asserts. Nothing here re-derives one or second-guesses one.
 
-`urpx.coverage` requires `urpx.index` and nothing else of the library: not `urpx.price`, not `urpx.arrangements`. Nothing in `src/` requires it.
+`urpx.coverage` requires `urpx.index` and nothing else of the library: not `urpx.price`, not `urpx.scenario-cost-model`. Nothing in `src/` requires it.
 
 ### Three things a caller should know
 
@@ -946,7 +946,7 @@ For a longer worked walkthrough that mirrors selected examples from the upstream
 |------------------|---------|
 | `urpx.core`          | JSON-LD parsing and loading (`parse-rate-plan`, `load-rate-plan`, `load-rate-plan-version`, `parse-graph`, `load-graph`, `expand-document-entities`) |
 | `urpx.schema`    | Malli schemas for the coerced URPX entity model |
-| `urpx.coverage`  | Optional reader for `urpx:CoverageClaim`: `of-version`, `of-arrangement`, `descriptions`, `coverage-interval`, `verdict-applies?`, `claim`. Requires `urpx.index` only |
+| `urpx.coverage`  | Optional reader for `urpx:CoverageClaim`: `of-version`, `of-model`, `descriptions`, `coverage-interval`, `verdict-applies?`, `claim`. Requires `urpx.index` only |
 | `urpx.load`      | `document-xf`, `documents`, `scan`: sources to coerced documents, with the discards reportable |
 | `urpx.coerce`    | Schema-driven coercion: strings → typed values; `coerce-doc` dispatches on `@type`; `validate`, `explain`; `uncoerced?` and `check-coerced!` tell a coerced document from a raw one |
 | `urpx.index`     | `build-index`, `resolve-ref`, `get-entity` for `@id` references; `versions-by-plan` for v0.5.1 back-pointers; `single` and `entities-of-type` |
@@ -956,7 +956,7 @@ For a longer worked walkthrough that mirrors selected examples from the upstream
 | `urpx.emit`          | Write-side: `write-rate-plan`, `write-rate-plan-modifier`, `write-urpx-document`, `write-urpx-package` |
 | `urpx.validate`      | Single-file CLI checker (`clojure -M:validate <file.jsonld>`), tri-state exit |
 | `urpx.dsl`           | Authoring DSL: `dsl-scope`, `make-builder`, named builders for every entity type |
-| `urpx.arrangements`  | Optional enumerator: `arrangements`, `arrangement-pairs`, `arrangement-id`, `plan-versions`, `applicable-modifiers`, `offered-by`, the `one-modifier-at-most` / `every-subset`, `named-versions-narrow` / `named-versions-add` and `repeated-ids-refuse` / `repeated-ids-union` policies, and `resolve-at` / `segments-for` / `schedule-for` for prices. Requires `urpx.price`; nothing in the library requires it |
+| `urpx.scenario-cost-model`  | Optional enumerator: `enumerate`, `enumerate-pairs`, `identity-tuple`, `plan-versions`, `applicable-modifiers`, `offered-by`, the `one-modifier-at-most` / `every-subset`, `named-versions-narrow` / `named-versions-add` and `repeated-ids-refuse` / `repeated-ids-union` policies, and `resolve-at` / `segments-for` / `schedule-for` for prices. Requires `urpx.price`; nothing in the library requires it |
 
 ## Status
 

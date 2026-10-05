@@ -1,25 +1,20 @@
-(ns urpx.arrangements
-  "Enumerate the service arrangements a set of URPX documents expresses.
+(ns urpx.scenario-cost-model
+  "Enumerate the scenario cost models a set of URPX documents expresses.
 
-  A SERVICE ARRANGEMENT is one urpx:RatePlanVersion, plus every
+  A SCENARIO COST MODEL is one urpx:RatePlanVersion, plus every
   urpx:RatePlanModifierVersion compatible with it, plus one
   urpx:ProfileAlternative for each dimension any of them leaves open. Fully
   determined: given an instant inside its window it resolves to prices with no
-  further input. If a choice is still outstanding it is not one arrangement but
-  several, and each of those is an arrangement in its own right.
+  further input. If a choice is still outstanding it is not one model but
+  several, and each of those is a model in its own right.
 
-  `urpx:ServiceArrangement` IS NOT A URPX CLASS. It occurs zero times in the
-  ontology and zero times in the SHACL shapes. It is a name for a thing the
-  standard describes the parts of and does not name the whole of, and nothing
-  here writes it into a document or claims a urpx: prefix for it. The
-  cardinalities this namespace relies on were checked against the shapes graph
-  rather than recalled.
+  Each model is the composition a urpx:ScenarioCostModel prices.
 
   WHAT THIS CAN AND CANNOT ENUMERATE. Which compatible modifiers a given
   CUSTOMER has is a fact about the customer, and URPX places customer data
   outside its scope: urpx:AccountServiceAgreement carries the skos:note
   \"Service account and agreement data lives in customer data, not URPX.\" So
-  this enumerates the arrangements the DOCUMENTS EXPRESS, every combination the
+  this enumerates the models the DOCUMENTS EXPRESS, every combination the
   filings say is permitted. That set is larger than any one customer's and is
   what a price server can publish.
 
@@ -130,10 +125,10 @@
                                        (str (pr-str id) " (" kind ") in " n " document(s)")))
                            ". Two different things cannot share one identifier, and nothing "
                            "in the documents says which is meant. Pass :repeated-ids "
-                           "urpx.arrangements/repeated-ids-union to merge them instead, "
-                           "which is the RDF reading of several documents describing "
-                           "one IRI.")
-                      {:reason  :urpx.arrangement/conflicting-version-id
+                           "urpx.scenario-cost-model/repeated-ids-union to merge them "
+                           "instead, which is the RDF reading of several documents "
+                           "describing one IRI.")
+                      {:reason  :urpx.scenario-cost-model/conflicting-version-id
                        :ids     (vec (mapcat (fn [[_ gs]] (map first gs)) bad))
                        :counts  (into {} (mapcat val bad))
                        :by-kind (into {} (map (fn [[k gs]] [k (mapv first gs)])) bad)}))))
@@ -168,7 +163,7 @@
                                           ", which is not a collection, so the values "
                                           "cannot be combined and nothing says which "
                                           "is meant. " (pr-str (vec vs)))
-                                     {:reason :urpx.arrangement/unmergeable-property
+                                     {:reason :urpx.scenario-cost-model/unmergeable-property
                                       :id id :kind kind :property k
                                       :values (vec vs)}))))))
           ks)))
@@ -195,8 +190,8 @@
    version effective in July offered them. Merging makes that enumerable; it
    does not make it true.
 
-   Refuses `:urpx.arrangement/unmergeable-property` when occurrences disagree
-   about a non-collection property, which cannot be combined."
+   Refuses `:urpx.scenario-cost-model/unmergeable-property` when occurrences
+   disagree about a non-collection property, which cannot be combined."
   [by-kind]
   (into {}
         (map (fn [[kind triples]]
@@ -253,7 +248,7 @@
     (when-not (package-zone-modes mode)
       (throw (ex-info (str "Unknown :package-zones " (pr-str mode) "; expected one of "
                            (pr-str (sort package-zone-modes)) ".")
-                      {:reason :urpx.arrangement/unknown-package-zones
+                      {:reason :urpx.scenario-cost-model/unknown-package-zones
                        :value  mode
                        :known  package-zone-modes})))
     mode))
@@ -265,7 +260,7 @@
                        "values, " (pr-str (vec declared)) ", so its wall-clock "
                        "bounds name different moments in each and nothing "
                        "says which is meant.")
-                  {:reason     :urpx.arrangement/conflicting-timezone
+                  {:reason     :urpx.scenario-cost-model/conflicting-timezone
                    :version-id (:jsonld/id v)
                    :plan-id    pid
                    :declared   (vec declared)})))
@@ -295,7 +290,7 @@
    urpx:packages, urpx:hasRatePlan or urpx:hasRatePlanModifier.
 
    `mode` decides what a package zone counts for; see `:package-zones` on
-   `arrangements`. Under every mode, the non-package nodes must agree among
+   `enumerate`. Under every mode, the non-package nodes must agree among
    themselves and the packages must agree among themselves. Values that
    disagree refuse: the documents state two frames for one set of bounds and
    nothing says which is meant."
@@ -346,7 +341,7 @@
    Nil `t` keeps every version, which is the whole expressed space rather than
    the currently-offered one.
 
-   A superseded version is not a service arrangement. Nobody takes service
+   A superseded version is not a scenario cost model. Nobody takes service
    under it, and it does not belong in a set offered for use.
 
    TIES ARE REFUSED, NOT BROKEN. This read `(apply max-key ...)`, which returns
@@ -361,7 +356,7 @@
    NOT the same silence: a plan whose versions have all expired, or none of
    which has taken effect, is genuinely not offered then. urpx.price refuses
    there because it was asked for one plan's price; this was asked which
-   arrangements exist, and the answer for that plan is none."
+   models exist, and the answer for that plan is none."
   [triples ^ZonedDateTime t zone-of]
   (let [by-identity (group-by first triples)]
     (if (nil? t)
@@ -384,7 +379,7 @@
                                                  (count winners) " snapshots share the latest "
                                                  "effective instant " latest ", so there is no rule "
                                                  "here that picks among them.")
-                                            {:reason :urpx.arrangement/ambiguous-version
+                                            {:reason :urpx.scenario-cost-model/ambiguous-version
                                              :plan-id pid
                                              :at t
                                              :ids (mapv #(:jsonld/id (second %)) winners)})))
@@ -401,7 +396,7 @@
   ;; Through index/as-vec because both properties are 0..N and a document
   ;; writing the single-valued form writes a bare object. Iterating that yields
   ;; MapEntries, so `keep :jsonld/id` found nothing and BOTH shipped policies
-  ;; returned false: the modifier applied to no base plan, every arrangement
+  ;; returned false: the modifier applied to no base plan, every model
   ;; came out base-only, and nothing was raised. `check-coerced!` cannot catch
   ;; it because it tests for date-shaped strings rather than Ref arity.
   [(into #{} (keep :jsonld/id) (index/as-vec (:urpx/applicableToRatePlanVersion mv)))
@@ -501,7 +496,7 @@
    KNOWN COST, stated because it is not small. The rule is NON-MONOTONIC.
    Merging a document that adds a version statement REMOVES compatibility with
    a plan named only by urpx:applicableToRatePlan, and RDF merge never retracts.
-   A partial view of a corpus can therefore yield MORE arrangements than the
+   A partial view of a corpus can therefore yield MORE models than the
    whole of it. It is the default because changing it would change behavior,
    not because it is known right; the evidence on each side is recorded above."
   [mv bv plan-id]
@@ -534,7 +529,7 @@
 
 (defn- open-dimensions
   "Container @id -> the urpx:ProfileAlternative @ids it offers, across every
-   version in the arrangement.
+   version in the model.
 
    urpx:PlanElementsShape.hasProfileAlternatives is sh:maxCount 1, so one
    version reaches at most one container, but a composition reaches one per
@@ -551,7 +546,7 @@
 
 (defn- selection-combinations
   "Every way of choosing one alternative per open dimension. One combination
-   when nothing is open, which is the arrangement itself rather than none."
+   when nothing is open, which is the model itself rather than none."
   [dims]
   (reduce (fn [acc [cid alts]]
             (for [m acc a alts] (assoc m cid a)))
@@ -567,10 +562,10 @@
 
    `:at` restricts to the version of each plan identity in force at that
    instant. Omit it for every version the documents carry, which reads no zone.
-   `:package-zones` is as `arrangements` takes it."
+   `:package-zones` is as `enumerate` takes it."
   ([documents] (plan-versions documents nil))
   ([documents opts]
-   (let [_       (check-coerced! documents "urpx.arrangements/plan-versions")
+   (let [_       (check-coerced! documents "urpx.scenario-cost-model/plan-versions")
          t       (:at opts)
          repeated (or (:repeated-ids opts) repeated-ids-refuse)
          triples (-> {"urpx:RatePlanVersion"
@@ -607,7 +602,7 @@
    urpx:modifierCategory and urpx:modifierType, which might have served as a
    signal, are optional. So CARE and FERA are both returned for SCE
    Schedule D and nothing in the documents says a customer has at most one.
-   Choosing among them is the caller's, which is why `arrangements` takes a
+   Choosing among them is the caller's, which is why `enumerate` takes a
    combining policy rather than inventing one.
 
    Options:
@@ -622,10 +617,10 @@
      :compatibility  fn `[modifier-version base-version plan-id] -> boolean`.
                      Defaults to `named-versions-narrow`; `named-versions-add`
                      is the monotone alternative.
-     :package-zones  as `arrangements` takes it."
+     :package-zones  as `enumerate` takes it."
   ([documents base-version] (applicable-modifiers documents base-version nil))
   ([documents base-version opts]
-   (let [_       (check-coerced! documents "urpx.arrangements/applicable-modifiers")
+   (let [_       (check-coerced! documents "urpx.scenario-cost-model/applicable-modifiers")
          t       (:at opts)
          compat  (or (:compatibility opts) named-versions-narrow)
          plan-id (:jsonld/id (:urpx/forRatePlan base-version))
@@ -657,8 +652,8 @@
   "The default combining policy: the empty set, and each modifier on its own.
 
    Conservative because URPX cannot state which modifiers combine. Every
-   arrangement it yields is one the documents support, and it is knowingly
-   INCOMPLETE: real multi-overlay arrangements exist, and California publishes
+   model it yields is one the documents support, and it is knowingly
+   INCOMPLETE: real multi-overlay models exist, and California publishes
    identifiers for some of them, so a caller that knows its own program rules
    should pass its own policy rather than accept this one."
   [modifier-versions]
@@ -675,29 +670,29 @@
           [[]]
           modifier-versions))
 
-(defn arrangement-id
-  "The intrinsic identity of `arrangement`:
+(defn identity-tuple
+  "The intrinsic identity of `model`:
 
      [base-version-iri [modifier-version-iris sorted] [[container alternative] sorted]]
 
    Computable from the documents alone, stable across regeneration, external
-   nothing. Two arrangements are the same when this matches and different
+   nothing. Two models are the same when this matches and different
    otherwise, INCLUDING when they resolve to the same price: a bundled customer
    and one buying generation elsewhere may pay the same delivery rate and are
-   on different arrangements."
-  [arrangement]
-  [(:urpx.arrangement/version-id arrangement)
-   (vec (sort (:urpx.arrangement/modifier-version-ids arrangement)))
-   (vec (sort-by first (:urpx.arrangement/selections arrangement)))])
+   on different models."
+  [model]
+  [(:urpx.scenario-cost-model/version-id model)
+   (vec (sort (:urpx.scenario-cost-model/modifier-version-ids model)))
+   (vec (sort-by first (:urpx.scenario-cost-model/selections model)))])
 
-(defn arrangements
-  "Every service arrangement `documents` expresses, as a vector.
+(defn enumerate
+  "Every scenario cost model `documents` expresses, as a vector.
 
    `documents` is a seq of coerced urpx:RatePlan and urpx:RatePlanModifier
    documents, the same values urpx.price takes.
 
    Options:
-     :at       a ZonedDateTime. Restricts to arrangements whose every component
+     :at       a ZonedDateTime. Restricts to models whose every component
                is CURRENT at that instant: the latest version of each identity
                to have taken effect and not expired. Omit to enumerate the whole
                expressed space across every version, a different and larger
@@ -720,12 +715,12 @@
                  :agree     (default) one more declaration, which must agree
                             with the version, its identity and its source
                             document, or the call refuses
-                            `:urpx.arrangement/conflicting-timezone`.
+                            `:urpx.scenario-cost-model/conflicting-timezone`.
                  :fallback  read only when none of those declares a zone.
                  :ignore    packages contribute no zone.
                Under every mode, two packages declaring different zones for one
                version refuse, as do a version and its identity. Any other
-               value refuses `:urpx.arrangement/unknown-package-zones`.
+               value refuses `:urpx.scenario-cost-model/unknown-package-zones`.
 
    THE COMBINING POLICY IS THE CALLER'S BECAUSE URPX CANNOT STATE IT. Nothing
    in the ontology expresses exclusivity or combinability between modifiers,
@@ -736,23 +731,23 @@
    knowingly wrong; a caller holding its own program rules should pass those
    instead. Use `applicable-modifiers` to see what it is choosing among.
 
-   Each arrangement is a map:
-     :urpx.arrangement/rate-plan            the coerced base document, declaring
-                                            the zone found for its version
-     :urpx.arrangement/version              the base version snapshot
-     :urpx.arrangement/version-id           its @id
-     :urpx.arrangement/plan-id              the plan identity @id
-     :urpx.arrangement/modifiers            coerced modifier documents, in order,
-                                            zoned the same way
-     :urpx.arrangement/modifier-versions    their snapshots
-     :urpx.arrangement/modifier-version-ids their @ids
-     :urpx.arrangement/selections           {container-@id alternative-@id}
+   Each model is a map with these keys, all in :urpx.scenario-cost-model:
+     rate-plan            the coerced base document, declaring the zone found
+                          for its version
+     version              the base version snapshot
+     version-id           its @id
+     plan-id              the plan identity @id
+     modifiers            coerced modifier documents, in order, zoned the
+                          same way
+     modifier-versions    their snapshots
+     modifier-version-ids their @ids
+     selections           {container-@id alternative-@id}
 
-   Deterministic: sorted by `arrangement-id`, so regenerating the same
+   Deterministic: sorted by `identity-tuple`, so regenerating the same
    documents gives the same order. Nothing here consults wall-clock time."
-  ([documents] (arrangements documents nil))
+  ([documents] (enumerate documents nil))
   ([documents opts]
-   (let [_       (check-coerced! documents "urpx.arrangements/arrangements")
+   (let [_       (check-coerced! documents "urpx.scenario-cost-model/enumerate")
          combine (or (:combine opts) one-modifier-at-most)
          compat  (or (:compatibility opts) named-versions-narrow)
          repeated (or (:repeated-ids opts) repeated-ids-refuse)
@@ -766,7 +761,7 @@
          live-plans (current-versions (get merged "urpx:RatePlanVersion") t zone-of)
          live-mods  (current-versions (get merged "urpx:RatePlanModifierVersion") t zone-of)]
      ;; Base version and modifier versions are carried as [id version doc]
-     ;; triples the whole way, so the document attached to an arrangement is
+     ;; triples the whole way, so the document attached to a model is
      ;; the one the snapshot was read out of rather than one looked up by @id.
      (->> (for [[plan-id bvs] live-plans
                 [_ bv _ :as btriple] bvs
@@ -790,99 +785,99 @@
                       mtriples (mapv by-node mvs)
                       dims     (open-dimensions (cons bv mvs))]
                 sel (selection-combinations dims)]
-            {:urpx.arrangement/rate-plan            (zoned-doc find-zone btriple)
-             :urpx.arrangement/version              bv
-             :urpx.arrangement/version-id           (:jsonld/id bv)
-             :urpx.arrangement/plan-id              plan-id
-             :urpx.arrangement/modifiers            (mapv #(zoned-doc find-zone %) mtriples)
-             :urpx.arrangement/modifier-versions    mvs
-             :urpx.arrangement/modifier-version-ids (mapv :jsonld/id mvs)
-             :urpx.arrangement/selections           sel})
-          (sort-by arrangement-id)
+            {:urpx.scenario-cost-model/rate-plan            (zoned-doc find-zone btriple)
+             :urpx.scenario-cost-model/version              bv
+             :urpx.scenario-cost-model/version-id           (:jsonld/id bv)
+             :urpx.scenario-cost-model/plan-id              plan-id
+             :urpx.scenario-cost-model/modifiers            (mapv #(zoned-doc find-zone %) mtriples)
+             :urpx.scenario-cost-model/modifier-versions    mvs
+             :urpx.scenario-cost-model/modifier-version-ids (mapv :jsonld/id mvs)
+             :urpx.scenario-cost-model/selections           sel})
+          (sort-by identity-tuple)
           vec))))
 
-(defn arrangement-pairs
+(defn enumerate-pairs
   "Every (base version, modifier set) pair `documents` expresses, as a set:
 
       #{[base-version-iri #{modifier-version-iri ...}] ...}
 
    The enumeration collapsed to one row per composition, with any
    ProfileAlternative choices NOT expanded. That is a coarser question than
-   `arrangements` answers and a deliberately different one: an arrangement with
-   an open dimension is several arrangements and one pair.
+   `enumerate` answers and a deliberately different one: a model with
+   an open dimension is several models and one pair.
 
    FOR COMPARING TWO IMPLEMENTATIONS. A consumer cross-checking an independent
-   enumerator against this one should compare pair SETS rather than arrangement
+   enumerator against this one should compare pair SETS rather than model
    counts, because the two sides can legitimately disagree about whether a
    pending choice is one row or several while agreeing completely about what
    composes with what.
 
-   `opts` is what `arrangements` takes. PIN EVERY POLICY EXPLICITLY when the
+   `opts` is what `enumerate` takes. PIN EVERY POLICY EXPLICITLY when the
    result is an expected value in a gate: `:at`, `:combine`, `:compatibility`,
    `:repeated-ids` and `:package-zones` each change the answer, and matching
    defaults across two implementations is agreement by coincidence rather than
    by construction."
-  ([documents] (arrangement-pairs documents nil))
+  ([documents] (enumerate-pairs documents nil))
   ([documents opts]
    (into #{}
-         (map (juxt :urpx.arrangement/version-id
-                    (comp set :urpx.arrangement/modifier-version-ids)))
-         (arrangements documents opts))))
+         (map (juxt :urpx.scenario-cost-model/version-id
+                    (comp set :urpx.scenario-cost-model/modifier-version-ids)))
+         (enumerate documents opts))))
 
 (defn- bound-opts
-  "The opts that bind `arrangement` to its own documents, merged under `opts`.
+  "The opts that bind `model` to its own documents, merged under `opts`.
 
    ONE BUILDER for every entry point here. resolve-at, segments-for and
    schedule-for must hand urpx.price an identical binding or they answer
-   different questions about the same arrangement, and a second copy of this
+   different questions about the same model, and a second copy of this
    map is the drift that put an effectiveDateTime filter in this namespace
    while urpx.price read effectiveDate too.
 
-   The two keys the arrangement itself determines are REFUSED rather than
+   The two keys the model itself determines are REFUSED rather than
    merged. Silently letting a caller's `:version` win would restore the exact
-   defect these functions exist to prevent; silently letting the arrangement
+   defect these functions exist to prevent; silently letting the model
    win would ignore an opt the caller meant. A caller who wants a different
-   version or a different selection wants a different arrangement."
-  [arrangement opts]
+   version or a different selection wants a different model."
+  [model opts]
   (when-let [bound (seq (filter (set (keys opts)) [:version :profile-alternatives]))]
-    (throw (ex-info "Opt is determined by the arrangement and cannot be overridden"
-                    {:reason :urpx.arrangement/opt-determined-by-arrangement
+    (throw (ex-info "Opt is determined by the model and cannot be overridden"
+                    {:reason :urpx.scenario-cost-model/opt-determined-by-model
                      :keys (vec bound)
-                     :arrangement-id (arrangement-id arrangement)})))
-  (merge {:profile-alternatives (:urpx.arrangement/selections arrangement)
-          :version (into {(:jsonld/id (:urpx.arrangement/rate-plan arrangement))
-                          (:urpx.arrangement/version arrangement)}
+                     :identity-tuple (identity-tuple model)})))
+  (merge {:profile-alternatives (:urpx.scenario-cost-model/selections model)
+          :version (into {(:jsonld/id (:urpx.scenario-cost-model/rate-plan model))
+                          (:urpx.scenario-cost-model/version model)}
                          (map (fn [d v] [(:jsonld/id d) v])
-                              (:urpx.arrangement/modifiers arrangement)
-                              (:urpx.arrangement/modifier-versions arrangement)))}
+                              (:urpx.scenario-cost-model/modifiers model)
+                              (:urpx.scenario-cost-model/modifier-versions model)))}
          opts))
 
 (defn resolve-at
-  "Resolve `arrangement` at `zdt`, returning what
+  "Resolve `model` at `zdt`, returning what
    `urpx.price/resolve-prices-with-modifiers` returns.
 
    A convenience over urpx.price, not a replacement: it binds each document to
-   its own version and hands the arrangement's selections through as
+   its own version and hands the model's selections through as
    `:profile-alternatives`, so the opts cannot reach a document they do not
    belong to. Both `:version` defects fixed in 0.28.0 were an opt and a document
    failing to line up: one applied the base plan's snapshot to every modifier,
    the other re-derived the snapshot on the holiday path and ignored the opt
-   entirely. An arrangement makes both unrepresentable rather than repeatedly
+   entirely. A model makes both unrepresentable rather than repeatedly
    fixable.
 
    The binding does more than choose. Handed a document carrying several
    version snapshots, urpx.price refuses outright rather than picking one, so
    this is what makes such a document resolvable at all.
 
-   Extra `opts` merge over the arrangement's own, except `:version` and
+   Extra `opts` merge over the model's own, except `:version` and
    `:profile-alternatives`, which are refused. See `bound-opts`."
-  ([arrangement ^ZonedDateTime zdt] (resolve-at arrangement zdt nil))
-  ([arrangement ^ZonedDateTime zdt opts]
+  ([model ^ZonedDateTime zdt] (resolve-at model zdt nil))
+  ([model ^ZonedDateTime zdt opts]
    (price/resolve-prices-with-modifiers
-    (:urpx.arrangement/rate-plan arrangement)
-    (:urpx.arrangement/modifiers arrangement)
+    (:urpx.scenario-cost-model/rate-plan model)
+    (:urpx.scenario-cost-model/modifiers model)
     zdt
-    (bound-opts arrangement opts))))
+    (bound-opts model opts))))
 
 ;; ---------------------------------------------------------------------------
 ;; Horizons
@@ -890,7 +885,7 @@
 ;; `resolve-at` answers one instant. A price server publishes a WINDOW: the
 ;; interval containing now and some number of them forward. Both functions
 ;; below exist because doing that through urpx.schedule directly means taking
-;; an arrangement apart into its rate-plan and modifier documents and rebuilding
+;; a model apart into its rate-plan and modifier documents and rebuilding
 ;; the per-document `:version` map by hand, which is the reconstruction
 ;; `resolve-at` exists to prevent and the defect class this library has fixed
 ;; three times.
@@ -901,7 +896,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn segments-for
-  "Exact price segments for `arrangement` across `[start, end)`, as
+  "Exact price segments for `model` across `[start, end)`, as
    `urpx.schedule/price-segments` returns them.
 
    PREFER THIS over `schedule-for` for publishing. Boundaries are derived from
@@ -913,23 +908,23 @@
 
    A resolution that throws inside the window becomes a segment carrying
    `:urpx.interval/refused` rather than aborting the horizon, and equal
-   refusals merge, so a stretch the arrangement does not cover is one segment
+   refusals merge, so a stretch the model does not cover is one segment
    and not one per candidate instant. That is what lets a publisher emit the
    part of a window it can price and say plainly what it cannot.
 
    `zone` may be nil when the plan declares `urpx:timezoneIdentifier`. Extra
-   `opts` are as `resolve-at`: merged, except the two the arrangement
+   `opts` are as `resolve-at`: merged, except the two the model
    determines, which are refused."
-  ([arrangement start end] (segments-for arrangement start end nil nil))
-  ([arrangement start end zone] (segments-for arrangement start end zone nil))
-  ([arrangement ^Instant start ^Instant end zone opts]
-   (schedule/price-segments (:urpx.arrangement/rate-plan arrangement)
-                            (:urpx.arrangement/modifiers arrangement)
+  ([model start end] (segments-for model start end nil nil))
+  ([model start end zone] (segments-for model start end zone nil))
+  ([model ^Instant start ^Instant end zone opts]
+   (schedule/price-segments (:urpx.scenario-cost-model/rate-plan model)
+                            (:urpx.scenario-cost-model/modifiers model)
                             start end zone
-                            (bound-opts arrangement opts))))
+                            (bound-opts model opts))))
 
 (defn schedule-for
-  "A stepped price schedule for `arrangement` across `[start, end)`, as
+  "A stepped price schedule for `model` across `[start, end)`, as
    `urpx.schedule/price-schedule-with-modifiers` returns them.
 
    Walks a grid, default hourly, merging adjacent steps whose prices are
@@ -938,11 +933,11 @@
    a price server is almost always the question.
 
    Same `zone` and `opts` handling as `segments-for`."
-  ([arrangement start end] (schedule-for arrangement start end nil nil))
-  ([arrangement start end zone] (schedule-for arrangement start end zone nil))
-  ([arrangement ^Instant start ^Instant end zone opts]
+  ([model start end] (schedule-for model start end nil nil))
+  ([model start end zone] (schedule-for model start end zone nil))
+  ([model ^Instant start ^Instant end zone opts]
    (schedule/price-schedule-with-modifiers
-    (:urpx.arrangement/rate-plan arrangement)
-    (:urpx.arrangement/modifiers arrangement)
+    (:urpx.scenario-cost-model/rate-plan model)
+    (:urpx.scenario-cost-model/modifiers model)
     start end zone
-    (bound-opts arrangement opts))))
+    (bound-opts model opts))))

@@ -109,9 +109,9 @@
    would be a missing value rather than a loud failure.
 
    THE ONE IMPLEMENTATION of this walk. `urpx.schedule` harvests boundary
-   candidates from it and `urpx.arrangements` uses it only to tell a coerced
-   document from an uncoerced one; two copies of the test is two chances to
-   disagree about what \"coerced\" means."
+   candidates from it and `urpx.scenario-cost-model` uses it only to tell a
+   coerced document from an uncoerced one; two copies of the test is two
+   chances to disagree about what \"coerced\" means."
   [doc]
   (let [acc (volatile! {:times #{} :dates #{} :date-times #{} :date-shaped-strings 0})]
     (letfn [(walk [x]
@@ -152,9 +152,9 @@
    `who` names the calling operation in the message. Reading an uncoerced
    document does not fail loudly on its own: dates stay strings, so anything
    that compares them throws deep inside, and anything that does NOT compare
-   them quietly answers a different question. `urpx.arrangements/arrangements`
-   returned 202 pairs instead of 144 that way, a plausible number rather than a
-   refusal."
+   them quietly answers a different question.
+   `urpx.scenario-cost-model/enumerate` returned 202 pairs instead of 144 that
+   way, a plausible number rather than a refusal."
   [documents who]
   (let [bad (filter uncoerced? documents)]
     (when (seq bad)

@@ -80,7 +80,7 @@
    "index" 'urpx.index "price" 'urpx.price "schedule" 'urpx.schedule
    "holidays" 'urpx.holidays "tz" 'urpx.tz-inference "emit" 'urpx.emit
    "dsl" 'urpx.dsl "validate" 'urpx.validate
-   "load" 'urpx.load "arr" 'urpx.arrangements "cov" 'urpx.coverage})
+   "load" 'urpx.load "scm" 'urpx.scenario-cost-model "cov" 'urpx.coverage})
 
 (defn- referenced-symbols
   "Qualified symbols a doc's Clojure blocks mention, as [alias name] pairs.
@@ -97,8 +97,8 @@
   (testing "the symbol checks below recognise only the aliases in alias->ns and
             drop the rest SILENTLY, so a namespace nobody registered is a
             namespace whose documented function names are never verified. That
-            is not hypothetical: urpx.arrangements shipped in 0.29.0 with a
-            README section full of arr/ calls that this suite never looked at,
+            is not hypothetical: the enumerator shipped in 0.29.0 with a README
+            section full of calls that this suite never looked at,
             because `owned` was a second hand-maintained copy of these keys.
 
             So adding a namespace to src/ now fails here until it is registered.

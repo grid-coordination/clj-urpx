@@ -9,7 +9,7 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
-            [urpx.arrangements :as arr]
+            [urpx.scenario-cost-model :as scm]
             [tick.alpha.interval :as ti]
             [urpx.coverage :as cov]
             [urpx.test-fixtures :as fixtures]))
@@ -191,29 +191,29 @@
             price-resolving consumer loads, and forbidding it there would push
             the validator into re-deriving checks this namespace already
             implements, which is the duplication that put an
-            effectiveDateTime-only filter into urpx.arrangements.
+            effectiveDateTime-only filter into urpx.scenario-cost-model.
 
             urpx.coverage must also not reach for the pricing side. A verdict is
             what a publisher asserts about a snapshot; needing urpx.price to
             read one would mean the reading depended on resolution."
-    (doseq [root ['urpx.price 'urpx.schedule 'urpx.arrangements 'urpx.emit 'urpx.dsl]]
+    (doseq [root ['urpx.price 'urpx.schedule 'urpx.scenario-cost-model 'urpx.emit 'urpx.dsl]]
       (is (not (contains? (transitive-requires root) 'urpx.coverage))
           (str root " must not reach urpx.coverage, directly or transitively")))
     (let [reached (transitive-requires 'urpx.coverage)]
       (is (contains? reached 'urpx.index) "sanity: the walk does find real requires")
       (is (not (contains? reached 'urpx.price)) "and it must not require urpx.price")
-      (is (not (contains? reached 'urpx.arrangements)) "nor urpx.arrangements"))))
+      (is (not (contains? reached 'urpx.scenario-cost-model)) "nor urpx.scenario-cost-model"))))
 
 ;; ---------------------------------------------------------------------------
-;; Arrangements
+;; Scenario cost models
 ;; ---------------------------------------------------------------------------
 
 (defn- sce-d+care []
-  (first (filter #(seq (:urpx.arrangement/modifier-version-ids %))
-                 (arr/arrangements [(fixtures/load-rate-plan "sce-d-2026-03-20")
+  (first (filter #(seq (:urpx.scenario-cost-model/modifier-version-ids %))
+                 (scm/enumerate [(fixtures/load-rate-plan "sce-d-2026-03-20")
                                     (fixtures/load-modifier "sce-care-2026-03-20")]))))
 
-(deftest there-is-no-arrangement-level-verdict
+(deftest there-is-no-model-level-verdict
   (testing "THE ABSENCE IS THE DESIGN, so it is pinned as an exact key set
             rather than left as a comment. Adding a rolled-up
             :urpx.coverage/completeness fails here, which is the only durable
@@ -225,14 +225,14 @@
             skos:broader where it does mean a hierarchy. More decisively, every
             definition is relative to 'the claimed scope' of its own snapshot
             and no snapshot states one, so composing would need each part's
-            scope and their union to equal the arrangement's. Neither is known,
+            scope and their union to equal the model's. Neither is known,
             which makes composition undefined at the domain level rather than
             merely unranked.
 
             And a minimum would be positively wrong in a case the vocabulary
             allows: a modifier claiming urpx:noCoverage contributes nothing, so
             a complete base with a noCoverage modifier is not a noCoverage
-            arrangement."
+            model."
     (is (= #{:urpx.coverage/parts
              :urpx.coverage/completeness-counts
              :urpx.coverage/unstated-count
@@ -240,9 +240,9 @@
              :urpx.coverage/every-part-complete?
              :urpx.coverage/every-part-self-contained?
              :urpx.coverage/any-part-scope-stated?}
-           (set (keys (cov/of-arrangement (sce-d+care)))))
+           (set (keys (cov/of-model (sce-d+care)))))
         "exactly these keys: no verdict, no min, no fold")
-    (is (not-any? #(re-find #"weakest|overall|rollup|composite|combined|arrangement-verdict"
+    (is (not-any? #(re-find #"weakest|overall|rollup|composite|combined|model-verdict"
                             (name %))
                   (keys (ns-publics 'urpx.coverage)))
         "and no public var offers one under another name. Deliberately NOT
@@ -250,11 +250,11 @@
          version's own scope, and an over-broad guard that fires on a correct
          name teaches people to loosen guards.")))
 
-(deftest a-mixed-arrangement-keeps-both-verdicts
+(deftest a-mixed-model-keeps-both-verdicts
   (testing "SCE Schedule D claims complete and the CARE modifier claims partial,
             so the report has to carry two distinct values. Any fold to one
             loses the thing a caller needs to decide with."
-    (let [r (cov/of-arrangement (sce-d+care))]
+    (let [r (cov/of-model (sce-d+care))]
       (is (= {"urpx:complete" 1 "urpx:partial" 1}
              (:urpx.coverage/completeness-counts r)))
       (is (false? (:urpx.coverage/every-part-complete? r)))
@@ -262,30 +262,30 @@
 
 (deftest every-part-complete-is-reachable-so-the-gate-is-not-constant-false
   (testing "a conjunction that can never be true is not a gate. SCE Schedule D
-            alone claims complete, so the base-only arrangement satisfies it.
+            alone claims complete, so the base-only model satisfies it.
 
             NOTE what it still does not mean: each claim covers its own
             snapshot's required elements, so every part claiming complete says
             nothing about elements a composition needs and neither part carries."
-    (let [base-only (first (filter #(empty? (:urpx.arrangement/modifier-version-ids %))
-                                   (arr/arrangements [(fixtures/load-rate-plan "sce-d-2026-03-20")])))]
-      (is (true? (:urpx.coverage/every-part-complete? (cov/of-arrangement base-only)))))))
+    (let [base-only (first (filter #(empty? (:urpx.scenario-cost-model/modifier-version-ids %))
+                                   (scm/enumerate [(fixtures/load-rate-plan "sce-d-2026-03-20")])))]
+      (is (true? (:urpx.coverage/every-part-complete? (cov/of-model base-only)))))))
 
-(deftest parts-come-in-arrangement-order-with-their-roles
-  (testing "base first, then modifiers in the order the arrangement holds them,
+(deftest parts-come-in-model-order-with-their-roles
+  (testing "base first, then modifiers in the order the model holds them,
             each tagged. A caller correlating a verdict with the document it
-            came from needs the order to be the arrangement's, not this
+            came from needs the order to be the model's, not this
             namespace's."
     (let [a (sce-d+care)
-          r (cov/of-arrangement a)]
+          r (cov/of-model a)]
       (is (= [:base :modifier] (mapv :urpx.coverage/role (:urpx.coverage/parts r))))
-      (is (= (into [(:urpx.arrangement/version-id a)]
-                   (:urpx.arrangement/modifier-version-ids a))
+      (is (= (into [(:urpx.scenario-cost-model/version-id a)]
+                   (:urpx.scenario-cost-model/modifier-version-ids a))
              (mapv :urpx.coverage/version-id (:urpx.coverage/parts r)))
-          "and the ids line up index for index with the arrangement's own"))))
+          "and the ids line up index for index with the model's own"))))
 
 (deftest each-part-is-read-against-its-own-document
-  (testing "the arrangement already binds each version to the document it came
+  (testing "the model already binds each version to the document it came
             from, so a claim recorded as a bare @id resolves against the right
             graph rather than whichever document was at hand. Reading the
             modifier's claim against the base plan's document would refuse
@@ -300,11 +300,11 @@
                    :urpx/hasRatePlanModifierVersion
                    {:jsonld/id "x:m-v" :jsonld/type "urpx:RatePlanModifierVersion"
                     :urpx/hasCoverageClaim {:jsonld/id "x:cc-m"}}}
-          arrangement {:urpx.arrangement/version {:jsonld/id "x:p-v" :jsonld/type "urpx:RatePlanVersion"}
-                       :urpx.arrangement/rate-plan {:jsonld/id "x:p" :jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"}
-                       :urpx.arrangement/modifier-versions [(:urpx/hasRatePlanModifierVersion mod-doc)]
-                       :urpx.arrangement/modifiers [mod-doc]}
-          r (cov/of-arrangement arrangement)]
+          model {:urpx.scenario-cost-model/version {:jsonld/id "x:p-v" :jsonld/type "urpx:RatePlanVersion"}
+                 :urpx.scenario-cost-model/rate-plan {:jsonld/id "x:p" :jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"}
+                 :urpx.scenario-cost-model/modifier-versions [(:urpx/hasRatePlanModifierVersion mod-doc)]
+                 :urpx.scenario-cost-model/modifiers [mod-doc]}
+          r (cov/of-model model)]
       (is (= [nil "urpx:pending"]
              (mapv :urpx.coverage/completeness (:urpx.coverage/parts r)))
           "the modifier's by-reference claim resolved in its OWN document")
@@ -316,7 +316,7 @@
             Evaluation says WHAT. The prose can be specific enough to act on,
             which makes it the thing a consumer deciding whether to
             publish a partial snapshot actually reads."
-    (let [ds (cov/descriptions (cov/of-arrangement (sce-d+care)))]
+    (let [ds (cov/descriptions (cov/of-model (sce-d+care)))]
       (is (= 1 (count ds)) "one part carries prose")
       (is (= :modifier (:role (first ds))))
       (is (= "sce:care-2026-03-20" (:version-id (first ds))))
@@ -387,7 +387,7 @@
   (testing "the same rule urpx.price/version-effective-at gives the version
             shapes' own date-or-dateTime pair. A second reading of the same kind
             of bound is the drift that put an effectiveDateTime-only filter into
-            urpx.arrangements."
+            urpx.scenario-cost-model."
     (let [w {:urpx/startDate (java.time.LocalDate/of 2026 1 1)
              :urpx/endDate   (java.time.LocalDate/of 2026 2 1)}]
       (is (true?  (applies? w (zdt 2026 1 1) (zdt 2026 2 1))))
@@ -476,8 +476,8 @@
 
 (deftest a-coverage-window-compares-with-a-real-schedule-segment
   (testing "THE ACTUAL USE CASE, and the reason the window is zoned. A price
-            server holds segments from urpx.arrangements/segments-for and asks
-            whether the verdict covers what it is about to publish. Both sides
+            server holds segments from urpx.scenario-cost-model/segments-for and
+            asks whether the verdict covers what it is about to publish. Both sides
             carry ZonedDateTime under :tick/beginning and :tick/end, so they
             compare with no conversion at the call site.
 
@@ -488,8 +488,8 @@
             thing this namespace could produce, and it is what the repo's own
             README already forbade: ZonedDateTime end-to-end at output
             boundaries."
-    (let [a    (first (arr/arrangements [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
-          segs (arr/segments-for a (.toInstant (zdt 2026 7 15)) (.toInstant (zdt 2026 7 16)))
+    (let [a    (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
+          segs (scm/segments-for a (.toInstant (zdt 2026 7 15)) (.toInstant (zdt 2026 7 16)))
           seg  (select-keys (first segs) [:tick/beginning :tick/end])
           ;; a verdict covering all of July, stated as the publisher would
           r    (cov/of-version (scoped {:urpx/startDateTime (ldt 2026 7 1)

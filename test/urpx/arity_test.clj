@@ -9,11 +9,11 @@
   gives `(\"x\")`. Nothing throws, and the answer stays well formed.
 
   That made it hard to see and easy to reintroduce. Three confirmed instances
-  reached real data (URPX-p8f): `urpx.arrangements/applicability`, where both
-  shipped compatibility policies returned false so every arrangement came out
-  base-only; `urpx.price/modifier-applies-to?`, where a modifier applied to no
-  base plan; and `urpx.emit`, which wrote a corrupt artifact with the @ prefixes
-  stripped. URPX writes a lone value of a 0..N property as a bare object, so
+  reached real data (URPX-p8f): `urpx.scenario-cost-model/applicability`,
+  where both shipped compatibility policies returned false so every model came
+  out base-only; `urpx.price/modifier-applies-to?`, where a modifier applied to
+  no base plan; and `urpx.emit`, which wrote a corrupt artifact with the @
+  prefixes stripped. URPX writes a lone value of a 0..N property as a bare object, so
   that is the spelling real filings carry.
 
   THE GUARD IS GENERATIVE, not per-site. Forty reads of one shape cannot be
@@ -26,7 +26,7 @@
   Equality against the unmodified baseline is the assertion, never \"does not
   throw\": every one of these defects returned a well-formed answer."
   (:require [clojure.test :refer [deftest is testing]]
-            [urpx.arrangements :as arr]
+            [urpx.scenario-cost-model :as scm]
             [urpx.emit :as emit]
             [urpx.index :as index]
             [urpx.price :as price]
@@ -54,9 +54,9 @@
 ;; of those readers nowhere.
 
 (deftest applicability-reads-a-bare-compatibility-statement
-  (testing "urpx.arrangements/applicability. Both shipped policies returned
-            false on the bare form, so applicable-modifiers gave [] and every
-            arrangement came out base-only, with nothing raised. The fixture
+  (testing "urpx.scenario-cost-model/applicability. Both shipped policies
+            returned false on the bare form, so applicable-modifiers gave [] and
+            every model came out base-only, with nothing raised. The fixture
             writes applicableToRatePlanVersion bare, so the list form these read
             correctly is not what real data carries."
     (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
@@ -66,10 +66,10 @@
           pid  (:jsonld/id plan)
           bare (update mv :urpx/applicableToRatePlan
                        #(if (and (vector? %) (= 1 (count %))) (first %) %))]
-      (is (= (arr/named-versions-narrow mv bv pid)
-             (arr/named-versions-narrow bare bv pid)))
-      (is (= (arr/named-versions-add mv bv pid)
-             (arr/named-versions-add bare bv pid))))))
+      (is (= (scm/named-versions-narrow mv bv pid)
+             (scm/named-versions-narrow bare bv pid)))
+      (is (= (scm/named-versions-add mv bv pid)
+             (scm/named-versions-add bare bv pid))))))
 
 (deftest modifier-applies-to-reads-a-bare-target-list
   (testing "urpx.price/modifier-applies-to?. A bare applicableToRatePlan made
