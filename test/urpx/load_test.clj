@@ -106,6 +106,39 @@
     (is (= [(coerce/coerce-doc (first (core/load-graph (src json))))]
            (load/documents [(src json)])))))
 
+(deftest a-by-reference-payload-is-not-a-discard
+  (testing "a package naming its payloads by @id alone, the entities themselves
+            being @graph siblings, discards nothing: the references stay on the
+            shell and the siblings load"
+    (let [json (str "{" ctx ",\"@graph\":["
+                    "{\"@id\":\"x:pkg\",\"@type\":\"urpx:URPXPackage\","
+                    "\"urpx:packages\":[{\"@id\":\"x:p\"},{\"@id\":\"x:m\"}],"
+                    "\"urpx:hasRatePlan\":{\"@id\":\"x:p\"},"
+                    "\"urpx:hasRatePlanModifier\":{\"@id\":\"x:m\"}},"
+                    "{\"@id\":\"x:p\",\"@type\":\"urpx:RatePlan\"},"
+                    "{\"@id\":\"x:m\",\"@type\":\"urpx:RatePlanModifier\"}]}")
+          {:urpx.load/keys [documents uncoercible]} (load/scan [(src json)])]
+      (is (= [] uncoercible))
+      (is (= ["x:pkg" "x:p" "x:m"] (mapv :jsonld/id documents)))
+      (is (= [{:jsonld/id "x:p"} {:jsonld/id "x:m"}] (:urpx/packages (first documents))))))
+  (testing "expand-document-entities still returns the references"
+    (let [json (str "{" ctx ",\"@id\":\"x:pkg\",\"@type\":\"urpx:URPXPackage\","
+                    "\"urpx:packages\":{\"@id\":\"x:p\"}}")]
+      (is (= [{:jsonld/id "x:p"}]
+             (mapcat core/expand-document-entities (core/load-graph (src json))))))))
+
+(deftest an-untyped-entity-is-still-a-discard
+  (testing "an embedded payload with no @type but statements of its own is an
+            entity, and scan names it"
+    (let [json (str "{" ctx ",\"@id\":\"x:pkg\",\"@type\":\"urpx:URPXPackage\","
+                    "\"urpx:packages\":{\"@id\":\"x:q\",\"urpx:name\":\"Q\"}}")]
+      (is (= [{:jsonld/type nil :jsonld/id "x:q"}]
+             (:urpx.load/uncoercible (load/scan [(src json)]))))))
+  (testing "a bare @id at the top of a @graph is an entity, and scan names it"
+    (let [json (str "{" ctx ",\"@graph\":[{\"@id\":\"x:r\"}]}")]
+      (is (= [{:jsonld/type nil :jsonld/id "x:r"}]
+             (:urpx.load/uncoercible (load/scan [(src json)])))))))
+
 (deftest an-embedded-payload-without-an-id-is-refused
   (let [json (str "{" ctx ",\"@id\":\"x:pkg\",\"@type\":\"urpx:URPXPackage\","
                   "\"urpx:hasRatePlan\":{\"@type\":\"urpx:RatePlan\"}}")]

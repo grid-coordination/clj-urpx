@@ -59,12 +59,20 @@
                 pkg))
             entity payload-keys)))
 
+(defn- reference?
+  "True when `payload` is a bare `{:jsonld/id id}` reference: a package naming
+   an entity stated elsewhere."
+  [payload]
+  (= #{:jsonld/id} (set (keys payload))))
+
 (defn- expand
   "`expand-document-entities`, followed by the package shell when `entity` is a
-   wrapper."
+   wrapper. A wrapper's by-reference payloads are dropped; the shell keeps the
+   references."
   [entity]
-  (let [shell (package-shell entity)]
-    (cond-> (core/expand-document-entities entity) shell (conj shell))))
+  (if-let [shell (package-shell entity)]
+    (conj (into [] (remove reference?) (core/expand-document-entities entity)) shell)
+    (core/expand-document-entities entity)))
 
 (def document-xf
   "A transducer from sources to coerced URPX documents.
@@ -87,7 +95,8 @@
                                 is how a zone declared only on the package
                                 reaches `urpx.arrangements`. An embedded payload
                                 with no @id refuses
-                                `:urpx.load/payload-without-id`.
+                                `:urpx.load/payload-without-id`. A by-reference
+                                payload yields nothing beyond the shell.
     `coerce-doc`                strings become java.time values and BigDecimals.
                                 Without it urpx:effectiveDateTime is still a
                                 string, so anything comparing dates throws from
