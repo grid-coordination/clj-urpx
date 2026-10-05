@@ -239,7 +239,7 @@
       (is (= 1 (:urpx.resolved/tou-period-number r))))))
 
 (deftest unknown-day-type-fails-loud
-  (testing "An out-of-vocabulary dayType returns no match (no silent fallthrough)."
+  (testing "An out-of-vocabulary dayType matches no bracket, which refuses."
     (let [plan-base (fixtures/load-rate-plan "pge-e-tou-d-2026-03-27")
           plan (update-in plan-base
                           [:urpx/hasRatePlanVersion
@@ -251,8 +251,9 @@
                            :urpx/hasTimeBracket]
                           (fn [bs]
                             (mapv #(assoc % :urpx/dayType {:jsonld/id "urpx:nonsense"}) bs)))
-          r (price/resolve-prices plan (zdt 2026 7 15 18))]
-      (is (not= 1 (:urpx.resolved/tou-period-number r))))))
+          d (try (price/resolve-prices plan (zdt 2026 7 15 18)) nil
+                 (catch clojure.lang.ExceptionInfo e (ex-data e)))]
+      (is (= :urpx.price/no-tou-period (:reason d))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Modifier resolution — sibling Vintage PCIA in @graph
@@ -352,6 +353,16 @@
             [{:jsonld/type "urpx:TimeBracket"
               :urpx/startTime (java.time.LocalTime/of 0 0)
               :urpx/endTime (java.time.LocalTime/of 6 0)
+              :urpx/dayType {:jsonld/id "urpx:allDays"}}]}
+           ;; Priced by nothing here. A schedule leaving 06:00-24:00 to no
+           ;; period would refuse there rather than gate the credit out.
+           {:jsonld/type "urpx:TOUPeriod"
+            :urpx/name "Rest of day"
+            :urpx/touPeriodNumber 2
+            :urpx/hasTimeBracket
+            [{:jsonld/type "urpx:TimeBracket"
+              :urpx/startTime (java.time.LocalTime/of 6 0)
+              :urpx/endTime (java.time.LocalTime/of 0 0)
               :urpx/dayType {:jsonld/id "urpx:allDays"}}]}]}]}]
       :urpx/hasLedger
       [{:jsonld/type "urpx:Ledger"

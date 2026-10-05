@@ -135,8 +135,9 @@
         (is (= 1 (:urpx.resolved/tou-period-number (price/resolve-prices p (at 2026 12 15 17))))))
       (testing "outside the window it does not match, so the season read is not
                 the only thing carrying the match"
-        (is (nil? (:urpx.resolved/tou-period-number
-                   (price/resolve-prices p (at 2026 7 15 9)))))))))
+        (is (= :urpx.price/no-tou-period
+               (try (price/resolve-prices p (at 2026 7 15 9)) nil
+                    (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; An unevaluable gate, and the one deliberate difference between the readers

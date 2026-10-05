@@ -167,6 +167,33 @@
                (mapcat :urpx/hasTOUPeriod (:urpx/hasTOUTier schedule)))
              tou-schedules))))
 
+(defn- require-tou-period
+  "`find-tou-period`, refusing `:urpx.price/no-tou-period` when `tou-schedules`
+   is non-empty and no bracket matches `q`. Nil when there is no schedule.
+
+   A nil period gates out no Price carrying urpx:touPeriodNumber, so resolving
+   on through a gap returns every period's Price at once. `season` is the
+   document's own, and a nil one, from a document declaring no urpx:hasSeasons,
+   matches only brackets naming no Season.
+
+   `plan-id` and `version-id` name the RatePlan or RatePlanModifier and the
+   version whose schedule has the gap."
+  [plan-id version-id tou-schedules season ^ZonedDateTime q holiday?]
+  (when (seq tou-schedules)
+    (or (find-tou-period tou-schedules (:jsonld/id season) q holiday?)
+        (throw (ex-info (str "No urpx:TOUPeriod of " (pr-str plan-id) " covers " q
+                             (if season
+                               (str " in season " (pr-str (:jsonld/id season)))
+                               ", which falls in no urpx:Season this version declares")
+                             ". Its urpx:TOUSchedule exists, so every Price gated by "
+                             "period has no period to be gated against.")
+                        {:reason       :urpx.price/no-tou-period
+                         :plan-id      plan-id
+                         :version-id   version-id
+                         :at           q
+                         :season-id    (:jsonld/id season)
+                         :schedule-ids (mapv :jsonld/id tou-schedules)})))))
+
 ;; ---------------------------------------------------------------------------
 ;; Active-price lookup
 ;; ---------------------------------------------------------------------------
@@ -1854,7 +1881,11 @@
 
    For non-tiered ledgers, :tiers has a single entry with no tier-* keys.
    For block-tiered ledgers (e.g. CPAU E-1), :tiers carries every tier sorted
-   by tier-number — the caller chooses based on cumulative billing-period usage."
+   by tier-number — the caller chooses based on cumulative billing-period usage.
+
+   The TOU period keys are nil only for a version with no urpx:TOUSchedule. A
+   version with one that no period covers at `zdt` refuses
+   `:urpx.price/no-tou-period`."
   ([rate-plan zdt] (resolve-prices rate-plan zdt nil))
   ([rate-plan ^ZonedDateTime zdt opts]
    ;; PROJECT INTO THE PLAN'S ZONE, ONCE, HERE. A bound in a URPX document
@@ -1882,7 +1913,8 @@
          date          (.toLocalDate zdt)
 
          season        (season-of seasons date)
-         tou-period    (find-tou-period tou-schedules (:jsonld/id season) zdt holiday?)
+         tou-period    (require-tou-period (:jsonld/id rate-plan) (:jsonld/id version)
+                                           tou-schedules season zdt holiday?)
          period-num    (:urpx/touPeriodNumber tou-period)
 
          pd->prices    (active-prices-by-pd prices zdt opts period-num)
@@ -2045,7 +2077,8 @@
    TOU gating for modifier PDs (issue #4):
    1. If the modifier carries its own urpx:hasTOUSchedule, resolve the
       modifier's own TOU period at `zdt` and gate PDs against THAT period
-      number — symmetric with base PD gating.
+      number — symmetric with base PD gating. No period of that schedule
+      covering `zdt` refuses `:urpx.price/no-tou-period`.
    2. Else if the caller passes `base-period-num`, gate PDs that carry
       :urpx/touPeriodNumber against the base RatePlan's resolved period
       (e.g. smud:cpp's Mid-Peak/Off-Peak discounts ride the base's TOU).
@@ -2106,17 +2139,15 @@
                            (make-member-status by-id base-period-num query-date
                                                own-rules season-status alt-status))
          own-period-num
-         (when (seq own-schedules)
-           (let [season-id  (:jsonld/id (season-of own-seasons query-date))
-                 hol?       (or holiday? (constantly false))]
-             (:urpx/touPeriodNumber
-             ;; hol?, not (hol? query-date): find-tou-period takes the PREDICATE
-             ;; and applies it per bracket. Passing the boolean made
-             ;; holiday-status-matches? call `true` as a function, which threw
-             ;; ClassCastException once a bracket actually reached the holiday
-             ;; check (it needs the modifier to carry its own seasons as well as
-             ;; its own schedule, which is why no fixture caught it).
-              (find-tou-period own-schedules season-id zdt hol?))))
+         (:urpx/touPeriodNumber
+          ;; holiday? or a predicate, never (holiday? query-date):
+          ;; find-tou-period takes the PREDICATE and applies it per bracket.
+          ;; Passing the boolean made holiday-status-matches? call `true` as a
+          ;; function, which threw ClassCastException once a bracket actually
+          ;; reached the holiday check.
+          (require-tou-period (:jsonld/id modifier) (:jsonld/id version)
+                              own-schedules (season-of own-seasons query-date)
+                              zdt (or holiday? (constantly false))))
          gate-period (if (seq own-schedules) own-period-num base-period-num)
          gate?       (or (seq own-schedules) (some? base-period-num))
          pd->prices  (all-active-prices-by-pd prices zdt opts gate-period)
@@ -2244,7 +2275,8 @@
    (modifier ledgers are flat add-ons): {:urpx.resolved/ledgers [...]}.
 
    When the modifier carries its own urpx:hasTOUSchedule, PDs with
-   :urpx/touPeriodNumber are gated against the modifier's resolved period.
+   :urpx/touPeriodNumber are gated against the modifier's resolved period,
+   and an instant no period covers refuses `:urpx.price/no-tou-period`.
    Without an own TOUSchedule and no base context, every applicable Price
    is surfaced — matrix-style modifiers (e.g. CPAU E-HRA — 4x4 reserve
    level x generation tier driven by external state) rely on this so the
