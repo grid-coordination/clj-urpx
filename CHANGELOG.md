@@ -9,17 +9,17 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
-## [Unreleased]
+## [0.37.0] — 2026-10-05
 
 ### Changed
 
-- **`resolve-prices`, `resolve-modifier-prices` and `resolve-prices-with-modifiers` refuse `:urpx.price/no-version` for a plan or modifier with no version snapshot**, neither nested nor supplied through `:version` or `:versions-by-plan`. `resolve-prices` and `resolve-modifier-prices` returned empty ledgers, and a composition dropped such a modifier. The message names both ways to supply one: `:versions-by-plan` from `urpx.index/versions-by-plan` over `urpx.load/documents`, or resolving the loaded documents through `urpx.scenario-cost-model`.
-- **`urpx.schedule`'s `price-schedule`, `price-schedule-days`, `price-schedule-with-modifiers`, `price-schedule-days-with-modifiers` and `price-segments` take ZonedDateTime bounds in any zone**, as `segments-for` and `schedule-for` do. The `zone` argument is gone: each takes `[plan start end]` or `[plan start end opts]`, with `modifiers` after `plan` where it takes them, and `days` in place of `end` for the `-days` forms. The bounds' instants define the window; intervals are computed and returned in the plan's zone. `:urpx.schedule/zone-disagrees-with-plan` is retired. A bound of any other type refuses `:urpx.schedule/bound-not-zoned-date-time`, where a ZonedDateTime bound threw a ClassCastException, and `opts` that are not a map refuse `:urpx.schedule/opts-not-a-map`.
+- **`urpx.schedule`'s `price-schedule`, `price-schedule-days`, `price-schedule-with-modifiers`, `price-schedule-days-with-modifiers` and `price-segments` take ZonedDateTime bounds in any zone**, as `segments-for` and `schedule-for` do. The `zone` argument is gone: each takes `[plan start end]` or `[plan start end opts]`, with `modifiers` after `plan` where it takes them, and `days` in place of `end` for the `-days` forms. The bounds' instants define the window; intervals are computed and returned in the plan's zone. `:urpx.schedule/zone-disagrees-with-plan` is retired. A bound of any other type refuses `:urpx.schedule/bound-not-zoned-date-time`, where a ZonedDateTime bound threw a ClassCastException, as do `segments-for` and `schedule-for`, and `opts` that are not a map refuse `:urpx.schedule/opts-not-a-map`.
+- **`coverage/of-version` returns `:evaluated-on` and the coverage window's `urpx:startDateTime` and `urpx:endDateTime` as `ZonedDateTime`.** One written without an offset is read in the zone of the `urpx:timezoneIdentifier` on the version, else on its document, else the zone given as the new optional third argument. With none it refuses `:urpx.coverage/zone-required`; with two whose rules differ, `:urpx.coverage/conflicting-timezone`. Zones with the same rules, such as `UTC`, `Etc/UTC` and `ZoneOffset/UTC`, agree. `coverage/of-model` reads each part in the zone on its model document.
 - **`price-schedule-days` and `price-schedule-days-with-modifiers` count `days` as calendar days in the plan's zone**, so the window ends at the same wall-clock time in that zone: a day is 23 or 25 hours across a daylight transition, where it was 24.
+- **`resolve-prices`, `resolve-modifier-prices` and `resolve-prices-with-modifiers` refuse `:urpx.price/no-version` for a plan or modifier with no version snapshot**, neither nested nor supplied through `:version` or `:versions-by-plan`. `resolve-prices` and `resolve-modifier-prices` returned empty ledgers, and a composition dropped such a modifier. The message names both ways to supply one: `:versions-by-plan` from `urpx.index/versions-by-plan` over `urpx.load/documents`, or resolving the loaded documents through `urpx.scenario-cost-model`.
 - **An unrecognized `urpx:holidayRule` refuses with `:reason :urpx.holidays/unknown-holiday-rule`, and an unrecognized `urpx:observanceRule` with `:urpx.holidays/unknown-observance-rule`.**
 - **A `urpx:Holiday` carrying neither `urpx:holidayDate` nor `urpx:holidayRule` refuses with `:reason :urpx.holidays/no-date-or-rule`.**
 - **`urpx.schema/Holiday` closes `urpx:observanceRule` to the `urpx:ObservanceRuleValue` members through the new `urpx.schema/ObservanceRule`**, so the validate CLI and `coerce/validate` reject any other IRI.
-- **`coverage/of-version` returns `:evaluated-on` and the coverage window's `urpx:startDateTime` and `urpx:endDateTime` as `ZonedDateTime`.** One written without an offset is read in the zone given as its new optional third argument, else the `urpx:timezoneIdentifier` on the version or on its document. With none it refuses `:urpx.coverage/zone-required`; with two whose rules differ, `:urpx.coverage/conflicting-timezone`. Zones with the same rules, such as `UTC`, `Etc/UTC` and `ZoneOffset/UTC`, agree, and the version's zone is used, else the document's, else the given one. `coverage/of-model` reads each part in the zone on its model document.
 
 ### Added
 
@@ -748,6 +748,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.37.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.37.0
 [0.36.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.36.0
 [0.35.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.35.0
 [0.34.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.34.0
