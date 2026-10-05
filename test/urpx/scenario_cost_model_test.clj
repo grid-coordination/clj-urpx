@@ -1255,6 +1255,23 @@
     (is (= (dissoc n :urpx/name :urpx/description) (scm/node m scm/rate-plans-iri {:context ctx})))
     (is (nil? (coerce/explain schema/ScenarioCostModel n)))))
 
+(deftest rate-plans-name-matches-the-urpx-rate-plans-report
+  (testing "urpx:name in urpx-rate-plans reports/scenario-cost-models.jsonld at d71845a"
+    (let [by-tuple (into {} (map (juxt scm/identity-tuple scm/rate-plans-name)) (fixture-models))]
+      (are [tuple nm] (= nm (by-tuple tuple))
+        ["cpau:e-14-2025-07-01" [] []]
+        "Street Lights [cpau:e-14-2025-07-01]"
+
+        ["ladwp:r-1a-2026-04-01" ["ladwp:ez-save-2008-09-01"] []]
+        "Schedule R-1(A) Residential Service — Standard [ladwp:r-1a-2026-04-01] + LADWP EZ-Save (Electric Lifeline Subsidy) [ladwp:ez-save-2008-09-01]"
+
+        ["pge:e-tou-d-2026-03-27" [] ["pge:e-tou-d-2026-03-27-pa-income-tier-care"]]
+        "Residential Time-Of-Use (Peak Pricing 5-8 p.m. Non-Holiday Weekdays) [pge:e-tou-d-2026-03-27]; Income Tier 1 — CARE-eligible"
+
+        ["pge:e-tou-d-2026-03-27" ["pge:e-tou-d-vintage-pcia-2026-03-27"]
+         ["pge:e-tou-d-2026-03-27-pa-income-tier-care" "pge:e-tou-d-vintage-pcia-2026-03-27-pa-vintage-2009"]]
+        "Residential Time-Of-Use (Peak Pricing 5-8 p.m. Non-Holiday Weekdays) [pge:e-tou-d-2026-03-27] + Vintaged Power Charge Indifference Adjustment (E-TOU-D) [pge:e-tou-d-vintage-pcia-2026-03-27]; Income Tier 1 — CARE-eligible; Departure vintage 2009"))))
+
 (defn- outcome
   "What calling `f` gives: its value, or the ex-data it throws."
   [f]
@@ -1291,6 +1308,51 @@
     base       (assoc :urpx/consumesVersion {:jsonld/id base})
     (seq mods) (assoc :urpx/consumesModifierVersion (mapv #(hash-map :jsonld/id %) mods))
     (seq alts) (assoc :urpx/selectsProfileAlternative (mapv #(hash-map :jsonld/id %) alts))))
+
+(defn- with-names
+  "`doc` with each node whose @id is a key of `names` carrying that urpx:name."
+  [names doc]
+  (clojure.walk/postwalk #(if-let [n (and (map? %) (names (:jsonld/id %)))] (assoc % :urpx/name n) %)
+                         doc))
+
+(defn- naming-docs
+  "Plan x:p offering {x:c2 [x:a]} and modifiers x:m1 (version x:m9-v) and x:m2
+   (version x:m2-v), x:m2 offering {x:c1 [x:b]}, named by `names`."
+  [names]
+  (mapv (partial with-names names)
+        [(plan-doc "x:p" "x:p-v1" (ldt 2026 1 1) (containers {"x:c2" ["x:a"]}))
+         (modifier-doc "x:m1" "x:m9-v" (ldt 2026 1 1) {:urpx/applicableToRatePlan [{:jsonld/id "x:p"}]})
+         (modifier-doc "x:m2" "x:m2-v" (ldt 2026 1 1)
+                       (merge {:urpx/applicableToRatePlan [{:jsonld/id "x:p"}]}
+                              (containers {"x:c1" ["x:b"]})))]))
+
+(def ^:private component-names
+  {"x:p" "Plan" "x:m1" "One" "x:m2" "Two" "x:a" "Second" "x:b" "First"})
+
+(defn- naming-model [docs]
+  (scm/from-node docs (scm-node "x:p-v1" ["x:m9-v" "x:m2-v"] ["x:b" "x:a"])))
+
+(deftest rate-plans-name-orders-versions-and-alternatives-by-id
+  (is (= "Plan [x:p-v1] + Two [x:m2-v] + One [x:m9-v]; Second; First"
+         (scm/rate-plans-name (naming-model (naming-docs component-names))))))
+
+(deftest rate-plans-name-refuses-a-component-it-cannot-name
+  (testing "a plan, a modifier or an alternative with no urpx:name"
+    (are [id] (= {:reason :urpx.scenario-cost-model/unnamed-component :id id}
+                 (refusal #(scm/rate-plans-name (naming-model (naming-docs (dissoc component-names id))))))
+      "x:p" "x:m1" "x:b"))
+  (testing "one @id named two ways across the model's documents"
+    (let [docs (assoc-in (naming-docs component-names)
+                           [1 :urpx/hasRatePlanModifierVersion :urpx/applicableToRatePlan]
+                           [{:jsonld/id "x:p" :jsonld/type "urpx:RatePlan" :urpx/name "Other"}])]
+      (is (= {:reason :urpx.scenario-cost-model/conflicting-name :id "x:p" :names ["Other" "Plan"]}
+             (refusal #(scm/rate-plans-name (naming-model docs)))))))
+  (testing "one @id named two ways within one document"
+    (let [docs (assoc-in (naming-docs component-names)
+                         [0 :urpx/hasRatePlanVersion :urpx/forRatePlan]
+                         {:jsonld/id "x:p" :jsonld/type "urpx:RatePlan" :urpx/name "Other"})]
+      (is (= {:reason :urpx.scenario-cost-model/conflicting-name :id "x:p" :names ["Other" "Plan"]}
+             (refusal #(scm/rate-plans-name (naming-model docs))))))))
 
 (defn- from-node-docs
   "A plan whose version offers c1 {z1 z2}, and a modifier compatible with it

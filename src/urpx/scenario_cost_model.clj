@@ -939,6 +939,54 @@
                         0 12))]
     (str n "scm-" (str/join "--" (cond-> names hash (conj hash))))))
 
+(def ^:private named-types #{"urpx:RatePlan" "urpx:RatePlanModifier" "urpx:ProfileAlternative"})
+
+(defn rate-plans-name
+  "The urpx:name urpx-rate-plans gives the urpx:ScenarioCostModel for `model`,
+   to pass `node` as its `:name`.
+
+   The rule is urpx-rate-plans doc/scenario-cost-models.md § The emitted
+   document: for the base version, then each modifier version sorted by @id,
+   its plan's or modifier's urpx:name, a space and its @id in brackets, joined
+   by ` + `; then, when the model selects any alternative, `; ` and each
+   selected alternative's urpx:name sorted by @id, joined by `; `. Every @id is
+   as the model's documents write it, and every name is read from those
+   documents.
+
+   A plan, modifier or alternative whose nodes there state no string urpx:name
+   refuses `:urpx.scenario-cost-model/unnamed-component`; one whose nodes state
+   two refuses `:urpx.scenario-cost-model/conflicting-name`."
+  [model]
+  (let [docs    (cons (:urpx.scenario-cost-model/rate-plan model)
+                      (:urpx.scenario-cost-model/modifiers model))
+        names   (reduce (fn [m [id n]]
+                          (cond-> m (string? (:urpx/name n))
+                                  (update id (fnil conj (sorted-set)) (:urpx/name n))))
+                        {}
+                        (for [d docs
+                              n (tree-seq coll? seq d)
+                              :when (and (map? n) (named-types (:jsonld/type n)) (:jsonld/id n))]
+                          [(:jsonld/id n) n]))
+        named   (fn [id]
+                  (let [found (get names id)]
+                    (case (count found)
+                      1 (first found)
+                      0 (throw (ex-info (str "Cannot name the model: " (pr-str id)
+                                             " states no urpx:name in its documents.")
+                                        {:reason :urpx.scenario-cost-model/unnamed-component
+                                         :id id}))
+                      (throw (ex-info (str "Cannot name the model: " (pr-str id) " is named "
+                                           (str/join " and " (map pr-str found)) ".")
+                                      {:reason :urpx.scenario-cost-model/conflicting-name
+                                       :id id :names (vec found)})))))
+        plan-of (into {(:urpx.scenario-cost-model/version-id model)
+                       (:urpx.scenario-cost-model/plan-id model)}
+                      (map (juxt :jsonld/id (comp :jsonld/id :urpx/forRatePlanModifier)))
+                      (:urpx.scenario-cost-model/modifier-versions model))
+        [base mods alts] (identity-tuple model)]
+    (cond-> (str/join " + " (for [v (cons base mods)] (str (named (plan-of v)) " [" v "]")))
+      (seq alts) (str "; " (str/join "; " (map named alts))))))
+
 (defn- prefix-bindings
   "Prefix -> namespace IRI for every prefix `context` binds to a string.
    `context` is a JSON-LD @context, a map or a vector, keyed as parsed or as
@@ -1001,7 +1049,7 @@
                    two ways refuses `:urpx.scenario-cost-model/conflicting-prefix`;
                    an @id it cannot expand refuses
                    `:urpx.scenario-cost-model/unexpandable-iri`.
-     :name         the node's urpx:name
+     :name         the node's urpx:name; `rate-plans-name` is urpx-rate-plans'
      :description  the node's urpx:description"
   ([model iri-fn] (node model iri-fn nil))
   ([model iri-fn opts]
