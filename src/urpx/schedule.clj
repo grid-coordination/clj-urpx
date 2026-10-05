@@ -248,18 +248,19 @@
                            (fn [zdt] (price/resolve-prices rate-plan zdt opts)))))
 
 (defn- plus-days
-  "`start` plus `days` days of exactly 24 hours, after `window` has checked it."
-  [start days opts]
+  "`start` plus `days` calendar days in the plan's zone, after `window` has
+   checked it."
+  [rate-plan start days opts]
   (window start start opts)
-  (.plus ^ZonedDateTime start (Duration/ofDays days)))
+  (.plusDays (.withZoneSameInstant ^ZonedDateTime start (walk-zone rate-plan)) (long days)))
 
 (defn price-schedule-days
-  "Convenience: generate a `price-schedule` covering `days` days of 24 hours
-   starting from the ZonedDateTime `start`. Accepts the same `opts` as
-   `price-schedule`."
+  "Convenience: generate a `price-schedule` covering `days` calendar days in
+   the plan's zone starting from the ZonedDateTime `start`. Accepts the same
+   `opts` as `price-schedule`."
   ([rate-plan start days] (price-schedule-days rate-plan start days nil))
   ([rate-plan start days opts]
-   (price-schedule rate-plan start (plus-days start days opts) opts)))
+   (price-schedule rate-plan start (plus-days rate-plan start days opts) opts)))
 
 (defn price-schedule-with-modifiers
   "Like `price-schedule`, but per step calls
@@ -281,13 +282,13 @@
 
 (defn price-schedule-days-with-modifiers
   "Convenience: generate a `price-schedule-with-modifiers` covering `days`
-   days of 24 hours starting from the ZonedDateTime `start`. Same `opts` as
-   `price-schedule-with-modifiers`."
+   calendar days in the plan's zone starting from the ZonedDateTime `start`.
+   Same `opts` as `price-schedule-with-modifiers`."
   ([rate-plan modifiers start days]
    (price-schedule-days-with-modifiers rate-plan modifiers start days nil))
   ([rate-plan modifiers start days opts]
    (price-schedule-with-modifiers
-    rate-plan modifiers start (plus-days start days opts) opts)))
+    rate-plan modifiers start (plus-days rate-plan start days opts) opts)))
 
 ;; ---------------------------------------------------------------------------
 ;; Exact segments

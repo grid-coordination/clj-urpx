@@ -382,9 +382,20 @@
                (:reason (refusal #(f plan s e la-zone))))
             nm)))))
 
-(deftest a-day-is-24-hours-across-a-daylight-transition
+(deftest a-day-is-a-calendar-day-in-the-plans-zone
   (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
-        s    (start-of-day-zdt 2026 3 8)]
-    (doseq [sch [(schedule/price-schedule-days plan s 1)
-                 (schedule/price-schedule-days-with-modifiers plan [] s 1)]]
-      (is (= (ZonedDateTime/of 2026 3 9 1 0 0 0 la-zone) (:tick/end (last sch)))))))
+        utc  #(.withZoneSameInstant ^ZonedDateTime % (ZoneId/of "UTC"))]
+    (doseq [[label s days end hours]
+            [["spring forward" (start-of-day-zdt 2026 3 8) 1 (start-of-day-zdt 2026 3 9) 23]
+             ["fall back" (start-of-day-zdt 2026 11 1) 1 (start-of-day-zdt 2026 11 2) 25]
+             ["a week across fall back" (start-of-day-zdt 2026 10 29) 7
+              (start-of-day-zdt 2026 11 5) 169]
+             ["spring forward, start in UTC" (utc (start-of-day-zdt 2026 3 8)) 1
+              (start-of-day-zdt 2026 3 9) 23]]
+            [nm sch] [["price-schedule-days" (schedule/price-schedule-days plan s days)]
+                      ["price-schedule-days-with-modifiers"
+                       (schedule/price-schedule-days-with-modifiers plan [] s days)]]]
+      (is (= end (:tick/end (last sch))) (str nm ": " label))
+      (is (= hours (.toHours (Duration/between ^ZonedDateTime (:tick/beginning (first sch))
+                                               ^ZonedDateTime (:tick/end (last sch)))))
+          (str nm ": " label)))))

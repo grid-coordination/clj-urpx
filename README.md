@@ -186,7 +186,7 @@ That makes **one moment cost one price, however it is spelled**. It did not used
 - `resolve-prices` takes a `ZonedDateTime`. Its **zone is not used to interpret the document** — only the instant is. Pass whatever zone you have
 - `price-schedule` / `price-segments` and friends take a `[start, end)` window bounded by two `ZonedDateTime`s in any zone, including two different zones. Their instants bound the window, and the walk happens in the plan's zone, where resolution happens, so candidate boundaries are derived in the same frame. A bound of any other type refuses `:urpx.schedule/bound-not-zoned-date-time`, and `opts` that are not a map refuse `:urpx.schedule/opts-not-a-map`
 - The schedule output's `:tick/beginning` and `:tick/end` are `ZonedDateTime` in the plan's zone. Callers wanting a plain `java.time.Instant` invoke `.toInstant` themselves
-- The `-days` forms cover `days` periods of exactly 24 hours from `start`
+- The `-days` forms cover `days` calendar days in the plan's zone from `start`, so a day is 23 or 25 hours across a daylight transition
 
 ```clojure
 (schedule/price-schedule-days plan start 1)                                          ; walked in the plan's zone
