@@ -176,6 +176,34 @@
            (get (json/read-str (emit/write-urpx-package pkg {:context nil}))
                 "urpx:dateCreated")))))
 
+(deftest a-wrapped-date-emits-exactly-as-written
+  (let [s   [:schema {:registry {::date schema/Date}}
+             [:map
+              [:maybe {:optional true} [:maybe schema/Date]]
+              [:or    {:optional true} [:or schema/Date schema/Ref]]
+              [:orn   {:optional true} [:orn [:date schema/Date] [:ref schema/Ref]]]
+              [:and   {:optional true} [:and schema/Date [:fn some?]]]
+              [:ref   {:optional true} [:ref ::date]]
+              [:name  {:optional true} ::date]]]
+        raw {:maybe "2026-03-01-08:00" :or "2026-03-02Z" :orn "2026-03-03+05:30"
+             :and "2026-03-04-07:00" :ref "2026-03-05+00:00" :name "2026-03-06Z"}
+        x   (coerce/coerce s raw)]
+    (is (coerce/validate s x))
+    (is (= {:maybe (LocalDate/of 2026 3 1) :or (LocalDate/of 2026 3 2)
+            :orn (LocalDate/of 2026 3 3) :and (LocalDate/of 2026 3 4)
+            :ref (LocalDate/of 2026 3 5) :name (LocalDate/of 2026 3 6)}
+           x))
+    (is (= raw (coerce/encode s x)))
+    (testing "a branch other than the Date keeps no offset"
+      (let [y (coerce/coerce s {:maybe nil :or {:jsonld/id "urpx:x"}})]
+        (is (nil? (:urpx.schema/date-offsets (meta y))))
+        (is (= {:maybe nil :or {:jsonld/id "urpx:x"}} (coerce/encode s y)))))
+    (testing "a string branch that wins keeps no offset"
+      (let [t [:map [:s [:or :string schema/Date]]]
+            y (coerce/coerce t {:s "2026-03-01Z"})]
+        (is (= {:s "2026-03-01Z"} y))
+        (is (nil? (:urpx.schema/date-offsets (meta y))))))))
+
 (deftest an-offset-date-reads-as-midnight-in-the-plan-zone
   (let [ny   (ZoneId/of "America/New_York")
         plan (coerce/coerce-rate-plan (parse-json (plan-json "-08:00")))]

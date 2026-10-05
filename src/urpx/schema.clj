@@ -151,12 +151,32 @@
        v)
       v)))
 
+(defn- date-schema?
+  "True if `schema` is `Date` or wraps it."
+  [schema]
+  (boolean
+   (or (::xsd-date (m/properties schema))
+       (case (m/type schema)
+         (:maybe :or :and) (some date-schema? (m/children schema))
+         :orn              (some (fn [[_ _ child]] (date-schema? child)) (m/children schema))
+         (:ref :schema ::m/schema) (date-schema? (m/deref schema))
+         false))))
+
 (defn- date-keys
-  "The keys of map schema `schema` whose values are `Date`s."
+  "The keys of map schema `schema` whose values may be `Date`s."
   [schema]
   (into #{}
-        (keep (fn [[k _ child]] (when (::xsd-date (m/properties child)) k)))
+        (keep (fn [[k _ child]] (when (date-schema? child) k)))
         (m/children schema)))
+
+(defn- offset-date
+  "`{:date LocalDate :offset offset}` for xsd:date lexical `s` written with an
+   offset, else nil."
+  [s]
+  (when-let [[_ off] (re-find offset-suffix s)]
+    (try
+      {:date (->date s) :offset off}
+      (catch clojure.lang.ExceptionInfo _ nil))))
 
 (def date-offsets-decoder
   "A `:map` decoder that keeps the offset written on each xsd:date the map
@@ -177,8 +197,7 @@
               (let [written (for [k ks
                                   :let [v (literal-value (get x k))]
                                   :when (string? v)]
-                              [k (when-let [[_ off] (re-find offset-suffix v)]
-                                   {:date (->date v) :offset off})])]
+                              [k (offset-date v)])]
                 (if (empty? written)
                   x
                   (vary-meta x (fn [md]
@@ -188,7 +207,20 @@
                                                     written)]
                                    (if (seq offs)
                                      (assoc md ::date-offsets offs)
-                                     (dissoc md ::date-offsets)))))))))})))})
+                                     (dissoc md ::date-offsets)))))))))
+          :leave
+          (fn [x]
+            (if-let [offs (and (map? x) (::date-offsets (meta x)))]
+              (let [kept (into {}
+                               (filter (fn [[k {:keys [date]}]] (= date (get x k))))
+                               offs)]
+                (if (= kept offs)
+                  x
+                  (vary-meta x (fn [md]
+                                 (if (seq kept)
+                                   (assoc md ::date-offsets kept)
+                                   (dissoc md ::date-offsets))))))
+              x))})))})
 
 (def date-offsets-encoder
   "A `:map` encoder that writes each xsd:date back with the offset
