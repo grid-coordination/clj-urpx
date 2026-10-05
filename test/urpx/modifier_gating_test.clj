@@ -739,3 +739,112 @@
                          (:urpx.resolved/tou-period-name l)
                          (:urpx.resolved/tou-period-number l)])
                      segs)))))))
+
+;; ---------------------------------------------------------------------------
+;; urpx:PriceSummary members gated by the period of their own document (URPX-m9c)
+;; ---------------------------------------------------------------------------
+
+(defn- with-summary
+  "`m` with a urpx:PriceSummary over `member-ids` and a Price on the
+  PriceDefinition test:adj-disc multiplying it by -1."
+  [m summary-id member-ids]
+  (update-in m [:urpx/hasRatePlanModifierVersion :urpx/hasPrices :urpx/hasPrice]
+             (fn [ps]
+               (-> (vec ps)
+                   (cond-> (seq member-ids)
+                     (conj {:jsonld/type "urpx:PriceSummary"
+                            :jsonld/id summary-id
+                            :urpx/name "Subtotal"
+                            :urpx/includesPrice (mapv #(hash-map :jsonld/id %) member-ids)}))
+                   (conj {:jsonld/type "urpx:Price"
+                          :jsonld/id "test:adj-disc-price"
+                          :urpx/name "Discount"
+                          :urpx/multiplier -1M
+                          :urpx/basedOnPrice {:jsonld/id summary-id}
+                          :urpx/referencesPriceDefinition {:jsonld/id "test:adj-disc"}})))))
+
+(defn- own-summary-modifier
+  "`tou-modifier` plus a flat definition and a discount over a summary of its
+  own Peak (0.01), Off-peak (0.02) and flat (0.03) Prices."
+  []
+  (-> (tou-modifier)
+      (update-in [:urpx/hasRatePlanModifierVersion :urpx/hasPlanElements
+                  :urpx/hasBillingModel :urpx/hasPriceDefinition]
+                 conj (pd "test:adj-flat" "Flat") (pd "test:adj-disc" "Discount"))
+      (update-in [:urpx/hasRatePlanModifierVersion :urpx/hasPrices :urpx/hasPrice]
+                 conj
+                 {:jsonld/type "urpx:Price" :jsonld/id "test:adj-flat-price"
+                  :urpx/name "Flat" :urpx/unitPrice 0.03M
+                  :urpx/referencesPriceDefinition {:jsonld/id "test:adj-flat"}})
+      (with-summary "test:own-summary"
+        ["test:adj-peak-price" "test:adj-offpeak-price" "test:adj-flat-price"])))
+
+(defn- discount
+  [resolved]
+  (->> (:urpx.resolved/ledgers resolved)
+       (mapcat :urpx.resolved/tiers)
+       (filter #(= "test:adj-disc-price" (:urpx.resolved/price-id %)))
+       first))
+
+(deftest a-modifiers-own-summary-members-are-gated-by-its-own-period
+  (let [m (own-summary-modifier)]
+    (testing "composed over a base plan in period 7, the modifier's Peak applies"
+      (is (= -0.04M (:urpx.resolved/unit-price
+                     (discount (price/resolve-prices-with-modifiers
+                                (base-with-schedule) [m] (at 2026 7 15)))))))
+    (testing "composed on a holiday, the modifier's Off-peak applies"
+      (is (= -0.05M (:urpx.resolved/unit-price
+                     (discount (price/resolve-prices-with-modifiers
+                                (base-with-schedule) [m] (at 2026 7 15)
+                                {:holiday? (constantly true)}))))))
+    (testing "resolved alone, the modifier's Peak applies"
+      (is (= -0.04M (:urpx.resolved/unit-price
+                     (discount (price/resolve-modifier-prices m (at 2026 7 15)))))))
+    (testing "outside the modifier's brackets, only the member naming no period applies"
+      (let [ten (ZonedDateTime/of 2026 7 15 10 0 0 0 la)]
+        (is (= -0.03M (:urpx.resolved/unit-price
+                       (discount (price/resolve-modifier-prices m ten)))))
+        (is (= -0.03M (:urpx.resolved/unit-price
+                       (discount (price/resolve-prices-with-modifiers
+                                  (base-with-schedule) [m] ten)))))))))
+
+(deftest a-base-plan-summary-is-gated-by-the-base-period
+  (let [base (-> (base-with-schedule)
+                 (update-in [:urpx/hasRatePlanVersion :urpx/hasPrices :urpx/hasPrice]
+                            conj
+                            {:jsonld/type "urpx:Price" :jsonld/id "test:base-p1-price"
+                             :urpx/name "Base period 1" :urpx/unitPrice 0.50M
+                             :urpx/touPeriodNumber 1
+                             :urpx/referencesPriceDefinition {:jsonld/id "test:base-pd"}}
+                            {:jsonld/type "urpx:PriceSummary" :jsonld/id "test:base-summary"
+                             :urpx/name "Base subtotal"
+                             :urpx/includesPrice [{:jsonld/id "test:base-price"}
+                                                  {:jsonld/id "test:base-p1-price"}]}))
+        m    (-> (tou-modifier)
+                 (update-in [:urpx/hasRatePlanModifierVersion :urpx/hasPlanElements
+                             :urpx/hasBillingModel :urpx/hasPriceDefinition]
+                            conj (pd "test:adj-disc" "Discount"))
+                 (with-summary "test:base-summary" []))]
+    (testing "the modifier is in its period 1; the base plan's members follow base period 7"
+      (is (= -0.10M (:urpx.resolved/unit-price
+                     (discount (price/resolve-prices-with-modifiers
+                                base [m] (at 2026 7 15)))))))))
+
+(deftest a-modifiers-own-summary-members-read-its-own-month-rules
+  (testing "a member's definition names, by bare @id, a month rule declared only
+            in the modifier"
+    (let [m (-> (modifier [(pd "test:adj-a" "A")
+                           (assoc (pd "test:adj-flat" "Flat")
+                                  :urpx/hasApplicabilityRule
+                                  [{:jsonld/id "test:adj-holder-rule"}])
+                           (pd "test:adj-holder" "Holder" :months [12 1 2])])
+                (update-in [:urpx/hasRatePlanModifierVersion :urpx/hasPlanElements
+                            :urpx/hasBillingModel :urpx/hasPriceDefinition]
+                           conj (pd "test:adj-disc" "Discount"))
+                (with-summary "test:own-summary" ["test:adj-a-price" "test:adj-flat-price"]))]
+      (is (= -0.01M (:urpx.resolved/unit-price
+                     (discount (price/resolve-prices-with-modifiers
+                                (base-plan) [m] (at 2026 7 15))))))
+      (is (= -0.03M (:urpx.resolved/unit-price
+                     (discount (price/resolve-prices-with-modifiers
+                                (base-plan) [m] (at 2026 1 15)))))))))

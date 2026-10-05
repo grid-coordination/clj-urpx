@@ -2227,17 +2227,6 @@
          ;; PriceDefinition gate above already uses.
          tier-cands    (service-tier-candidates billing)
          tier-ctx      {:alt-status alt-status :season-status season-status}
-         member-status (or (:member-status opts)
-                           ;; Resolved on its own, a modifier has only its own
-                           ;; context to judge by; composing supplies the base
-                           ;; plan's, which is the one that matters. Standing
-                           ;; alone this passed EMPTY rule and season indexes, so
-                           ;; pd-active-in-season? found no Season for any ref
-                           ;; and a member carrying urpx:appliesInSeason was
-                           ;; always inactive: silently dropped from the subtotal
-                           ;; rather than gated by it.
-                           (make-member-status by-id base-period-num query-date
-                                               own-rules season-status alt-status))
          own-season    (season-of own-seasons query-date)
          ;; `holiday?` is the inherited predicate: the base plan's when
          ;; composing, nil standing alone.
@@ -2273,6 +2262,20 @@
                        own-period             own-period-num
                        :else                  ::uncovered)
          gate?       (or (seq own-schedules) (some? base-period-num))
+         ;; A urpx:PriceSummary member is gated in the document it lives in:
+         ;; this modifier's own context for its own Prices, and the composing
+         ;; base plan's (:member-status) for any other.
+         own-status  (make-member-status by-id gate-period query-date
+                                         own-rules season-status alt-status)
+         member-status (if-let [other-status (:member-status opts)]
+                         (let [own-ids (index/build-index version)]
+                           (fn [member]
+                             (if (or (contains? own-ids (:jsonld/id member))
+                                     (contains? own-ids (get-in member [:urpx/referencesPriceDefinition
+                                                                        :jsonld/id])))
+                               (own-status member)
+                               (other-status member))))
+                         own-status)
          pd->prices  (all-active-prices-by-pd prices zdt opts gate-period)
          pds         (:urpx/hasPriceDefinition billing)
          pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
