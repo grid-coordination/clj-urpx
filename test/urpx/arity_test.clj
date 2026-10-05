@@ -25,7 +25,8 @@
 
   Equality against the unmodified baseline is the assertion, never \"does not
   throw\": every one of these defects returned a well-formed answer."
-  (:require [clojure.java.io :as io]
+  (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [clojure.walk :as walk]
@@ -35,6 +36,7 @@
             [urpx.scenario-cost-model :as scm]
             [urpx.emit :as emit]
             [urpx.index :as index]
+            [urpx.load :as load]
             [urpx.price :as price]
             [urpx.test-fixtures :as fixtures])
   (:import [java.time ZoneId ZonedDateTime]))
@@ -174,6 +176,40 @@
         (is (<= 14 (count modifiers)))
         (is (= (count modifiers) (count composed)) "every modifier finds its base")
         (is (<= 907 @n) "resolutions compared, flipped against unflipped")))))
+
+(deftest the-invariant-holds-for-scenario-cost-models
+  (testing "Writing each fixture's urpx:hasProfileAlternative bare changes no
+            model that urpx.scenario-cost-model/enumerate yields, and no model
+            from-node reads back from its node. Both sides first cut each list
+            to one alternative, so that every list is written bare."
+    (let [files   (sort (filter #(str/ends-with? (str %) ".jsonld")
+                                (file-seq (io/file (io/resource "urpx-fixtures")))))
+          ctx     (mapv #(get (json/read-str (slurp %)) "@context") files)
+          opts    {:compatibility scm/named-versions-add}
+          t       "urpx:ProfileAlternatives"
+          p       :urpx/hasProfileAlternative
+          cut     (map #(first-only % t p) (load/documents files))
+          listed  (mapv first cut)
+          flipped (map #(bare % t p) listed)
+          flat    (mapv first flipped)
+          shape   (juxt scm/identity-tuple :urpx.scenario-cost-model/selections)
+          models  (scm/enumerate listed opts)
+          reread  (fn [m]
+                    (try (shape (scm/from-node flat
+                                               (scm/node m scm/rate-plans-iri {:context ctx})
+                                               (assoc opts :context ctx)))
+                         (catch clojure.lang.ExceptionInfo e [:threw (ex-message e)])))]
+      (is (contains? (get @zero-to-n t) p) "sanity: the schema decodes it as 0..N")
+      (is (= (map shape models) (map shape (scm/enumerate flat opts))))
+      (is (= (map shape models) (map reread models)))
+      (testing "and it reached enough to mean something"
+        (is (= (reduce + (map second cut)) (reduce + (map second flipped)))
+            "every cut list is written bare")
+        (is (<= 9 (reduce + (map second flipped))) "lists written bare")
+        (is (<= 36 (count models)))
+        (is (<= 7 (count (distinct (mapcat (comp keys :urpx.scenario-cost-model/selections)
+                                           models))))
+            "alternative containers selected from")))))
 
 (deftest applicability-reads-a-bare-compatibility-statement
   (testing "urpx.scenario-cost-model/applicability. Both shipped policies
