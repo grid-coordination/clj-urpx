@@ -779,7 +779,10 @@
              ["EvaluationKind" s/EvaluationKind
               ["consolidation" "coverageEvaluation" "validation" "comparison" "benchmark"]]
              ["ExclusionReason" s/ExclusionReason
-              ["pruned" "fullySuperseded" "voided" "outOfScope"]]]]
+              ["pruned" "fullySuperseded" "voided" "outOfScope"]]
+             ["ObservanceRule" s/ObservanceRule
+              ["actualDateObservance" "fridayIfWeekendObservance"
+               "mondayIfWeekendObservance" "nearestWeekdayObservance"]]]]
       (doseq [m members]
         (is (m/validate schema {:jsonld/id (str "urpx:" m)})
             (str label " must accept urpx:" m)))
@@ -819,6 +822,14 @@
                          {:jsonld/type "urpx:ModelExclusion"
                           :urpx/excludedModel {:jsonld/id "urpx:pm-1"}
                           :urpx/exclusionReason {:jsonld/id "urpx:because"}}))))
+  (testing "Holiday rejects a non-member observanceRule"
+    (let [holiday {:jsonld/type "urpx:Holiday"
+                   :urpx/holidayName "Independence Day"
+                   :urpx/holidayRule "July 4"}]
+      (is (m/validate s/Holiday (assoc holiday :urpx/observanceRule
+                                       {:jsonld/id "urpx:fridayIfWeekendObservance"})))
+      (is (not (m/validate s/Holiday (assoc holiday :urpx/observanceRule
+                                            {:jsonld/id "urpx:mondayIfSundayObservance"}))))))
   (testing "SourcePublication rejects a non-member publicationType"
     (is (not (m/validate s/SourcePublication
                          {:jsonld/type "urpx:SourcePublication"

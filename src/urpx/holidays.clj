@@ -139,7 +139,8 @@
              obs]))
 
         (throw (ex-info (str "Unrecognized urpx:holidayRule: " (pr-str rule))
-                        {:rule rule})))))
+                        {:reason :urpx.holidays/unknown-holiday-rule
+                         :rule   rule})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Holiday → year-fn
@@ -159,7 +160,8 @@
                         (or (observance-id->fn (:jsonld/id observance))
                             (throw (ex-info (str "Unrecognized urpx:observanceRule: "
                                                  (pr-str (:jsonld/id observance)))
-                                            {:observance-rule (:jsonld/id observance)
+                                            {:reason :urpx.holidays/unknown-observance-rule
+                                             :observance-rule (:jsonld/id observance)
                                              :holiday (select-keys holiday [:jsonld/id :urpx/holidayName])}))))]
     (cond
       date

@@ -442,6 +442,11 @@
    apply, and when something was observed."
   (enum-ref "publication" "sourceLifecycle" "applicability" "observation" "coverage"))
 
+(def ObservanceRule
+  "urpx:ObservanceRuleValue."
+  (enum-ref "actualDateObservance" "fridayIfWeekendObservance"
+            "mondayIfWeekendObservance" "nearestWeekdayObservance"))
+
 (def SourcePublicationType
   "urpx:SourcePublicationTypeValue, the shipped 8 members plus one legacy.
 
@@ -751,7 +756,7 @@
 (def Holiday
   "v0.2.0: holidayName is required. Observance can be a literal date
    (urpx:holidayDate) or a free-form rule string (urpx:holidayRule);
-   urpx:observanceRule (Ref) optionally shifts the date when it lands on a
+   urpx:observanceRule optionally shifts the date when it lands on a
    weekend."
   [:map
    [:jsonld/type [:= "urpx:Holiday"]]
@@ -759,7 +764,7 @@
    [:urpx/holidayName    :string]
    [:urpx/holidayDate    {:optional true} Date]
    [:urpx/holidayRule    {:optional true} :string]
-   [:urpx/observanceRule {:optional true} Ref]])
+   [:urpx/observanceRule {:optional true} ObservanceRule]])
 
 (def HolidayCalendar
   [:map

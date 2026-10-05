@@ -11,6 +11,11 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 ## [Unreleased]
 
+### Changed
+
+- **An unrecognized `urpx:holidayRule` refuses with `:reason :urpx.holidays/unknown-holiday-rule`, and an unrecognized `urpx:observanceRule` with `:urpx.holidays/unknown-observance-rule`.**
+- **`urpx.schema/Holiday` closes `urpx:observanceRule` to the `urpx:ObservanceRuleValue` members through the new `urpx.schema/ObservanceRule`**, so the validate CLI and `coerce/validate` reject any other IRI.
+
 ### Added
 
 - **`corpus/corpus_json.clj`, a dev-only walker for any corpus whose layout is declared in a `corpus.json`**, in urpx-rate-plans' format. `corpus-sweep --layout` takes a `corpus.json` or a directory holding one, as well as a walker namespace. As a program it prints the documents, named kinds, or `--all` as `kind<TAB>path`.

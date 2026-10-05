@@ -132,10 +132,12 @@
     (let [plan (calendar-plan
                 [{:jsonld/type "urpx:Holiday"
                   :urpx/holidayName "Mystery"
-                  :urpx/holidayRule "the third blue moon"}])]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"Unrecognized urpx:holidayRule"
-                            (holidays/derive-predicate plan))))))
+                  :urpx/holidayRule "the third blue moon"}])
+          e    (try (holidays/derive-predicate plan) nil
+                    (catch clojure.lang.ExceptionInfo e e))]
+      (is (re-find #"Unrecognized urpx:holidayRule" (ex-message e)))
+      (is (= :urpx.holidays/unknown-holiday-rule (:reason (ex-data e))))
+      (is (= "the third blue moon" (:rule (ex-data e)))))))
 
 (deftest unrecognized-observance-rule-throws
   (testing "An observanceRule IRI outside the recognized four throws, on a rule or a literal date"
@@ -150,6 +152,7 @@
                       (catch clojure.lang.ExceptionInfo e e))]
         (is (some? e))
         (is (re-find #"Unrecognized urpx:observanceRule" (ex-message e)))
+        (is (= :urpx.holidays/unknown-observance-rule (:reason (ex-data e))))
         (is (= "urpx:mondayIfSundayObservance" (:observance-rule (ex-data e))))
         (is (= "Independence Day" (get-in (ex-data e) [:holiday :urpx/holidayName])))))))
 

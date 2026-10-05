@@ -142,6 +142,20 @@
           (is (empty? (filter :error (:checked clean))))
           (is (empty? (:findings clean))))))))
 
+(deftest an-unknown-observance-rule-fails-the-schema
+  (let [raw   (slurp (.getPath (fixtures/fixture-resource "pge-e-tou-d-2026-03-27")))
+        with  (fn [iri]
+                (str/replace raw
+                             "\"urpx:holidayRule\": \"Third Monday in February\""
+                             (str "\"urpx:holidayRule\": \"Third Monday in February\", "
+                                  "\"urpx:observanceRule\": {\"@id\": \"" iri "\"}")))
+        errors (fn [iri] (->> (validate/check-file (tmp-doc (with iri)))
+                              :checked (keep :error) (mapcat :errors)))]
+    (is (not= raw (with "urpx:mondayIfSundayObservance")) "the fixture was actually doctored")
+    (is (empty? (errors "urpx:mondayIfWeekendObservance")))
+    (is (some #(= :urpx/observanceRule (last (remove #{:jsonld/id} (:in %))))
+              (errors "urpx:mondayIfSundayObservance")))))
+
 (deftest the-target-version-is-found-by-a-deep-walk
   (testing "urpx:targetURPXVersion sits on the urpx:URPXPackage wrapper in most
             filings and on a node inside the @graph in the rest, so a top-level
