@@ -137,6 +137,22 @@
                             #"Unrecognized urpx:holidayRule"
                             (holidays/derive-predicate plan))))))
 
+(deftest unrecognized-observance-rule-throws
+  (testing "An observanceRule IRI outside the recognized four throws, on a rule or a literal date"
+    (doseq [holiday [{:urpx/holidayRule "July 4"}
+                     {:urpx/holidayDate (ld 2027 7 4)}]]
+      (let [plan (calendar-plan
+                  [(merge {:jsonld/type "urpx:Holiday"
+                           :urpx/holidayName "Independence Day"
+                           :urpx/observanceRule {:jsonld/id "urpx:mondayIfSundayObservance"}}
+                          holiday)])
+            e    (try (holidays/derive-predicate plan) nil
+                      (catch clojure.lang.ExceptionInfo e e))]
+        (is (some? e))
+        (is (re-find #"Unrecognized urpx:observanceRule" (ex-message e)))
+        (is (= "urpx:mondayIfSundayObservance" (:observance-rule (ex-data e))))
+        (is (= "Independence Day" (get-in (ex-data e) [:holiday :urpx/holidayName])))))))
+
 (deftest holiday-without-date-or-rule-throws
   (let [plan (calendar-plan
               [{:jsonld/type "urpx:Holiday"

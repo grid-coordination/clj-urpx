@@ -27,8 +27,9 @@
   urpx:mondayIfWeekendObservance / urpx:fridayIfWeekendObservance) it
   overrides the implicit observance derived from the rule string.
 
-  Unrecognized rules throw ex-info — pass an explicit `:holiday?` predicate
-  in `urpx.price/resolve-prices` opts to override the derived calendar."
+  An unrecognized urpx:holidayRule or urpx:observanceRule throws ex-info.
+  Pass an explicit `:holiday?` predicate in `urpx.price/resolve-prices` opts
+  to override the derived calendar."
   (:require [clojure.string :as str]
             [urpx.index :as index])
   (:import [java.time DayOfWeek LocalDate Month]
@@ -148,12 +149,18 @@
   "Compile a coerced Holiday entity into a function `(long-year -> LocalDate or nil)`.
    Returns nil for years outside the holiday's applicability (a urpx:holidayDate
    only applies to its own year). Throws ex-info when neither holidayDate nor
-   holidayRule is present, or when the rule string isn't recognized."
+   holidayRule is present, or when the rule string or urpx:observanceRule
+   isn't recognized."
   [holiday]
   (let [{date         :urpx/holidayDate
          rule         :urpx/holidayRule
          observance   :urpx/observanceRule} holiday
-        explicit-obs  (some-> observance :jsonld/id observance-id->fn)]
+        explicit-obs  (when observance
+                        (or (observance-id->fn (:jsonld/id observance))
+                            (throw (ex-info (str "Unrecognized urpx:observanceRule: "
+                                                 (pr-str (:jsonld/id observance)))
+                                            {:observance-rule (:jsonld/id observance)
+                                             :holiday (select-keys holiday [:jsonld/id :urpx/holidayName])}))))]
     (cond
       date
       (let [^LocalDate d date
@@ -209,7 +216,7 @@
    The predicate computes the holiday set for any year on demand; results
    are cached internally so reusing the predicate across many dates is
    cheap. Throws ex-info if any Holiday in the calendar carries an
-   unparseable urpx:holidayRule.
+   unparseable urpx:holidayRule or an unrecognized urpx:observanceRule.
 
    The 2-arity takes a resolved version snapshot, for v0.5.1 documents that
    carry the version top-level rather than nested under the plan. Without it
