@@ -1,10 +1,11 @@
 (ns urpx.tou-coverage-test
-  "A urpx:TOUSchedule that no period covers at the instant refuses
-  `:urpx.price/no-tou-period` (URPX-hlv).
+  "An instant no period of a urpx:TOUSchedule covers. On a base plan it refuses
+  `:urpx.price/no-tou-period` (URPX-hlv). On a modifier its period-bound Prices
+  contribute nothing and the rest still apply (URPX-zoq).
 
-  The period resolved to nil instead, and a nil period gates no Price carrying
-  urpx:touPeriodNumber, so every period's Price surfaced as the answer at once.
-  A plan or modifier with no schedule keeps resolving with no period."
+  The period resolved to nil before either, and a nil period gates no Price
+  carrying urpx:touPeriodNumber, so every period's Price surfaced at once. A
+  plan or modifier with no schedule keeps resolving with no period."
   (:require [clojure.test :refer [deftest is testing]]
             [urpx.price :as price]
             [urpx.schedule :as schedule])
@@ -59,8 +60,9 @@
 
 (defn- version-body
   "PlanElements and Prices for one ledger, one PriceDefinition carrying no
-  period, and one Price per period carrying urpx:touPeriodNumber."
-  [prefix {:keys [seasons schedule]}]
+  period, and one Price per period carrying urpx:touPeriodNumber. With
+  `flat-price`, also one Price carrying no period."
+  [prefix {:keys [seasons schedule flat-price]}]
   {:urpx/changeReason {:jsonld/id "urpx:rateCase"}
    :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim"
                            :urpx/completenessResult {:jsonld/id "urpx:complete"}}
@@ -85,10 +87,13 @@
    :urpx/hasPrices
    {:jsonld/type "urpx:Prices"
     :urpx/hasPrice
-    (vec (for [[n v] [[1 0.40M] [2 0.20M]]]
-           {:jsonld/type "urpx:Price" :jsonld/id (str prefix "-price-" n)
-            :urpx/name "Energy" :urpx/unitPrice v :urpx/touPeriodNumber n
-            :urpx/referencesPriceDefinition {:jsonld/id (str prefix "-pd")}}))}})
+    (cond-> (vec (for [[n v] [[1 0.40M] [2 0.20M]]]
+                   {:jsonld/type "urpx:Price" :jsonld/id (str prefix "-price-" n)
+                    :urpx/name "Energy" :urpx/unitPrice v :urpx/touPeriodNumber n
+                    :urpx/referencesPriceDefinition {:jsonld/id (str prefix "-pd")}}))
+      flat-price (conj {:jsonld/type "urpx:Price" :jsonld/id (str prefix "-price-flat")
+                        :urpx/name "Adder" :urpx/unitPrice 0.01M
+                        :urpx/referencesPriceDefinition {:jsonld/id (str prefix "-pd")}}))}})
 
 (defn- base-plan
   [& {:as opts}]
@@ -124,44 +129,52 @@
 
 (def ^:private peak-gap [[] [off-bracket]])
 
-(deftest a-modifier-schedule-gap-refuses
+(deftest a-modifier-schedule-gap-contributes-nothing
   (let [m (modifier :schedule peak-gap)]
     (testing "composed: 17:00 matches no bracket of the modifier's own schedule"
-      (let [d (refusal #(price/resolve-prices-with-modifiers (base-plan) [m] (at 2026 7 15 17)))]
-        (is (= :urpx.price/no-tou-period (:reason d)))
-        (is (= "test:mod" (:plan-id d)))
-        (is (= "test:mod-v1" (:version-id d)))
-        (is (= (at 2026 7 15 17) (:at d)))
-        (is (= "test:season-summer" (:season-id d)))))
+      (let [r (price/resolve-prices-with-modifiers (base-plan) [m] (at 2026 7 15 17))]
+        (is (= [] (ledger-price-ids r "test:mod-ledger")))
+        (is (= ["test:base-price-1" "test:base-price-2"] (ledger-price-ids r "test:base-ledger"))
+            "the base plan resolves as without the modifier")))
     (testing "standalone, the same"
-      (is (= :urpx.price/no-tou-period
-             (:reason (refusal #(price/resolve-modifier-prices m (at 2026 7 15 17)))))))
+      (is (= [] (:urpx.resolved/ledgers (price/resolve-modifier-prices m (at 2026 7 15 17))))))
     (testing "an instant the schedule covers still resolves to its one Price"
       (is (= ["test:mod-price-2"]
              (ledger-price-ids (price/resolve-prices-with-modifiers (base-plan) [m] (at 2026 7 15 22))
                                "test:mod-ledger"))))))
 
-(deftest a-holiday-no-bracket-covers-refuses
+(deftest a-modifier-gap-keeps-prices-carrying-no-period
+  (let [m (modifier :schedule peak-gap :flat-price true)]
+    (testing "in the gap only the Price carrying no period applies, with no period labels"
+      (let [[ledger :as ledgers] (:urpx.resolved/ledgers
+                                  (price/resolve-modifier-prices m (at 2026 7 15 17)))]
+        (is (= 1 (count ledgers)))
+        (is (= ["test:mod-price-flat"] (map :urpx.resolved/price-id (:urpx.resolved/tiers ledger))))
+        (is (nil? (:urpx.resolved/tou-period-number ledger)))
+        (is (= "Summer" (:urpx.resolved/season-name ledger)))))
+    (testing "where a period covers, it applies alongside that period's Price"
+      (is (= ["test:mod-price-2" "test:mod-price-flat"]
+             (ledger-price-ids (price/resolve-modifier-prices m (at 2026 7 15 22))
+                               "test:mod-ledger"))))))
+
+(deftest a-holiday-no-modifier-bracket-covers-contributes-nothing
   (let [m (modifier :schedule [[(bracket 16 21 :urpx/includeHolidays false)]
                                [(bracket 21 16 :urpx/includeHolidays false)]])
         hol {:holiday? #{(LocalDate/of 2026 7 3)}}]
-    (is (= :urpx.price/no-tou-period
-           (:reason (refusal #(price/resolve-modifier-prices m (at 2026 7 3 17) hol))))
+    (is (= [] (:urpx.resolved/ledgers (price/resolve-modifier-prices m (at 2026 7 3 17) hol)))
         "a holiday that every bracket excludes")
     (is (= ["test:mod-price-1"]
            (ledger-price-ids (price/resolve-modifier-prices m (at 2026 7 2 17) hol)
                              "test:mod-ledger"))
         "the day before, a non-holiday, resolves")))
 
-(deftest a-modifier-whose-seasons-are-declared-only-on-the-base-refuses
+(deftest a-modifier-whose-seasons-are-declared-only-on-the-base-contributes-nothing
   (testing "the modifier's brackets name the base plan's Seasons and the
             modifier declares none, so its season at the instant is nil and no
             bracket matches"
     (let [m (modifier :seasons nil :schedule full-schedule)
-          d (refusal #(price/resolve-prices-with-modifiers (base-plan) [m] (at 2026 7 15 17)))]
-      (is (= :urpx.price/no-tou-period (:reason d)))
-      (is (= "test:mod" (:plan-id d)))
-      (is (nil? (:season-id d))))))
+          r (price/resolve-prices-with-modifiers (base-plan) [m] (at 2026 7 15 17))]
+      (is (= [] (ledger-price-ids r "test:mod-ledger"))))))
 
 (deftest a-base-schedule-gap-refuses
   (let [p (base-plan :schedule peak-gap)]

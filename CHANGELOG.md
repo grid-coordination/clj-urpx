@@ -33,7 +33,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
   | Reason | When |
   |---|---|
-  | `:urpx.price/no-tou-period` | a plan or modifier has a `urpx:TOUSchedule` and no period covers the instant, including a holiday no bracket covers. The period resolved to nil and every period's Price was admitted. `price-segments` and `segments-for` report it as `:urpx.interval/refused`; `resolve-at` and `price-schedule` propagate it |
+  | `:urpx.price/no-tou-period` | a plan has a `urpx:TOUSchedule` and no period covers the instant, including a holiday no bracket covers. The period resolved to nil and every period's Price was admitted. `price-segments` and `segments-for` report it as `:urpx.interval/refused`; `resolve-at` and `price-schedule` propagate it |
   | `:unknown-profile-alternatives-container` | a `:profile-alternatives` key names no container in any version being resolved. The prices it was meant to select were withheld. The ex-data lists the known containers under `:containers` |
   | `:urpx.scenario-cost-model/shared-alternative` | two containers in one composition's versions list the same `urpx:ProfileAlternative`, in `enumerate` and `from-node` |
   | `:urpx.scenario-cost-model/unknown-package-zones` | a `:package-zones` value other than `:agree`, `:fallback` or `:ignore` |
@@ -56,6 +56,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 - **A nested `@graph` was loaded as one untyped node.** `parse-graph` unwrapped only a top-level `@graph`, so upstream `test-cases/pge-e-tou-c` lost its package, plan, version, vintage-PCIA modifier and that modifier's version. It now flattens graph objects at any depth.
 - **A modifier summed a superseded dated Price with the one replacing it.** The modifier path now keeps the latest started Price per cell, as the base path does. With no selection, each `urpx:PriceSetAlternative` is reduced on its own.
+- **A modifier admitted every period's Price where its own `urpx:TOUSchedule` covers no period**, such as `smud:pev-credit` outside 00:00-06:00. There its Prices carrying `urpx:touPeriodNumber` now contribute nothing, and those carrying none still apply.
 - **`load/scan` reported a by-reference package payload as uncoercible**, as `{:jsonld/type nil}`. The package shell keeps the reference, and the referenced entity loads where it is stated.
 
 ## [0.35.0] — 2026-10-04

@@ -353,16 +353,6 @@
             [{:jsonld/type "urpx:TimeBracket"
               :urpx/startTime (java.time.LocalTime/of 0 0)
               :urpx/endTime (java.time.LocalTime/of 6 0)
-              :urpx/dayType {:jsonld/id "urpx:allDays"}}]}
-           ;; Priced by nothing here. A schedule leaving 06:00-24:00 to no
-           ;; period would refuse there rather than gate the credit out.
-           {:jsonld/type "urpx:TOUPeriod"
-            :urpx/name "Rest of day"
-            :urpx/touPeriodNumber 2
-            :urpx/hasTimeBracket
-            [{:jsonld/type "urpx:TimeBracket"
-              :urpx/startTime (java.time.LocalTime/of 6 0)
-              :urpx/endTime (java.time.LocalTime/of 0 0)
               :urpx/dayType {:jsonld/id "urpx:allDays"}}]}]}]}]
       :urpx/hasLedger
       [{:jsonld/type "urpx:Ledger"
