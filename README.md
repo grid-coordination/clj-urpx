@@ -313,6 +313,7 @@ The reasons are:
 | `:ambiguous-basis` | two or more named bases are present at once, which is not a choice this library makes |
 | `:summary-member-unresolved` | a summary member is absent from these documents, or is in effect here but carries no unit price |
 | `:summary-no-active-members` | no member of the summary is in effect at this instant, so its subtotal is undefined here |
+| `:summary-ambiguous-tier` | two or more members in effect share the lowest tier number of the summary's block-tier ladder, so which rung enters the subtotal is undefined |
 | `:basis-not-valuable` | the basis resolved but has no unit price |
 | `:no-unit-price` | the Price states neither a unit price nor a multiplier and basis to derive one from |
 | `:summary-member-unselected` | a summary member's PriceDefinition is scoped to a `urpx:ProfileAlternative` in a dimension the caller chose nothing for, so excluding it would understate the subtotal and including it would overstate it |

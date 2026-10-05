@@ -1284,8 +1284,7 @@
 
 (defn- lowest-rung-ties
   "The members of `xs` at the lowest tier number, when there are two or more of
-   them, else nil. `additive-plus-lowest-rung` takes one of these, and which one
-   is arbitrary."
+   them, else nil."
   [xs tier-of]
   (let [tiered (filter #(some? (tier-of %)) xs)]
     (when (seq tiered)
@@ -1468,8 +1467,9 @@
                                        (get by-id (get-in m [:urpx/referencesPriceDefinition
                                                              :jsonld/id])))))
                         unknown (filterv #(= :unknown (member-status %)) nodes)
-                        active (-> (filterv #(= :active (member-status %)) nodes)
-                                   (additive-plus-lowest-rung tier-of))
+                        in-effect (filterv #(= :active (member-status %)) nodes)
+                        ties   (lowest-rung-ties in-effect tier-of)
+                        active (additive-plus-lowest-rung in-effect tier-of)
                         values (mapv :urpx/unitPrice active)]
                     (cond
                       ;; A member whose applicability is UNKNOWN cannot be
@@ -1488,6 +1488,15 @@
                                        "; read urpx:referencesProfileAlternative on each, and pass "
                                        ":profile-alternatives keyed by the urpx:ProfileAlternatives "
                                        "that lists the alternative it names."))
+
+                      ties
+                      (unvaluable :summary-ambiguous-tier
+                                  (str "urpx:PriceSummary " (pr-str (:jsonld/id target))
+                                       " has " (count ties) " members in effect here at "
+                                       "the lowest tier number of its block-tier ladder, "
+                                       (tier-of (first ties)) ", so the rung that enters "
+                                       "the subtotal is undefined. The members are "
+                                       (pr-str (mapv :jsonld/id ties)) "."))
 
                       (empty? active)
                       (unvaluable :summary-no-active-members

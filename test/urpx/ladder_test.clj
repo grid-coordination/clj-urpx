@@ -1,6 +1,7 @@
 (ns urpx.ladder-test
-  "marginal-unit-rate takes the lowest rung of a ledger's block-tier ladder.
-  Two prices at that tier number leave the rung undefined, and it refuses."
+  "marginal-unit-rate takes the lowest rung of a ledger's block-tier ladder, and
+  a urpx:PriceSummary subtotal the lowest rung of its members. Two entries at
+  that tier number leave the rung undefined, and each refuses."
   (:require [clojure.test :refer [deftest is testing]]
             [urpx.price :as price])
   (:import [java.time LocalDate LocalDateTime ZoneId ZonedDateTime]))
@@ -120,3 +121,51 @@
     (is (== 0.10M (price/marginal-unit-rate r)))
     (is (= :ambiguous-marginal-tier
            (:reason (refusal r {:include-dynamic-pricing? true}))))))
+
+(defn- with-summary
+  "`plan` with a PriceSet holding a summary of `member-ids` and a Price `test:d`
+   valued at 1 x that summary."
+  [plan member-ids]
+  (assoc-in plan [:urpx/hasRatePlanVersion :urpx/hasPrices :urpx/hasPriceSet]
+            [{:jsonld/type "urpx:PriceSet" :jsonld/id "test:set"
+              :urpx/hasPriceSummary
+              [{:jsonld/type "urpx:PriceSummary" :jsonld/id "test:sum"
+                :urpx/includesPrice (mapv (fn [id] {:jsonld/id id}) member-ids)}]
+              :urpx/hasPrice
+              [{:jsonld/type "urpx:Price" :jsonld/id "test:d"
+                :urpx/multiplier 1M :urpx/basedOnPrice {:jsonld/id "test:sum"}
+                :urpx/referencesPriceDefinition {:jsonld/id "test:pd-d"}}]}]))
+
+(defn- derived [resolved]
+  (->> (:urpx.resolved/ledgers resolved)
+       (mapcat :urpx.resolved/tiers)
+       (filter #(= "test:d" (:urpx.resolved/price-id %)))
+       first))
+
+(deftest two-summary-members-at-the-lowest-tier-number-refuse
+  (let [t (-> (plan ["test:pd-a" "test:pd-b" "test:pd-c" "test:pd-x" "test:pd-d"]
+                    [(price- "test:a" "test:pd-a" "0.10" :urpx/serviceTierNumber 1)
+                     (price- "test:b" "test:pd-b" "0.20" :urpx/serviceTierNumber 1)
+                     (price- "test:c" "test:pd-c" "0.30" :urpx/serviceTierNumber 2)
+                     (price- "test:x" "test:pd-x" "0.01")])
+              (with-summary ["test:a" "test:b" "test:c" "test:x"])
+              (price/resolve-prices q)
+              derived)]
+    (is (nil? (:urpx.resolved/unit-price t)))
+    (is (= :summary-ambiguous-tier (:reason (:urpx.resolved/unvaluable t))))
+    (is (= "test:d" (:price-id (:urpx.resolved/unvaluable t))))
+    (is (re-find #"\"test:a\".*\"test:b\"|\"test:b\".*\"test:a\""
+                 (:detail (:urpx.resolved/unvaluable t))))
+    (is (not (re-find #"test:c|test:x" (:detail (:urpx.resolved/unvaluable t)))))))
+
+(deftest a-shared-higher-tier-number-in-a-summary-does-not-refuse
+  (let [t (-> (plan ["test:pd-a" "test:pd-b" "test:pd-c" "test:pd-x" "test:pd-d"]
+                    [(price- "test:a" "test:pd-a" "0.10" :urpx/serviceTierNumber 1)
+                     (price- "test:b" "test:pd-b" "0.20" :urpx/serviceTierNumber 2)
+                     (price- "test:c" "test:pd-c" "0.30" :urpx/serviceTierNumber 2)
+                     (price- "test:x" "test:pd-x" "0.01")])
+              (with-summary ["test:a" "test:b" "test:c" "test:x"])
+              (price/resolve-prices q)
+              derived)]
+    (is (nil? (:urpx.resolved/unvaluable t)))
+    (is (== 0.11M (:urpx.resolved/unit-price t)))))

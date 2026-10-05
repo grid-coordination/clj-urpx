@@ -21,6 +21,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 - **`:urpx.resolved/withheld-prices` and `:urpx.resolved/unselected-alternatives` listed Prices that would not apply at the instant.** A Price in an unselected `urpx:PriceSetAlternative` is now listed only when it has started, is the latest for its cell within that alternative, and has no `urpx:touPeriodNumber` or the resolved one, as on the active path. A ledger left with none is no longer marked, so `marginal-unit-rate` answers where it refused `:unselected-alternatives`.
 - **A modifier's own `urpx:PriceSummary` members were gated by the base plan's TOU period, and in a composition a month rule declared in the modifier and named by bare `@id` from a member's `urpx:PriceDefinition` was not applied; resolved alone, a modifier with its own `urpx:TOUSchedule` counted no member whose `urpx:PriceDefinition` carries a `urpx:touPeriodNumber`.** They are now gated by the modifier's own period when it carries a schedule, counting outside its brackets only members with no `urpx:touPeriodNumber`, and by its own `urpx:ApplicabilityRule`s. Members in the base plan keep the base plan's gates.
+- **A `urpx:PriceSummary` whose members in effect shared the lowest tier number of a block-tier ladder summed one of them, chosen arbitrarily.** A Price derived from it is now unvaluable with `:summary-ambiguous-tier`, and its detail names the members, as `marginal-unit-rate` refuses `:ambiguous-marginal-tier` for a ledger.
 
 ## [0.36.0] — 2026-10-05
 
