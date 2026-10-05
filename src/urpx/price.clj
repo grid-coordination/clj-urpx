@@ -2194,16 +2194,26 @@
                            ;; rather than gated by it.
                            (make-member-status by-id base-period-num query-date
                                                own-rules season-status alt-status))
-         own-period-num
-         (:urpx/touPeriodNumber
-          ;; holiday? or a predicate, never (holiday? query-date):
-          ;; find-tou-period takes the PREDICATE and applies it per bracket.
-          ;; Passing the boolean made holiday-status-matches? call `true` as a
-          ;; function, which threw ClassCastException once a bracket actually
-          ;; reached the holiday check.
-          (require-tou-period (:jsonld/id modifier) (:jsonld/id version)
-                              own-schedules (season-of own-seasons query-date)
-                              zdt (or holiday? (constantly false))))
+         own-season    (season-of own-seasons query-date)
+         ;; holiday? or a predicate, never (holiday? query-date):
+         ;; find-tou-period takes the PREDICATE and applies it per bracket.
+         ;; Passing the boolean made holiday-status-matches? call `true` as a
+         ;; function, which threw ClassCastException once a bracket actually
+         ;; reached the holiday check.
+         own-period    (require-tou-period (:jsonld/id modifier) (:jsonld/id version)
+                                           own-schedules own-season
+                                           zdt (or holiday? (constantly false)))
+         own-period-num (:urpx/touPeriodNumber own-period)
+         ;; The modifier's OWN season and period, on each of its ledgers. The
+         ;; result-level keys are the base plan's, and a period the base plan
+         ;; gated this modifier by is already reported there.
+         own-labels    (cond-> {}
+                         own-season (assoc :urpx.resolved/season-name
+                                           (:urpx/seasonName own-season))
+                         own-period (assoc :urpx.resolved/tou-period-name
+                                           (:urpx/name own-period)
+                                           :urpx.resolved/tou-period-number
+                                           own-period-num))
          gate-period (if (seq own-schedules) own-period-num base-period-num)
          gate?       (or (seq own-schedules) (some? base-period-num))
          pd->prices  (all-active-prices-by-pd prices zdt opts gate-period)
@@ -2321,14 +2331,19 @@
                (when-let [ids (seq (concat unselected-ids withheld))]
                  {:urpx.resolved/unselected-alternatives (vec ids)
                   :urpx.resolved/withheld-prices         withheld-prices})
+               own-labels
                (ledger-metric-info ledger mi-index)))))))
 
 (defn resolve-modifier-prices
   "Resolve every per-energy unit price that `modifier` (a coerced
    urpx:RatePlanModifier) contributes at `zdt`.
 
-   Returns the same shape as `resolve-prices` minus the season/TOU keys
-   (modifier ledgers are flat add-ons): {:urpx.resolved/ledgers [...]}.
+   Returns the same shape as `resolve-prices` minus the result-level
+   season/TOU keys: {:urpx.resolved/ledgers [...]}. Each ledger carries
+   :urpx.resolved/season-name when the modifier's own urpx:hasSeasons matches
+   `zdt`, and :urpx.resolved/tou-period-name and
+   :urpx.resolved/tou-period-number when its own urpx:hasTOUSchedule does. A
+   modifier declaring neither carries neither.
 
    When the modifier carries its own urpx:hasTOUSchedule, PDs with
    :urpx/touPeriodNumber are gated against the modifier's resolved period,
@@ -2375,7 +2390,10 @@
    the plan are silently skipped.
 
    Returns the `resolve-prices` shape with :urpx.resolved/ledgers extended
-   by the modifier ledgers."
+   by the modifier ledgers. The result-level season and TOU keys are the base
+   plan's. A modifier ledger carries its modifier's own season and period as
+   `resolve-modifier-prices` describes; a modifier gated by the base plan's
+   period carries none of its own."
   ([rate-plan modifiers ^ZonedDateTime zdt] (resolve-prices-with-modifiers rate-plan modifiers zdt nil))
   ([rate-plan modifiers ^ZonedDateTime zdt opts]
    (let [;; ONE ZONE FOR THE WHOLE COMPOSITION, the base plan's. A modifier may

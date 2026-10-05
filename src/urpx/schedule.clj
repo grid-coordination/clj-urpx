@@ -69,6 +69,15 @@
     (->> (iterate #(.plus ^ZonedDateTime % step) first-zdt)
          (take-while #(.isBefore ^ZonedDateTime % end-zdt)))))
 
+(def ^:private ledger-labels
+  "Per-step labels a modifier ledger carries: its own season and TOU period."
+  [:urpx.resolved/season-name :urpx.resolved/tou-period-name
+   :urpx.resolved/tou-period-number])
+
+(defn- unlabeled-ledgers
+  [resolved]
+  (mapv #(apply dissoc % ledger-labels) (:urpx.resolved/ledgers resolved)))
+
 (defn- same-ledgers?
   "True when two resolved values price the same way, so the steps that produced
    them may merge into one interval.
@@ -87,7 +96,7 @@
    price-segments never had this because it merges on the whole resolved value.
    The two APIs are supposed to agree about the same instant."
   [a b]
-  (and (= (:urpx.resolved/ledgers a) (:urpx.resolved/ledgers b))
+  (and (= (unlabeled-ledgers a) (unlabeled-ledgers b))
        (= (:urpx.resolved/outside-version-window a)
           (:urpx.resolved/outside-version-window b))))
 
@@ -99,11 +108,17 @@
    The rest are per-step labels: season, TOU period name and number. Keeping the
    earlier step's labels reported one season or period for a span that crossed
    into another; omitting a label that differs leaves the interval saying only
-   what is true for all of it."
+   what is true for all of it. A modifier ledger's own labels follow the same
+   rule, ledger by ledger."
   [a b]
-  (reduce-kv (fn [m k v]
-               (if (and (contains? b k) (= v (get b k))) m (dissoc m k)))
-             a a))
+  (let [agree (fn [x y ks]
+                (reduce (fn [m k]
+                          (if (and (contains? y k) (= (get x k) (get y k))) m (dissoc m k)))
+                        x ks))]
+    (-> (agree a b (keys (dissoc a :urpx.resolved/ledgers)))
+        (assoc :urpx.resolved/ledgers
+               (mapv #(agree %1 %2 ledger-labels)
+                     (:urpx.resolved/ledgers a) (:urpx.resolved/ledgers b))))))
 
 (defn- merge-adjacent
   "Merge consecutive intervals whose resolved ledger structure matches.
@@ -172,8 +187,10 @@
    A merged interval carries `:urpx.resolved/season-name`,
    `:urpx.resolved/tou-period-name` and `:urpx.resolved/tou-period-number`
    only when that value holds for every step merged into it; a label that
-   changes inside the interval is omitted. `price-segments` splits on those
-   labels instead, so use it when they matter.
+   changes inside the interval is omitted. The same holds for those keys on a
+   modifier ledger, which name the modifier's own season and period.
+   `price-segments` splits on those labels instead, so use it when they
+   matter.
 
    `zone` (a java.time.ZoneId) is optional when `rate-plan` declares
    `urpx:timezoneIdentifier`; pass `nil` to use the plan's declared

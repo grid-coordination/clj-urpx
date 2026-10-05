@@ -17,7 +17,8 @@
   modifier PriceDefinition or PriceSummary carries `appliesInSeason` or a month
   rule, so every case here is constructed."
   (:require [clojure.test :refer [deftest is testing]]
-            [urpx.price :as price])
+            [urpx.price :as price]
+            [urpx.schedule :as schedule])
   (:import [java.time LocalDate LocalDateTime ZoneId ZonedDateTime]))
 
 (def ^:private la (ZoneId/of "America/Los_Angeles"))
@@ -550,3 +551,129 @@
     (let [m (modifier [(pd "test:adj-flat" "Flat adjustment")])]
       (is (= (price/resolve-modifier-prices m (at 2026 7 15))
              (price/resolve-modifier-prices m (at 2026 7 15) nil))))))
+
+;; ---------------------------------------------------------------------------
+;; A modifier's own matched period and season (URPX-hsn)
+;; ---------------------------------------------------------------------------
+
+(def ^:private ledger-labels
+  [:urpx.resolved/season-name :urpx.resolved/tou-period-name
+   :urpx.resolved/tou-period-number])
+
+(defn- base-with-schedule
+  "The base plan carrying its own all-day period numbered 7, so its period is
+  distinguishable from any the modifier resolves."
+  []
+  (assoc-in (base-plan)
+            [:urpx/hasRatePlanVersion :urpx/hasPlanElements
+             :urpx/hasBillingModel :urpx/hasTOUSchedule]
+            [{:jsonld/type "urpx:TOUSchedule" :jsonld/id "test:base-tou"
+              :urpx/name "Base schedule"
+              :urpx/referencesMetricInput [{:jsonld/id "test:mi-energy"}]
+              :urpx/hasTOUTier
+              [{:jsonld/type "urpx:TOUTier" :urpx/touTierNumber 1
+                :urpx/hasTOUPeriod
+                [{:jsonld/type "urpx:TOUPeriod" :jsonld/id "test:base-p-all"
+                  :urpx/name "Base all day" :urpx/touPeriodNumber 7
+                  :urpx/hasTimeBracket
+                  [{:jsonld/type "urpx:TimeBracket"
+                    :urpx/dayType {:jsonld/id "urpx:allDays"}
+                    :urpx/appliesInSeason [{:jsonld/id "test:season-summer"}
+                                           {:jsonld/id "test:season-winter"}]
+                    :urpx/startTime (java.time.LocalTime/of 0 0)
+                    :urpx/endTime   (java.time.LocalTime/of 0 0)}]}]}]}]))
+
+(defn- flat-day-evening-modifier
+  "A modifier with its own two-period schedule, Day before 16:00 and Evening
+  after, and one PriceDefinition naming no period. Its price is the same in
+  both periods; only its matched period changes."
+  []
+  (let [bracket (fn [s e] {:jsonld/type "urpx:TimeBracket"
+                           :urpx/appliesInSeason [{:jsonld/id "test:season-summer"}]
+                           :urpx/dayType {:jsonld/id "urpx:allDays"}
+                           :urpx/startTime (java.time.LocalTime/of s 0)
+                           :urpx/endTime   (java.time.LocalTime/of e 0)})]
+    (assoc-in (modifier [(pd "test:adj-flat" "Flat adjustment")])
+              [:urpx/hasRatePlanModifierVersion :urpx/hasPlanElements
+               :urpx/hasBillingModel :urpx/hasTOUSchedule]
+              [{:jsonld/type "urpx:TOUSchedule" :jsonld/id "test:tou-de"
+                :urpx/name "Day and evening"
+                :urpx/referencesMetricInput [{:jsonld/id "test:mi-energy"}]
+                :urpx/hasTOUTier
+                [{:jsonld/type "urpx:TOUTier" :urpx/touTierNumber 1
+                  :urpx/hasTOUPeriod
+                  [{:jsonld/type "urpx:TOUPeriod" :jsonld/id "test:p-day"
+                    :urpx/name "Day" :urpx/touPeriodNumber 1
+                    :urpx/hasTimeBracket [(bracket 0 16)]}
+                   {:jsonld/type "urpx:TOUPeriod" :jsonld/id "test:p-evening"
+                    :urpx/name "Evening" :urpx/touPeriodNumber 2
+                    :urpx/hasTimeBracket [(bracket 16 0)]}]}]}])))
+
+(defn- ledger [resolved id]
+  (some #(when (= id (:urpx.resolved/ledger-id %)) %)
+        (:urpx.resolved/ledgers resolved)))
+
+(deftest a-modifier-ledger-reports-its-own-matched-period
+  (testing "composed: the modifier ledger carries the modifier's own period and
+            season, and the result-level keys stay the base plan's"
+    (let [r (price/resolve-prices-with-modifiers
+             (base-with-schedule) [(tou-modifier)] (at 2026 7 15))]
+      (is (= 7 (:urpx.resolved/tou-period-number r)))
+      (is (= "Base all day" (:urpx.resolved/tou-period-name r)))
+      (is (= {:urpx.resolved/season-name "Summer"
+              :urpx.resolved/tou-period-name "Peak"
+              :urpx.resolved/tou-period-number 1}
+             (select-keys (ledger r "test:ledger-adj") ledger-labels)))
+      (is (= {} (select-keys (ledger r "test:base-ledger") ledger-labels))
+          "a base ledger carries none: the result-level keys are its labels")))
+  (testing "resolved alone on a holiday, the modifier's own Off-peak period"
+    (is (= {:urpx.resolved/season-name "Summer"
+            :urpx.resolved/tou-period-name "Off-peak"
+            :urpx.resolved/tou-period-number 2}
+           (select-keys (ledger (price/resolve-modifier-prices
+                                 (tou-modifier) (at 2026 7 15) {:holiday? (constantly true)})
+                                "test:ledger-adj")
+                        ledger-labels)))))
+
+(deftest a-modifier-without-a-schedule-reports-no-period
+  (testing "gated by the base plan's period, which the result-level keys
+            already report, so the ledger carries no period of its own"
+    (let [m (modifier [(assoc (pd "test:adj-p7" "Base-period adjustment")
+                              :urpx/touPeriodNumber 7)])
+          r (price/resolve-prices-with-modifiers (base-with-schedule) [m] (at 2026 7 15))]
+      (is (= ["test:adj-p7"] (composed-pd-ids (base-with-schedule) m (at 2026 7 15)))
+          "gated by base period 7")
+      (is (= {:urpx.resolved/season-name "Summer"}
+             (select-keys (ledger r "test:ledger-adj") ledger-labels))
+          "its own Season still matched, so its season is reported")))
+  (testing "a modifier declaring no Season and no schedule carries no labels"
+    (let [m (modifier [(pd "test:adj-flat" "Flat adjustment")] :seasons [])
+          r (price/resolve-prices-with-modifiers (base-plan) [m] (at 2026 7 15))]
+      (is (= {} (select-keys (ledger r "test:ledger-adj") ledger-labels))))))
+
+(deftest a-modifiers-period-labels-follow-the-schedule-merge-rules
+  (let [start (.toInstant (ZonedDateTime/of 2026 7 15 0 0 0 0 la))
+        end   (.toInstant (ZonedDateTime/of 2026 7 16 0 0 0 0 la))
+        mods  [(flat-day-evening-modifier)]]
+    (testing "price-schedule merges across a modifier period change with equal
+              prices, and keeps a ledger label only where every step agrees"
+      (let [ivs (schedule/price-schedule-with-modifiers (base-plan) mods start end nil)]
+        (is (= 1 (count ivs)))
+        (is (= {:urpx.resolved/season-name "Summer"}
+               (select-keys (ledger (:urpx.interval/resolved (first ivs)) "test:ledger-adj")
+                            ledger-labels)))))
+    (testing "an interval inside one period keeps that period"
+      (let [ivs (schedule/price-schedule-with-modifiers
+                 (base-plan) mods start
+                 (.toInstant (ZonedDateTime/of 2026 7 15 12 0 0 0 la)) nil)]
+        (is (= 1 (count ivs)))
+        (is (= 1 (:urpx.resolved/tou-period-number
+                  (ledger (:urpx.interval/resolved (first ivs)) "test:ledger-adj"))))))
+    (testing "price-segments splits where the modifier's period changes"
+      (let [segs (schedule/price-segments (base-plan) mods start end nil)]
+        (is (= [[0 "Day" 1] [16 "Evening" 2]]
+               (mapv #(let [l (ledger (:urpx.interval/resolved %) "test:ledger-adj")]
+                        [(.getHour ^ZonedDateTime (:tick/beginning %))
+                         (:urpx.resolved/tou-period-name l)
+                         (:urpx.resolved/tou-period-number l)])
+                     segs)))))))
