@@ -52,6 +52,17 @@
       (throw (ex-info (str jar-file " lacks " changelog-entry)
                       {:jar-file jar-file :entry changelog-entry})))))
 
+(declare git jar-provenance)
+
+(defn- check-jar-provenance!
+  "Throw unless the jar carries build-provenance naming HEAD."
+  [{:keys [jar-file]}]
+  (let [head (git "rev-parse" "HEAD")
+        prov (jar-provenance jar-file)]
+    (when-not (= head (:commit prov))
+      (throw (ex-info (str jar-file " carries no build-provenance naming HEAD " head)
+                      {:jar-file jar-file :head head :provenance prov})))))
+
 (defn ci "Run the CI pipeline of tests (and build the JAR)." [opts]
   (test opts)
   (b/delete {:path "target"})
@@ -72,7 +83,8 @@
     (bp/write! {:lib lib :version version :class-dir class-dir})
     (println "\nBuilding JAR...")
     (b/jar opts)
-    (check-jar-docs! opts))
+    (check-jar-docs! opts)
+    (check-jar-provenance! opts))
   opts)
 
 ;; ---------------------------------------------------------------------------

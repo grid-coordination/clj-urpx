@@ -50,5 +50,6 @@
                   :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}
                                com.networknt/json-schema-validator {:mvn/version "1.5.7"}
                                babashka/fs {:mvn/version "0.5.22"}
-                               org.clojure/tools.gitlibs {:mvn/version "2.5.197"}}
+                               org.clojure/tools.gitlibs {:mvn/version "2.5.197"}
+                               com.dcj/build-provenance {:mvn/version "0.2.0"}}
                   :main-opts ["-m" "kaocha.runner" "--config-file" "tests.edn"]}}}
