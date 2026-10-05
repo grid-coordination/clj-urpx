@@ -1221,23 +1221,10 @@
 ;; `resolve-at` exists to prevent and the defect class this library has fixed
 ;; three times.
 ;;
-;; `start` and `end` are ZonedDateTimes, as `resolve-at` takes, and their zone
-;; is the zone the walk is asked for. urpx.schedule walks only in the plan's
-;; declared zone and refuses any other, so bounds in another zone refuse.
-;; Bounds in two different zones ask for no single zone, and refuse here.
+;; `start` and `end` are ZonedDateTimes, as `resolve-at` takes, in any zone.
+;; Their instants bound the window, and the walk happens in the plan's zone,
+;; where `resolve-at` resolves too.
 ;; ---------------------------------------------------------------------------
-
-(defn- bounds-zone
-  "The zone `start` and `end` share, or a refusal naming both."
-  ^ZoneId [model ^ZonedDateTime start ^ZonedDateTime end]
-  (let [zone (.getZone start)]
-    (when-not (= zone (.getZone end))
-      (throw (ex-info (str "Horizon bounds are in two zones, " zone " and " (.getZone end))
-                      {:reason :urpx.scenario-cost-model/bounds-in-different-zones
-                       :start start
-                       :end end
-                       :identity-tuple (identity-tuple model)})))
-    zone))
 
 (defn segments-for
   "Exact price segments for `model` across `[start, end)`, as
@@ -1256,14 +1243,14 @@
    and not one per candidate instant. That is what lets a publisher emit the
    part of a window it can price and say plainly what it cannot.
 
-   `start` and `end` must share a zone, the one the plan resolves in. Extra
+   `start` and `end` may be in any zone; segments are in the plan's. Extra
    `opts` are as `resolve-at`: merged, except the two the model
    determines, which are refused."
   ([model start end] (segments-for model start end nil))
   ([model ^ZonedDateTime start ^ZonedDateTime end opts]
    (schedule/price-segments (:urpx.scenario-cost-model/rate-plan model)
                             (:urpx.scenario-cost-model/modifiers model)
-                            (.toInstant start) (.toInstant end) (bounds-zone model start end)
+                            (.toInstant start) (.toInstant end) nil
                             (bound-opts model opts))))
 
 (defn schedule-for
@@ -1281,5 +1268,5 @@
    (schedule/price-schedule-with-modifiers
     (:urpx.scenario-cost-model/rate-plan model)
     (:urpx.scenario-cost-model/modifiers model)
-    (.toInstant start) (.toInstant end) (bounds-zone model start end)
+    (.toInstant start) (.toInstant end) nil
     (bound-opts model opts))))

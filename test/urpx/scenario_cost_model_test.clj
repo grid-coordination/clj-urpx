@@ -1072,9 +1072,9 @@
         in   #(ZonedDateTime/of 2026 7 % 0 0 0 0 (ZoneId/of %2))
         segs (scm/segments-for a (in 15 ny) (in 16 ny))]
     (is (seq segs))
-    (is (= :urpx.schedule/zone-disagrees-with-plan
-           (:reason (refusal #(scm/segments-for a (at 2026 7 15 0) (at 2026 7 16 0)))))
-        "bounds in a zone other than the package's are refused")
+    (is (= segs (scm/segments-for a (.withZoneSameInstant ^ZonedDateTime (in 15 ny) la)
+                                  (.withZoneSameInstant ^ZonedDateTime (in 16 ny) la)))
+        "the same instants stated in another zone")
     (is (every? #(and (instance? ZonedDateTime (:tick/beginning %))
                       (= (ZoneId/of ny) (.getZone ^ZonedDateTime (:tick/beginning %)))
                       (= (ZoneId/of ny) (.getZone ^ZonedDateTime (:tick/end %))))
@@ -1423,17 +1423,22 @@
             (str nm " covers " n " hours on " d))
         (is (not-any? :urpx.interval/refused segs) (str nm " prices the whole day " d))))))
 
-(deftest horizon-bounds-in-another-zone-are-refused
-  (let [a   (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
-        s   (at 2026 7 15 0)
-        e   (at 2026 7 16 0)
-        utc #(.withZoneSameInstant ^ZonedDateTime % java.time.ZoneOffset/UTC)]
-    (doseq [[nm f] [["segments-for" scm/segments-for] ["schedule-for" scm/schedule-for]]]
-      (is (= {:reason :urpx.scenario-cost-model/bounds-in-different-zones
-              :start  s
-              :end    (utc e)}
-             (select-keys (refusal #(f a s (utc e))) [:reason :start :end]))
-          (str nm ": the same instants, stated in two zones, name no one zone"))
-      (is (= :urpx.schedule/zone-disagrees-with-plan
-             (:reason (refusal #(f a (utc s) (utc e)))))
-          (str nm ": one zone, but not the plan's")))))
+(deftest horizon-bounds-in-any-zone-walk-in-the-plans-zone
+  (let [a  (first (scm/enumerate [(fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")]))
+        s  (at 2026 7 15 0)
+        e  (at 2026 7 16 0)
+        in #(.withZoneSameInstant ^ZonedDateTime %1 (ZoneId/of %2))]
+    (doseq [[nm f] [["segments-for" scm/segments-for] ["schedule-for" scm/schedule-for]]
+            [zs ze] [["UTC" "UTC"] ["-07:00" "-07:00"] ["US/Pacific" "US/Pacific"]
+                     ["Asia/Kolkata" "Asia/Kolkata"] ["UTC" "America/New_York"]]
+            :let [segs (f a (in s zs) (in e ze))]]
+      (is (= (f a s e) segs) (str nm ": bounds in " zs " and " ze " are the same instants"))
+      (is (every? #(= la (.getZone ^ZonedDateTime (:tick/beginning %))
+                      (.getZone ^ZonedDateTime (:tick/end %)))
+                  segs)
+          (str nm ": bounds in " zs " and " ze " give segments in the plan's zone")))
+    (is (= ["2026-07-15T00:00-07:00[America/Los_Angeles]"
+            "2026-07-15T16:00-07:00[America/Los_Angeles]"
+            "2026-07-15T21:00-07:00[America/Los_Angeles]"]
+           (mapv (comp str :tick/beginning) (scm/segments-for a (in s "UTC") (in e "UTC"))))
+        "UTC bounds find the plan's local transitions")))

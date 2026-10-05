@@ -27,7 +27,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
   | `:arrangement-id` in refusal ex-data | `:identity-tuple` |
 
 - **`identity-tuple` keys a model by its alternatives alone:** `[base-version-iri (sorted modifier-version iris) (sorted alternative iris)]`, the values a `urpx:ScenarioCostModel` carries. `arrangement-id` ended in `[[container alternative] ...]`. `enumerate` sorts by the new tuple, and each model's `:urpx.scenario-cost-model/selections` still maps every container to its alternative.
-- **`segments-for` and `schedule-for` take ZonedDateTime bounds**, as `[model start end]` or `[model start end opts]`, in the zone the model resolves in. The Instant arities and the `zone` argument are gone. Bounds in another zone refuse `:urpx.schedule/zone-disagrees-with-plan`; bounds in two different zones refuse `:urpx.scenario-cost-model/bounds-in-different-zones`.
+- **`segments-for` and `schedule-for` take ZonedDateTime bounds**, as `[model start end]` or `[model start end opts]`, in any zone. The Instant arities and the `zone` argument are gone. The bounds' instants define the window; segments are computed and returned in the plan's zone, the zone `resolve-at` resolves in.
 - **`load/documents` and `load/scan` return a package shell for every `urpx:URPXPackage` or `urpx:URPXDocument` wrapper:** the wrapper's own properties, with each embedded payload under `hasRatePlan`, `hasRatePlanModifier`, `hasTariffPublication` and `packages` replaced by a `{:jsonld/id id}` reference. README gives the predicate that drops the shells. Both also return any `urpx:ScenarioCostModel` among the coerced documents.
 - **New refusals.**
 
