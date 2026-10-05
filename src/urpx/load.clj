@@ -74,6 +74,15 @@
     (conj (into [] (remove reference?) (core/expand-document-entities entity)) shell)
     (core/expand-document-entities entity)))
 
+(defn- shell-references
+  "Each payload reference on `entity` when it is a package shell, as
+   `{:jsonld/id id :package-id p :property k}`."
+  [entity]
+  (when (core/wrapper-types (:jsonld/type entity))
+    (for [k payload-keys
+          ref (index/as-vec (get entity k))]
+      {:jsonld/id (:jsonld/id ref) :package-id (:jsonld/id entity) :property k})))
+
 (def document-xf
   "A transducer from sources to coerced URPX documents.
 
@@ -124,8 +133,9 @@
   "Like `documents`, but in ONE pass over `sources` and reporting what was
    discarded:
 
-      {:urpx.load/documents   [<coerced document> ...]
-       :urpx.load/uncoercible [{:jsonld/type t :jsonld/id id} ...]}
+      {:urpx.load/documents             [<coerced document> ...]
+       :urpx.load/uncoercible           [{:jsonld/type t :jsonld/id id} ...]
+       :urpx.load/unresolved-references [{:jsonld/id id :package-id p :property k} ...]}
 
   THE DISCARD IS THE POINT. `document-xf` drops every entity this library does
   not model, such as urpx:ProgramEnrollment, urpx:SourcePublication and
@@ -145,15 +155,27 @@
   discard is invisible.
 
   Entries carry `@type` and `@id` only, not the entity, so scanning a large
-  corpus does not retain every graph it walked past."
+  corpus does not retain every graph it walked past.
+
+  `:urpx.load/unresolved-references` names each package payload reference
+  `{:jsonld/id id}` whose entity no source states: the referenced @id, the
+  package's @id, and the payload property."
   [sources]
-  (reduce (fn [acc entity]
-            (if-let [doc (coerce/coerce-doc entity)]
-              (update acc :urpx.load/documents conj doc)
-              (update acc :urpx.load/uncoercible conj
-                      {:jsonld/type (:jsonld/type entity)
-                       :jsonld/id   (:jsonld/id entity)})))
-          {:urpx.load/documents [] :urpx.load/uncoercible []}
-          (eduction (comp (mapcat core/load-graph)
-                          (mapcat expand))
-                    sources)))
+  (let [{:keys [stated references] :as acc}
+        (reduce (fn [acc entity]
+                  (let [acc (-> acc
+                                (update :stated conj (:jsonld/id entity))
+                                (update :references into (shell-references entity)))]
+                    (if-let [doc (coerce/coerce-doc entity)]
+                      (update acc :urpx.load/documents conj doc)
+                      (update acc :urpx.load/uncoercible conj
+                              {:jsonld/type (:jsonld/type entity)
+                               :jsonld/id   (:jsonld/id entity)}))))
+                {:urpx.load/documents [] :urpx.load/uncoercible [] :stated #{} :references []}
+                (eduction (comp (mapcat core/load-graph)
+                                (mapcat expand))
+                          sources))]
+    (-> acc
+        (dissoc :stated :references)
+        (assoc :urpx.load/unresolved-references
+               (filterv #(not (stated (:jsonld/id %))) references)))))

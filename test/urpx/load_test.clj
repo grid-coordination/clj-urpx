@@ -127,6 +127,25 @@
       (is (= [{:jsonld/id "x:p"}]
              (mapcat core/expand-document-entities (core/load-graph (src json))))))))
 
+(deftest a-reference-no-source-states-is-reported
+  (let [pkg  (str "{" ctx ",\"@id\":\"x:pkg\",\"@type\":\"urpx:URPXPackage\","
+                  "\"urpx:packages\":[{\"@id\":\"x:p\"},{\"@id\":\"x:gone\"}],"
+                  "\"urpx:hasRatePlanModifier\":{\"@id\":\"x:m\",\"@type\":\"urpx:RatePlanModifier\"}}")
+        plan (plan-json "x:p" "x:p-v1")]
+    (testing "each payload reference whose entity no source states, with the
+              package and property naming it"
+      (is (= [{:jsonld/id "x:gone" :package-id "x:pkg" :property :urpx/packages}]
+             (:urpx.load/unresolved-references (load/scan [(src pkg) (src plan)])))))
+    (testing "an entity stated in any source resolves, in either order"
+      (is (= [{:jsonld/id "x:gone" :package-id "x:pkg" :property :urpx/packages}]
+             (:urpx.load/unresolved-references (load/scan [(src plan) (src pkg)])))))
+    (testing "with no source stating x:p, it is reported too"
+      (is (= [{:jsonld/id "x:p" :package-id "x:pkg" :property :urpx/packages}
+              {:jsonld/id "x:gone" :package-id "x:pkg" :property :urpx/packages}]
+             (:urpx.load/unresolved-references (load/scan [(src pkg)])))))
+    (testing "a scan with no unresolved reference reports an empty vector"
+      (is (= [] (:urpx.load/unresolved-references (load/scan [(src plan)])))))))
+
 (deftest an-untyped-entity-is-still-a-discard
   (testing "an embedded payload with no @type but statements of its own is an
             entity, and scan names it"

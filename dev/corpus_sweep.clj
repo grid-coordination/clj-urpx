@@ -188,6 +188,8 @@
                                                dropped))]
                       (println "  !! VERSION TYPES DISCARDED:"
                                (frequencies (map :jsonld/type vs))))
+        _           (println "unresolved refs :"
+                             (count (:urpx.load/unresolved-references scanned)))
         _           (coverage-census docs)
         now         (ZonedDateTime/of 2026 7 15 17 0 0 0 (ZoneId/of "America/Los_Angeles"))
         ;; A REFUSAL IS A RESULT, not a crash. This corpus can legitimately

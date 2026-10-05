@@ -736,6 +736,8 @@ Nothing guarantees a discarded type is never a version. `scan` does the same wor
   documents)
 ```
 
+`scan` also reports `:urpx.load/unresolved-references`: each package payload reference whose entity no source states, as `{:jsonld/id id :package-id p :property k}`.
+
 "This library does not model it" and "it does not matter" are different statements. `ProgramEnrollment` is modeled nowhere here; whether that matters is yours to decide, and it cannot be decided while the discard is invisible.
 
 ### Example walkers
