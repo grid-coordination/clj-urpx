@@ -159,10 +159,12 @@
 (deftest holiday-without-date-or-rule-throws
   (let [plan (calendar-plan
               [{:jsonld/type "urpx:Holiday"
-                :urpx/holidayName "Useless"}])]
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"urpx:holidayDate or urpx:holidayRule"
-                          (holidays/derive-predicate plan)))))
+                :urpx/holidayName "Useless"}])
+        e    (try (holidays/derive-predicate plan) nil
+                  (catch clojure.lang.ExceptionInfo e e))]
+    (is (re-find #"urpx:holidayDate or urpx:holidayRule" (ex-message e)))
+    (is (= :urpx.holidays/no-date-or-rule (:reason (ex-data e))))
+    (is (= "Useless" (get-in (ex-data e) [:holiday :urpx/holidayName])))))
 
 (deftest fifth-weekday-of-month
   (testing "Some months have a fifth occurrence of a given weekday"

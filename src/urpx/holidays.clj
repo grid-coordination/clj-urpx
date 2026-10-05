@@ -178,7 +178,8 @@
 
       :else
       (throw (ex-info "Holiday must carry urpx:holidayDate or urpx:holidayRule"
-                      {:holiday (select-keys holiday [:jsonld/id :urpx/holidayName])})))))
+                      {:reason  :urpx.holidays/no-date-or-rule
+                       :holiday (select-keys holiday [:jsonld/id :urpx/holidayName])})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Calendar lookup
