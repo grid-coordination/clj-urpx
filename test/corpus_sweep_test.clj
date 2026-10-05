@@ -1,6 +1,7 @@
 (ns corpus-sweep-test
   (:require [babashka.fs :as fs]
             [clojure.data.json :as json]
+            [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.test :refer [deftest is testing]]
             [corpus-sweep]
@@ -43,3 +44,9 @@
         (is (= (* 2 one) (doc-count (corpus-sweep/load-corpus with all)))))
       (finally
         (run! fs/delete-tree [with without])))))
+
+(deftest the-dev-alias-carries-the-corpus-json-walker
+  (testing "`clojure -M:dev -m corpus-sweep` reads a root corpus.json through
+            corpus-json, so :dev puts it on the classpath"
+    (let [paths (get-in (edn/read-string (slurp "deps.edn")) [:aliases :dev :extra-paths])]
+      (is (some #(fs/exists? (fs/path % "corpus_json.clj")) paths)))))

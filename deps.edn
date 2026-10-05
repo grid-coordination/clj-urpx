@@ -26,7 +26,7 @@
            ;; documents is not.
            :corpus {:extra-paths ["corpus"]}
 
-           :dev {:extra-paths ["dev"]
+           :dev {:extra-paths ["dev" "corpus"]
                  :extra-deps {babashka/fs {:mvn/version "0.5.22"}
                               org.clojure/tools.gitlibs {:mvn/version "2.5.197"}}}
 
