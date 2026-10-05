@@ -125,40 +125,37 @@
   [node]
   (index/as-vec (:urpx/appliesInSeason node)))
 
+(defn- season-id-matcher
+  "A bracket-season predicate for `find-tou-period`: refs naming `season-id`
+   match, and a bracket naming no Season matches only a nil `season-id`, which
+   is the season of a document declaring no urpx:hasSeasons."
+  [season-id]
+  (fn [refs]
+    (if (empty? refs)
+      (nil? season-id)
+      (boolean (some #(= season-id (:jsonld/id %)) refs)))))
+
 (defn- find-tou-period
-  "Find the TOUPeriod whose TimeBracket matches the given season and the
-   date, day of week and local time of `q`, a ZonedDateTime in the plan's
-   zone, across every TOUSchedule in `tou-schedules`.
+  "Find the TOUPeriod whose TimeBracket matches the date, day of week and local
+   time of `q`, a ZonedDateTime in the plan's zone, and whose urpx:appliesInSeason
+   refs satisfy `in-season?`, across every TOUSchedule in `tou-schedules`.
    Walks every tier's periods (the tier hierarchy is for classification —
    what matters for resolution is the bracket match).
 
    BillingModel.hasTOUSchedule is a vector: one schedule per
    MetricInput when the rate plan TOU-zones multiple metrics. The first
    bracket-matching period across all schedules wins."
-  [tou-schedules season-id ^ZonedDateTime q holiday?]
+  [tou-schedules in-season? ^ZonedDateTime q holiday?]
   (when (seq tou-schedules)
     (some
      (fn [period]
        (when (some
               (fn [bracket]
                 ;; Disjunctive across refs, matching every other reader of
-                ;; urpx:appliesInSeason. This went through urpx.index/single,
-                ;; which refuses on several, and that was the odd one out: the
-                ;; property is sh:minCount 0 with no sh:maxCount on
-                ;; TimeBracketShape as on the rest, so a bracket naming two
-                ;; Seasons applies in either. No fixture names more than one,
-                ;; so this widens acceptance and changes no resolved number.
-                ;; Unlike the other readers this compares IDENTITY against the
-                ;; season `season-of` already resolved, rather than evaluating
-                ;; months itself, so multiplicity was the only divergence here.
-                ;; A bracket naming NO season keeps its old meaning exactly:
-                ;; index/single returned nil for it, which matched only a nil
-                ;; season-id, so an unseasoned schedule still works only on a
-                ;; plan that declares no season.
-                (and (let [refs (season-refs bracket)]
-                       (if (empty? refs)
-                         (nil? season-id)
-                         (boolean (some #(= season-id (:jsonld/id %)) refs))))
+                ;; urpx:appliesInSeason: TimeBracketShape sets sh:minCount 0
+                ;; and no sh:maxCount, so a bracket naming two Seasons applies
+                ;; in either.
+                (and (in-season? (season-refs bracket))
                      (bracket-matches-day? bracket (.toLocalDate q) (.getDayOfWeek q) holiday?)
                      (time-in-bracket? q bracket)))
               (:urpx/hasTimeBracket period))
@@ -166,6 +163,49 @@
      (mapcat (fn [schedule]
                (mapcat :urpx/hasTOUPeriod (:urpx/hasTOUTier schedule)))
              tou-schedules))))
+
+(defn- modifier-season-matcher
+  "A bracket-season predicate for a modifier's own `tou-schedules`. A ref to one
+   of `own-seasons` matches by identity with the modifier's own season at `date`,
+   as `season-id-matcher` does. Any other ref resolves through `by-id`, which is
+   composition-wide when composing, and matches when that urpx:Season's months
+   include `date`'s.
+
+   Refuses `:unresolvable-season-ref` when a bracket names a Season that neither
+   `own-seasons` nor `by-id` declares, whichever bracket the instant reaches."
+  [plan-id version-id tou-schedules own-seasons by-id ^LocalDate date]
+  (let [own-ids    (into #{} (map :jsonld/id) own-seasons)
+        own-id     (:jsonld/id (season-of own-seasons date))
+        resolved   (fn [sid]
+                     (let [n (get by-id sid)]
+                       (when (= "urpx:Season" (:jsonld/type n)) n)))
+        unresolved (->> tou-schedules
+                        (mapcat :urpx/hasTOUTier)
+                        (mapcat :urpx/hasTOUPeriod)
+                        (mapcat :urpx/hasTimeBracket)
+                        (mapcat season-refs)
+                        (map :jsonld/id)
+                        (remove #(or (own-ids %) (resolved %)))
+                        distinct
+                        vec)
+        m          (.getMonthValue date)]
+    (when (seq unresolved)
+      (throw (ex-info (str "urpx:TimeBracket of " (pr-str version-id) " names urpx:Season "
+                           (pr-str unresolved) ", which no document passed to this call "
+                           "declares, so the urpx:TOUPeriod in effect cannot be determined.")
+                      {:reason       :unresolvable-season-ref
+                       :plan-id      plan-id
+                       :version-id   version-id
+                       :season-ids   unresolved
+                       :schedule-ids (mapv :jsonld/id tou-schedules)})))
+    (fn [refs]
+      (if (empty? refs)
+        (nil? own-id)
+        (boolean (some (fn [{sid :jsonld/id}]
+                         (if (own-ids sid)
+                           (= own-id sid)
+                           (some #{m} (:urpx/month (resolved sid)))))
+                       refs))))))
 
 (defn- require-tou-period
   "`find-tou-period`, refusing `:urpx.price/no-tou-period` when `tou-schedules`
@@ -180,7 +220,7 @@
    has the gap."
   [plan-id version-id tou-schedules season ^ZonedDateTime q holiday?]
   (when (seq tou-schedules)
-    (or (find-tou-period tou-schedules (:jsonld/id season) q holiday?)
+    (or (find-tou-period tou-schedules (season-id-matcher (:jsonld/id season)) q holiday?)
         (throw (ex-info (str "No urpx:TOUPeriod of " (pr-str plan-id) " covers " q
                              (if season
                                (str " in season " (pr-str (:jsonld/id season)))
@@ -2133,7 +2173,8 @@
       modifier's own TOU period at `zdt` and gate PDs against THAT period
       number — symmetric with base PD gating. Where no period of that
       schedule covers `zdt`, PDs and Prices carrying :urpx/touPeriodNumber
-      contribute nothing and the rest still apply.
+      contribute nothing and the rest still apply. A bracket may name a
+      urpx:Season declared only in `:by-id` (`modifier-season-matcher`).
    2. Else if the caller passes `base-period-num`, gate PDs that carry
       :urpx/touPeriodNumber against the base RatePlan's resolved period
       (e.g. smud:cpp's Mid-Peak/Off-Peak discounts ride the base's TOU).
@@ -2202,7 +2243,10 @@
          ;; Passing the boolean made holiday-status-matches? call `true` as a
          ;; function, which threw ClassCastException once a bracket actually
          ;; reached the holiday check.
-         own-period    (find-tou-period own-schedules (:jsonld/id own-season)
+         own-period    (find-tou-period own-schedules
+                                        (modifier-season-matcher
+                                         (:jsonld/id modifier) (:jsonld/id version)
+                                         own-schedules own-seasons by-id query-date)
                                         zdt (or holiday? (constantly false)))
          own-period-num (:urpx/touPeriodNumber own-period)
          ;; The modifier's OWN season and period, on each of its ledgers. The
@@ -2371,7 +2415,8 @@
    said nothing. :profile-alternatives lets a cell-scoped urpx:ServiceBracket's
    bounds be determined at all, which no caller could do here before.
    :by-id supplies a urpx:Season the modifier names but does not declare, which
-   is otherwise unevaluable. :version chooses among several snapshots.
+   is otherwise unevaluable, and which a urpx:TimeBracket naming it refuses
+   `:unresolvable-season-ref` without. :version chooses among several snapshots.
 
    The caller-picks contract above is unchanged and is NOT in tension with
    :profile-alternatives: surfacing every applicable Price is about prices whose

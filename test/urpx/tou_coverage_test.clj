@@ -1,7 +1,8 @@
 (ns urpx.tou-coverage-test
   "An instant no period of a urpx:TOUSchedule covers. On a base plan it refuses
   `:urpx.price/no-tou-period` (URPX-hlv). On a modifier its period-bound Prices
-  contribute nothing and the rest still apply (URPX-zoq).
+  contribute nothing and the rest still apply (URPX-zoq). A modifier's bracket
+  may name a Season only the base plan declares (URPX-pbq).
 
   The period resolved to nil before either, and a nil period gates no Price
   carrying urpx:touPeriodNumber, so every period's Price surfaced at once. A
@@ -168,13 +169,40 @@
                              "test:mod-ledger"))
         "the day before, a non-holiday, resolves")))
 
-(deftest a-modifier-whose-seasons-are-declared-only-on-the-base-contributes-nothing
-  (testing "the modifier's brackets name the base plan's Seasons and the
-            modifier declares none, so its season at the instant is nil and no
-            bracket matches"
-    (let [m (modifier :seasons nil :schedule full-schedule)
-          r (price/resolve-prices-with-modifiers (base-plan) [m] (at 2026 7 15 17))]
-      (is (= [] (ledger-price-ids r "test:mod-ledger"))))))
+(def ^:private summer-peak-schedule
+  "Peak 16:00-21:00 in Summer only; Off-peak the rest of Summer and all Winter."
+  [[(bracket 16 21 :urpx/appliesInSeason [{:jsonld/id "test:season-summer"}])]
+   [(bracket 21 16 :urpx/appliesInSeason [{:jsonld/id "test:season-summer"}])
+    (bracket 0 0 :urpx/appliesInSeason [{:jsonld/id "test:season-winter"}])]])
+
+(deftest a-modifier-bracket-resolves-a-base-plan-season-through-the-composition
+  (let [m (modifier :seasons nil :schedule summer-peak-schedule)
+        mod-ids #(ledger-price-ids (price/resolve-prices-with-modifiers (base-plan) [m] %)
+                                   "test:mod-ledger")]
+    (is (= ["test:mod-price-1"] (mod-ids (at 2026 7 15 17))))
+    (is (= ["test:mod-price-2"] (mod-ids (at 2026 7 15 22))))
+    (is (= ["test:mod-price-2"] (mod-ids (at 2026 12 15 17)))
+        "in Winter, by the base plan's months")
+    (is (= 1 (->> (price/resolve-prices-with-modifiers (base-plan) [m] (at 2026 7 15 17))
+                  :urpx.resolved/ledgers
+                  (filter #(= "test:mod-ledger" (:urpx.resolved/ledger-id %)))
+                  first
+                  :urpx.resolved/tou-period-number)))))
+
+(deftest a-modifier-bracket-season-resolving-nowhere-refuses
+  (testing "standalone, the base plan's Seasons are not in scope"
+    (let [d (refusal #(price/resolve-modifier-prices (modifier :seasons nil :schedule full-schedule)
+                                                     (at 2026 7 15 17)))]
+      (is (= :unresolvable-season-ref (:reason d)))
+      (is (= "test:mod" (:plan-id d)))
+      (is (= "test:mod-v1" (:version-id d)))
+      (is (= #{"test:season-summer" "test:season-winter"} (set (:season-ids d))))))
+  (testing "composed, a ref no document declares"
+    (let [m (modifier :schedule [[(bracket 16 21 :urpx/appliesInSeason [{:jsonld/id "test:season-typo"}])]
+                                 [off-bracket]])
+          d (refusal #(price/resolve-prices-with-modifiers (base-plan) [m] (at 2026 7 15 22)))]
+      (is (= :unresolvable-season-ref (:reason d)))
+      (is (= ["test:season-typo"] (:season-ids d))))))
 
 (deftest a-base-schedule-gap-refuses
   (let [p (base-plan :schedule peak-gap)]
@@ -212,14 +240,16 @@
                              "test:mod-ledger")))))
 
 (deftest a-fully-covered-modifier-gives-one-price-per-ledger-all-year
-  (let [m (modifier :schedule full-schedule)
-        p (base-plan)
+  (let [p     (base-plan)
         hours (take-while #(.isBefore ^ZonedDateTime % (at 2027 1 1 0))
-                          (iterate #(.plusHours ^ZonedDateTime % 1) (at 2026 1 1 0)))
-        wrong (remove (fn [^ZonedDateTime z]
-                        (= [(if (<= 16 (.getHour z) 20) "test:mod-price-1" "test:mod-price-2")]
-                           (ledger-price-ids (price/resolve-prices-with-modifiers p [m] z)
-                                             "test:mod-ledger")))
-                      hours)]
+                          (iterate #(.plusHours ^ZonedDateTime % 1) (at 2026 1 1 0)))]
     (is (= 8760 (count hours)))
-    (is (empty? wrong))))
+    (doseq [[label m] [["Seasons declared on the modifier" (modifier :schedule full-schedule)]
+                       ["Seasons declared only on the base plan"
+                        (modifier :seasons nil :schedule full-schedule)]]]
+      (testing label
+        (is (empty? (remove (fn [^ZonedDateTime z]
+                              (= [(if (<= 16 (.getHour z) 20) "test:mod-price-1" "test:mod-price-2")]
+                                 (ledger-price-ids (price/resolve-prices-with-modifiers p [m] z)
+                                                   "test:mod-ledger")))
+                            hours)))))))
