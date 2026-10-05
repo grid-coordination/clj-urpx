@@ -17,6 +17,10 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 - **`corpus/urpx.corpus.json` declares the layout of urpx-org/urpx's `test-cases/`.** The `urpx-upstream` walker reads it.
 - **`scenario-cost-model/rate-plans-name`, the `urpx:name` urpx-rate-plans gives a model's `urpx:ScenarioCostModel`**, to pass `node` as its `:name`: each consumed version's plan or modifier name with the version's `@id` in brackets, then any selected alternatives' names. A component with no `urpx:name` refuses `:urpx.scenario-cost-model/unnamed-component`; one named two ways refuses `:urpx.scenario-cost-model/conflicting-name`.
 
+### Fixed
+
+- **`:urpx.resolved/withheld-prices` and `:urpx.resolved/unselected-alternatives` listed Prices that would not apply at the instant.** A Price in an unselected `urpx:PriceSetAlternative` is now listed only when it has started, is the latest for its cell within that alternative, and has no `urpx:touPeriodNumber` or the resolved one, as on the active path. A ledger left with none is no longer marked, so `marginal-unit-rate` answers where it refused `:unselected-alternatives`.
+
 ## [0.36.0] — 2026-10-05
 
 ### Changed

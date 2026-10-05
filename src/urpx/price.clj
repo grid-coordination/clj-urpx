@@ -391,6 +391,17 @@
    (latest-by-pd (filter #(price-active-at-tou? (first %) resolved-period-num)
                          (scoped-prices prices q opts)))))
 
+(defn- alternative-price-pairs
+  "The started [price start] pairs of each urpx:PriceSetAlternative under
+   `psas-seq`, a seq of urpx:PriceSetAlternatives, one seq per alternative."
+  [psas-seq ^ZonedDateTime q]
+  (for [psas psas-seq
+        psa  (:urpx/hasPriceSetAlternative psas)]
+    (keep (fn [p]
+            (let [sd (price-start p nil (.getZone q))]
+              (when (started? sd q) [p sd])))
+          (:urpx/hasPrice psa))))
+
 (defn- all-prices-from-alternatives
   "Walk Prices.hasPriceSetAlternatives and return the active [price
    start] pairs of EVERY PriceSetAlternative, one seq per alternative:
@@ -400,12 +411,13 @@
    later versions of it. Distinct from `prices-from-alternatives`, which only
    surfaces the caller-selected alternative."
   [prices ^ZonedDateTime q]
-  (for [psas (:urpx/hasPriceSetAlternatives prices)
-        psa  (:urpx/hasPriceSetAlternative psas)]
-    (keep (fn [p]
-            (let [sd (price-start p nil (.getZone q))]
-              (when (started? sd q) [p sd])))
-          (:urpx/hasPrice psa))))
+  (alternative-price-pairs (:urpx/hasPriceSetAlternatives prices) q))
+
+(defn- period-cells
+  "`latest-by-pd` over the [price start] `pairs` that may apply at
+   `resolved-period-num`."
+  [pairs resolved-period-num]
+  (latest-by-pd (filter #(price-active-at-tou? (first %) resolved-period-num) pairs)))
 
 (defn- all-active-prices-by-pd
   "Build a map from PriceDefinition id to a vector of [price start] pairs
@@ -426,9 +438,7 @@
    ;; silently pick one of them.
    (if (seq (:profile-alternatives opts))
      (active-prices-by-pd prices q opts resolved-period-num)
-     (let [cells (fn [pairs]
-                   (latest-by-pd
-                    (filter #(price-active-at-tou? (first %) resolved-period-num) pairs)))]
+     (let [cells #(period-cells % resolved-period-num)]
        (apply merge-with into
               (cells (scoped-prices prices q nil))
               (map cells (all-prices-from-alternatives prices q)))))))
@@ -438,26 +448,23 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- unselected-alternative-ids
-  "The @ids of the Prices surfaced from a urpx:PriceSetAlternatives for which
-   the caller supplied no selection.
+  "The @ids of the Prices in `withheld`, a `withheld-prices-by-pd` map.
 
    These are ALTERNATIVES, not tiers: exactly one applies to any customer, and
    which one is the caller's to say. PG&E's vintage-PCIA ledger carries 18 of
    them spanning 0.06391/kWh. Surfacing them all is the documented contract for
    reading tiers; silently adding one of them to an aggregate is not, so the
    ledger is marked and `marginal-unit-rate` refuses rather than pick."
-  [prices selection]
-  (into #{}
-        (comp (remove #(get selection (get-in % [:urpx/referencesProfileAlternatives :jsonld/id])))
-              (mapcat :urpx/hasPriceSetAlternative)
-              (mapcat :urpx/hasPrice)
-              (keep :jsonld/id))
-        (:urpx/hasPriceSetAlternatives prices)))
+  [withheld]
+  (into #{} (comp (mapcat val) (keep :jsonld/id)) withheld))
 
 (defn- withheld-prices-by-pd
   "The Prices that exist only inside a urpx:PriceSetAlternatives the caller
    supplied no selection for, grouped by the @id of the PriceDefinition each
-   references.
+   references. Only those that would apply at `q` were their alternative
+   selected are kept: started, the latest per cell within each
+   urpx:PriceSetAlternative, and active at `resolved-period-num` (see
+   `period-cells`).
 
    A ledger fed only by such definitions resolves to no tiers and is then
    elided, taking with it both the prices AND any signal that they were
@@ -465,20 +472,19 @@
    contributes nothing, so the prices, the ledger and the evidence disappear
    together, and six shipped base versions carry one. On the modifier path it
    defeats an existing guard, because the unselected mark is computed from
-   surviving tier entries and there are none: dating PG&E's 18 vintage-PCIA
-   prices into the future took marginal-unit-rate from refusing to answering
-   0.46886. Removing content should not remove a refusal.
+   surviving tier entries, and a selection in another dimension leaves none.
 
    The Prices themselves are kept, not just their definition ids, because
    whether a refusal is owed depends on what was withheld: see
    `withheld-price-entry`."
-  [prices selection]
-  (->> (:urpx/hasPriceSetAlternatives prices)
-       (remove #(get selection (get-in % [:urpx/referencesProfileAlternatives :jsonld/id])))
-       (mapcat :urpx/hasPriceSetAlternative)
-       (mapcat :urpx/hasPrice)
-       (filter #(get-in % [:urpx/referencesPriceDefinition :jsonld/id]))
-       (group-by #(get-in % [:urpx/referencesPriceDefinition :jsonld/id]))))
+  [prices selection ^ZonedDateTime q resolved-period-num]
+  (let [unselected (remove #(get selection (get-in % [:urpx/referencesProfileAlternatives :jsonld/id]))
+                           (:urpx/hasPriceSetAlternatives prices))]
+    (-> (apply merge-with into {}
+               (map #(period-cells % resolved-period-num)
+                    (alternative-price-pairs unselected q)))
+        (dissoc nil)
+        (update-vals #(mapv first %)))))
 
 (defn- recurring-interval
   "urpx:intervalDuration off `pd`'s calculation method: the field that makes a
@@ -2049,7 +2055,7 @@
          ;; alone left it named in the mark and absent from the evidence, and
          ;; one unrelated excluded price on the same ledger was then enough to
          ;; drop the refusal and answer short.
-         psa-prices    (withheld-prices-by-pd prices (:profile-alternatives opts))
+         psa-prices    (withheld-prices-by-pd prices (:profile-alternatives opts) zdt period-num)
          member-status (or (:member-status opts)
                            (make-member-status by-id period-num date
                                                rules-by-id season-status alt-status))
@@ -2268,7 +2274,6 @@
                        :else                  ::uncovered)
          gate?       (or (seq own-schedules) (some? base-period-num))
          pd->prices  (all-active-prices-by-pd prices zdt opts gate-period)
-         unselected  (unselected-alternative-ids prices (:profile-alternatives opts))
          pds         (:urpx/hasPriceDefinition billing)
          pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
         ;; A modifier's PriceDefinitions are scoped by urpx:referencesProfileAlternative
@@ -2277,7 +2282,8 @@
         ;; needed: a matrix of mutually-exclusive cells is a modifier shape, so
         ;; a definition scoped to a cell the caller did not choose was summed
         ;; anyway, unmarked.
-         psa-prices  (withheld-prices-by-pd prices (:profile-alternatives opts))
+         psa-prices  (withheld-prices-by-pd prices (:profile-alternatives opts) zdt gate-period)
+         unselected  (unselected-alternative-ids psa-prices)
          mi-index    (mi-by-id plan-elts)]
      (vec
       (for [ledger ledgers

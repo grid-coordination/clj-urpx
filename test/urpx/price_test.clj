@@ -1872,25 +1872,28 @@
             route that emptied an alternatives ledger also removed the refusal
             protecting it.
 
-            Dating PG&E's 18 vintage-PCIA prices into the future took
-            marginal-unit-rate from refusing to answering 0.46886, a rate
-            silently missing a component spanning 0.06391/kWh."
+            Selecting an income tier on PG&E E-TOU-C empties its vintage-PCIA
+            ledger: with a selection, the modifier path surfaces only selected
+            alternatives, and no vintage is selected."
     (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
           modi (fixtures/load-modifier "pge-e-tou-c-2026-03-01")
-          v18  (into #{} (map #(str "pge:price-vpcia-" %)) (range 2009 2027))
-          futured (clojure.walk/postwalk
-                   (fn [n] (if (and (map? n) (v18 (:jsonld/id n)))
-                             (assoc n :urpx/startDate (java.time.LocalDate/of 2030 1 1))
-                             n))
-                   modi)
-          rate (fn [m] (try (price/marginal-unit-rate
-                             (price/resolve-prices-with-modifiers plan [m] (zdt 2026 7 15 17)))
-                            (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))]
-      (is (= :unselected-alternatives (rate modi)) "intact: refuses, as it always did")
-      (is (= :unselected-alternatives (rate futured))
-          "emptied: must STILL refuse, or removing content removed the guard")
+          rate (fn [m sel]
+                 (try (price/marginal-unit-rate
+                       (price/resolve-prices-with-modifiers plan [m] (zdt 2026 7 15 17)
+                                                            {:profile-alternatives sel}))
+                      (catch clojure.lang.ExceptionInfo e (:reason (ex-data e)))))
+          income {"pge:pa-income-tier" "pge:pa-income-tier-care"}
+          emptied (price/resolve-prices-with-modifiers plan [modi] (zdt 2026 7 15 17)
+                                                       {:profile-alternatives income})]
+      (is (= :unselected-alternatives (rate modi {})) "intact: refuses, as it always did")
+      (is (empty? (->> (:urpx.resolved/ledgers emptied)
+                       (filter #(= "pge:ledger-vintage-pcia" (:urpx.resolved/ledger-id %)))
+                       (mapcat :urpx.resolved/tiers)))
+          "sanity: the selection empties the vintage-PCIA ledger")
+      (is (= :unselected-alternatives (rate modi income))
+          "emptied: must STILL refuse, or emptying the ledger removed the guard")
 
-      (testing "and a selection resolves it either way, so the refusal is not a
+      (testing "and a vintage selection resolves it, so the refusal is not a
                 blanket one"
         (let [sel {:profile-alternatives {"pge:pa-departure-vintage" "pge:pa-vintage-2020"}}]
           (is (some? (price/marginal-unit-rate
