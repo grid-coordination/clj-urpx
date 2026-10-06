@@ -13,8 +13,17 @@
 
 set -euo pipefail
 
+usage="usage: $0 [path-to-urpx-checkout] [rev]   (checkout defaults to \$URPX_DIR)"
+
+case "${1:-}" in
+  -h|--help)
+    echo "$usage"
+    exit 0
+    ;;
+esac
+
 if [[ $# -gt 2 ]]; then
-  echo "usage: $0 [path-to-urpx-checkout] [rev]   (checkout defaults to \$URPX_DIR)" >&2
+  echo "$usage" >&2
   exit 2
 fi
 
@@ -29,7 +38,7 @@ repo_root=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-if [[ ! -d "$src_dir/.git" ]]; then
+if ! git -C "$src_dir" rev-parse --git-dir >/dev/null 2>&1; then
   echo "REFUSED: $src_dir is not a git checkout" >&2
   exit 2
 fi
