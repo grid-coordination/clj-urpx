@@ -188,13 +188,15 @@
 (defn- alias-map
   "Build a {short-key → canonical-key} map for `schema`'s :urpx/* entries.
    Aliases are kebab-cased local names — :urpx/seasonName → :season-name,
-   :urpx/yearlyRecurrence → :yearly-recurrence."
+   :urpx/yearlyRecurrence → :yearly-recurrence. A schema wrapped in
+   `[:schema {:registry ...} <inner>]` is unwrapped first, as in
+   `entity-type`."
   [schema]
   (into {}
         (keep (fn [[k _]]
                 (when (and (qualified-keyword? k) (= "urpx" (namespace k)))
                   [(keyword (camel->kebab (name k))) k])))
-        (m/entries schema)))
+        (m/entries (m/deref schema))))
 
 (defn- canonicalize-keys
   "Translate any short-form keys in `opts` to their canonical :urpx/* form

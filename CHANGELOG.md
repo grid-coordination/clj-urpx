@@ -9,6 +9,12 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Fixed
+
+- **`urpx.dsl/condition-expression` accepts kebab-case short keys** (`:root-node`), as every other builder does.
+
 ## [0.40.0] — 2026-10-06
 
 ### Added

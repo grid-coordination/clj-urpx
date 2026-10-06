@@ -344,6 +344,36 @@
     (is (some? (var-get #'urpx.dsl/tou-schedule)))
     (is (some? (var-get #'urpx.dsl/tou-period)))))
 
+(defn- entity-schemas
+  "{name → schema} for every public urpx.schema var naming an entity schema."
+  []
+  (into (sorted-map)
+        (keep (fn [[sym v]]
+                (let [val (deref v)]
+                  (when (and (or (vector? val) (m/schema? val))
+                             (try (dsl/entity-type val)
+                                  (catch Exception _ nil)))
+                    [(str sym) val]))))
+        (ns-publics 'urpx.schema)))
+
+(deftest every-builder-has-short-keys
+  (let [alias-map (var-get #'urpx.dsl/alias-map)
+        empty-ones (keep (fn [[n schema]]
+                           (when (empty? (alias-map schema)) n))
+                         (entity-schemas))]
+    (is (empty? empty-ones)
+        (str "builders with no kebab-case short keys: " (pr-str (vec empty-ones))))))
+
+(deftest condition-expression-accepts-short-keys
+  (let [ce (dsl/condition-expression
+            :root-node {:jsonld/type "urpx:ComparisonNode"
+                        :urpx/operator {:jsonld/id "urpx:equalTo"}
+                        :urpx/leftOperand {:jsonld/type "urpx:CustomOperandNode"
+                                           :urpx/customConditionProperty "x"}
+                        :urpx/rightOperand {:jsonld/type "urpx:CustomOperandNode"
+                                            :urpx/stringValue "y"}})]
+    (is (= "urpx:ComparisonNode" (get-in ce [:urpx/rootNode :jsonld/type])))))
+
 ;; ---------------------------------------------------------------------------
 ;; Sample of new named builders — spot-check coverage across the
 ;; ~35 entity types
