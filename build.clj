@@ -11,7 +11,7 @@
   (:import [java.util.zip ZipFile]))
 
 (def lib 'energy.grid-coordination/clj-urpx)
-(def version "0.38.0")
+(def version "0.39.0-SNAPSHOT")
 (def class-dir "target/classes")
 
 (defn test "Run all the tests." [opts]
