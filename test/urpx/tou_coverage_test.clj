@@ -4,7 +4,7 @@
   contribute nothing and the rest still apply. A modifier's bracket
   may name a Season only the base plan declares.
 
-  The period resolved to nil before either, and a nil period gates no Price
+  The period used to resolve to nil here, and a nil period gates no Price
   carrying urpx:touPeriodNumber, so every period's Price surfaced at once. A
   plan or modifier with no schedule keeps resolving with no period."
   (:require [clojure.test :refer [deftest is testing]]

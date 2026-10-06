@@ -626,10 +626,10 @@
 
 (deftest pge-e-1-tier-bounds-are-instant-independent
   (testing "bracket qualifier scoping does not narrow PG&E E-1 to one season,
-            and must not be read as having fixed it. E-1 carries its seasonality in tier NAMES
-            and in six distinct serviceTierNumbers, with no appliesInSeason and
-            no referencesProfileAlternative on any container or bracket, so it
-            is outside both scopes. All six tiers surface at every instant,
+            and must not be read as having fixed it. E-1 carries its
+            seasonality in tier NAMES and in six distinct serviceTierNumbers,
+            with no appliesInSeason and no referencesProfileAlternative on any
+            container or bracket, so it is outside both scopes. All six tiers surface at every instant,
             summer bounds beside winter ones, exactly as before."
     (let [tiers (fn [inst]
                   (->> (:urpx.resolved/ledgers

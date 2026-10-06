@@ -599,8 +599,8 @@
    Both scopes qualify a candidate and they compose. The two properties on the
    urpx:ServiceTiers container decide whether that container's tiers are in
    effect at all; the same two on the urpx:ServiceBracket decide which of a
-   tier's brackets states the bounds. Reading one and not the other would leave the
-   other a silent no-op.
+   tier's brackets states the bounds. Reading one and not the other would
+   leave the other a silent no-op.
 
    Returns nil when the number names no tier, {:tier-name s :bracket b} when
    one set of bounds is determined, {:tier-name s :mark m} when it is not and
@@ -2162,10 +2162,9 @@
       ;; refuses on the mark, because a PRICE from a version that does not
       ;; cover the instant is the confident wrong number this library refuses.
       ;; No per-instant field, the same rule the modifier ledger mark follows.
-      ;; This map sits on the RESULT rather than on a ledger, so same-ledgers?
-      ;; never sees it, but price-segments merges on the whole resolved value:
-      ;; a per-instant field here would split one uncovered window into many
-      ;; segments holding identical prices.
+      ;; price-schedule and price-segments both merge on this map, so a
+      ;; per-instant field here would split one uncovered window into one
+      ;; interval per step.
       ;; :version-id, :effective and :expires identify the window; the instant
       ;; the caller asked about is the caller's own. :plan-id is the key
       ;; :versions-by-plan is looked up by.

@@ -295,9 +295,9 @@
       (is (= "Scope-A Summer" (:urpx/seasonName a)))
       (is (= "Scope-B Summer" (:urpx/seasonName b))))))
 
-(deftest worked-example-from-issue-description
-  (testing "the example call shape from the issue description —
-            seasons declared with local syms, PD references them by sym"
+(deftest worked-local-sym-example
+  (testing "seasons and a ledger declared with local syms, and a PD that
+            references them by sym"
     (let [pd (dsl/dsl-scope
               (dsl/season ::summer :urpx/seasonName "Summer"
                           :urpx/month [5 6 7 8 9 10])
