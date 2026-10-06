@@ -24,8 +24,11 @@
 
   When a Holiday carries an explicit urpx:observanceRule (Ref to one of
   urpx:actualDateObservance / urpx:nearestWeekdayObservance /
-  urpx:mondayIfWeekendObservance / urpx:fridayIfWeekendObservance) it
-  overrides the implicit observance derived from the rule string.
+  urpx:mondayIfWeekendObservance / urpx:mondayIfSundayObservance /
+  urpx:fridayIfWeekendObservance) it overrides the implicit observance
+  derived from the rule string. urpx:mondayIfSundayObservance moves a
+  Sunday holiday to the following Monday and leaves a Saturday holiday on
+  its date.
 
   An unrecognized urpx:holidayRule or urpx:observanceRule throws ex-info.
   Pass an explicit `:holiday?` predicate in `urpx.price/resolve-prices` opts
@@ -69,6 +72,11 @@
     DayOfWeek/SUNDAY   (.plusDays d 1)
     d))
 
+(defn- observe-monday-if-sunday ^LocalDate [^LocalDate d]
+  (if (= DayOfWeek/SUNDAY (.getDayOfWeek d))
+    (.plusDays d 1)
+    d))
+
 (defn- observe-friday-if-weekend ^LocalDate [^LocalDate d]
   (condp = (.getDayOfWeek d)
     DayOfWeek/SATURDAY (.minusDays d 1)
@@ -79,6 +87,7 @@
   {"urpx:actualDateObservance"      observe-actual
    "urpx:nearestWeekdayObservance"  observe-nearest-weekday
    "urpx:mondayIfWeekendObservance" observe-monday-if-weekend
+   "urpx:mondayIfSundayObservance"  observe-monday-if-sunday
    "urpx:fridayIfWeekendObservance" observe-friday-if-weekend})
 
 ;; ---------------------------------------------------------------------------

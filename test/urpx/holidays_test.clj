@@ -114,6 +114,46 @@
       (is (h? (ld 2027 7 5)))
       (is (not (h? (ld 2027 7 4)))))))
 
+(deftest monday-if-sunday-observance
+  (doseq [[label rule date observed not-observed]
+          [["Jul 4 2027 (Sun) is observed Mon Jul 5 2027"
+            "July 4" (ld 2027 7 4) (ld 2027 7 5) [(ld 2027 7 4) (ld 2027 7 2)]]
+           ["Jul 4 2026 (Sat) stays Jul 4 2026"
+            "July 4" (ld 2026 7 4) (ld 2026 7 4) [(ld 2026 7 3) (ld 2026 7 6)]]
+           ["Dec 25 2027 (Sat) stays Dec 25 2027"
+            "December 25" (ld 2027 12 25) (ld 2027 12 25) [(ld 2027 12 24) (ld 2027 12 27)]]]]
+    (testing label
+      (doseq [holiday [{:urpx/holidayRule rule}
+                       {:urpx/holidayDate date}]]
+        (let [h? (holidays/derive-predicate
+                  (calendar-plan
+                   [(merge {:jsonld/type "urpx:Holiday"
+                            :urpx/holidayName rule
+                            :urpx/observanceRule {:jsonld/id "urpx:mondayIfSundayObservance"}}
+                           holiday)]))]
+          (is (h? observed) (str holiday))
+          (doseq [d not-observed]
+            (is (not (h? d)) (str holiday " " d))))))))
+
+(deftest monday-if-sunday-observance-at-the-year-boundary
+  (doseq [[label date observed not-observed]
+          [["Jan 1 2023 (Sun) is observed Mon Jan 2 2023"
+            (ld 2023 1 1) (ld 2023 1 2) [(ld 2023 1 1) (ld 2022 12 30)]]
+           ["Jan 1 2028 (Sat) stays Jan 1 2028"
+            (ld 2028 1 1) (ld 2028 1 1) [(ld 2027 12 31) (ld 2028 1 3)]]]]
+    (testing label
+      (doseq [holiday [{:urpx/holidayRule "January 1"}
+                       {:urpx/holidayDate date}]]
+        (let [h? (holidays/derive-predicate
+                  (calendar-plan
+                   [(merge {:jsonld/type "urpx:Holiday"
+                            :urpx/holidayName "New Year's Day"
+                            :urpx/observanceRule {:jsonld/id "urpx:mondayIfSundayObservance"}}
+                           holiday)]))]
+          (is (h? observed) (str holiday))
+          (doseq [d not-observed]
+            (is (not (h? d)) (str holiday " " d))))))))
+
 (deftest friday-if-weekend-observance
   (testing "urpx:fridayIfWeekendObservance: Sat → Fri, Sun → Fri"
     (let [plan (calendar-plan
@@ -140,20 +180,20 @@
       (is (= "the third blue moon" (:rule (ex-data e)))))))
 
 (deftest unrecognized-observance-rule-throws
-  (testing "An observanceRule IRI outside the recognized four throws, on a rule or a literal date"
+  (testing "An unrecognized observanceRule IRI throws, on a rule or a literal date"
     (doseq [holiday [{:urpx/holidayRule "July 4"}
                      {:urpx/holidayDate (ld 2027 7 4)}]]
       (let [plan (calendar-plan
                   [(merge {:jsonld/type "urpx:Holiday"
                            :urpx/holidayName "Independence Day"
-                           :urpx/observanceRule {:jsonld/id "urpx:mondayIfSundayObservance"}}
+                           :urpx/observanceRule {:jsonld/id "urpx:sundayOnlyObservance"}}
                           holiday)])
             e    (try (holidays/derive-predicate plan) nil
                       (catch clojure.lang.ExceptionInfo e e))]
         (is (some? e))
         (is (re-find #"Unrecognized urpx:observanceRule" (ex-message e)))
         (is (= :urpx.holidays/unknown-observance-rule (:reason (ex-data e))))
-        (is (= "urpx:mondayIfSundayObservance" (:observance-rule (ex-data e))))
+        (is (= "urpx:sundayOnlyObservance" (:observance-rule (ex-data e))))
         (is (= "Independence Day" (get-in (ex-data e) [:holiday :urpx/holidayName])))))))
 
 (deftest holiday-without-date-or-rule-throws

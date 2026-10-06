@@ -174,10 +174,11 @@
                                   "\"urpx:observanceRule\": {\"@id\": \"" iri "\"}")))
         errors (fn [iri] (->> (validate/check-file (tmp-doc (with iri)))
                               :checked (keep :error) (mapcat :errors)))]
-    (is (not= raw (with "urpx:mondayIfSundayObservance")) "the fixture was actually doctored")
+    (is (not= raw (with "urpx:sundayOnlyObservance")) "the fixture was actually doctored")
     (is (empty? (errors "urpx:mondayIfWeekendObservance")))
+    (is (empty? (errors "urpx:mondayIfSundayObservance")))
     (is (some #(= :urpx/observanceRule (last (remove #{:jsonld/id} (:in %))))
-              (errors "urpx:mondayIfSundayObservance")))))
+              (errors "urpx:sundayOnlyObservance")))))
 
 (deftest the-target-version-is-found-by-a-deep-walk
   (testing "urpx:targetURPXVersion sits on the urpx:URPXPackage wrapper in most

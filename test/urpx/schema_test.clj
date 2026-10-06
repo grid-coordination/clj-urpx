@@ -791,7 +791,8 @@
               ["pruned" "fullySuperseded" "voided" "outOfScope"]]
              ["ObservanceRule" s/ObservanceRule
               ["actualDateObservance" "fridayIfWeekendObservance"
-               "mondayIfWeekendObservance" "nearestWeekdayObservance"]]]]
+               "mondayIfSundayObservance" "mondayIfWeekendObservance"
+               "nearestWeekdayObservance"]]]]
       (doseq [m members]
         (is (m/validate schema {:jsonld/id (str "urpx:" m)})
             (str label " must accept urpx:" m)))
@@ -837,8 +838,10 @@
                    :urpx/holidayRule "July 4"}]
       (is (m/validate s/Holiday (assoc holiday :urpx/observanceRule
                                        {:jsonld/id "urpx:fridayIfWeekendObservance"})))
+      (is (m/validate s/Holiday (assoc holiday :urpx/observanceRule
+                                       {:jsonld/id "urpx:mondayIfSundayObservance"})))
       (is (not (m/validate s/Holiday (assoc holiday :urpx/observanceRule
-                                            {:jsonld/id "urpx:mondayIfSundayObservance"}))))))
+                                            {:jsonld/id "urpx:sundayOnlyObservance"}))))))
   (testing "SourcePublication rejects a non-member publicationType"
     (is (not (m/validate s/SourcePublication
                          {:jsonld/type "urpx:SourcePublication"

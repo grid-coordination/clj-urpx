@@ -220,6 +220,8 @@ URPX `TimeBracket` carries two optional booleans — `urpx:includeHolidays` and 
 2. **Embedded `urpx:HolidayCalendar`** — if the plan declares one (PG&E E-TOU-D and several CPAU filings do), `urpx.holidays/derive-predicate` builds a predicate from the calendar's `urpx:Holiday` entries (literal dates plus rule-based descriptions like "fourth Thursday of November"). No caller setup required.
 3. **Fallback** — only when both of the above are absent: every date is treated as a non-holiday. Brackets that opt out of non-holidays (`includeNonHolidays: false`, e.g. holiday-only off-peak overrides) will never match.
 
+A `urpx:Holiday`'s `urpx:observanceRule` moves its date when it falls on a weekend: `urpx:actualDateObservance` keeps it, `urpx:nearestWeekdayObservance` moves Saturday to Friday and Sunday to Monday, `urpx:mondayIfWeekendObservance` moves both to Monday, `urpx:fridayIfWeekendObservance` moves both to Friday, and `urpx:mondayIfSundayObservance` (urpx-org/urpx#77) moves Sunday to Monday and keeps Saturday. A move may cross into the adjacent year.
+
 A caller-supplied `:holiday?` overrides any embedded calendar — useful when you need a different jurisdiction's holiday set or want to inject a calendar service:
 
 ```clojure

@@ -38,4 +38,7 @@
   ["ServiceTier" "urpx:serviceTierNumber" "under-validates"]
   ["BillingModel" "urpx:hasPriceDefinition" "under-validates"]
 
-]}
+  ;; urpx-org/urpx#77 adds urpx:mondayIfSundayObservance to
+  ;; urpx:ObservanceRuleValue, and this library accepts and applies it. Drop
+  ;; this entry once the pinned shapes carry that change.
+  ["Holiday" "urpx:observanceRule" "enum-drift"]]}

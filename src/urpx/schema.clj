@@ -491,9 +491,11 @@
   (enum-ref "publication" "sourceLifecycle" "applicability" "observation" "coverage"))
 
 (def ObservanceRule
-  "urpx:ObservanceRuleValue."
+  "urpx:ObservanceRuleValue, with urpx:mondayIfSundayObservance from
+   urpx-org/urpx#77."
   (enum-ref "actualDateObservance" "fridayIfWeekendObservance"
-            "mondayIfWeekendObservance" "nearestWeekdayObservance"))
+            "mondayIfSundayObservance" "mondayIfWeekendObservance"
+            "nearestWeekdayObservance"))
 
 (def DayOfWeek
   "urpx:DayOfWeekValue, the range of urpx:daysOfWeek, from urpx-org/urpx#71.
