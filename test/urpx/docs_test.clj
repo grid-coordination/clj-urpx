@@ -186,6 +186,43 @@
                          (str (.getSimpleName (class t)) ": " (.getMessage t)))))))))
           (finally (remove-ns ns-sym)))))))
 
+;; A `;; => value` line, and the `;;` lines after it up to a blank line, show
+;; the value of the code above it.
+(defn- annotated-chunks
+  "Split `block` into [code shown] pairs, one per `;; =>` annotation. `shown`
+   is the annotation's text with the comment markers removed."
+  [block]
+  (loop [[line & more :as lines] (str/split-lines block), code [], out []]
+    (cond
+      (empty? lines) out
+
+      (str/starts-with? line ";; =>")
+      (let [[ann tail] (split-with #(str/starts-with? % ";;") more)
+            shown      (->> (cons (subs line 5) (map #(subs % 2) ann))
+                            (str/join "\n"))]
+        (recur tail [] (conj out [(str/join "\n" code) shown])))
+
+      :else (recur more (conj code line) out))))
+
+(deftest readme-getting-started-shows-what-it-returns
+  (testing "every `;; =>` value in the Getting started walkthrough is what the
+            code above it returns"
+    (let [blocks (fenced-blocks (or (section (doc "README.md") "Getting started") "")
+                                "clojure")
+          chunks (mapcat annotated-chunks blocks)
+          ns-sym (gensym "urpx-readme-shown-")]
+      (is (<= 1 (count chunks)) "the walkthrough shows at least one value")
+      (create-ns ns-sym)
+      (try
+        (binding [*ns* (the-ns ns-sym)]
+          (refer-clojure)
+          (doseq [[code shown] chunks]
+            (let [actual (load-string (str "(in-ns '" ns-sym ")(clojure.core/refer-clojure)" code))]
+              (is (= (read-string shown) actual)
+                  (str "README shows " (str/trim shown) " but the code returns "
+                       (pr-str actual))))))
+        (finally (remove-ns ns-sym))))))
+
 (deftest readme-installation-names-the-latest-release
   (testing "the Installation coordinate is the newest version in CHANGELOG.md,
             so a release that forgets to bump it fails here"

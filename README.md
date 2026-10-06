@@ -91,8 +91,9 @@ In the REPL:
 ;; => "Summer"
 
 (mapv :urpx.resolved/ledger-name (:urpx.resolved/ledgers resolved))
-;; => ["Energy Supply Prices" "Energy Delivery Prices" "Adjustment Prices"
-;;     "Conservation Incentive Adjustment"
+;; => ["Energy Supply Prices" "Energy Delivery Prices"
+;;     "Conservation Incentive Adjustment" "Adjustment Prices"
+;;     "Base Services Charge"
 ;;     "Vintaged Power Charge Indifference Adjustment"]
 
 ;; 3. Marginal $/kWh — sum of the lowest-tier unit-prices across energy ledgers.
@@ -106,7 +107,7 @@ In the REPL:
    {:profile-alternatives {"pge:pa-departure-vintage" "pge:pa-vintage-2020"}}))
 
 (price/marginal-unit-rate with-vintage)
-;; => some BigDecimal in the [0, 1] range
+;; => 0.36193M
 ```
 
 Calling `marginal-unit-rate` on `resolved` instead, with no selection, throws `ExceptionInfo` naming the ledger: an aggregate that silently took one of eighteen mutually-exclusive prices would be reporting an arbitrary number as the marginal rate. Reading `:urpx.resolved/tiers` directly needs no selection, and still surfaces all eighteen.
