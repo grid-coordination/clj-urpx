@@ -411,7 +411,7 @@
   (testing "the result-level mark on the base plan and the ledger-level mark on
             a modifier carry the same fields and neither carries the instant.
 
-            The result-level one carried :at from 0.22.0 until now. That never
+            The result-level one carried :at from 0.22.0 until 0.27.0. That never
             reached same-ledgers?, so price-schedule was fine, but price-segments
             merges on the WHOLE resolved value: a base filing queried across a
             window it does not cover returned 31 segments over a month where it

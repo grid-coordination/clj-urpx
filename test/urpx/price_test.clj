@@ -51,12 +51,12 @@
         "TOU period 4 = Winter Off-Peak Period")))
 
 (deftest resolved-ledgers-carry-metric-input-info
-  (testing "URPX-046: each resolved Ledger surfaces its MetricInput-derived
+  (testing "each resolved Ledger surfaces its MetricInput-derived
             type, measurementKind, and unitOfMeasure so consumers can
             distinguish energy ledgers from per-meter / per-household
             service-charge ledgers."
     (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
-          ;; April includes the Climate Credit ledger (per URPX-axn fix)
+          ;; April includes the Climate Credit ledger
           r (price/resolve-prices plan (zdt 2026 4 15 17))
           energy (ledger-by-name r "Energy Supply Prices")
           credit (ledger-by-name r "California Climate Credit")]
@@ -75,7 +75,7 @@
         (is (nil? (get-in credit [:urpx.resolved/measurement-kind :jsonld/id])))))))
 
 (deftest marginal-unit-rate-excludes-non-energy-ledgers
-  (testing "URPX-046: marginal-unit-rate must exclude ledgers whose
+  (testing "marginal-unit-rate must exclude ledgers whose
             MetricInput is not energy-shaped (urpx:profileMetricInput,
             non-energy measurementKind, or no measurementKind)."
     (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
@@ -92,7 +92,7 @@
           "marginal $/kWh from energy-only ledgers should be a sane rate"))))
 
 (deftest e-tou-c-climate-credit-month-gated
-  (testing "URPX-axn: PriceDefinition.hasApplicabilityRule.month gates resolution.
+  (testing "PriceDefinition.hasApplicabilityRule.month gates resolution.
             E-TOU-C's Climate Credit PD is restricted to April + October; it must
             NOT appear in July resolution and MUST appear in April/October."
     (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
@@ -790,7 +790,7 @@
 
 ;; ---------------------------------------------------------------------------
 ;; Non-TOU seasonal pricing — PriceDefinition.appliesInSeason → Season.month
-;; (URPX-2nk; CPAU E-2 shape)
+;; (CPAU E-2 shape)
 ;; ---------------------------------------------------------------------------
 
 (defn- non-tou-seasonal-fixture
@@ -889,7 +889,7 @@
     {:jsonld/type "urpx:Prices"
      ;; CPAU E-2 wraps its Prices in a PriceSet that DOES NOT carry a
      ;; urpx:startDate (per-Price startDates are the date floor). Keep that
-     ;; shape here so the fixture exercises URPX-453 alongside URPX-2nk.
+     ;; shape here so the fixture also exercises a PriceSet with no startDate.
      :urpx/hasPriceSet
      [{:jsonld/type "urpx:PriceSet"
        :jsonld/id "test:price-set"
@@ -920,7 +920,7 @@
          :urpx/startDate (java.time.LocalDate/of 2025 7 1)}]}]}}})
 
 (deftest non-tou-seasonal-summer-resolves-summer-pds-only
-  (testing "URPX-2nk: PDs with appliesInSeason → Summer match in July; Winter
+  (testing "PDs with appliesInSeason → Summer match in July; Winter
             PDs are gated out via Season.month, not via hasApplicabilityRule."
     (let [plan (non-tou-seasonal-fixture)
           r    (price/resolve-prices plan (zdt 2026 7 15 17))
@@ -935,7 +935,7 @@
       (is (not (contains? price-ids "test:price-public-benefits-winter"))))))
 
 (deftest non-tou-seasonal-winter-resolves-winter-pds-only
-  (testing "URPX-2nk: January (in the Winter season month list) resolves only
+  (testing "January (in the Winter season month list) resolves only
             the Winter-keyed PDs."
     (let [plan (non-tou-seasonal-fixture)
           r    (price/resolve-prices plan (zdt 2026 1 15 12))
@@ -948,7 +948,7 @@
       (is (not (contains? price-ids "test:price-distribution-summer"))))))
 
 (deftest non-tou-seasonal-marginal-rate-matches-summer-total
-  (testing "URPX-2nk: marginal-unit-rate sums the three Summer energy ledgers
+  (testing "marginal-unit-rate sums the three Summer energy ledgers
             to the published $0.26485/kWh CPAU E-2 Summer total."
     (let [plan (non-tou-seasonal-fixture)
           r    (price/resolve-prices plan (zdt 2026 7 15 17))
@@ -962,7 +962,7 @@
     (is (= (BigDecimal. "0.17290") rate))))
 
 ;; ---------------------------------------------------------------------------
-;; ProfileAlternatives + PriceSetAlternatives selection (URPX-vlf)
+;; ProfileAlternatives + PriceSetAlternatives selection
 ;; ---------------------------------------------------------------------------
 ;; Models the PG&E E-1 BSC (Basic Service Charge) income-tier pattern: three
 ;; mutually-exclusive alternatives — CARE, FERA, Standard — exposing
@@ -1087,7 +1087,7 @@
            :urpx/startDate (java.time.LocalDate/of 2026 1 1)}]}]}]}}})
 
 (deftest bsc-care-selection-yields-care-price
-  (testing "URPX-vlf: :profile-alternatives selects the CARE alternative; only
+  (testing ":profile-alternatives selects the CARE alternative; only
             its BSC price surfaces"
     (let [plan (bsc-fixture)
           r (price/resolve-prices
@@ -1099,7 +1099,7 @@
       (is (= (BigDecimal. "0.05")  (:urpx.resolved/unit-price (first tiers)))))))
 
 (deftest bsc-standard-selection-yields-standard-price
-  (testing "URPX-vlf: switching the selection switches the surfaced price"
+  (testing "switching the selection switches the surfaced price"
     (let [plan (bsc-fixture)
           r (price/resolve-prices
              plan (zdt 2026 7 15 17)
@@ -1169,7 +1169,7 @@
            the ledger it was meant to select"))))
 
 (deftest bsc-fixture-round-trips-through-emit
-  (testing "URPX-vlf: ProfileAlternatives + PriceSetAlternatives round-trip
+  (testing "ProfileAlternatives + PriceSetAlternatives round-trip
             cleanly through urpx.emit/write-rate-plan + re-parse + re-coerce"
     (let [plan (bsc-fixture)
           re-coerced (-> (emit/write-rate-plan plan {:context nil})

@@ -10,11 +10,11 @@
   (:import [java.time ZonedDateTime ZoneId]))
 
 ;; ---------------------------------------------------------------------------
-;; entity-type introspection (URPX-0cq)
+;; entity-type introspection
 ;; ---------------------------------------------------------------------------
 
 (deftest entity-type-extracts-jsonld-type-literal
-  (testing "URPX-0cq: entity-type pulls the @type literal from the schema's
+  (testing "entity-type pulls the @type literal from the schema's
             :jsonld/type [:= ...] entry"
     (is (= "urpx:Season"       (dsl/entity-type schema/Season)))
     (is (= "urpx:MetricInput"  (dsl/entity-type schema/MetricInput)))
@@ -29,7 +29,7 @@
     (is (nil? (dsl/entity-type schema/Decimal)))))
 
 ;; ---------------------------------------------------------------------------
-;; make-builder mechanics (URPX-0cq)
+;; make-builder mechanics
 ;; ---------------------------------------------------------------------------
 
 (deftest make-builder-rejects-non-entity-schema
@@ -50,7 +50,7 @@
       (is (= 1 (:urpx/touPeriodNumber period))))))
 
 ;; ---------------------------------------------------------------------------
-;; Season builder via make-builder (URPX-0cq replaces the URPX-4wa spike)
+;; Season builder via make-builder
 ;; ---------------------------------------------------------------------------
 
 (deftest season-minimal
@@ -67,7 +67,7 @@
       (is (every? int? (:urpx/month s))))))
 
 (deftest season-auto-coerces-gMonth-strings
-  (testing "URPX-4wa/0cq: '--MM' xsd:gMonth strings auto-coerce via the
+  (testing "'--MM' xsd:gMonth strings auto-coerce via the
             schema's :decode/urpx-jsonld decoder — no per-property handling
             needed in the builder"
     (let [s (dsl/season :urpx/seasonName "Summer"
@@ -104,7 +104,7 @@
       (is (false? (:urpx/yearlyRecurrence s))))))
 
 (deftest season-nil-kwargs-are-stripped
-  (testing "URPX-0cq: nil kwarg values drop out, so optional fields can be
+  (testing "nil kwarg values drop out, so optional fields can be
             supplied conditionally without producing present-but-nil entries"
     (let [s (dsl/season :urpx/seasonName "Summer"
                         :urpx/month nil
@@ -114,7 +114,7 @@
       (is (= "Summer" (:urpx/seasonName s))))))
 
 (deftest season-equals-hand-built
-  (testing "URPX-0cq acceptance: generator output equals a hand-built coerced
+  (testing "generator output equals a hand-built coerced
             Season — same shape, same values, same types"
     (let [hand-built {:jsonld/type "urpx:Season"
                       :jsonld/id "x:summer"
@@ -147,12 +147,12 @@
       (is (= [13] (get-in (ex-data thrown) [:input :urpx/month]))))))
 
 ;; ---------------------------------------------------------------------------
-;; Other named builders (URPX-0cq) — demonstrate the generator works
+;; Other named builders — demonstrate the generator works
 ;; across entity-shape variety
 ;; ---------------------------------------------------------------------------
 
 (deftest metric-input-with-nested-spec
-  (testing "URPX-0cq: nested-entity coercion — urpx:hasMetricSpecification
+  (testing "nested-entity coercion — urpx:hasMetricSpecification
             takes a raw MetricSpecification map; coerce/coerce traverses it"
     (let [mi (dsl/metric-input
               :urpx/name "Energy consumed (kWh)"
@@ -167,7 +167,7 @@
       (is (nil? (coerce/explain schema/MetricInput mi))))))
 
 (deftest ledger-with-refs
-  (testing "URPX-0cq: Ref-bearing fields work — urpx:referencesMetricInput
+  (testing "Ref-bearing fields work — urpx:referencesMetricInput
             and urpx:ledgerType are passed as :jsonld/id maps"
     (let [l (dsl/ledger :urpx/name "Commodity"
                         :urpx/ledgerType {:jsonld/id "urpx:supplyLedger"}
@@ -176,7 +176,7 @@
       (is (nil? (coerce/explain schema/Ledger l))))))
 
 (deftest holiday-with-date-coercion
-  (testing "URPX-0cq: typed-leaf coercion — Date strings auto-coerce into
+  (testing "typed-leaf coercion — Date strings auto-coerce into
             LocalDate via the schema's :decode/urpx-jsonld decoder"
     (let [h (dsl/holiday :urpx/holidayName "Christmas"
                          :urpx/holidayDate "2026-12-25")]
@@ -185,11 +185,11 @@
       (is (= (java.time.LocalDate/of 2026 12 25) (:urpx/holidayDate h))))))
 
 ;; ---------------------------------------------------------------------------
-;; Auto-coercion of raw Clojure numbers (URPX-4w3)
+;; Auto-coercion of raw Clojure numbers
 ;; ---------------------------------------------------------------------------
 
 (deftest dsl-builders-accept-clojure-number-literals-for-decimal-fields
-  (testing "URPX-4w3: a builder for an entity with a Decimal field accepts
+  (testing "a builder for an entity with a Decimal field accepts
             an idiomatic Clojure number — the user no longer has to write
             (BigDecimal. \"0.15075\") at every call site"
     (let [build-price (dsl/make-builder schema/Price)
@@ -199,7 +199,7 @@
       (is (= (BigDecimal. "0.15075") (:urpx/unitPrice p))))))
 
 (deftest dsl-builders-pass-through-pre-typed-decimals
-  (testing "URPX-4w3: callers who already have a BigDecimal in hand can pass
+  (testing "callers who already have a BigDecimal in hand can pass
             it through; no double-conversion churn"
     (let [build-price (dsl/make-builder schema/Price)
           original (BigDecimal. "0.15075")
@@ -210,7 +210,7 @@
           "scale preserved (0.15075 has scale 5)"))))
 
 (deftest dsl-builders-accept-mixed-raw-and-typed-inputs
-  (testing "URPX-4w3: every leaf decoder routes its own input shape; a single
+  (testing "every leaf decoder routes its own input shape; a single
             builder call can mix raw and pre-typed values across fields"
     (let [build-price (dsl/make-builder schema/Price)
           p (build-price :urpx/unitPrice 0.15075                                  ; double
@@ -223,25 +223,25 @@
       (is (nil? (coerce/explain schema/Price p))))))
 
 ;; ---------------------------------------------------------------------------
-;; Local-symbol refs (URPX-8fo) — dsl-scope + qualified-keyword resolution
+;; Local-symbol refs — dsl-scope + qualified-keyword resolution
 ;; ---------------------------------------------------------------------------
 
 (deftest local-id-arg-sets-jsonld-id-inside-scope
-  (testing "URPX-8fo: leading qualified-keyword arg becomes the entity's
+  (testing "leading qualified-keyword arg becomes the entity's
             local @id when called inside a dsl-scope"
     (let [s (dsl/dsl-scope (dsl/season ::summer :urpx/seasonName "Summer"))]
       (is (= "summer" (:jsonld/id s))
           "default id is the keyword's local name"))))
 
 (deftest local-id-arg-ignored-outside-scope
-  (testing "URPX-8fo: outside dsl-scope, builders only accept canonical
+  (testing "outside dsl-scope, builders only accept canonical
             kwargs — a leading qualified keyword would be (mis-)parsed as
             a kwarg key, which fails because :foo expects a value"
     (is (thrown? Exception
                  (dsl/season ::summer :urpx/seasonName "Summer")))))
 
 (deftest qualified-keyword-value-resolves-to-ref
-  (testing "URPX-8fo: a kwarg value that's a qualified keyword resolves to
+  (testing "a kwarg value that's a qualified keyword resolves to
             a {:jsonld/id ...} Ref via the registry"
     (let [pd (dsl/dsl-scope
               (dsl/season ::summer :urpx/seasonName "Summer")
@@ -253,7 +253,7 @@
           "::summer resolved to a Ref vector (single-or-vec→vec normalizes)"))))
 
 (deftest local-refs-resolve-inside-vectors
-  (testing "URPX-8fo: vector-typed kwargs walk element-wise — each
+  (testing "vector-typed kwargs walk element-wise — each
             qualified keyword resolves to its own Ref"
     (let [pd (dsl/dsl-scope
               (dsl/season ::summer :urpx/seasonName "Summer")
@@ -266,7 +266,7 @@
              (:urpx/appliesInSeason pd))))))
 
 (deftest unknown-local-ref-throws
-  (testing "URPX-8fo: a reference to an undeclared keyword fails loud"
+  (testing "a reference to an undeclared keyword fails loud"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"DSL local ref not declared"
@@ -277,7 +277,7 @@
            :urpx/referencesLedger {:jsonld/id "x:l"}))))))
 
 (deftest duplicate-local-id-throws
-  (testing "URPX-8fo: declaring the same local sym twice fails loud"
+  (testing "declaring the same local sym twice fails loud"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"DSL local ref already declared"
@@ -286,7 +286,7 @@
           (dsl/season ::summer :urpx/seasonName "Hot Summer"))))))
 
 (deftest each-dsl-scope-has-its-own-registry
-  (testing "URPX-8fo: scopes don't leak — the same local sym can be declared
+  (testing "scopes don't leak — the same local sym can be declared
             in two distinct scopes without collision"
     (let [a (dsl/dsl-scope (dsl/season ::summer :urpx/seasonName "Scope-A Summer"))
           b (dsl/dsl-scope (dsl/season ::summer :urpx/seasonName "Scope-B Summer"))]
@@ -296,7 +296,7 @@
       (is (= "Scope-B Summer" (:urpx/seasonName b))))))
 
 (deftest worked-example-from-issue-description
-  (testing "URPX-8fo: the example call shape from the issue description —
+  (testing "the example call shape from the issue description —
             seasons declared with local syms, PD references them by sym"
     (let [pd (dsl/dsl-scope
               (dsl/season ::summer :urpx/seasonName "Summer"
@@ -315,11 +315,11 @@
       (is (= {:jsonld/id "commodity"} (:urpx/referencesLedger pd))))))
 
 ;; ---------------------------------------------------------------------------
-;; Kebab-case kwarg aliases (URPX-upf)
+;; Kebab-case kwarg aliases
 ;; ---------------------------------------------------------------------------
 
 (deftest kebab-case-aliases-resolve-to-canonical
-  (testing "URPX-upf: every builder accepts kebab-cased :urpx/* short names
+  (testing "every builder accepts kebab-cased :urpx/* short names
             in addition to the canonical form"
     (let [s (dsl/season :season-name "Summer"
                         :month [5 6 7 8 9 10]
@@ -330,13 +330,13 @@
       (is (nil? (coerce/explain schema/Season s))))))
 
 (deftest canonical-and-alias-keys-can-mix
-  (testing "URPX-upf: canonical and short-form keys can be mixed in one call"
+  (testing "canonical and short-form keys can be mixed in one call"
     (let [s (dsl/season :urpx/seasonName "Summer" :month [5 6 7 8 9 10])]
       (is (= "Summer" (:urpx/seasonName s)))
       (is (= [5 6 7 8 9 10] (:urpx/month s))))))
 
 (deftest acronym-prefixes-kebab-correctly
-  (testing "URPX-upf: schema names with acronym prefixes (URPXDocument,
+  (testing "schema names with acronym prefixes (URPXDocument,
             TOUSchedule) kebab-case correctly — boundary between an all-caps
             run and the next CamelCase word inserts a hyphen"
     (is (some? (var-get #'urpx.dsl/urpx-document)))
@@ -345,12 +345,12 @@
     (is (some? (var-get #'urpx.dsl/tou-period)))))
 
 ;; ---------------------------------------------------------------------------
-;; Sample of new named builders (URPX-upf) — spot-check coverage across the
+;; Sample of new named builders — spot-check coverage across the
 ;; ~35 entity types
 ;; ---------------------------------------------------------------------------
 
 (deftest builder-coverage-spot-check
-  (testing "URPX-upf: sample of new builders defined via defbuilders all work
+  (testing "sample of new builders defined via defbuilders all work
             and produce valid coerced entities"
     (let [tb (dsl/time-bracket :urpx/startTime "16:00:00"
                                :urpx/endTime "21:00:00"
@@ -407,13 +407,13 @@
             "single-or-vec→vec applies to URPXPackage's packages pointer")))))
 
 ;; ---------------------------------------------------------------------------
-;; End-to-end CPAU-E-2 via the DSL (URPX-z2l)
+;; End-to-end CPAU-E-2 via the DSL
 ;; ---------------------------------------------------------------------------
 ;; Strongest available demonstration of the full DSL: build a non-TOU
 ;; two-season rate plan idiomatically, then exercise it three ways —
 ;; schema validation, in-memory price resolution, and JSON-LD round-trip
 ;; through urpx.emit. Mirrors the hand-built `non-tou-seasonal-fixture`
-;; from urpx.price-test (URPX-2nk) so the resolution targets are pinned
+;; from urpx.price-test so the resolution targets are pinned
 ;; to the published CPAU E-2 Summer / Winter totals.
 
 (def la-zone (ZoneId/of "America/Los_Angeles"))
@@ -514,13 +514,13 @@
                       (price-of ::pd-public-benefits-winter  0.00604)])]))))))
 
 (deftest cpau-e-2-via-dsl-validates
-  (testing "URPX-z2l: a CPAU-E-2-shaped plan authored via the DSL passes
+  (testing "a CPAU-E-2-shaped plan authored via the DSL passes
             full RatePlan schema validation"
     (let [plan (cpau-e-2-via-dsl)]
       (is (nil? (coerce/explain schema/RatePlan plan))))))
 
 (deftest cpau-e-2-via-dsl-resolves-summer
-  (testing "URPX-z2l: the DSL plan resolves at a Summer probe instant to
+  (testing "the DSL plan resolves at a Summer probe instant to
             the published $0.26485/kWh CPAU E-2 Summer total"
     (let [plan (cpau-e-2-via-dsl)
           r    (price/resolve-prices plan (zdt 2026 7 15 17))]
@@ -528,7 +528,7 @@
           "Summer marginal = 0.15075 + 0.10806 + 0.00604"))))
 
 (deftest cpau-e-2-via-dsl-resolves-winter
-  (testing "URPX-z2l: the DSL plan resolves at a Winter probe instant to
+  (testing "the DSL plan resolves at a Winter probe instant to
             the published $0.17290/kWh CPAU E-2 Winter total"
     (let [plan (cpau-e-2-via-dsl)
           r    (price/resolve-prices plan (zdt 2026 1 15 12))]
@@ -536,10 +536,10 @@
           "Winter marginal = 0.09334 + 0.07352 + 0.00604"))))
 
 (deftest cpau-e-2-via-dsl-round-trips
-  (testing "URPX-z2l: DSL → emit → re-parse → re-coerce yields a structurally
+  (testing "DSL → emit → re-parse → re-coerce yields a structurally
             equal plan. End-to-end validates the DSL composes with the
             write-side without information loss. `{:context nil}` suppresses
-            the URPX-awl default @context so the re-coerced shape matches
+            the default @context so the re-coerced shape matches
             the DSL-built original (which doesn't carry one)."
     (let [plan (cpau-e-2-via-dsl)
           re-coerced (-> (emit/write-rate-plan plan {:context nil})

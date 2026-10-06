@@ -243,7 +243,7 @@
                                (dissoc version :urpx/effectiveDateTime))))))))
 
 (deftest rate-plan-version-modifier-options
-  (testing "URPX-1nq / Decisions #084 + #090: RatePlanVersion accepts
+  (testing "Decisions #084 + #090: RatePlanVersion accepts
             hasModifierOptions and hasModifierVersionOptions, both as vectors
             of Refs (single-or-vec→vec normalizes the JSON-LD shape)."
     (let [version-base {:jsonld/type "urpx:RatePlanVersion"
@@ -326,7 +326,7 @@
       (testing "missing modifierUniqueIdentifier rejected"
         (is (not (m/validate s/RatePlanModifier
                              (dissoc modifier :urpx/modifierUniqueIdentifier)))))
-      (testing "URPX-g7z: applicableToRatePlan is optional per SHACL — standalone
+      (testing "applicableToRatePlan is optional per SHACL — standalone
                 modifier filings without it must still validate"
         (let [standalone (assoc modifier
                                 :urpx/hasRatePlanModifierVersion
@@ -334,14 +334,13 @@
           (is (m/validate s/RatePlanModifier standalone)))))))
 
 ;; ---------------------------------------------------------------------------
-;; ProfileAlternatives + PriceSetAlternatives (URPX-vlf)
+;; ProfileAlternatives + PriceSetAlternatives
 ;; ---------------------------------------------------------------------------
 
 (def ^:private trivial-condition-expression
   "A minimal valid urpx:ConditionExpression — a single ComparisonNode with
    two operand nodes. Used to satisfy the required-field constraint on
-   ProfileAlternative.hasConditionExpression in the tests below; URPX-vlf
-   doesn't yet evaluate condition expressions."
+   ProfileAlternative.hasConditionExpression in the tests below."
   {:jsonld/type "urpx:ConditionExpression"
    :urpx/rootNode
    {:jsonld/type "urpx:ComparisonNode"
@@ -460,7 +459,7 @@
       (is (m/validate s/Prices prices)))))
 
 (deftest billing-model-accepts-multiple-service-tiers
-  (testing "URPX-6hf: BillingModel.hasServiceTiers is a vector, one per cell of
+  (testing "BillingModel.hasServiceTiers is a vector, one per cell of
             a baseline-allowance matrix for instance. This test constructs
             three; no vendored fixture carries more than one, and
             single-or-vec→vec is what keeps those compatible. All three state

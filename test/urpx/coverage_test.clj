@@ -330,7 +330,7 @@
 (def ^:private la (java.time.ZoneId/of "America/Los_Angeles"))
 (defn- zdt
   "A ZonedDateTime, because every boundary here is zoned. See the README's
-   \"Time and timezones\" and clj-price-server's standing rule."
+   \"Time and timezones\"."
   [y m d]
   (java.time.ZonedDateTime/of y m d 0 0 0 0 la))
 (defn- ldt [y m d] (java.time.LocalDateTime/of y m d 0 0))

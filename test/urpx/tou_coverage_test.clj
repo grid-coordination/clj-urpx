@@ -1,8 +1,8 @@
 (ns urpx.tou-coverage-test
   "An instant no period of a urpx:TOUSchedule covers. On a base plan it refuses
-  `:urpx.price/no-tou-period` (URPX-hlv). On a modifier its period-bound Prices
-  contribute nothing and the rest still apply (URPX-zoq). A modifier's bracket
-  may name a Season only the base plan declares (URPX-pbq).
+  `:urpx.price/no-tou-period`. On a modifier its period-bound Prices
+  contribute nothing and the rest still apply. A modifier's bracket
+  may name a Season only the base plan declares.
 
   The period resolved to nil before either, and a nil period gates no Price
   carrying urpx:touPeriodNumber, so every period's Price surfaced at once. A

@@ -34,7 +34,7 @@
       (is (identical? bd (coerce/coerce schema/Decimal bd))))))
 
 (deftest decimal-coerces-clojure-numbers
-  (testing "URPX-4w3: number literals (long, double, ratio) coerce to BigDecimal
+  (testing "number literals (long, double, ratio) coerce to BigDecimal
             so DSL callers can write idiomatic Clojure numbers"
     (is (= (BigDecimal. "0.15075") (coerce/coerce schema/Decimal 0.15075)))
     (is (= (BigDecimal. "1")       (coerce/coerce schema/Decimal 1)))
@@ -78,7 +78,7 @@
             "every PriceDefinition points to its parent Ledger via referencesLedger")))
 
     (testing "ServiceTiers (v0.2.0 plural container) holds the tier vector.
-              hasServiceTiers is itself a vector (URPX-6hf) — walk it via
+              hasServiceTiers is itself a vector — walk it via
               (mapcat :urpx/hasServiceTier ...)."
       (let [tiers (mapcat :urpx/hasServiceTier
                           (get-in plan [:urpx/hasRatePlanVersion
@@ -168,7 +168,7 @@
       (is (= "pge:e-1" (:jsonld/id plan))))))
 
 ;; ---------------------------------------------------------------------------
-;; URPXDocument wrapper (URPX-1ii / Decision #103)
+;; URPXDocument wrapper (Decision #103)
 ;; ---------------------------------------------------------------------------
 
 (def ^:private valid-urpx-document-raw
@@ -180,7 +180,7 @@
    {:jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles" :jsonld/id "ex:plan"}})
 
 (deftest urpx-document-validates-with-target-version
-  (testing "URPX-1ii: a URPXDocument carrying urpx:targetURPXVersion validates"
+  (testing "a URPXDocument carrying urpx:targetURPXVersion validates"
     (let [coerced (coerce/coerce-urpx-document valid-urpx-document-raw)]
       (is (nil? (coerce/explain schema/URPXDocument coerced)))
       (testing "single hasRatePlan map is normalized to a vector"
@@ -188,7 +188,7 @@
         (is (= 1 (count (:urpx/hasRatePlan coerced))))))))
 
 (deftest urpx-document-rejected-when-target-version-missing
-  (testing "URPX-1ii / Decision #103: missing urpx:targetURPXVersion fails
+  (testing "Decision #103: missing urpx:targetURPXVersion fails
             Malli validation, so a retrofitted filing must add the field."
     (let [no-version (dissoc valid-urpx-document-raw :urpx/targetURPXVersion)
           coerced (coerce/coerce-urpx-document no-version)
@@ -205,7 +205,7 @@
       (is (some? err)))))
 
 (deftest coerce-doc-dispatches-on-urpx-document
-  (testing "URPX-1ii: coerce-doc routes urpx:URPXDocument through coerce-urpx-document"
+  (testing "coerce-doc routes urpx:URPXDocument through coerce-urpx-document"
     (let [coerced (coerce/coerce-doc valid-urpx-document-raw)]
       (is (nil? (coerce/explain schema/URPXDocument coerced))))))
 
@@ -249,17 +249,17 @@
                               (coerce/coerce-doc valid-urpx-document-raw))))))
 
 ;; ---------------------------------------------------------------------------
-;; Encoder spike (URPX-bnt) — verify malli's transformer system handles
+;; Encoder spike — verify malli's transformer system handles
 ;; bidirectional encode + decode on a single schema without duplication
 ;; ---------------------------------------------------------------------------
 
 (deftest encoder-spike-decimal-forward
-  (testing "URPX-bnt: encoding a typed BigDecimal yields the JSON-LD string form"
+  (testing "encoding a typed BigDecimal yields the JSON-LD string form"
     (is (= "0.15075"
            (coerce/encode schema/Decimal (BigDecimal. "0.15075"))))))
 
 (deftest encoder-spike-decimal-roundtrip
-  (testing "URPX-bnt: decode → encode → decode is a fixed point — same schema,
+  (testing "decode → encode → decode is a fixed point — same schema,
             same transformer, no parallel encode-only schemas needed."
     (let [original (BigDecimal. "0.15075")
           encoded  (coerce/encode schema/Decimal original)
@@ -270,13 +270,13 @@
           "BigDecimal equality is scale-sensitive; .toPlainString must preserve scale"))))
 
 (deftest encoder-spike-decimal-passthrough
-  (testing "URPX-bnt: encoding an already-string value passes through unchanged
+  (testing "encoding an already-string value passes through unchanged
             (mirror of the decoder's already-typed pass-through)"
     (is (= "0.15075"
            (coerce/encode schema/Decimal "0.15075")))))
 
 ;; ---------------------------------------------------------------------------
-;; Encoders for the rest of the schema primitives (URPX-99c)
+;; Encoders for the rest of the schema primitives
 ;; ---------------------------------------------------------------------------
 
 (deftest encode-primitives-via-schema
@@ -297,7 +297,7 @@
     (is (= "--05"       (coerce/encode schema/MonthNumber "--05")))))
 
 (deftest encode-roundtrip-primitives
-  (testing "URPX-99c: every primitive's decode → encode → decode is a fixed point"
+  (testing "every primitive's decode → encode → decode is a fixed point"
     (let [cases [[schema/Decimal     (BigDecimal. "0.15075")]
                  [schema/Date        (LocalDate/of 2026 3 1)]
                  [schema/Time        (LocalTime/of 16 30)]

@@ -1,7 +1,7 @@
 (ns urpx.season-readers-test
   "One reader for urpx:appliesInSeason, across all three places it is read.
 
-  There were three, and they disagreed about more than strictness (URPX-8yp).
+  There were three, and they disagreed about more than strictness.
   `pd-active-in-season?` skipped an unresolvable ref silently and read a Season
   carrying no urpx:month as excluding the month. `find-tou-period` put a
   TimeBracket's refs through `urpx.index/single`, which refuses on several.
@@ -150,10 +150,9 @@
             this library spends its refusals on, and the same reasoning
             condition-gates records for a predicate nothing here evaluates.
 
-            It is also what keeps URPX-2a6 fixed: if an unevaluable gate
-            excluded, a modifier resolved without the base plan that declares
-            its Seasons would silently drop every seasonal definition, which is
-            the defect 2a6 removed by a different route."
+            It also keeps a modifier resolved without the base plan that declares
+            its Seasons from silently dropping every seasonal definition, which is
+            what an unevaluable gate that excluded would do."
     (let [p (plan {:seasons [summer winter undated]
                    :pds [{:jsonld/type "urpx:PriceDefinition" :jsonld/id "test:pd-undated"
                           :urpx/name "Undated energy"

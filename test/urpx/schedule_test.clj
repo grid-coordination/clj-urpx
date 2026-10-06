@@ -22,7 +22,7 @@
           end-zdt   (start-of-day-zdt 2026 7 16)
           sch       (schedule/price-schedule plan
                                              start-zdt end-zdt)]
-      (testing "intervals cover the full 24 hours with no gaps. URPX-906:
+      (testing "intervals cover the full 24 hours with no gaps, and
                 :tick/beginning and :tick/end are ZonedDateTimes."
         (is (= start-zdt (:tick/beginning (first sch))))
         (is (= end-zdt   (:tick/end (last sch))))
@@ -131,7 +131,7 @@
            states no moment"))))
 
 ;; ---------------------------------------------------------------------------
-;; price-schedule-with-modifiers (URPX-21n)
+;; price-schedule-with-modifiers
 ;; ---------------------------------------------------------------------------
 ;; Mirror of price-schedule that calls resolve-prices-with-modifiers per step.
 ;; Verifies (a) modifier ledgers are folded into each interval's resolved
@@ -140,7 +140,7 @@
 ;; silently skipped (delegated behavior).
 
 (deftest schedule-with-modifiers-folds-modifier-ledgers-per-step
-  (testing "URPX-21n: every interval includes the vintage-PCIA modifier ledger
+  (testing "every interval includes the vintage-PCIA modifier ledger
             appended to the base plan's"
     (let [plan     (fixtures/load-rate-plan "pge-e-1-2026-03-01")
           modifier (fixtures/load-modifier  "pge-e-1-2026-03-01")
@@ -156,7 +156,7 @@
                                         :urpx.resolved/ledgers])))
                     sch)))
       (testing "ledger count per interval matches resolve-prices-with-modifiers
-                at the corresponding instant. URPX-906: :tick/beginning is
+                at the corresponding instant. :tick/beginning is
                 already a ZonedDateTime, so resolve-prices-with-modifiers
                 consumes it directly."
         (let [zdt (:tick/beginning (first sch))
@@ -166,7 +166,7 @@
                                              :urpx.resolved/ledgers])))))))))
 
 (deftest schedule-with-modifiers-merges-adjacent-intervals
-  (testing "URPX-21n: same merge semantics as price-schedule. A 24h Summer day
+  (testing "same merge semantics as price-schedule. A 24h Summer day
             on PG&E E-1 (no TOU) collapses to a single interval whether or
             not the modifier is folded in (modifier is constant across the
             day, so adjacency holds)."
@@ -181,7 +181,7 @@
           "modifier addition doesn't change the day's TOU/merge structure"))))
 
 (deftest schedule-with-modifiers-skips-non-applicable
-  (testing "URPX-21n: modifiers whose applicableToRatePlan doesn't include
+  (testing "modifiers whose applicableToRatePlan doesn't include
             the plan @id are silently skipped per step (delegated to
             resolve-prices-with-modifiers)"
     (let [plan      (fixtures/load-rate-plan "pge-e-1-2026-03-01")
@@ -199,7 +199,7 @@
           "non-applicable modifier produces the same schedule as the base plan"))))
 
 (deftest schedule-days-with-modifiers
-  (testing "URPX-21n: the days-convenience wrapper composes the same as the
+  (testing "the days-convenience wrapper composes the same as the
             base price-schedule-days"
     (let [plan     (fixtures/load-rate-plan "pge-e-1-2026-03-01")
           modifier (fixtures/load-modifier  "pge-e-1-2026-03-01")
@@ -259,7 +259,7 @@
                 :urpx.resolved/tou-period-number]))
 
 (deftest a-merged-interval-keeps-only-labels-true-for-all-of-it
-  (testing "URPX-xqt. SCE D prices Winter and Summer identically, so May through
+  (testing "SCE D prices Winter and Summer identically, so May through
             September merges into one interval on ledgers. It used to carry the
             first step's Winter for all five months."
     (let [plan (fixtures/load-rate-plan "sce-d-2026-03-20")

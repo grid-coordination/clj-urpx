@@ -50,12 +50,12 @@
               "every PD references its parent Ledger"))))))
 
 (deftest load-rate-plan-accepts-url-and-reader
-  (testing "URPX-drt: load-rate-plan accepts any source io/reader can handle.
+  (testing "load-rate-plan accepts any source io/reader can handle.
             Specifically, a java.net.URL — which is what (io/resource ...)
             returns — must work, both for `file:` (test classpath) and
             `jar:file:` (production uberjar) flavors.
 
-            Reproduces the production deploy bug surfaced in PPS-6f0:
+            Reproduces the deploy bug seen when loading from an uberjar:
             previously load-rate-plan called (io/file path), which throws
             IllegalArgumentException 'Not a file: jar:file:...' on the
             jar:file: URL form."
@@ -260,11 +260,11 @@
           (is (= "x:mod" (:jsonld/id modifier))))))))
 
 ;; ---------------------------------------------------------------------------
-;; load-rate-plan-modifier (URPX-g7z) — standalone & bundled modifier filings
+;; load-rate-plan-modifier — standalone & bundled modifier filings
 ;; ---------------------------------------------------------------------------
 
 (deftest load-rate-plan-modifier-standalone
-  (testing "URPX-g7z: a document whose sole entity is urpx:RatePlanModifier
+  (testing "a document whose sole entity is urpx:RatePlanModifier
             (no @graph wrapper) — the CPAU E-2-G shape"
     (with-temp-jsonld standalone-modifier-doc
       (fn [path]
@@ -299,11 +299,11 @@
                               (core/load-rate-plan-modifier path)))))))
 
 ;; ---------------------------------------------------------------------------
-;; URPXDocument wrapper traversal (URPX-8hq)
+;; URPXDocument wrapper traversal
 ;; ---------------------------------------------------------------------------
 
 (deftest load-rate-plan-descends-into-urpx-document
-  (testing "URPX-8hq: a v0.2.0 URPXDocument-wrapped filing — load-rate-plan
+  (testing "a v0.2.0 URPXDocument-wrapped filing — load-rate-plan
             traverses urpx:hasRatePlan to find the inner plan"
     (with-temp-jsonld urpx-document-with-plan
       (fn [path]
@@ -312,7 +312,7 @@
           (is (= "x:plan" (:jsonld/id plan))))))))
 
 (deftest load-rate-plan-modifier-descends-into-urpx-document
-  (testing "URPX-8hq: load-rate-plan-modifier traverses urpx:hasRatePlanModifier
+  (testing "load-rate-plan-modifier traverses urpx:hasRatePlanModifier
             on a URPXDocument-wrapped filing"
     (with-temp-jsonld urpx-document-with-plan-and-modifier
       (fn [path]
@@ -321,7 +321,7 @@
           (is (= "x:mod" (:jsonld/id m))))))))
 
 (deftest load-rate-plan-modifier-from-standalone-urpx-document
-  (testing "URPX-8hq: a URPXDocument carrying only a hasRatePlanModifier
+  (testing "a URPXDocument carrying only a hasRatePlanModifier
             (no hasRatePlan) — the wrapped equivalent of a standalone modifier
             filing — yields the modifier via load-rate-plan-modifier"
     (with-temp-jsonld urpx-document-with-standalone-modifier
@@ -331,7 +331,7 @@
           (is (= "x:mod" (:jsonld/id m))))))))
 
 (deftest load-rate-plan-still-throws-on-urpx-document-without-plan
-  (testing "URPX-8hq: a URPXDocument with no inner urpx:RatePlan still
+  (testing "a URPXDocument with no inner urpx:RatePlan still
             errors clearly (the modifier-only doc isn't a base plan)"
     (with-temp-jsonld urpx-document-with-standalone-modifier
       (fn [path]
@@ -361,11 +361,11 @@
         (is (= "x:mod"  (:jsonld/id (core/load-rate-plan-modifier path))))))))
 
 ;; ---------------------------------------------------------------------------
-;; Key encoder (URPX-moq) — keyword → JSON-LD string-key form
+;; Key encoder — keyword → JSON-LD string-key form
 ;; ---------------------------------------------------------------------------
 
 (deftest keyword->jsonld-key-cases
-  (testing "URPX-moq: reserved JSON-LD keys (:jsonld/X) → '@X'"
+  (testing "reserved JSON-LD keys (:jsonld/X) → '@X'"
     (is (= "@type"    (core/keyword->jsonld-key :jsonld/type)))
     (is (= "@id"      (core/keyword->jsonld-key :jsonld/id)))
     (is (= "@context" (core/keyword->jsonld-key :jsonld/context)))
@@ -377,7 +377,7 @@
     (is (= "plain" (core/keyword->jsonld-key :plain)))))
 
 (deftest keys->jsonld-walks-nested-structure
-  (testing "URPX-moq: keys->jsonld walks maps and sequences, converting every
+  (testing "keys->jsonld walks maps and sequences, converting every
             namespaced-keyword key back to its JSON-LD string form (leaves
             unchanged)"
     (let [typed {:jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles"
@@ -408,7 +408,7 @@
           (is (= "PD-1"                  (get (first pds) "urpx:name"))))))))
 
 (deftest keys->jsonld-roundtrips-against-parsed-data
-  (testing "URPX-moq: parse → keys->jsonld → write → parse yields the same
+  (testing "parse → keys->jsonld → write → parse yields the same
             JSON-LD-keyed shape (round-trip via the existing parser path)"
     (let [parsed (core/parse-rate-plan
                   (jsonld-reader graph-with-plan-and-modifier))

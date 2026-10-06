@@ -9,7 +9,7 @@
   gives `(\"x\")`. Nothing throws, and the answer stays well formed.
 
   That made it hard to see and easy to reintroduce. Three confirmed instances
-  reached real data (URPX-p8f): `urpx.scenario-cost-model/applicability`,
+  reached real data: `urpx.scenario-cost-model/applicability`,
   where both shipped compatibility policies returned false so every model came
   out base-only; `urpx.price/modifier-applies-to?`, where a modifier applied to
   no base plan; and `urpx.emit`, which wrote a corrupt artifact with the @

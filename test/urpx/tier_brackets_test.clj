@@ -13,8 +13,7 @@
   Every case here is constructed, which was the only option when this landed:
   the tiered base-plan fixtures carry one unqualified bracket per tier, and the
   one filing that qualifies its brackets, PG&E's E-TOU-C baseline-tier overlay
-  with 120 of them, is a urpx:RatePlanModifier whose tiers nothing read until
-  URPX-sr4 wired `tier-info` into that path. `urpx.modifier-gating-test` now
+  with 120 of them, is a urpx:RatePlanModifier. `urpx.modifier-gating-test`
   holds the real-filing case; these stay constructed because a synthetic
   document can state one shape per test where a filing states many at once."
   (:require [clojure.test :refer [deftest is testing]]
@@ -626,8 +625,8 @@
                                             :urpx/month  [6 7 8 9]}}})))))))))
 
 (deftest pge-e-1-tier-bounds-are-instant-independent
-  (testing "URPX-rng does not narrow PG&E E-1 to one season, and must not be
-            read as having fixed it. E-1 carries its seasonality in tier NAMES
+  (testing "bracket qualifier scoping does not narrow PG&E E-1 to one season,
+            and must not be read as having fixed it. E-1 carries its seasonality in tier NAMES
             and in six distinct serviceTierNumbers, with no appliesInSeason and
             no referencesProfileAlternative on any container or bracket, so it
             is outside both scopes. All six tiers surface at every instant,

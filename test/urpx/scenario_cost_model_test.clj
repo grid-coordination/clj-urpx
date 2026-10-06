@@ -259,7 +259,7 @@
       (is (= ["x:p-v1" "x:p-v2"] (sort (:ids (ex-data e))))))))
 
 (deftest uncoerced-documents-are-refused-not-answered
-  (testing "the defect the peer's cross-check probe walked into. urpx.core/load-graph
+  (testing "the defect a cross-check probe walked into. urpx.core/load-graph
             returns PARSED but UNTYPED entities, so urpx:effectiveDateTime is
             still a string. With an instant that threw a ClassCastException from
             deep inside; with no instant nothing compares a date at all, so the

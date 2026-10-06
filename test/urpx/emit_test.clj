@@ -109,8 +109,8 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest roundtrip-minimal-rate-plan
-  (testing "URPX-biu: minimal rate-plan round-trips with logical equivalence.
-            `{:context nil}` suppresses the URPX-awl default @context so the
+  (testing "minimal rate-plan round-trips with logical equivalence.
+            `{:context nil}` suppresses the default @context so the
             re-coerced shape matches the original (which doesn't carry one)."
     (let [emitted (emit/write-rate-plan minimal-rate-plan {:context nil})
           re-parsed (-> emitted java.io.StringReader. core/parse-rate-plan)
@@ -118,10 +118,9 @@
       (is (= minimal-rate-plan re-coerced)))))
 
 (deftest roundtrip-pge-fixture-rate-plan
-  (testing "URPX-biu: a PG&E E-1 RatePlan (extracted from the @graph fixture)
-            round-trips cleanly through emit + re-parse + re-coerce. Strongest
-            available smoke test of the full encoder pipeline before URPX-739
-            adds the dedicated round-trip suite over every vendored fixture."
+  (testing "a PG&E E-1 RatePlan (extracted from the @graph fixture)
+            round-trips cleanly through emit + re-parse + re-coerce. A smoke test
+            of the full encoder pipeline."
     (let [original (fixtures/load-rate-plan "pge-e-1-2026-03-01")
           emitted (emit/write-rate-plan original {:context nil})
           re-coerced (-> emitted
@@ -132,7 +131,7 @@
           "structural equivalence end-to-end"))))
 
 (deftest default-context-emitted-when-no-opts
-  (testing "URPX-awl: write-* attaches the default @context by default — the
+  (testing "write-* attaches the default @context by default — the
             output is SHACL-friendly without consumer setup"
     (let [parsed (json/read-str (emit/write-rate-plan minimal-rate-plan))
           ctx    (get parsed "@context")]
@@ -196,7 +195,7 @@
       (is (= original (dissoc re-coerced :jsonld/context))))))
 
 (deftest caller-supplied-context-overrides-default
-  (testing "URPX-awl: passing :context replaces the default verbatim"
+  (testing "passing :context replaces the default verbatim"
     (let [my-ctx {"urpx" "https://urpx.org/ns/ontology/"
                   "ex"   "https://example.com/test/"}
           parsed (json/read-str (emit/write-rate-plan minimal-rate-plan
@@ -204,14 +203,14 @@
       (is (= my-ctx (get parsed "@context"))))))
 
 (deftest explicit-nil-context-suppresses-emission
-  (testing "URPX-awl: :context nil emits no @context (used for clean
+  (testing ":context nil emits no @context (used for clean
             round-trip tests where the original doesn't carry one)"
     (let [parsed (json/read-str (emit/write-rate-plan minimal-rate-plan
                                                       {:context nil}))]
       (is (not (contains? parsed "@context"))))))
 
 (deftest existing-context-on-input-is-preserved
-  (testing "URPX-awl: an entity carrying :jsonld/context keeps its own
+  (testing "an entity carrying :jsonld/context keeps its own
             @context unchanged — the default doesn't clobber it"
     (let [bespoke-ctx {:urpx "https://urpx.org/ns/ontology/"
                        :ex   "https://example.com/preserved/"}
@@ -246,7 +245,7 @@
           "LocalDate round-trips"))))
 
 ;; ---------------------------------------------------------------------------
-;; Vendored-fixture round-trip suite (URPX-739)
+;; Vendored-fixture round-trip suite
 ;; ---------------------------------------------------------------------------
 ;; The authoritative correctness check for the write side: every fixture
 ;; in `vendored-fixtures` must round-trip through
@@ -254,7 +253,7 @@
 ;;
 ;; Each is a JSON-LD @graph bundling a base urpx:RatePlan with a
 ;; sibling urpx:RatePlanModifier (vintage-PCIA pattern). Both halves are
-;; round-tripped independently. `:context nil` suppresses the URPX-awl
+;; round-tripped independently. `:context nil` suppresses the
 ;; default @context — the inner RatePlan / RatePlanModifier entities don't
 ;; carry :jsonld/context (it's at the @graph wrapper level), so the default
 ;; would produce a present-but-not-in-original entry that breaks `=`.
@@ -284,7 +283,7 @@
     [original re-coerced]))
 
 (deftest all-vendored-rate-plans-round-trip
-  (testing "URPX-739: every vendored RatePlan round-trips through emit
+  (testing "every vendored RatePlan round-trips through emit
             with structural equality (= original re-coerced)"
     (doseq [fixture-name vendored-fixtures]
       (testing fixture-name
@@ -293,7 +292,7 @@
               (str "RatePlan round-trip failed for fixture " fixture-name)))))))
 
 (deftest all-vendored-modifiers-round-trip
-  (testing "URPX-739: every vendored RatePlanModifier (vintage-PCIA pattern)
+  (testing "every vendored RatePlanModifier (vintage-PCIA pattern)
             round-trips through emit with structural equality"
     (doseq [fixture-name vendored-fixtures]
       (testing fixture-name

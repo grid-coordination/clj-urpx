@@ -182,10 +182,10 @@
             all, so the gate is UNEVALUATED rather than failed, and the
             definition surfaces.
 
-            Surfacing it is the deliberate choice (URPX-8yp). Excluding it would
+            Surfacing it is the deliberate choice. Excluding it would
             silently drop every seasonal definition from a modifier resolved
-            without its base plan, which is precisely the defect URPX-2a6 fixed
-            for summary members when this path passed empty season indexes.
+            without its base plan, which is the defect summary members had
+            when this path passed empty season indexes.
             Reinstating it by a different route would be worse than a price the
             caller can see and reject, and standalone modifier resolution is
             already documented as surfacing every applicable price for the
@@ -311,7 +311,7 @@
   "The resolved tier-1 entry from the modifier, standalone.
 
   Deliberately calls the 2-arity, so these cases resolve with no caller input at
-  all. The 3-arity that takes opts is exercised separately, in the URPX-crk
+  all. The 3-arity that takes opts is exercised separately, in the caller-input
   cases at the end of this namespace."
   [m inst]
   (->> (:urpx.resolved/ledgers (price/resolve-modifier-prices m inst))
@@ -329,7 +329,7 @@
        first))
 
 (deftest a-modifiers-own-tiers-carry-their-number-and-bounds
-  (testing "URPX-sr4. This path built its entries from price-fields alone and
+  (testing "This path built its entries from price-fields alone and
             never called tier-info, so a modifier holding its own
             urpx:ServiceTiers surfaced its rungs UNTIERED: no
             :urpx.resolved/tier-number and no bounds, however the tiers were
@@ -411,8 +411,8 @@
       (is (= 13.5M (:urpx.resolved/tier-upper-bound care)))
       (is (nil? (:urpx.resolved/tier-bounds-unresolved care)))
       (testing "and standalone with no selection the bounds are withheld the same
-                way. They are determinable there since URPX-crk gave
-                resolve-modifier-prices an opts arity; the case that a selection
+                way. They are determinable there through the opts
+                arity of resolve-modifier-prices; the case that a selection
                 reaches it is a-cell-selection-reaches-a-modifier-resolved-alone."
         (is (= :alternative-unselected
                (:reason (:urpx.resolved/tier-bounds-unresolved
@@ -432,7 +432,7 @@
       (is (nil? (:urpx.resolved/tier-bounds-unresolved t))))))
 
 ;; ---------------------------------------------------------------------------
-;; Caller inputs reaching a modifier resolved on its own (URPX-crk)
+;; Caller inputs reaching a modifier resolved on its own
 ;; ---------------------------------------------------------------------------
 
 (defn- tou-modifier
@@ -472,7 +472,7 @@
                         :urpx/endTime   (java.time.LocalTime/of 21 0)}]}]}]}])))
 
 (deftest a-holiday-predicate-reaches-a-modifier-resolved-alone
-  (testing "URPX-crk, and the half that was a WRONG number rather than a
+  (testing "the caller-input case that was a WRONG number rather than a
             withheld one. This path defaults the holiday predicate to
             (constantly false), so a modifier carrying its own TOUSchedule with
             holiday-sensitive brackets resolved the non-holiday period on a
@@ -493,7 +493,7 @@
           "told it IS a holiday: the holiday bracket, which no caller could reach before"))))
 
 ;; ---------------------------------------------------------------------------
-;; A modifier's own urpx:HolidayCalendar (URPX-lcf)
+;; A modifier's own urpx:HolidayCalendar
 ;; ---------------------------------------------------------------------------
 
 (defn- calendar
@@ -555,7 +555,7 @@
         "a caller's predicate overrides both")))
 
 (deftest a-cell-selection-reaches-a-modifier-resolved-alone
-  (testing "URPX-crk. A cell-scoped urpx:ServiceBracket's bounds could not be
+  (testing "A cell-scoped urpx:ServiceBracket's bounds could not be
             determined standalone at all, because no selection could arrive, so
             they were always withheld. Now they can."
     (let [m (-> (modifier [(pd "test:adj-t1" "Tier 1 adjustment")]
@@ -583,7 +583,7 @@
                     (tier {:profile-alternatives {"test:pas" "test:pa-std"}})))))))
 
 (deftest a-season-supplied-by-the-caller-reaches-a-modifier-resolved-alone
-  (testing "URPX-crk. PG&E's E-TOU-C overlay declares no urpx:Season and names
+  (testing "PG&E's E-TOU-C overlay declares no urpx:Season and names
             its base plan's, so standalone the gate is unevaluable and every
             season-qualified bracket's bounds are withheld. :by-id lets a caller
             supply the Season without composing the whole base plan."
@@ -615,7 +615,7 @@
              (price/resolve-modifier-prices m (at 2026 7 15) nil))))))
 
 ;; ---------------------------------------------------------------------------
-;; A modifier's own matched period and season (URPX-hsn)
+;; A modifier's own matched period and season
 ;; ---------------------------------------------------------------------------
 
 (def ^:private ledger-labels
@@ -741,7 +741,7 @@
                      segs)))))))
 
 ;; ---------------------------------------------------------------------------
-;; urpx:PriceSummary members gated by the period of their own document (URPX-m9c)
+;; urpx:PriceSummary members gated by the period of their own document
 ;; ---------------------------------------------------------------------------
 
 (defn- with-summary
