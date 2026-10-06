@@ -499,12 +499,6 @@
             ;; v0.2.x acceptance.
             "regulatoryFiling"))
 
-(def NodeIdentity
-  "Common JSON-LD identity fields present on most entities."
-  [:map
-   [:jsonld/type :string]
-   [:jsonld/id {:optional true} :string]])
-
 ;; ---------------------------------------------------------------------------
 ;; Plan elements
 ;; ---------------------------------------------------------------------------

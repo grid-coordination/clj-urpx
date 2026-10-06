@@ -15,6 +15,10 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 - **`urpx.emit/default-context` binds `urpx` to `https://urpx.org/ns/ontology/`**, the namespace URPX moved to in v0.5.0. It bound the earlier `https://urpx-org.github.io/urpx/ontology/`.
 
+### Removed
+
+- **`urpx.schema/NodeIdentity`**, which no schema or function referenced.
+
 ### Fixed
 
 - **The jar carries the MIT notice at `META-INF/LICENSE`.** `clojure -T:build ci` refuses a jar without it.
