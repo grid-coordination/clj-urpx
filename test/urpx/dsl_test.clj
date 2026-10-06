@@ -294,12 +294,14 @@
          (ex-data (thrown #(dsl/dsl-scope {:id "ex:s"} nil))))))
 
 (deftest as-refuses-outside-a-scope
-  (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                        #"urpx:Season takes :as only inside a dsl-scope"
-                        (dsl/season :as :ex/summer :season-name "Summer"))))
+  (doseq [k [:ex/summer nil]]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"urpx:Season takes :as only inside a dsl-scope"
+                          (dsl/season :as k :season-name "Summer"))
+        (pr-str k))))
 
 (deftest as-takes-only-a-local-keyword
-  (doseq [k [:urpx/summer :jsonld/summer :summer "ex:summer"]]
+  (doseq [k [:urpx/summer :jsonld/summer :summer "ex:summer" nil]]
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"needs :as to be a qualified keyword"
                           (dsl/dsl-scope (dsl/season :as k :season-name "S")))
@@ -337,6 +339,22 @@
                     :references-ledger {:jsonld/id "x:l"})
                 (dsl/season :as :ex/summer :season-name "Summer")])]
     (is (= [{:jsonld/id (:jsonld/id s)}] (:urpx/appliesInSeason p)))))
+
+(deftest a-lazy-body-builds-in-scope
+  (testing "declarations"
+    (is (= ["ex:a" "ex:b"]
+           (map :jsonld/id
+                (dsl/dsl-scope
+                 (for [k [:ex/a :ex/b]]
+                   (dsl/season :as k :season-name "S")))))))
+  (testing "references"
+    (is (= {:unresolved {:ex/winter #{"urpx:PriceDefinition"}}}
+           (ex-data (thrown #(dsl/dsl-scope
+                              (map (fn [season]
+                                     (pd :name "P"
+                                         :applies-in-season season
+                                         :references-ledger {:jsonld/id "x:l"}))
+                                   [:ex/winter]))))))))
 
 (deftest an-explicit-id-resolves-a-keyword-reference
   (let [p (dsl/dsl-scope

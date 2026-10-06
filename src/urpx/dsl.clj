@@ -133,6 +133,11 @@
   (and (qualified-keyword? v)
        (not (#{"urpx" "jsonld"} (namespace v)))))
 
+(defn- realize!
+  "Realize every lazy sequence in `x`, so builders inside one run in scope."
+  [x]
+  (dorun (tree-seq coll? seq x)))
+
 (defn- run-scope
   "Run `body-fn` in a fresh scope configured by `opts`, then refuse every
    keyword referenced in it whose @id no builder in it declared."
@@ -145,7 +150,8 @@
                           :declared {}
                           :referenced {}})
         result (binding [*scope* scope]
-                 (body-fn))
+                 (doto (body-fn)
+                   realize!))
         {:keys [id-fn declared referenced]} @scope
         unresolved (into (sorted-map-by (fn [a b]
                                           (compare (str a) (str b))))
@@ -179,11 +185,12 @@
        explicit `:jsonld/id`.
 
    A reference may come before or after its declaration. When the body
-   finishes, every keyword referenced whose @id no builder in the scope
-   declared is refused in one ex-info naming each such keyword and the
-   @type of each builder that referenced it, under `:unresolved`. A
-   reference to an entity outside the scope is a Ref map,
-   `{:jsonld/id \"…\"}`.
+   finishes, the scope realizes every lazy sequence in its value, so a
+   builder inside `for` or `map` runs in the scope. Then every keyword
+   referenced whose @id no builder in the scope declared is refused in one
+   ex-info naming each such keyword and the @type of each builder that
+   referenced it, under `:unresolved`. A reference to an entity outside
+   the scope is a Ref map, `{:jsonld/id \"…\"}`.
 
    Each scope has its own state; an inner scope does not see the outer."
   [& body]
@@ -356,26 +363,27 @@
                        {:schema (m/form schema)})))
      (fn build [& args]
        (let [opts (normalize-args args)
+             as? (contains? opts :as)
              as (:as opts)
              opts (canonicalize-keys (dissoc opts :as) aliases)
              _ (when-let [unknown (seq (remove admitted? (keys opts)))]
                  (throw (ex-info (str "DSL builder for " t " refuses unknown keys "
                                       (pr-str (vec (sort-by str unknown))))
                                  {:type t :unknown-keys (set unknown)})))
-             _ (when (and as (some? (:jsonld/id opts)))
+             _ (when (and as? (some? (:jsonld/id opts)))
                  (throw (ex-info (str "DSL builder for " t " takes :as or :jsonld/id, not both")
                                  {:type t :as as :id (:jsonld/id opts)})))
-             id (if as
+             id (if as?
                   (local-id as t)
                   (:jsonld/id opts))
-             _ (when (and *scope* (not as) (some? id))
+             _ (when (and *scope* (not as?) (some? id))
                  (declare-id! id nil t))
              opts* (into {}
                          (map (fn [[k v]]
                                 [k (resolve-refs-in-value t v)]))
                          opts)
              raw (cond-> (assoc (strip-nils opts*) :jsonld/type t)
-                   as (assoc :jsonld/id id))
+                   as? (assoc :jsonld/id id))
              coerced (m/decode schema raw authoring-transformer)]
          (when-let [err (coerce/explain schema coerced)]
            (throw (or (inexact-decimal-error t err)
