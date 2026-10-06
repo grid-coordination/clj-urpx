@@ -18,10 +18,14 @@
       subscription-style and don't apply to instantaneous lookup).
 
   Day types honored (URPX ontology): urpx:allDays, urpx:weekdayDays,
-  urpx:weekendDays, urpx:customDays. Holiday inclusion is expressed by the
+  urpx:weekendDays, and urpx:customDays, which matches the days its bracket
+  lists in urpx:daysOfWeek. Holiday inclusion is expressed by the
   TimeBracket's optional urpx:includeHolidays / urpx:includeNonHolidays
-  booleans (both default to true when omitted). Holiday detection sources,
-  in priority order:
+  booleans (both default to true when omitted). A bracket matches a date only
+  when its day test and its holiday test both pass, so 'Sundays and holidays'
+  takes two brackets: urpx:customDays listing urpx:sunday, and urpx:allDays
+  with urpx:includeNonHolidays false. Holiday detection sources, in priority
+  order:
 
     1. Explicit `:holiday?` predicate in opts (highest precedence — overrides).
     2. The plan's embedded urpx:HolidayCalendar, derived via
@@ -51,21 +55,29 @@
 (def ^:private weekend-set
   #{DayOfWeek/SATURDAY DayOfWeek/SUNDAY})
 
+(def ^:private day-of-week-by-id
+  {"urpx:monday"    DayOfWeek/MONDAY
+   "urpx:tuesday"   DayOfWeek/TUESDAY
+   "urpx:wednesday" DayOfWeek/WEDNESDAY
+   "urpx:thursday"  DayOfWeek/THURSDAY
+   "urpx:friday"    DayOfWeek/FRIDAY
+   "urpx:saturday"  DayOfWeek/SATURDAY
+   "urpx:sunday"    DayOfWeek/SUNDAY})
+
 (defn- day-of-week-matches?
-  "True if `day-type-id` (the :jsonld/id of a urpx:DayType reference) accepts
-   the given day-of-week. Recognized values come from the URPX ontology
-   (urpx:allDays, urpx:weekdayDays, urpx:weekendDays, urpx:customDays). A
-   bracket without dayType is permissive. Unknown values return false so
-   misspellings or out-of-vocabulary day types fail loudly instead of
-   silently matching every day."
-  [day-type-id ^DayOfWeek dow]
-  (case day-type-id
+  "True if `bracket`'s urpx:dayType accepts the given day-of-week. Recognized
+   values come from the URPX ontology (urpx:allDays, urpx:weekdayDays,
+   urpx:weekendDays, urpx:customDays). urpx:customDays accepts the days listed
+   in the bracket's urpx:daysOfWeek. A bracket without dayType is permissive.
+   Unknown values, of either property, match nothing so misspellings or
+   out-of-vocabulary days fail loudly instead of silently matching every day."
+  [bracket ^DayOfWeek dow]
+  (case (get-in bracket [:urpx/dayType :jsonld/id])
     "urpx:allDays"     true
     "urpx:weekdayDays" (boolean (weekday-set dow))
     "urpx:weekendDays" (boolean (weekend-set dow))
-    ;; customDays semantics are not yet specified in URPX; treat permissively
-    ;; until the ontology defines a calendar-of-custom-days property.
-    "urpx:customDays"  true
+    "urpx:customDays"  (boolean (some #(= dow (day-of-week-by-id (:jsonld/id %)))
+                                      (index/as-vec (:urpx/daysOfWeek bracket))))
     nil                true
     false))
 
@@ -84,7 +96,7 @@
 
 (defn- bracket-matches-day?
   [bracket ^LocalDate date ^DayOfWeek dow holiday?]
-  (and (day-of-week-matches? (get-in bracket [:urpx/dayType :jsonld/id]) dow)
+  (and (day-of-week-matches? bracket dow)
        (holiday-status-matches? bracket date holiday?)))
 
 ;; ---------------------------------------------------------------------------
@@ -138,6 +150,29 @@
       (nil? season-id)
       (boolean (some #(= season-id (:jsonld/id %)) refs)))))
 
+(defn- refuse-unspecified-custom-days!
+  "Refuse `:urpx.price/custom-days-unspecified` when any urpx:TimeBracket in
+   `tou-schedules` has urpx:dayType urpx:customDays and lists no
+   urpx:daysOfWeek, so the days it applies on are not stated. Checks every
+   bracket, so the refusal is the same at every instant and in any bracket
+   order."
+  [tou-schedules]
+  (let [unspecified (for [schedule tou-schedules
+                          tier     (index/as-vec (:urpx/hasTOUTier schedule))
+                          period   (index/as-vec (:urpx/hasTOUPeriod tier))
+                          bracket  (index/as-vec (:urpx/hasTimeBracket period))
+                          :when (and (= "urpx:customDays" (get-in bracket [:urpx/dayType :jsonld/id]))
+                                     (empty? (index/as-vec (:urpx/daysOfWeek bracket))))]
+                      {:tou-period-id   (:jsonld/id period)
+                       :time-bracket-id (:jsonld/id bracket)})]
+    (when (seq unspecified)
+      (throw (ex-info (str "urpx:TimeBracket " (pr-str (vec unspecified)) " has urpx:dayType "
+                           "urpx:customDays and no urpx:daysOfWeek, so the days it applies "
+                           "on are not stated.")
+                      {:reason       :urpx.price/custom-days-unspecified
+                       :brackets     (vec unspecified)
+                       :schedule-ids (mapv :jsonld/id tou-schedules)})))))
+
 (defn- find-tou-period
   "Find the TOUPeriod whose TimeBracket matches the date, day of week and local
    time of `q`, a ZonedDateTime in the plan's zone, and whose urpx:appliesInSeason
@@ -150,6 +185,7 @@
    bracket-matching period across all schedules wins."
   [tou-schedules in-season? ^ZonedDateTime q holiday?]
   (when (seq tou-schedules)
+    (refuse-unspecified-custom-days! tou-schedules)
     (some
      (fn [period]
        (when (some

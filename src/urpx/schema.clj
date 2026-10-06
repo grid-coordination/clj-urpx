@@ -479,6 +479,11 @@
   (enum-ref "actualDateObservance" "fridayIfWeekendObservance"
             "mondayIfWeekendObservance" "nearestWeekdayObservance"))
 
+(def DayOfWeek
+  "urpx:DayOfWeekValue, the range of urpx:daysOfWeek, from urpx-org/urpx#71.
+   ISO 8601 days 1 (Monday) through 7 (Sunday)."
+  (enum-ref "monday" "tuesday" "wednesday" "thursday" "friday" "saturday" "sunday"))
+
 (def SourcePublicationType
   "urpx:SourcePublicationTypeValue, the shipped 8 members plus one legacy.
 
@@ -540,6 +545,8 @@
    [:urpx/endTime Time]
    ;; v0.2.0 SHACL: dayType is required (was optional in v0.1.x).
    [:urpx/dayType Ref]
+   ;; 0..N, read with dayType urpx:customDays (urpx-org/urpx#71).
+   [:urpx/daysOfWeek {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector DayOfWeek]]
    ;; 0..N upstream. TOU matching in price.clj reads one via index/single.
    [:urpx/appliesInSeason     {:optional true :decode/urpx-jsonld single-or-vec->vec} [:or Ref [:vector Ref]]]
    [:urpx/includeHolidays     {:optional true} :boolean]
