@@ -9,27 +9,28 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
-## [Unreleased]
-
-### Added
-
-- **`urpx:daysOfWeek` on a `urpx:TimeBracket`** (urpx-org/urpx#71). `urpx.schema/TimeBracket` admits it as a vector of `urpx.schema/DayOfWeek`, the seven `urpx:DayOfWeekValue` members, and decodes a bare value to a one-element vector.
-
-### Changed
-
-- **A `urpx:TimeBracket` with `urpx:dayType` `urpx:customDays` matches the days it lists in `urpx:daysOfWeek`.** It matched every day. `resolve-prices` refuses `:urpx.price/custom-days-unspecified` against a `urpx:TOUSchedule` holding one that lists none, naming each such bracket under `:brackets`.
-- **`urpx.emit/default-context` binds `urpx` to `https://urpx.org/ns/ontology/`**, the namespace URPX moved to in v0.5.0. It bound the earlier `https://urpx-org.github.io/urpx/ontology/`.
+## [0.39.0] — 2026-10-06
 
 ### Removed
 
 - **`urpx.schema/NodeIdentity`**, which no schema or function referenced.
 
-### Fixed
+### Changed
 
+- **`urpx.emit/default-context` binds `urpx` to `https://urpx.org/ns/ontology/`**, the namespace URPX moved to in v0.5.0. It bound the earlier `https://urpx-org.github.io/urpx/ontology/`.
+- **A `urpx:TimeBracket` with `urpx:dayType` `urpx:customDays` matches the days it lists in `urpx:daysOfWeek`.** It matched every day. `resolve-prices` refuses `:urpx.price/custom-days-unspecified` against a `urpx:TOUSchedule` holding one that lists none, naming each such bracket under `:brackets`.
+
+### Added
+
+- **`urpx:daysOfWeek` on a `urpx:TimeBracket`** (urpx-org/urpx#71). `urpx.schema/TimeBracket` admits it as a vector of `urpx.schema/DayOfWeek`, the seven `urpx:DayOfWeekValue` members, and decodes a bare value to a one-element vector.
 - **The jar carries the MIT notice at `META-INF/LICENSE`.** `clojure -T:build ci` refuses a jar without it.
 - **The pom carries `<description>` and `<url>`.** `clojure -T:build ci` refuses a jar whose pom lacks either.
-- **The README Getting started walkthrough runs from a fresh clone.** The `:nrepl` alias now puts `test` and `test/resources` on the classpath, so `urpx.test-fixtures` and the vendored fixtures load.
+- **GitHub Actions runs `clj-kondo` and the test suite** on pull requests and on pushes to `main`.
+
+### Fixed
+
 - **A holiday whose observed date falls in the adjacent calendar year now counts on that date.** New Year's Day 2028, a Saturday, is observed Friday 2027-12-31 under `urpx:nearestWeekdayObservance` or `urpx:fridayIfWeekendObservance`, and a Sunday December 31 is observed Monday January 1 under `urpx:nearestWeekdayObservance` or `urpx:mondayIfWeekendObservance`, for both `urpx:holidayRule` and `urpx:holidayDate` holidays.
+- **The README Getting started walkthrough runs from a fresh clone.** The `:nrepl` alias now puts `test` and `test/resources` on the classpath, so `urpx.test-fixtures` and the vendored fixtures load.
 
 ## [0.38.0] — 2026-10-05
 
@@ -776,6 +777,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.39.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.39.0
 [0.38.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.38.0
 [0.37.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.37.0
 [0.36.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.36.0
