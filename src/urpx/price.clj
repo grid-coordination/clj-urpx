@@ -560,6 +560,13 @@
       interval
       (assoc :urpx.resolved/interval-duration interval))))
 
+(defn- adjusting-bracket?
+  "True if `bracket` carries urpx:adjustsServiceTier or either bound offset,
+   so it offsets another tier's bounds instead of stating its own."
+  [bracket]
+  (boolean (some #(some? (% bracket))
+                 [:urpx/adjustsServiceTier :urpx/lowerBoundOffset :urpx/upperBoundOffset])))
+
 (defn- service-tier-candidates
   "Every (ServiceTiers container, ServiceTier, ServiceBracket) triple under
    BillingModel.hasServiceTiers, grouped by :urpx/serviceTierNumber in document
@@ -583,11 +590,16 @@
 
    hasServiceTiers is a vector, though every tiered fixture carries exactly one
    container. A filing stating a per-season or per-cell container is the case
-   this grouping is for."
+   this grouping is for.
+
+   An adjusting bracket is never a candidate: it states no bounds of its own,
+   and `tier-adjusters` collects it instead."
   [billing-model]
   (->> (for [container (index/as-vec (:urpx/hasServiceTiers billing-model))
              tier      (index/as-vec (:urpx/hasServiceTier container))
-             bracket   (or (seq (index/as-vec (:urpx/hasServiceBracket tier))) [nil])]
+             bracket   (or (seq (remove adjusting-bracket?
+                                        (index/as-vec (:urpx/hasServiceBracket tier))))
+                           [nil])]
          {:container container :tier tier :bracket bracket})
        (group-by #(:urpx/serviceTierNumber (:tier %)))))
 
@@ -628,6 +640,35 @@
    (:jsonld/id (:urpx/lowerBoundOperator bracket))
    (:jsonld/id (:urpx/upperBoundOperator bracket))])
 
+(defn- tier-node-status
+  "Whether `node`, a urpx:ServiceTiers or a urpx:ServiceBracket, applies at
+   this instant under this selection: :pass, :drop, or :unknown."
+  [node alt-status season-status]
+  (let [a (alt-status node)
+        s (season-status node)]
+    (cond
+      (or (= :not-selected a) (= :out-of-season s))  :drop
+      (or (= :unselected a)   (= :not-evaluable s))  :unknown
+      :else                                          :pass)))
+
+(defn- combined-tier-status
+  "A container status and a bracket status combined: either :drop drops,
+   else either :unknown is unknown."
+  [a b]
+  (cond
+    (or (= :drop a) (= :drop b))       :drop
+    (or (= :unknown a) (= :unknown b)) :unknown
+    :else                              :pass))
+
+(defn- unselected-alternatives
+  "The distinct urpx:ProfileAlternative @ids that `nodes` reference and the
+   caller has chosen nothing for."
+  [nodes alt-status]
+  (into [] (comp (filter #(= :unselected (alt-status %)))
+                 (keep #(:jsonld/id (:urpx/referencesProfileAlternative %)))
+                 (distinct))
+        nodes))
+
 (defn- select-tier-bracket
   "Which urpx:ServiceBracket states this tier's bounds at this instant, given
    every (container, tier, bracket) candidate carrying its serviceTierNumber.
@@ -638,9 +679,11 @@
    tier's brackets states the bounds. Reading one and not the other would
    leave the other a silent no-op.
 
-   Returns nil when the number names no tier, {:tier-name s :bracket b} when
-   one set of bounds is determined, {:tier-name s :mark m} when it is not and
-   the caller is told why, or throws.
+   Returns nil when the number names no tier, {:tier-name s :bracket b
+   :tier-ids v} when one set of bounds is determined, {:tier-name s :mark m}
+   when it is not and the caller is told why, or throws. :tier-ids are the
+   @ids of the urpx:ServiceTiers stating those bounds, which is what an
+   adjusting bracket names.
 
    REFUSES rather than picking, three ways. A season ref resolving to no
    urpx:Season is a typo, and reading it as out-of-season leaves a rung with no
@@ -664,31 +707,20 @@
                (not (qualified-tier-node? (:bracket one))))
         (cond-> {}
           (:urpx/name (:tier one)) (assoc :tier-name (:urpx/name (:tier one)))
-          (:bracket one)           (assoc :bracket (:bracket one)))
+          (:bracket one)           (assoc :bracket (:bracket one))
+          (:jsonld/id (:tier one)) (assoc :tier-ids [(:jsonld/id (:tier one))]))
         (let [;; Both gates run on both nodes of every candidate BEFORE any
               ;; filtering. A dangling season ref is a property of the
               ;; document, not of the query, and one that refused only for the
               ;; caller who happened to name the broken cell could be found by
               ;; no validator and no sweep.
-              node-status
-              (fn [node]
-                (let [a (alt-status node)
-                      s (season-status node)]
-                  (cond
-                    (or (= :not-selected a) (= :out-of-season s))  :drop
-                    (or (= :unselected a)   (= :not-evaluable s))  :unknown
-                    :else                                          :pass)))
+              node-status #(tier-node-status % alt-status season-status)
               tagged     (mapv (fn [c]
                                  (assoc c
                                         :container-status (node-status (:container c))
                                         :bracket-status   (node-status (:bracket c))))
                                candidates)
-              status     (fn [c] (let [a (:container-status c)
-                                       b (:bracket-status c)]
-                                   (cond
-                                     (or (= :drop a) (= :drop b))       :drop
-                                     (or (= :unknown a) (= :unknown b)) :unknown
-                                     :else                              :pass)))
+              status     #(combined-tier-status (:container-status %) (:bracket-status %))
               applying   (filterv #(= :pass (status %)) tagged)
               unknown    (filterv #(= :unknown (status %)) tagged)
               ;; A container in effect means the bounds are the open question;
@@ -710,11 +742,8 @@
               tier-name  (let [names (distinct (keep #(:urpx/name (:tier %)) considered))]
                            (when (= 1 (count names)) (first names)))
               named      (fn [m] (cond-> m tier-name (assoc :tier-name tier-name)))
-              unselected (into [] (comp (mapcat (juxt :container :bracket))
-                                        (filter #(= :unselected (alt-status %)))
-                                        (keep #(:jsonld/id (:urpx/referencesProfileAlternative %)))
-                                        (distinct))
-                               unknown)]
+              unselected (unselected-alternatives (mapcat (juxt :container :bracket) unknown)
+                                                  alt-status)]
           (cond
             ;; An unqualified bracket beside a cell-scoped one is NOT a
             ;; default: URPX orders nothing between them, so reading the
@@ -733,8 +762,10 @@
             (named {:mark {:reason :no-applicable-bounds :scope scope :ids ids}})
 
             (= 1 (count (distinct (map #(bracket-bounds-key (:bracket %)) applying))))
-            (named (cond-> {} (:bracket (first applying))
-                           (assoc :bracket (:bracket (first applying)))))
+            (let [tier-ids (into [] (comp (keep #(:jsonld/id (:tier %))) (distinct)) applying)]
+              (named (cond-> {}
+                       (:bracket (first applying)) (assoc :bracket (:bracket (first applying)))
+                       (seq tier-ids)              (assoc :tier-ids tier-ids))))
 
             (< 1 (count (distinct (map :container applying))))
             (throw (ex-info
@@ -771,6 +802,175 @@
                      :bracket-ids     ids
                      :count           (count applying)}))))))))
 
+(defn- container-units
+  "The urpx:unitOfMeasure @ids of the urpx:MetricInputs `container` references,
+   as far as `by-id` resolves them."
+  [container by-id]
+  (into #{} (comp (keep #(get by-id (:jsonld/id %)))
+                  (mapcat #(index/as-vec (:urpx/hasMetricSpecification %)))
+                  (keep #(get-in % [:urpx/unitOfMeasure :jsonld/id])))
+        (index/as-vec (:urpx/referencesMetricInput container))))
+
+(defn- tier-adjusters
+  "Every adjusting urpx:ServiceBracket under the urpx:ServiceTiers of
+   `versions`, deduplicated by @id, as {:bracket :container :seasons
+   :target-id}. :seasons are the urpx:Seasons of the version holding it.
+
+   Refuses, whatever the instant, a bracket naming no tier or one `by-id`
+   does not declare (:unresolvable-adjusted-tier), naming a node that is not
+   a urpx:ServiceTier (:adjusted-tier-not-service-tier), naming several
+   (:multiple-adjusted-tiers), or whose container states its bounds in a
+   different unit from the adjusted tier's container
+   (:adjusted-tier-unit-mismatch). Units are compared where both containers
+   reference a urpx:MetricInput stating one."
+  [versions by-id]
+  (let [tiers-of       (fn [v]
+                         (for [c (index/as-vec (get-in v [:urpx/hasPlanElements :urpx/hasBillingModel
+                                                         :urpx/hasServiceTiers]))
+                               t (index/as-vec (:urpx/hasServiceTier c))]
+                           [c t]))
+        tier-container (into {} (for [v versions
+                                      [c t] (tiers-of v)
+                                      :when (:jsonld/id t)]
+                                  [(:jsonld/id t) c]))
+        entries        (for [v versions
+                             :let [seasons (index/as-vec (get-in v [:urpx/hasPlanElements :urpx/hasSeasons]))]
+                             [c t] (tiers-of v)
+                             b (index/as-vec (:urpx/hasServiceBracket t))
+                             :when (adjusting-bracket? b)]
+                         {:bracket b :container c :seasons seasons})
+        deduped        (first (reduce (fn [[acc seen] e]
+                                        (let [id (:jsonld/id (:bracket e))]
+                                          (if (and id (seen id))
+                                            [acc seen]
+                                            [(conj acc e) (cond-> seen id (conj id))])))
+                                      [[] #{}] entries))
+        refuse         (fn [msg reason b data]
+                         (throw (ex-info msg (merge {:reason reason :bracket-id (:jsonld/id b)} data))))]
+    (mapv (fn [{b :bracket c :container :as e}]
+            (let [targets (index/as-vec (:urpx/adjustsServiceTier b))
+                  tid     (:jsonld/id (first targets))
+                  target  (get by-id tid)
+                  units   (container-units c by-id)
+                  tunits  (some-> (tier-container tid) (container-units by-id))]
+              (cond
+                (< 1 (count targets))
+                (refuse (str "urpx:ServiceBracket " (pr-str (:jsonld/id b)) " names "
+                             (count targets) " tiers in urpx:adjustsServiceTier: "
+                             (pr-str (mapv :jsonld/id targets)) ". An adjusting bracket "
+                             "offsets one tier.")
+                        :multiple-adjusted-tiers b {:tier-ids (mapv :jsonld/id targets)})
+
+                (nil? target)
+                (refuse (str "urpx:ServiceBracket " (pr-str (:jsonld/id b)) " carries a bound "
+                             "offset for urpx:ServiceTier " (pr-str tid) ", which no document "
+                             "passed to this call declares, so the bounds it offsets cannot "
+                             "be determined.")
+                        :unresolvable-adjusted-tier b {:tier-id tid})
+
+                (not= "urpx:ServiceTier" (:jsonld/type target))
+                (refuse (str "urpx:adjustsServiceTier on " (pr-str (:jsonld/id b)) " names "
+                             (pr-str tid) ", a " (:jsonld/type target) ", not a urpx:ServiceTier.")
+                        :adjusted-tier-not-service-tier b
+                        {:tier-id tid :node-type (:jsonld/type target)})
+
+                (and (seq units) (seq tunits) (not= units tunits))
+                (refuse (str "urpx:ServiceBracket " (pr-str (:jsonld/id b)) " offsets "
+                             (pr-str tid) " in " (pr-str (vec (sort units)))
+                             ", but that tier's bounds are in " (pr-str (vec (sort tunits))) ".")
+                        :adjusted-tier-unit-mismatch b
+                        {:tier-id tid :units (vec (sort units)) :tier-units (vec (sort tunits))})
+
+                :else
+                (assoc e :target-id tid))))
+          deduped)))
+
+(declare make-season-status)
+
+(defn- tier-adjustments-at
+  "`adjusters`, from `tier-adjusters`, grouped by the tier they adjust:
+   {tier-id {:ids [...] :applying [bracket ...] :unknown [node ...]}}. :ids
+   is every adjusting bracket naming the tier; :applying are those whose
+   container and own qualifiers hold at `date`; :unknown holds the container
+   and bracket of each whose qualifiers cannot be decided."
+  [adjusters by-id alt-status ^LocalDate date]
+  (let [season-status (memoize #(make-season-status % by-id date))]
+    (reduce (fn [acc {:keys [bracket container seasons target-id]}]
+              (let [ss     (season-status seasons)
+                    status (combined-tier-status (tier-node-status container alt-status ss)
+                                                 (tier-node-status bracket alt-status ss))]
+                (cond-> (update-in acc [target-id :ids] (fnil conj []) (:jsonld/id bracket))
+                  (= :pass status)
+                  (update-in [target-id :applying] (fnil conj []) bracket)
+                  (= :unknown status)
+                  (update-in [target-id :unknown] (fnil into []) [container bracket]))))
+            {} adjusters)))
+
+(defn- adjust-selection
+  "`selected`, from `select-tier-bracket`, with the adjusting brackets that
+   name its tier applied.
+
+   Each applying offset adds to the same bound of the selected bracket, and
+   offsets on one bound sum; operators are unchanged. The result carries the
+   adjusted bracket and, under :adjustment, the base bound, the summed offset
+   and the contributing bracket @ids. An adjusting bracket whose qualifiers
+   cannot be decided replaces the bounds with a mark, :reason
+   :adjustment-unresolved.
+
+   Refuses an offset on a bound the selected bracket lacks
+   (:adjusted-bound-absent) and an adjusted lower bound above the adjusted
+   upper (:adjusted-bounds-inverted)."
+  [selected adjustments alt-status]
+  (let [adjs     (keep #(get adjustments %) (:tier-ids selected))
+        applying (mapcat :applying adjs)
+        unknown  (mapcat :unknown adjs)]
+    (cond
+      (or (:mark selected) (and (empty? applying) (empty? unknown)))
+      selected
+
+      (seq unknown)
+      (let [alts (unselected-alternatives unknown alt-status)]
+        (-> selected
+            (dissoc :bracket)
+            (assoc :mark (cond-> {:reason :adjustment-unresolved
+                                  :scope  :adjusting-bracket
+                                  :ids    (into [] (comp (mapcat :ids) (remove nil?) (distinct)) adjs)}
+                           (seq alts) (assoc :alternatives alts)))))
+
+      :else
+      (let [bracket (:bracket selected)
+            sum     (fn [k] (let [xs (keep k applying)] (when (seq xs) (reduce + xs))))
+            lo-off  (sum :urpx/lowerBoundOffset)
+            up-off  (sum :urpx/upperBoundOffset)
+            lo      (:urpx/lowerBound bracket)
+            up      (:urpx/upperBound bracket)
+            ids     (into [] (keep :jsonld/id) applying)
+            data    {:tier-ids (:tier-ids selected) :bracket-id (:jsonld/id bracket)
+                     :adjusting-ids ids}]
+        (when (or (and lo-off (nil? lo)) (and up-off (nil? up)))
+          (throw (ex-info (str "Adjusting urpx:ServiceBrackets " (pr-str ids) " offset a "
+                               (if (and lo-off (nil? lo)) "lower" "upper") " bound that "
+                               "urpx:ServiceBracket " (pr-str (:jsonld/id bracket)) " of "
+                               (pr-str (:tier-ids selected)) " does not state.")
+                          (assoc data :reason :adjusted-bound-absent))))
+        (let [lo' (if lo-off (+ lo lo-off) lo)
+              up' (if up-off (+ up up-off) up)]
+          (when (and lo' up' (> lo' up'))
+            (throw (ex-info (str "Adjusting urpx:ServiceBrackets " (pr-str ids) " move the "
+                                 "lower bound of " (pr-str (:tier-ids selected)) " to " lo'
+                                 ", above its upper bound " up' ".")
+                            (assoc data :reason :adjusted-bounds-inverted
+                                   :lower-bound lo' :upper-bound up'))))
+          (assoc selected
+                 :bracket (cond-> bracket
+                            lo-off (assoc :urpx/lowerBound lo')
+                            up-off (assoc :urpx/upperBound up'))
+                 :adjustment (cond-> {:urpx.resolved/tier-adjusting-bracket-ids ids}
+                               lo-off (assoc :urpx.resolved/tier-lower-bound-base lo
+                                             :urpx.resolved/tier-lower-bound-offset lo-off)
+                               up-off (assoc :urpx.resolved/tier-upper-bound-base up
+                                             :urpx.resolved/tier-upper-bound-offset up-off))))))))
+
 (defn- tier-info
   "Pull tier metadata for a (PD, Price) pair into the resolved-entry shape.
    The serviceTierNumber may live on the Price (PG&E-style: many tier-Prices
@@ -783,7 +983,8 @@
    `select-tier-bracket` chooses among them and among the urpx:ServiceTiers
    containers declaring this number, honoring urpx:appliesInSeason and
    urpx:referencesProfileAlternative at both scopes. It may instead return a
-   mark saying the bounds are not determined, or throw.
+   mark saying the bounds are not determined, or throw. `adjust-selection`
+   then applies the adjusting brackets in `tier-ctx`'s :adjustments.
 
    :urpx.resolved/tier-number is assoc'd from the Price or the PriceDefinition
    BEFORE any container or bracket is read. On the WITHHELD path that is the
@@ -795,7 +996,8 @@
   [pd price tier-candidates tier-ctx]
   (let [tier-num   (or (:urpx/serviceTierNumber price) (:urpx/serviceTierNumber pd))
         selected   (when tier-num
-                     (select-tier-bracket (tier-candidates tier-num) tier-ctx))
+                     (some-> (select-tier-bracket (tier-candidates tier-num) tier-ctx)
+                             (adjust-selection (:adjustments tier-ctx) (:alt-status tier-ctx))))
         bracket    (:bracket selected)
         ;; A recurring charge's unit price is per INTERVAL, not per unit of
         ;; consumption: SCE's base services charge is 0.794 per P1D, and its
@@ -816,6 +1018,8 @@
                (assoc :urpx.resolved/tier-name (:tier-name selected))
                (:mark selected)
                (assoc :urpx.resolved/tier-bounds-unresolved (:mark selected))
+               (:adjustment selected)
+               (merge (:adjustment selected))
                (:urpx/lowerBound bracket)
                (assoc :urpx.resolved/tier-lower-bound (:urpx/lowerBound bracket))
                (:urpx/upperBound bracket)
@@ -1998,6 +2202,13 @@
       :urpx.resolved/tier-upper-bound     BigDecimal
       :urpx.resolved/tier-lower-bound-operator Ref
       :urpx.resolved/tier-upper-bound-operator Ref
+      :urpx.resolved/tier-lower-bound-base   BigDecimal (present iff an adjusting
+      :urpx.resolved/tier-lower-bound-offset BigDecimal  urpx:ServiceBracket
+      :urpx.resolved/tier-upper-bound-base   BigDecimal  offsets that bound; the
+      :urpx.resolved/tier-upper-bound-offset BigDecimal  bound key then carries
+                                                         base plus summed offset)
+      :urpx.resolved/tier-adjusting-bracket-ids [String] (the adjusting brackets
+                                                          that applied)
       :urpx.resolved/tier-bounds-unresolved Map    (present INSTEAD of the four
                                                     bound keys, when which
                                                     urpx:ServiceBracket applies
@@ -2112,7 +2323,11 @@
          ;; ONE season reader for this instant, shared by tier selection, the
          ;; PriceDefinition filter and the summary-member gate.
          season-status (make-season-status seasons by-id date)
-         tier-ctx      {:alt-status alt-status :season-status season-status}
+         tier-ctx      {:alt-status    alt-status
+                        :season-status season-status
+                        :adjustments   (tier-adjustments-at
+                                        (or (:tier-adjusters opts) (tier-adjusters [version] by-id))
+                                        by-id alt-status date)}
          ;; Ledger-independent, so it is built once rather than per ledger, and
          ;; it is the ONLY view that sees Prices nested under an alternatives
          ;; set the caller did not select: the base path's price lookup skips
@@ -2289,7 +2504,11 @@
          ;; qualifiers read the same alt-status and season-status the
          ;; PriceDefinition gate above already uses.
          tier-cands    (service-tier-candidates billing)
-         tier-ctx      {:alt-status alt-status :season-status season-status}
+         tier-ctx      {:alt-status    alt-status
+                        :season-status season-status
+                        :adjustments   (tier-adjustments-at
+                                        (or (:tier-adjusters opts) (tier-adjusters [version] by-id))
+                                        by-id alt-status query-date)}
          own-season    (season-of own-seasons query-date)
          ;; `holiday?` is the inherited predicate: the base plan's when
          ;; composing, nil standing alone.
@@ -2566,29 +2785,34 @@
          ;; Only modifiers that actually apply are indexed: one that names a
          ;; different plan contributes nothing to this resolution, and reading
          ;; its version to index it would surface its version errors here.
+         versions        (cons base-version
+                               (keep #(when (modifier-applies-to? % plan-id opts zdt)
+                                        (plan-version
+                                         % opts :urpx/hasRatePlanModifierVersion zdt))
+                                     modifiers))
          opts            (assoc opts :alt-index
                                 (or (:alt-index opts)
-                                    (let [versions
-                                          (cons base-version
-                                                (keep #(when (modifier-applies-to? % plan-id opts zdt)
-                                                         (plan-version
-                                                          % opts :urpx/hasRatePlanModifierVersion zdt))
-                                                      modifiers))]
-                                      (reduce (fn [idx v]
-                                                (index-with-price-set-alternatives
-                                                 idx (:urpx/hasPrices v)))
-                                              (merge-alternative-indexes
-                                               (map #(profile-alternative-index
-                                                      (:urpx/hasPlanElements %))
-                                                    versions))
-                                              versions)))
+                                    (reduce (fn [idx v]
+                                              (index-with-price-set-alternatives
+                                               idx (:urpx/hasPrices v)))
+                                            (merge-alternative-indexes
+                                             (map #(profile-alternative-index
+                                                    (:urpx/hasPlanElements %))
+                                                  versions))
+                                            versions))
                                 :alt-containers
                                 (or (:alt-containers opts)
                                     (delay (declared-containers
                                             opts
                                             (cons [rate-plan :urpx/hasRatePlanVersion]
                                                   (map #(vector % :urpx/hasRatePlanModifierVersion)
-                                                       modifiers))))))
+                                                       modifiers)))))
+                                ;; Adjusting brackets may name a tier in any
+                                ;; document of the composition, so they are
+                                ;; collected across all of them.
+                                :tier-adjusters
+                                (or (:tier-adjusters opts)
+                                    (tier-adjusters versions (:by-id opts))))
          base            (resolve-prices rate-plan zdt opts)
          base-period-num (:urpx.resolved/tou-period-number base)
          ;; A discount Price in a modifier names a summary whose members live in

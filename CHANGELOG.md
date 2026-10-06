@@ -9,6 +9,14 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Added
+
+- **Adjusting `urpx:ServiceBracket`s** (proposed in urpx-org/urpx#80). A bracket carrying `urpx:adjustsServiceTier` and `urpx:lowerBoundOffset` or `urpx:upperBoundOffset` adds each offset to the same bound of the named tier's applicable bracket when its own season and profile-alternative qualifiers hold, across every document in a composition. Offsets on one bound sum, a bracket repeated by `@id` counts once, and operators are unchanged. An adjusted tier carries the adjusted value under `:urpx.resolved/tier-lower-bound` or `:urpx.resolved/tier-upper-bound`, with `:urpx.resolved/tier-{lower,upper}-bound-base`, `:urpx.resolved/tier-{lower,upper}-bound-offset` and `:urpx.resolved/tier-adjusting-bracket-ids`. An adjusting bracket is never a bound of the tier hosting it.
+- **Refusals for adjusting brackets:** `:unresolvable-adjusted-tier`, `:adjusted-tier-not-service-tier`, `:multiple-adjusted-tiers` and `:adjusted-tier-unit-mismatch` at any instant, and `:adjusted-bound-absent` and `:adjusted-bounds-inverted` where an offset applies. An adjusting bracket whose qualifiers cannot be decided withholds the tier's bounds under `:urpx.resolved/tier-bounds-unresolved` with `:reason :adjustment-unresolved`.
+- **`urpx.schema/ServiceBracket` admits `urpx:adjustsServiceTier`**, decoding a bare value to a one-element vector, and both offsets as decimals; `urpx.emit/default-context` types the offsets `xsd:decimal`.
+
 ## [0.39.0] — 2026-10-06
 
 ### Removed

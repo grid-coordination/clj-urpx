@@ -681,7 +681,11 @@
 
    SHACL enforces sh:or three branches (lower-only, upper-only, or both
    bounds + matching operators); Malli stays open-world, consistent with
-   the customDimensionProperty / customConditionProperty pattern."
+   the customDimensionProperty / customConditionProperty pattern.
+
+   An adjusting bracket carries urpx:adjustsServiceTier and one or both
+   offsets in place of bounds; `urpx.price` adds the offsets to the bounds
+   of the tier it names."
   [:map
    [:jsonld/type [:= "urpx:ServiceBracket"]]
    [:jsonld/id {:optional true} :string]
@@ -689,6 +693,11 @@
    [:urpx/upperBound         {:optional true} Decimal]
    [:urpx/lowerBoundOperator {:optional true} Ref]
    [:urpx/upperBoundOperator {:optional true} Ref]
+   [:urpx/adjustsServiceTier
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/lowerBoundOffset   {:optional true} Decimal]
+   [:urpx/upperBoundOffset   {:optional true} Decimal]
    [:urpx/appliesInSeason
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]

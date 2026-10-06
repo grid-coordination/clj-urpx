@@ -80,6 +80,8 @@
    "urpx:baseQuantity"     {"@type" "xsd:decimal"}
    "urpx:lowerBound"       {"@type" "xsd:decimal"}
    "urpx:upperBound"       {"@type" "xsd:decimal"}
+   "urpx:lowerBoundOffset" {"@type" "xsd:decimal"}
+   "urpx:upperBoundOffset" {"@type" "xsd:decimal"}
    "urpx:decimalValue"     {"@type" "xsd:decimal"}
 
    ;; xsd:date
