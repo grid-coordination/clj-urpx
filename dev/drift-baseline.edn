@@ -30,4 +30,12 @@
   ["RatePlanModifierVersion" "urpx:forRatePlanModifier" "under-validates"]
   ["RatePlanModifierVersion" "urpx:hasCoverageClaim" "under-validates"]
 
+  ;; urpx-org/urpx#80 drops both to sh:minCount 0: a tier hosting adjusting
+  ;; brackets carries no serviceTierNumber, and a billing model that only
+  ;; moves bounds carries no PriceDefinition. Held optional for the adjusting
+  ;; brackets this library resolves; drop these entries once the pinned shapes
+  ;; carry that change.
+  ["ServiceTier" "urpx:serviceTierNumber" "under-validates"]
+  ["BillingModel" "urpx:hasPriceDefinition" "under-validates"]
+
 ]}

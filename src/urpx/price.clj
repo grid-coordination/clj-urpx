@@ -819,10 +819,11 @@
    Refuses, whatever the instant, a bracket naming no tier or one `by-id`
    does not declare (:unresolvable-adjusted-tier), naming a node that is not
    a urpx:ServiceTier (:adjusted-tier-not-service-tier), naming several
-   (:multiple-adjusted-tiers), or whose container states its bounds in a
-   different unit from the adjusted tier's container
-   (:adjusted-tier-unit-mismatch). Units are compared where both containers
-   reference a urpx:MetricInput stating one."
+   (:multiple-adjusted-tiers), naming a tier that holds adjusting brackets
+   itself, its own host included (:adjusted-tier-adjusts), or whose container
+   and the adjusted tier's do not both state a unit through the
+   urpx:MetricInputs they reference (:adjusted-tier-unit-absent) or state
+   different ones (:adjusted-tier-unit-mismatch)."
   [versions by-id]
   (let [tiers-of       (fn [v]
                          (for [c (index/as-vec (get-in v [:urpx/hasPlanElements :urpx/hasBillingModel
@@ -874,7 +875,22 @@
                         :adjusted-tier-not-service-tier b
                         {:tier-id tid :node-type (:jsonld/type target)})
 
-                (and (seq units) (seq tunits) (not= units tunits))
+                (some adjusting-bracket? (index/as-vec (:urpx/hasServiceBracket target)))
+                (refuse (str "urpx:ServiceBracket " (pr-str (:jsonld/id b)) " offsets "
+                             (pr-str tid) ", which hosts adjusting brackets itself. "
+                             "Adjustments do not chain, and a host tier is never adjusted.")
+                        :adjusted-tier-adjusts b {:tier-id tid})
+
+                (or (empty? units) (empty? tunits))
+                (refuse (str "urpx:ServiceBracket " (pr-str (:jsonld/id b)) " offsets "
+                             (pr-str tid) ", but "
+                             (if (empty? units) "its own urpx:ServiceTiers" "that tier's urpx:ServiceTiers")
+                             " references no urpx:MetricInput stating a urpx:unitOfMeasure, "
+                             "so the offset's unit cannot be matched to the bound's.")
+                        :adjusted-tier-unit-absent b
+                        {:tier-id tid :units (vec (sort units)) :tier-units (vec (sort tunits))})
+
+                (not= units tunits)
                 (refuse (str "urpx:ServiceBracket " (pr-str (:jsonld/id b)) " offsets "
                              (pr-str tid) " in " (pr-str (vec (sort units)))
                              ", but that tier's bounds are in " (pr-str (vec (sort tunits))) ".")

@@ -142,8 +142,9 @@
 
 (defn- modifier
   "A coerced RatePlanModifier applicable to `plan-id` whose one host tier holds
-   `brackets`. `opts` may add host-tier Prices, extra MetricInputs, the host
-   container's MetricInput, or extra version-level nodes."
+   `brackets`. `opts` may add host-tier Prices, which number the host tier 1
+   and give the modifier a ledger, extra MetricInputs, or the host container's
+   MetricInput."
   ([id brackets] (modifier id brackets nil))
   ([id brackets {:keys [plan-id prices metric-inputs mi]
                  :or   {plan-id "test:base" mi "test:mi-energy"}}]
@@ -157,24 +158,22 @@
                   {:jsonld/type "urpx:PlanElements"
                    :urpx/hasMetricInput (vec metric-inputs)
                    :urpx/hasBillingModel
-                   {:jsonld/type "urpx:BillingModel"
-                    :urpx/hasLedger (if prices
-                                      [{:jsonld/type "urpx:Ledger" :jsonld/id (str id "-ledger")
-                                        :urpx/name "Host"
-                                        :urpx/ledgerType {:jsonld/id "urpx:supplyLedger"}}]
-                                      [])
-                    :urpx/hasServiceTiers
-                    [{:jsonld/type "urpx:ServiceTiers" :jsonld/id (str id "-tiers")
-                      :urpx/referencesMetricInput [{:jsonld/id mi}]
-                      :urpx/hasServiceTier
-                      [{:jsonld/type "urpx:ServiceTier" :jsonld/id (str id "-host")
-                        :urpx/serviceTierNumber 1
-                        :urpx/hasServiceBracket brackets}]}]
-                    :urpx/hasPriceDefinition
-                    (if prices
-                      [{:jsonld/type "urpx:PriceDefinition" :jsonld/id (str id "-pd")
-                        :urpx/referencesLedger {:jsonld/id (str id "-ledger")}}]
-                      [])}}
+                   (cond-> {:jsonld/type "urpx:BillingModel"
+                            :urpx/hasServiceTiers
+                            [{:jsonld/type "urpx:ServiceTiers" :jsonld/id (str id "-tiers")
+                              :urpx/referencesMetricInput [{:jsonld/id mi}]
+                              :urpx/hasServiceTier
+                              [(cond-> {:jsonld/type "urpx:ServiceTier" :jsonld/id (str id "-host")
+                                        :urpx/hasServiceBracket brackets}
+                                 prices (assoc :urpx/serviceTierNumber 1))]}]}
+                     prices
+                     (assoc :urpx/hasLedger
+                            [{:jsonld/type "urpx:Ledger" :jsonld/id (str id "-ledger")
+                              :urpx/name "Host"
+                              :urpx/ledgerType {:jsonld/id "urpx:supplyLedger"}}]
+                            :urpx/hasPriceDefinition
+                            [{:jsonld/type "urpx:PriceDefinition" :jsonld/id (str id "-pd")
+                              :urpx/referencesLedger {:jsonld/id (str id "-ledger")}}]))}
                   :urpx/hasPrices {:jsonld/type "urpx:Prices"
                                    :urpx/hasPrice
                                    (vec (for [p prices]
@@ -218,17 +217,20 @@
 
 (def ^:private medical
   "PG&E Electric Rule 19's Standard Medical Baseline Quantity, 16.438 kWh/day,
-   as raw JSON-LD values so the offsets go through coercion. Tier 2's upper
-   bound and Tier 3's lower are left where the baseline-tier modifier puts
-   them."
+   as raw JSON-LD values so the offsets go through coercion. Its host tier
+   carries no serviceTierNumber and its billing model no PriceDefinition.
+   Tier 2's upper bound and Tier 3's lower are left where the baseline-tier
+   modifier puts them."
   (coerce/coerce-rate-plan-modifier
    {:jsonld/type "urpx:RatePlanModifier" :jsonld/id "test:pge-medical-baseline"
     :urpx/name "Medical Baseline" :urpx/timezoneIdentifier "America/Los_Angeles"
+    :urpx/modifierUniqueIdentifier "MEDICAL-BASELINE"
     :urpx/initialEffectiveDate "2023-03-23"
     :urpx/hasRatePlanModifierVersion
     {:jsonld/type "urpx:RatePlanModifierVersion"
      :urpx/changeReason {:jsonld/id "urpx:rateCase"}
      :urpx/forRatePlanModifier {:jsonld/id "test:pge-medical-baseline"}
+     :urpx/modifierVersionNumber "2023-03-23"
      :urpx/hasCoverageClaim {:jsonld/type "urpx:CoverageClaim"
                              :urpx/completenessResult {:jsonld/id "urpx:complete"}}
      :urpx/serviceRole {:jsonld/id "urpx:bundledServiceRole"}
@@ -237,23 +239,28 @@
      :urpx/applicableToRatePlan {:jsonld/id "pge:e-tou-c"}
      :urpx/hasPlanElements
      {:jsonld/type "urpx:PlanElements"
+      :urpx/hasMetricInput
+      {:jsonld/type "urpx:MetricInput" :jsonld/id "test:pge-mi-energy-medical"
+       :urpx/name "Energy consumption (kWh)"
+       :urpx/metricInputType {:jsonld/id "urpx:measuredMetricInput"}
+       :urpx/hasMetricSpecification {:jsonld/type "urpx:MetricSpecification"
+                                     :urpx/measurementKind {:jsonld/id "urpx:energy"}
+                                     :urpx/unitOfMeasure {:jsonld/id "urpx:kWh"}}}
       :urpx/hasBillingModel
       {:jsonld/type "urpx:BillingModel"
        :urpx/hasServiceTiers
        {:jsonld/type "urpx:ServiceTiers" :jsonld/id "test:pge-medical-tiers"
-        :urpx/referencesMetricInput {:jsonld/id "pge:mi-energy-baseline"}
+        :urpx/referencesMetricInput {:jsonld/id "test:pge-mi-energy-medical"}
         :urpx/hasServiceTier
         {:jsonld/type "urpx:ServiceTier" :jsonld/id "test:pge-medical-host"
-         :urpx/serviceTierNumber "1"
          :urpx/hasServiceBracket
          [{:jsonld/type "urpx:ServiceBracket" :jsonld/id "test:pge-medical-t1"
            :urpx/adjustsServiceTier {:jsonld/id "pge:tier-baseline-t1"}
            :urpx/upperBoundOffset "16.438"}
           {:jsonld/type "urpx:ServiceBracket" :jsonld/id "test:pge-medical-t2"
            :urpx/adjustsServiceTier {:jsonld/id "pge:tier-baseline-t2"}
-           :urpx/lowerBoundOffset "16.438"}]}}
-       :urpx/hasPriceDefinition []}}
-     :urpx/hasPrices {:jsonld/type "urpx:Prices" :urpx/hasPrice []}}}))
+           :urpx/lowerBoundOffset "16.438"}]}}}}
+     :urpx/hasPrices {:jsonld/type "urpx:Prices"}}}))
 
 (deftest medical-baseline-raises-the-pge-tier-1-and-2-boundary
   (let [plan (fixtures/load-rate-plan "pge-e-tou-c-2026-03-01")
@@ -298,6 +305,9 @@
 ;; Coercion and emission
 ;; ---------------------------------------------------------------------------
 
+(deftest a-modifier-that-only-moves-bounds-validates
+  (is (nil? (coerce/explain schema/RatePlanModifier medical))))
+
 (deftest offsets-coerce-to-decimals-and-emit-typed
   (let [bracket (get-in medical [:urpx/hasRatePlanModifierVersion :urpx/hasPlanElements
                                  :urpx/hasBillingModel :urpx/hasServiceTiers 0
@@ -340,6 +350,14 @@
     (is (= 10M (:urpx.resolved/tier-upper-bound-base (t 1))))
     (is (= #{"test:hp-t1-summer-any" "test:extra-t1"}
            (set (:urpx.resolved/tier-adjusting-bracket-ids (t 1)))))))
+
+(deftest a-negative-offset-lowers-the-bound
+  (let [t (composed (base flat-tiers)
+                    [(modifier "test:m" [(adjusting "test:m-t1" "test:tier-1" :upper -2M)
+                                         (adjusting "test:m-t2" "test:tier-2" :lower -2M)])]
+                    summer)]
+    (is (= [0M 8M] (bounds (t 1))))
+    (is (= [8M nil] (bounds (t 2))))))
 
 (deftest a-duplicated-adjusting-bracket-counts-once
   (let [plan (base flat-tiers)]
@@ -436,3 +454,32 @@
          (refuses [(modifier "test:m" [(adjusting "test:a" "test:tier-1" :upper 1M)]
                              {:mi "test:mi-therm"
                               :metric-inputs [(metric-input "test:mi-therm" "urpx:therm")]})]))))
+
+(deftest a-target-hosting-adjusting-brackets-refuses
+  (testing "its own host tier"
+    (is (= {:reason :adjusted-tier-adjusts :bracket-id "test:a" :tier-id "test:m-host"}
+           (refuses [(modifier "test:m" [(adjusting "test:a" "test:m-host" :upper 1M)])]))))
+  (testing "another modifier's host tier"
+    (is (= {:reason :adjusted-tier-adjusts :bracket-id "test:b" :tier-id "test:m-host"}
+           (refuses [(modifier "test:m" [(adjusting "test:a" "test:tier-1" :upper 1M)])
+                     (modifier "test:n" [(adjusting "test:b" "test:m-host" :upper 1M)])])))))
+
+(deftest a-container-stating-no-unit-refuses
+  (testing "the adjusting bracket's own container"
+    (is (= {:reason :adjusted-tier-unit-absent :bracket-id "test:a" :tier-id "test:tier-1"
+            :units [] :tier-units ["urpx:kWh"]}
+           (refuses [(modifier "test:m" [(adjusting "test:a" "test:tier-1" :upper 1M)]
+                               {:mi "test:mi-unitless"
+                                :metric-inputs [(dissoc (metric-input "test:mi-unitless" "urpx:kWh")
+                                                        :urpx/hasMetricSpecification)]})]))))
+  (testing "the adjusted tier's container"
+    (is (= {:reason :adjusted-tier-unit-absent :bracket-id "test:a" :tier-id "test:tier-1"
+            :units ["urpx:kWh"] :tier-units []}
+           (refusal #(price/resolve-prices-with-modifiers
+                      (update-in (base flat-tiers)
+                                 [:urpx/hasRatePlanVersion :urpx/hasPlanElements :urpx/hasMetricInput 0]
+                                 dissoc :urpx/hasMetricSpecification)
+                      [(modifier "test:m" [(adjusting "test:a" "test:tier-1" :upper 1M)]
+                                 {:mi "test:mi-own"
+                                  :metric-inputs [(metric-input "test:mi-own" "urpx:kWh")]})]
+                      summer))))))

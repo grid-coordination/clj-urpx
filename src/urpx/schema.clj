@@ -708,11 +708,13 @@
    ServiceBracket instances (Decision #111). ServiceTier carries only the
    logical identity (serviceTierNumber + optional name); hasServiceBracket
    carries 1+ bound-bearing brackets, optionally qualified by season or
-   ProfileAlternative for matrix-cell variants of the same logical tier."
+   ProfileAlternative for matrix-cell variants of the same logical tier.
+
+   A tier hosting adjusting brackets carries no serviceTierNumber."
   [:map
    [:jsonld/type [:= "urpx:ServiceTier"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/serviceTierNumber Int]
+   [:urpx/serviceTierNumber {:optional true} Int]
    [:urpx/name {:optional true} :string]
    [:urpx/hasServiceBracket
     {:decode/urpx-jsonld single-or-vec->vec}
@@ -763,10 +765,10 @@
    [:urpx/hasServiceTier {:decode/urpx-jsonld single-or-vec->vec} [:vector ServiceTier]]])
 
 (def BillingModel
-  "v0.2.0: hasPriceDefinition is required (min 1) and lives at this level
-   (not inside Ledger). The v0.1.x BillingModel.hasServiceTier flat vector
-   is gone — block tiers now live under hasServiceTiers's nested
-   `urpx:hasServiceTier` field.
+  "v0.2.0: hasPriceDefinition lives at this level (not inside Ledger). A
+   billing model hosting only adjusting brackets carries none. The v0.1.x
+   BillingModel.hasServiceTier flat vector is gone — block tiers now live
+   under hasServiceTiers's nested `urpx:hasServiceTier` field.
 
    Both hasTOUSchedule and hasServiceTiers are vectors (sh:maxCount
    unbounded per BillingModelShape). `single-or-vec->vec` keeps
@@ -792,7 +794,7 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ledger]]
    [:urpx/hasPriceDefinition
-    {:decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector PriceDefinition]]])
 
 (def Holiday
