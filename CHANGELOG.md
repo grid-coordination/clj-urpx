@@ -26,6 +26,8 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 ### Added
 
+- **`urpx.defs`, typed definitions.** `(defurpx kind name doc? value)` validates the value against `(kind-schema kind)` at macroexpansion, with every map in the schema closed, so an invalid value or an unknown kind interns nothing; the message names the var, its file and line, and each failing path. The var carries `:urpx/kind`. `(defs-of-kind kind nses)` returns the definitions of a kind in the namespaces given.
+- **A clj-kondo config in the jar** (`clj-kondo.exports/energy.grid-coordination/clj-urpx`) whose hook lints `defurpx` as a `def`.
 - **`urpx.dsl/curie`**, the default `dsl-scope` `:id-fn`.
 - **`urpx.schema/OfferingOrganization`**, an `Organization` or `UtilityOperator` inline, or a reference. The version builders take `:offered-by`.
 - **`ComparisonNode` and `BooleanOperationNode` schemas**, with `urpx.dsl/comparison-node` and `urpx.dsl/boolean-operation-node`. `BooleanOperationNode` admits `urpx:description`.

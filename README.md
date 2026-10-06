@@ -962,6 +962,43 @@ The named builders (`season`, `metric-input`, `price-definition`, `rate-plan`, `
 
 For a longer worked walkthrough that mirrors selected examples from the upstream [URPX Tutorial](https://github.com/urpx-org/urpx/blob/main/documentation/pages/urpx-tutorial.md), see [`doc/dsl-tutorial.md`](doc/dsl-tutorial.md) — each example shows the canonical URPX JSON-LD shape and the equivalent DSL form, with deep-links back to the upstream source section.
 
+## Typed definitions
+
+`urpx.defs/defurpx` defines a var whose value is validated against a schema chosen by a kind keyword. A corpus written as Clojure source uses it for the tables a filing states, and its generator finds every definition of a kind with `defs-of-kind`.
+
+```clojure
+(require '[urpx.defs :as defs :refer [defurpx]])
+
+(defmethod defs/kind-schema :ex/rates [_]
+  [:map-of :keyword decimal?])
+
+(defurpx :ex/rates rtc-rates
+  "Cents per kWh."
+  {:peak 16.10M :off-peak 8.05M})
+
+(defs/defs-of-kind :ex/rates ['my.corpus])   ; => [#'my.corpus/rtc-rates]
+```
+
+- **Validation at macroexpansion.** The value is checked before the `def`, so an invalid value or an unknown kind interns nothing and a failed re-evaluation keeps the previous value. The message names the kind, the var, its file and line, and each failing path:
+
+  ```
+  Invalid :ex/rates my.corpus/rtc-rates (my/corpus.clj:7)
+    at [:peak]: 16.9 should be a decimal
+  ```
+
+  The `ex-data` carries `:kind`, `:where` and the humanized `:errors`.
+- **Closed schemas.** Every map in a kind's schema is closed unless it says `{:closed false}`, so a misspelled key refuses.
+- **Kinds.** `kind-schema` is a multimethod; its `:default` refuses. The kind is a keyword literal. The `urpx.kind` namespace is reserved for kinds clj-urpx defines; qualify your own kinds in your namespace.
+- **No registry.** The kind is in the var's metadata as `:urpx/kind`, with the docstring, `:file` and `:line`. `defs-of-kind` reads the vars interned in the namespaces you pass, so an unmapped var is not returned.
+
+### clj-kondo
+
+The jar carries a clj-kondo config whose hook lints `defurpx` as a `def`. Import it into a project that depends on clj-urpx:
+
+```bash
+clj-kondo --lint "$(clojure -Spath)" --copy-configs --skip-lint
+```
+
 ## Namespace overview
 
 | Namespace        | Purpose |
@@ -978,6 +1015,7 @@ For a longer worked walkthrough that mirrors selected examples from the upstream
 | `urpx.emit`          | Write-side: `write-rate-plan`, `write-rate-plan-modifier`, `write-urpx-document`, `write-urpx-package`, `write-scenario-cost-model` |
 | `urpx.validate`      | Single-file CLI checker (`clojure -M:validate <file.jsonld>`), tri-state exit |
 | `urpx.dsl`           | Authoring DSL: `dsl-scope`, `make-builder`, named builders for every entity type |
+| `urpx.defs`          | Typed definitions: `defurpx`, `kind-schema`, `defs-of-kind` |
 | `urpx.scenario-cost-model`  | Optional enumerator: `enumerate`, `enumerate-pairs`, `identity-tuple`, `plan-versions`, `applicable-modifiers`, `offered-by`, the `one-modifier-at-most` / `every-subset`, `named-versions-narrow` / `named-versions-add` and `repeated-ids-refuse` / `repeated-ids-union` policies, and `resolve-at` / `segments-for` / `schedule-for` for prices. Requires `urpx.price`; nothing in the library requires it |
 
 ## Status

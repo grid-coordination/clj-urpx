@@ -80,7 +80,7 @@
   {"core" 'urpx.core "schema" 'urpx.schema "coerce" 'urpx.coerce
    "index" 'urpx.index "price" 'urpx.price "schedule" 'urpx.schedule
    "holidays" 'urpx.holidays "tz" 'urpx.tz-inference "emit" 'urpx.emit
-   "dsl" 'urpx.dsl "validate" 'urpx.validate
+   "dsl" 'urpx.dsl "defs" 'urpx.defs "validate" 'urpx.validate
    "load" 'urpx.load "scm" 'urpx.scenario-cost-model "cov" 'urpx.coverage})
 
 (defn- referenced-symbols

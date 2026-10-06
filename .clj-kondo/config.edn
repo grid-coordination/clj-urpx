@@ -1,1 +1,1 @@
-{}
+{:config-paths ["../resources/clj-kondo.exports/energy.grid-coordination/clj-urpx"]}
