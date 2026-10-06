@@ -9,6 +9,19 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Changed
+
+- **Breaking: a `dsl-scope` entity's local `@id` comes only from `:as`.** `(dsl/season :as :scl/summer …)` replaces `(dsl/season :scl/summer …)`. A leading qualified keyword is a key, so `(dsl/organization-identifier :skos/notation "16868" …)` works inside a scope. `:as` outside a scope throws.
+- **Breaking: a `dsl-scope` names `@id`s with a function of the keyword, by default `urpx.dsl/curie`.** `:scl/summer` gives `"scl:summer"`; it gave `"summer"`. `(dsl/dsl-scope {:id-fn f} …)` supplies another function.
+- **Breaking: a `dsl-scope` checks keyword references when its body finishes.** A reference may come before its declaration, so a version can name its enclosing plan. Every keyword referenced but not declared in the scope throws in one `ex-info`, naming each keyword and the `@type` of each builder that used it, under `:unresolved`. A reference to an undeclared keyword threw `DSL local ref not declared` at the call.
+- **Breaking: a `dsl-scope` refuses an `@id` declared twice**, by `:as` or by an explicit `:jsonld/id`, naming both declarations under `:declared-by`. The messages and `ex-data` of the former refusals are replaced.
+
+### Added
+
+- **`urpx.dsl/curie`**, the default `dsl-scope` `:id-fn`.
+
 ## [0.41.0] — 2026-10-06
 
 ### Changed

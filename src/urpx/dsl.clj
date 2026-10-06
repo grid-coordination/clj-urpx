@@ -8,16 +8,19 @@
     (require '[urpx.dsl :as dsl])
 
     (dsl/dsl-scope
-      (dsl/season ::summer :name \"Summer\" :month [5 6 7 8 9 10])
-      (dsl/season ::winter :name \"Winter\" :month [11 12 1 2 3 4])
-      (dsl/price-definition ::pd-summer
+      (dsl/season :as :ex/summer :season-name \"Summer\" :month [5 6 7 8 9 10])
+      (dsl/ledger :as :ex/commodity
+                  :name \"Commodity\"
+                  :ledger-type :urpx/supplyLedger)
+      (dsl/price-definition :as :ex/pd-summer
                             :name \"Commodity Summer\"
-                            :applies-in-season ::summer
-                            :references-ledger ::ledger-commodity))
+                            :applies-in-season :ex/summer
+                            :references-ledger :ex/commodity))
 
   ## Public API
 
-    - `dsl-scope`             macro establishing a local-symbol-ref scope
+    - `dsl-scope`             macro naming entities by keyword
+    - `curie`                 the default keyword -> @id function
     - `make-builder`          generator: schema → constructor function
     - `entity-type`           introspect a schema for its @type literal
     - a named builder for every entity-type schema in `urpx.schema`
@@ -52,18 +55,8 @@
     - Validates the assembled entity against the schema and throws
       `ex-info` with the Malli explanation on failure.
 
-  Inside a `dsl-scope`, builders additionally:
-
-    - Accept an optional leading qualified-keyword arg as the entity's
-      local `@id` (e.g. `(season ::summer …)` registers `::summer` in the
-      scope and sets `:jsonld/id \"summer\"`).
-    - Resolve other qualified-keyword kwarg values against the scope's
-      registry to produce `{:jsonld/id …}` Ref maps. Vector-typed kwargs walk
-      element-wise.
-
-  Resolution is eager (declare-before-reference): an unknown ref, a
-  duplicate declaration, or two declarations with the same @id throws.
-  Each `dsl-scope` has its own registry — scopes don't leak."
+  Inside a `dsl-scope`, builders also take `:as k` for the entity's @id
+  and read other qualified keywords as references; see `dsl-scope`."
   (:require [clojure.string :as str]
             [malli.core :as m]
             [malli.transform :as mt]
@@ -117,66 +110,122 @@
               :fields (vec fields)})))
 
 ;; ---------------------------------------------------------------------------
-;; Local-symbol refs: dsl-scope + registry
+;; dsl-scope: keyword @ids and keyword references
 ;; ---------------------------------------------------------------------------
 
-(def ^:dynamic ^:private *local-refs*
-  "Holds the volatile map of {qualified-keyword → @id-string} for the
-   currently-active `dsl-scope`; nil outside any scope. The dynamic var
-   is just the indirection that lets builders find the registry without
-   an explicit arg — actual mutation happens to the volatile inside it,
-   which is born when the scope opens and dies when it closes (no shared
-   mutable state escapes)."
+(def ^:dynamic ^:private *scope*
+  "The volatile state of the innermost active `dsl-scope`, nil outside one:
+
+     :id-fn      keyword -> @id string
+     :declared   {@id {:as keyword-or-nil, :type @type}}
+     :referenced {keyword #{@type of each builder that referenced it}}"
   nil)
 
-(defn- in-scope? [] (some? *local-refs*))
+(defn curie
+  "The default `dsl-scope` `:id-fn`: `:scl/summer` -> \"scl:summer\"."
+  [k]
+  (str (namespace k) ":" (name k)))
+
+(defn- local-keyword?
+  "True if `v` can name an entity in a `dsl-scope`: a qualified keyword
+   outside the `urpx` and `jsonld` namespaces."
+  [v]
+  (and (qualified-keyword? v)
+       (not (#{"urpx" "jsonld"} (namespace v)))))
+
+(defn- run-scope
+  "Run `body-fn` in a fresh scope configured by `opts`, then refuse every
+   keyword referenced in it whose @id no builder in it declared."
+  [opts body-fn]
+  (when-let [unknown (seq (remove #{:id-fn} (keys opts)))]
+    (throw (ex-info (str "dsl-scope refuses unknown options "
+                         (pr-str (vec unknown)))
+                    {:unknown-options (set unknown)})))
+  (let [scope (volatile! {:id-fn (:id-fn opts curie)
+                          :declared {}
+                          :referenced {}})
+        result (binding [*scope* scope]
+                 (body-fn))
+        {:keys [id-fn declared referenced]} @scope
+        unresolved (into (sorted-map-by (fn [a b]
+                                          (compare (str a) (str b))))
+                         (remove (fn [[k _]]
+                                   (contains? declared (id-fn k))))
+                         referenced)]
+    (when (seq unresolved)
+      (throw (ex-info (str "dsl-scope has unresolved references "
+                           (str/join ", "
+                                     (for [[k types] unresolved]
+                                       (str k
+                                            " (from "
+                                            (str/join ", " (sort types))
+                                            ")"))))
+                      {:unresolved unresolved})))
+    result))
 
 (defmacro dsl-scope
-  "Establish a local-symbol-ref scope. Inside the body, builders accept an
-   optional leading qualified-keyword argument as the entity's local @id
-   (registered in the scope), and qualified-keyword values in kwarg
-   positions other than `:urpx/*` vocabulary terms resolve to
-   {:jsonld/id ...} maps via the registry.
+  "Evaluate `body` in a scope where entities are named by keyword. An
+   optional leading map literal holds options:
 
-   Resolution is eager (declare-before-reference): a reference to an
-   undeclared keyword throws ex-info. Multiple declarations of the same
-   keyword, or of two keywords with the same @id, also throw.
+     :id-fn   keyword -> @id string; default `curie` (`:scl/summer` ->
+              \"scl:summer\")
 
-   Implementation: the scope binds `*local-refs*` to a fresh `volatile!`
-   holding a persistent map. Builders mutate it via `vswap!` during the
-   scope's evaluation; nothing outside the body's dynamic extent ever
-   sees the volatile, and the scope returns a regular immutable result."
+   Inside the scope, a builder:
+
+     - takes `:as k` to set the entity's @id to `(id-fn k)`;
+     - reads a qualified-keyword value outside the `urpx` and `jsonld`
+       namespaces as the Ref `{:jsonld/id (id-fn k)}`;
+     - refuses an @id already declared in the scope, by `:as` or by an
+       explicit `:jsonld/id`.
+
+   A reference may come before or after its declaration. When the body
+   finishes, every keyword referenced whose @id no builder in the scope
+   declared is refused in one ex-info naming each such keyword and the
+   @type of each builder that referenced it, under `:unresolved`. A
+   reference to an entity outside the scope is a Ref map,
+   `{:jsonld/id \"…\"}`.
+
+   Each scope has its own state; an inner scope does not see the outer."
   [& body]
-  `(binding [*local-refs* (volatile! {})]
-     ~@body))
+  (let [[opts body] (if (map? (first body))
+                      [(first body) (rest body)]
+                      [{} body])]
+    `(#'run-scope ~opts (fn [] ~@body))))
 
-(defn- ->local-id
-  "Project a qualified keyword to a string @id form: the keyword's local
-   name (`::summer` → \"summer\")."
-  [sym]
-  (name sym))
+(defn- declare-id!
+  "Record that a builder of @type `t` declared @id `id`, by `:as k` when `k`
+   is given; refuse an @id already declared in the scope."
+  [id k t]
+  (when-let [{:keys [as type]} (get-in @*scope* [:declared id])]
+    (throw (ex-info (str "dsl-scope: @id " (pr-str id)
+                         " of " (or k t)
+                         " is already declared by " (or as type))
+                    {:id id
+                     :as k
+                     :type t
+                     :declared-by {:as as :type type}})))
+  (vswap! *scope* assoc-in [:declared id] {:as k :type t}))
 
-(defn- register-local-id!
-  "Register `sym` in the scope and return its @id. Throws if `sym` is
-   already declared, or if another keyword in the scope already projects to
-   the same @id, since two entities sharing an @id merge in RDF."
-  [sym]
-  (let [id (->local-id sym)]
-    (when (contains? @*local-refs* sym)
-      (throw (ex-info (str "DSL local ref already declared: " sym)
-                      {:sym sym :existing (get @*local-refs* sym)})))
-    (when-let [other (some (fn [[k v]] (when (= id v) k)) @*local-refs*)]
-      (throw (ex-info (str "DSL local ref " sym " has the @id " (pr-str id)
-                           " already declared by " other)
-                      {:sym sym :id id :declared-by other})))
-    (vswap! *local-refs* assoc sym id)
+(defn- local-id
+  "The @id `:as k` gives an entity of @type `t`, declared in the scope."
+  [k t]
+  (when-not *scope*
+    (throw (ex-info (str "DSL builder for " t " takes :as only inside a dsl-scope")
+                    {:type t :as k})))
+  (when-not (local-keyword? k)
+    (throw (ex-info (str "DSL builder for " t
+                         " needs :as to be a qualified keyword outside the urpx and jsonld namespaces, not "
+                         (pr-str k))
+                    {:type t :as k})))
+  (let [id ((:id-fn @*scope*) k)]
+    (declare-id! id k t)
     id))
 
-(defn- resolve-local-ref [sym]
-  (if-let [id (get @*local-refs* sym)]
-    {:jsonld/id id}
-    (throw (ex-info (str "DSL local ref not declared: " sym)
-                    {:sym sym :declared (keys @*local-refs*)}))))
+(defn- reference!
+  "The Ref for keyword `k`, recorded as referenced by a builder of @type `t`."
+  [k t]
+  (vswap! *scope* update-in [:referenced k] (fnil conj #{}) t)
+  {:jsonld/id ((:id-fn @*scope*) k)})
 
 (defn- vocabulary-keyword?
   "True if `v` names a URPX vocabulary term, such as `:urpx/allDays`."
@@ -185,43 +234,25 @@
        (= "urpx" (namespace v))))
 
 (defn- resolve-refs-in-value
-  "Walk a kwarg value and replace keyword leaves with {:jsonld/id ...} maps.
-   A `:urpx/X` keyword names the vocabulary term `urpx:X`; inside a
-   `dsl-scope`, any other qualified keyword is a local ref resolved from the
-   registry. Vectors are walked element-wise; other shapes pass through
-   unchanged."
-  [v]
+  "Walk a kwarg value given to a builder of @type `t` and replace keyword
+   leaves with {:jsonld/id ...} maps. A `:urpx/X` keyword names the
+   vocabulary term `urpx:X`; inside a `dsl-scope`, any other qualified
+   keyword outside `jsonld` is a reference. Vectors are walked element-wise;
+   other shapes pass through unchanged."
+  [t v]
   (cond
-    (vocabulary-keyword? v)                  {:jsonld/id (str "urpx:" (name v))}
-    (and (in-scope?) (qualified-keyword? v)) (resolve-local-ref v)
-    (vector? v)                              (mapv resolve-refs-in-value v)
-    :else                                    v))
-
-(defn- local-id-arg?
-  "True if `v` looks like a DSL local-id: a qualified keyword whose
-   namespace is NOT 'urpx' or 'jsonld' (those are reserved for kwarg keys
-   in URPX schemas, e.g. :urpx/seasonName, :jsonld/id). Inside `dsl-scope`,
-   a leading keyword that passes this test is treated as the entity's
-   local @id rather than the first kwarg key.
-
-   Constraint: kwarg keys outside the urpx/jsonld namespaces aren't
-   supported in builder calls (use the trailing-map form to pass them)."
-  [v]
-  (and (qualified-keyword? v)
-       (not (#{"urpx" "jsonld"} (namespace v)))))
+    (vocabulary-keyword? v)               {:jsonld/id (str "urpx:" (name v))}
+    (and *scope* (local-keyword? v))      (reference! v t)
+    (vector? v)                           (mapv (partial resolve-refs-in-value t) v)
+    :else                                 v))
 
 (defn- normalize-args
-  "Split a builder's varargs into [local-id-or-nil opts-map]. Local-id only
-   activates inside `dsl-scope`. Trailing-map and alternating-kvs forms both
-   produce the same opts map."
+  "A builder's varargs, alternating keys and values or one trailing map, as
+   one opts map."
   [args]
-  (let [[local-id args*] (if (and (in-scope?) (local-id-arg? (first args)))
-                           [(first args) (rest args)]
-                           [nil args])
-        opts (if (and (= 1 (count args*)) (map? (first args*)))
-               (first args*)
-               (apply hash-map args*))]
-    [local-id opts]))
+  (if (and (= 1 (count args)) (map? (first args)))
+    (first args)
+    (apply hash-map args)))
 
 (defn entity-type
   "Extract the @type literal (e.g. \"urpx:Season\") from a Malli entity
@@ -282,10 +313,9 @@
      - Accepts kwargs (or a trailing map per Clojure 1.11+ unification) of
        canonical :urpx/* keys; the entity's :jsonld/type is set automatically
        from the schema.
-     - Inside a `dsl-scope`, accepts an optional leading
-       qualified-keyword as the entity's local @id (registered in the scope's
-       registry); qualified-keyword values in kwarg positions resolve to
-       Ref maps via the same registry.
+     - Inside a `dsl-scope`, takes `:as k` for the entity's @id and reads
+       other qualified-keyword values as references; see `dsl-scope`.
+       Outside one, refuses `:as`.
      - Reads a `:urpx/X` keyword value as the Ref `{:jsonld/id \"urpx:X\"}`,
        inside a scope or not.
      - Refuses a key that is neither a key of the schema, a short form of
@@ -325,22 +355,27 @@
        (throw (ex-info "make-builder: schema must have a :jsonld/type [:= ...] entry"
                        {:schema (m/form schema)})))
      (fn build [& args]
-       (let [[local-id-arg opts] (normalize-args args)
-             opts (canonicalize-keys opts aliases)
+       (let [opts (normalize-args args)
+             as (:as opts)
+             opts (canonicalize-keys (dissoc opts :as) aliases)
              _ (when-let [unknown (seq (remove admitted? (keys opts)))]
                  (throw (ex-info (str "DSL builder for " t " refuses unknown keys "
                                       (pr-str (vec (sort-by str unknown))))
                                  {:type t :unknown-keys (set unknown)})))
-             ;; Register the local-id BEFORE resolving the rest of the opts —
-             ;; an entity can't reference itself, but registering early keeps
-             ;; the registry consistent if any value resolution were to look
-             ;; back at the in-progress entity.
-             id (when local-id-arg (register-local-id! local-id-arg))
+             _ (when (and as (some? (:jsonld/id opts)))
+                 (throw (ex-info (str "DSL builder for " t " takes :as or :jsonld/id, not both")
+                                 {:type t :as as :id (:jsonld/id opts)})))
+             id (if as
+                  (local-id as t)
+                  (:jsonld/id opts))
+             _ (when (and *scope* (not as) (some? id))
+                 (declare-id! id nil t))
              opts* (into {}
-                         (map (fn [[k v]] [k (resolve-refs-in-value v)]))
+                         (map (fn [[k v]]
+                                [k (resolve-refs-in-value t v)]))
                          opts)
              raw (cond-> (assoc (strip-nils opts*) :jsonld/type t)
-                   id (assoc :jsonld/id id))
+                   as (assoc :jsonld/id id))
              coerced (m/decode schema raw authoring-transformer)]
          (when-let [err (coerce/explain schema coerced)]
            (throw (or (inexact-decimal-error t err)

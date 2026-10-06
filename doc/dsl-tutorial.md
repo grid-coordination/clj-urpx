@@ -109,11 +109,11 @@ The upstream tutorial's TOU section nests deeply: `BillingModel → TOUSchedule 
 }
 ```
 
-Via the DSL inside a `dsl-scope`, `::summer` gets registered when the season is declared and resolves to a Ref everywhere it's used downstream — no `@id`-string repetition:
+Inside a `dsl-scope`, `:as :ex/summer` gives the season the `@id` `"ex:summer"`, and the keyword `:ex/summer` anywhere else in the scope is a Ref to it:
 
 ```clojure
 (dsl/dsl-scope
-  (dsl/season ::summer :season-name "Summer" :month [6 7 8 9])
+  (dsl/season :as :ex/summer :season-name "Summer" :month [6 7 8 9])
   (dsl/tou-tier
     :tou-tier-number 1
     :tou-tier-standard-name {:jsonld/id "urpx:peakTier"}
@@ -125,12 +125,12 @@ Via the DSL inside a `dsl-scope`, `::summer` gets registered when the season is 
        [(dsl/time-bracket
           :start-time "14:00:00"
           :end-time   "19:00:00"
-          :applies-in-season ::summer            ; ← resolved against the scope
+          :applies-in-season :ex/summer            ; ← {:jsonld/id "ex:summer"}
           :day-type {:jsonld/id "urpx:weekdayDays"}
           :include-holidays false)])]))
 ```
 
-ISO time strings auto-coerce to `LocalTime`; the `::summer` keyword resolves to `{:jsonld/id "summer"}`. Typo a ref name (e.g. `::summers`) and the DSL throws `ex-info` with the registered keys — fail-loud is a feature.
+ISO time strings auto-coerce to `LocalTime`; `:ex/summer` resolves to `{:jsonld/id "ex:summer"}`. A reference may come before its declaration. When the scope exits, every keyword referenced but never declared in it throws, in one `ex-info` naming each keyword and the builders that used it. `(dsl/dsl-scope {:id-fn f} …)` names `@id`s with `f` instead of `dsl/curie`.
 
 ## Example 4: a small but complete rate plan
 
@@ -138,10 +138,10 @@ Pulling it together: a non-TOU two-season plan modeled on the published CPAU E-2
 
 ```clojure
 (dsl/dsl-scope
-  (let [summer (dsl/season ::summer :season-name "Summer" :month [5 6 7 8 9 10])
-        winter (dsl/season ::winter :season-name "Winter" :month [11 12 1 2 3 4])
+  (let [summer (dsl/season :as :ex/summer :season-name "Summer" :month [5 6 7 8 9 10])
+        winter (dsl/season :as :ex/winter :season-name "Winter" :month [11 12 1 2 3 4])
 
-        mi-energy (dsl/metric-input ::mi-energy
+        mi-energy (dsl/metric-input :as :ex/mi-energy
                                     :name "kWh"
                                     :metric-input-type {:jsonld/id "urpx:profileMetricInput"}
                                     :has-metric-specification
@@ -149,20 +149,20 @@ Pulling it together: a non-TOU two-season plan modeled on the published CPAU E-2
                                      :measurement-kind {:jsonld/id "urpx:energy"}
                                      :unit-of-measure  {:jsonld/id "urpx:kWh"}))
 
-        l-comm (dsl/ledger ::ledger-commodity
+        l-comm (dsl/ledger :as :ex/ledger-commodity
                            :name "Commodity"
                            :ledger-type {:jsonld/id "urpx:supplyLedger"}
-                           :references-metric-input [::mi-energy])
+                           :references-metric-input [:ex/mi-energy])
 
-        pd-cs (dsl/price-definition ::pd-commodity-summer
+        pd-cs (dsl/price-definition :as :ex/pd-commodity-summer
                                     :name "Commodity Summer"
-                                    :applies-in-season ::summer
-                                    :references-ledger ::ledger-commodity)
+                                    :applies-in-season :ex/summer
+                                    :references-ledger :ex/ledger-commodity)
 
-        pd-cw (dsl/price-definition ::pd-commodity-winter
+        pd-cw (dsl/price-definition :as :ex/pd-commodity-winter
                                     :name "Commodity Winter"
-                                    :applies-in-season ::winter
-                                    :references-ledger ::ledger-commodity)]
+                                    :applies-in-season :ex/winter
+                                    :references-ledger :ex/ledger-commodity)]
     (dsl/rate-plan
      :rate-plan-unique-identifier "TUTORIAL-CPAU-E-2"
      :name "Tutorial: non-TOU two-season plan"
@@ -188,10 +188,10 @@ Pulling it together: a non-TOU two-season plan modeled on the published CPAU E-2
       (dsl/prices
        :has-price-set
        [(dsl/price-set
-         :has-price [(dsl/price :references-price-definition ::pd-commodity-summer
+         :has-price [(dsl/price :references-price-definition :ex/pd-commodity-summer
                                 :unit-price 0.15075M      ; ← a double refuses: write M or a string
                                 :start-date "2025-07-01")
-                     (dsl/price :references-price-definition ::pd-commodity-winter
+                     (dsl/price :references-price-definition :ex/pd-commodity-winter
                                 :unit-price 0.09334M
                                 :start-date "2025-07-01")])])))))
 ```

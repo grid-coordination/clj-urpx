@@ -277,18 +277,18 @@
             that is true until someone changes a schema, and a missing builder
             is not otherwise a failing test."
     (dsl/dsl-scope
-     (let [p1 (dsl/price ::gen-peak :unit-price 0.20782M)
-           p2 (dsl/price ::gen-off  :unit-price 0.10482M)
-           sm (dsl/price-summary ::care-basis
+     (let [p1 (dsl/price :as :ex/gen-peak :unit-price 0.20782M)
+           p2 (dsl/price :as :ex/gen-off  :unit-price 0.10482M)
+           sm (dsl/price-summary :as :ex/care-basis
                                  :name "CARE discountable subtotal"
-                                 :includes-price [::gen-peak ::gen-off])
-           ps (dsl/price-set ::ps-gen :has-price [p1 p2] :has-price-summary [sm])
-           d  (dsl/price ::care-discount :multiplier -0.325M :based-on-price ::care-basis)]
+                                 :includes-price [:ex/gen-peak :ex/gen-off])
+           ps (dsl/price-set :as :ex/ps-gen :has-price [p1 p2] :has-price-summary [sm])
+           d  (dsl/price :as :ex/care-discount :multiplier -0.325M :based-on-price :ex/care-basis)]
 
        (testing "local-symbol refs resolve to @id refs on both new properties"
-         (is (= [{:jsonld/id "gen-peak"} {:jsonld/id "gen-off"}]
+         (is (= [{:jsonld/id "ex:gen-peak"} {:jsonld/id "ex:gen-off"}]
                 (:urpx/includesPrice sm)))
-         (is (= [{:jsonld/id "care-basis"}] (:urpx/basedOnPrice d))
+         (is (= [{:jsonld/id "ex:care-basis"}] (:urpx/basedOnPrice d))
              "0..N upstream, so the decoder normalizes a single value to a vector"))
 
        (testing "the summary attaches to the PriceSet, which is where

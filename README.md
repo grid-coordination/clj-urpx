@@ -21,7 +21,7 @@ The standard's source of truth — ontology, SHACL shapes, JSON-LD context, tuto
 - **Resolve** the per-ledger, per-tier prices that apply at a given instant in a given timezone — TOU period, season, day-of-week, midnight-wrapping brackets, block-tier ladders
 - **Generate** contiguous price-interval schedules suitable for [OpenADR 3](https://www.openadr.org/) events, either sampled on a grid or as exact segments whose boundaries come from the tariff
 - **Emit** URPX JSON-LD from coerced Clojure entities (the inverse of parse + coerce) — useful for round-trip validation and programmatic authoring of URPX documents
-- **Author** URPX entities idiomatically in Clojure via `urpx.dsl` — per-entity builders with auto-coercion, validation-on-construct, and local-symbol refs scoped via `dsl-scope`
+- **Author** URPX entities idiomatically in Clojure via `urpx.dsl` — per-entity builders with auto-coercion, validation-on-construct, and keyword refs scoped via `dsl-scope`
 
 ## Library at a glance
 
@@ -905,15 +905,15 @@ For programmatic construction or test-fixture authoring, `urpx.dsl` provides idi
 (require '[urpx.dsl :as dsl])
 
 (dsl/dsl-scope
-  (let [summer (dsl/season ::summer :season-name "Summer" :month [5 6 7 8 9 10])
-        winter (dsl/season ::winter :season-name "Winter" :month [11 12 1 2 3 4])
-        ledger-comm (dsl/ledger ::ledger-commodity
+  (let [summer (dsl/season :as :ex/summer :season-name "Summer" :month [5 6 7 8 9 10])
+        winter (dsl/season :as :ex/winter :season-name "Winter" :month [11 12 1 2 3 4])
+        ledger-comm (dsl/ledger :as :ex/ledger-commodity
                                 :name "Commodity"
                                 :ledger-type {:jsonld/id "urpx:supplyLedger"})
-        pd-cs (dsl/price-definition ::pd-commodity-summer
+        pd-cs (dsl/price-definition :as :ex/pd-commodity-summer
                                     :name "Commodity Summer"
-                                    :applies-in-season ::summer
-                                    :references-ledger ::ledger-commodity)]
+                                    :applies-in-season :ex/summer
+                                    :references-ledger :ex/ledger-commodity)]
     ;; ...assemble into a rate-plan via dsl/rate-plan, dsl/rate-plan-version, etc.
     ))
 ```
@@ -926,22 +926,26 @@ The DSL handles the boring parts so authoring code stays declarative:
 - **Two kwarg forms** — canonical `:urpx/seasonName` or auto-derived kebab-case `:season-name` (both work, can be mixed in one call).
 - **Unknown keys refuse.** A key that is neither in the schema, a kebab-case form of one, nor `:jsonld/*` throws, naming the key and the entity type. `(dsl/make-builder schema/X {:passthrough #{…}})` builds a constructor that admits further keys.
 
-### Local-symbol refs
+### Keyword refs
 
-Inside a `dsl-scope`, builders accept an optional leading qualified-keyword as the entity's local `@id`, and qualified-keyword values in kwarg positions resolve to `{:jsonld/id …}` Ref maps via the scope's registry:
+Inside a `dsl-scope`, `:as k` gives an entity the `@id` `(dsl/curie k)`, and a qualified-keyword value anywhere else in the scope is a Ref to the same `@id`:
 
 ```clojure
 (dsl/dsl-scope
-  (dsl/season ::summer :season-name "Summer" :month [5 6 7 8 9 10])
-  (dsl/season ::winter :season-name "Winter" :month [11 12 1 2 3 4])
-  (dsl/ledger ::commodity :name "Commodity" :ledger-type {:jsonld/id "urpx:supplyLedger"})
-  (dsl/price-definition ::pd-summer
+  (dsl/season :as :ex/summer :season-name "Summer" :month [5 6 7 8 9 10])
+  (dsl/season :as :ex/winter :season-name "Winter" :month [11 12 1 2 3 4])
+  (dsl/ledger :as :ex/commodity :name "Commodity" :ledger-type :urpx/supplyLedger)
+  (dsl/price-definition :as :ex/pd-summer
                         :name "Summer commodity"
-                        :applies-in-season ::summer    ; → {:jsonld/id "summer"}
-                        :references-ledger ::commodity))
+                        :applies-in-season :ex/summer    ; → {:jsonld/id "ex:summer"}
+                        :references-ledger :ex/commodity))
 ```
 
-Resolution is eager (declare-before-reference); unknown refs and duplicate declarations throw. Each `dsl-scope` has its own registry — scopes don't leak.
+- A reference may come before or after its declaration.
+- When the scope exits, every keyword referenced but not declared in it throws, in one `ex-info` naming each keyword and the builders that used it.
+- An `@id` declared twice in a scope throws, whether by `:as` or by `:jsonld/id`.
+- `(dsl/dsl-scope {:id-fn f} …)` names `@id`s with `f`.
+- An entity outside the scope is referenced with a Ref map, `{:jsonld/id "…"}`.
 
 ### Building from arbitrary schemas
 
@@ -1011,7 +1015,7 @@ Covered:
 - `urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives`, the selection layer for declarative customer-or-configuration choices (income tier CARE/FERA/Standard, voltage configuration, vintage-PCIA departure year). Coerce + validate full schemas; resolve-prices selects the active alternative via an explicit `:profile-alternatives` opt; emit round-trips cleanly. `urpx:referencesProfileAlternative` is read on `PriceSetAlternative`, on `PriceDefinition`, and on `ServiceTiers` and `ServiceBracket` when a tier's bounds are selected; the shapes also carry it on `TOUSchedule`, which is not read. Programmatic `ConditionExpression` evaluation against a customer profile is a future enhancement
 - Configurable schedule step (hourly default; sub-hour available via `:step`)
 - Symmetric write-side: `urpx.emit` emits JSON-LD from any coerced `RatePlan` / `RatePlanModifier` / `URPXDocument`; the vendored-fixture round-trip suite verifies `parse → coerce → emit → re-parse → re-coerce` is a fixed point for each PG&E bundle in `urpx.emit-test/vendored-fixtures` × {RatePlan, Modifier}
-- Authoring DSL (`urpx.dsl`): named builders for every entity-type schema, kebab-case kwarg aliases, auto-coercion of raw inputs (numbers → BigDecimal, ISO strings → java.time, `--MM` → int month), validation-on-construct, and local-symbol refs scoped via `dsl-scope`
+- Authoring DSL (`urpx.dsl`): named builders for every entity-type schema, kebab-case kwarg aliases, auto-coercion of raw inputs (numbers → BigDecimal, ISO strings → java.time, `--MM` → int month), validation-on-construct, and keyword refs scoped via `dsl-scope`
 
 Known gaps:
 

@@ -256,105 +256,154 @@
       (is (nil? (coerce/explain schema/Price p))))))
 
 ;; ---------------------------------------------------------------------------
-;; Local-symbol refs — dsl-scope + qualified-keyword resolution
+;; dsl-scope: keyword @ids and keyword references
 ;; ---------------------------------------------------------------------------
 
-(deftest local-id-arg-sets-jsonld-id-inside-scope
-  (testing "leading qualified-keyword arg becomes the entity's
-            local @id when called inside a dsl-scope"
-    (let [s (dsl/dsl-scope (dsl/season ::summer :urpx/seasonName "Summer"))]
-      (is (= "summer" (:jsonld/id s))
-          "default id is the keyword's local name"))))
+(def ^:private pd
+  "A PriceDefinition builder, so a test can name a ledger it never declares."
+  (dsl/make-builder schema/PriceDefinition))
 
-(deftest local-id-arg-ignored-outside-scope
-  (testing "outside dsl-scope, builders only accept canonical
-            kwargs — a leading qualified keyword would be (mis-)parsed as
-            a kwarg key, which fails because :foo expects a value"
-    (is (thrown? Exception
-                 (dsl/season ::summer :urpx/seasonName "Summer")))))
+(defn- thrown
+  "The ExceptionInfo `f` throws, or nil."
+  [f]
+  (try (f)
+       nil
+       (catch clojure.lang.ExceptionInfo e e)))
 
-(deftest qualified-keyword-value-resolves-to-ref
-  (testing "a kwarg value that's a qualified keyword resolves to
-            a {:jsonld/id ...} Ref via the registry"
-    (let [pd (dsl/dsl-scope
-              (dsl/season ::summer :urpx/seasonName "Summer")
-              ((dsl/make-builder schema/PriceDefinition)
-               :urpx/name "Commodity Summer"
-               :urpx/appliesInSeason ::summer
-               :urpx/referencesLedger {:jsonld/id "x:commodity"}))]
-      (is (= [{:jsonld/id "summer"}] (:urpx/appliesInSeason pd))
-          "::summer resolved to a Ref vector (single-or-vec→vec normalizes)"))))
+(deftest as-sets-the-id-through-curie-by-default
+  (let [[a b] (dsl/dsl-scope
+               [(dsl/season :as :scl/summer :season-name "SCL Summer")
+                (dsl/season :as :pge/summer :season-name "PG&E Summer")])]
+    (is (= "scl:summer" (:jsonld/id a)))
+    (is (= "pge:summer" (:jsonld/id b)))))
 
-(deftest local-refs-resolve-inside-vectors
-  (testing "vector-typed kwargs walk element-wise — each
-            qualified keyword resolves to its own Ref"
-    (let [pd (dsl/dsl-scope
-              (dsl/season ::summer :urpx/seasonName "Summer")
-              (dsl/season ::winter :urpx/seasonName "Winter")
-              ((dsl/make-builder schema/PriceDefinition)
-               :urpx/name "All-season"
-               :urpx/appliesInSeason [::summer ::winter]
-               :urpx/referencesLedger {:jsonld/id "x:commodity"}))]
-      (is (= [{:jsonld/id "summer"} {:jsonld/id "winter"}]
-             (:urpx/appliesInSeason pd))))))
+(deftest a-caller-supplied-id-fn-names-ids-and-refs
+  (let [iri #(str "https://example.org/" (namespace %) "/" (name %))
+        [s p] (dsl/dsl-scope
+               {:id-fn iri}
+               [(dsl/season :as :ex/summer :season-name "Summer")
+                (pd :name "Summer"
+                    :applies-in-season :ex/summer
+                    :references-ledger {:jsonld/id "x:l"})])]
+    (is (= "https://example.org/ex/summer" (:jsonld/id s)))
+    (is (= [{:jsonld/id "https://example.org/ex/summer"}]
+           (:urpx/appliesInSeason p)))))
 
-(deftest unknown-local-ref-throws
-  (testing "a reference to an undeclared keyword fails loud"
-    (is (thrown-with-msg?
-         clojure.lang.ExceptionInfo
-         #"DSL local ref not declared"
-         (dsl/dsl-scope
-          ((dsl/make-builder schema/PriceDefinition)
-           :urpx/name "broken"
-           :urpx/appliesInSeason ::nowhere
-           :urpx/referencesLedger {:jsonld/id "x:l"}))))))
+(deftest dsl-scope-refuses-unknown-options
+  (is (= {:unknown-options #{:id}}
+         (ex-data (thrown #(dsl/dsl-scope {:id "ex:s"} nil))))))
 
-(deftest duplicate-local-id-throws
-  (testing "declaring the same local sym twice fails loud"
-    (is (thrown-with-msg?
-         clojure.lang.ExceptionInfo
-         #"DSL local ref already declared"
-         (dsl/dsl-scope
-          (dsl/season ::summer :urpx/seasonName "Summer")
-          (dsl/season ::summer :urpx/seasonName "Hot Summer"))))))
+(deftest as-refuses-outside-a-scope
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"urpx:Season takes :as only inside a dsl-scope"
+                        (dsl/season :as :ex/summer :season-name "Summer"))))
 
-(deftest two-local-ids-with-one-jsonld-id-throw
-  (let [e (try (dsl/dsl-scope
-                (dsl/season :scl/summer :urpx/seasonName "SCL Summer")
-                (dsl/season :pge/summer :urpx/seasonName "PG&E Summer"))
-               nil
-               (catch clojure.lang.ExceptionInfo e e))]
-    (is (re-find #"already declared by :scl/summer" (ex-message e)))
-    (is (= {:sym :pge/summer :id "summer" :declared-by :scl/summer} (ex-data e)))))
+(deftest as-takes-only-a-local-keyword
+  (doseq [k [:urpx/summer :jsonld/summer :summer "ex:summer"]]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"needs :as to be a qualified keyword"
+                          (dsl/dsl-scope (dsl/season :as k :season-name "S")))
+        (pr-str k))))
 
-(deftest each-dsl-scope-has-its-own-registry
-  (testing "scopes don't leak — the same local sym can be declared
-            in two distinct scopes without collision"
-    (let [a (dsl/dsl-scope (dsl/season ::summer :urpx/seasonName "Scope-A Summer"))
-          b (dsl/dsl-scope (dsl/season ::summer :urpx/seasonName "Scope-B Summer"))]
-      (is (= "summer" (:jsonld/id a)))
-      (is (= "summer" (:jsonld/id b)))
-      (is (= "Scope-A Summer" (:urpx/seasonName a)))
-      (is (= "Scope-B Summer" (:urpx/seasonName b))))))
+(deftest as-and-an-explicit-id-refuse-together
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"takes :as or :jsonld/id, not both"
+                        (dsl/dsl-scope
+                         (dsl/season :as :ex/s :jsonld/id "ex:s" :season-name "S")))))
 
-(deftest worked-local-sym-example
-  (testing "seasons and a ledger declared with local syms, and a PD that
-            references them by sym"
-    (let [pd (dsl/dsl-scope
-              (dsl/season ::summer :urpx/seasonName "Summer"
-                          :urpx/month [5 6 7 8 9 10])
-              (dsl/season ::winter :urpx/seasonName "Winter"
-                          :urpx/month [11 12 1 2 3 4])
-              (dsl/ledger ::commodity :urpx/name "Commodity"
-                          :urpx/ledgerType {:jsonld/id "urpx:supplyLedger"})
-              (dsl/price-definition
-               ::pd-summer
-               :urpx/name "Commodity Summer"
-               :urpx/appliesInSeason ::summer
-               :urpx/referencesLedger ::commodity))]
-      (is (= "pd-summer" (:jsonld/id pd)))
-      (is (= [{:jsonld/id "summer"}] (:urpx/appliesInSeason pd)))
-      (is (= {:jsonld/id "commodity"} (:urpx/referencesLedger pd))))))
+(deftest a-leading-qualified-key-is-a-key
+  (let [oi (dsl/dsl-scope
+            (dsl/organization-identifier :skos/notation "16868"
+                                         :scheme :urpx/eiaScheme))]
+    (is (= "16868" (:skos/notation oi)))
+    (is (nil? (:jsonld/id oi)))))
+
+(deftest keyword-values-are-refs
+  (let [p (dsl/dsl-scope
+           (dsl/season :as :ex/summer :season-name "Summer")
+           (dsl/season :as :ex/winter :season-name "Winter")
+           (dsl/ledger :as :ex/commodity :name "Commodity")
+           (pd :name "All-season"
+               :applies-in-season [:ex/summer :ex/winter]
+               :references-ledger :ex/commodity))]
+    (is (= [{:jsonld/id "ex:summer"} {:jsonld/id "ex:winter"}]
+           (:urpx/appliesInSeason p)))
+    (is (= {:jsonld/id "ex:commodity"} (:urpx/referencesLedger p)))))
+
+(deftest a-reference-may-precede-its-declaration
+  (let [[p s] (dsl/dsl-scope
+               [(pd :name "Summer"
+                    :applies-in-season :ex/summer
+                    :references-ledger {:jsonld/id "x:l"})
+                (dsl/season :as :ex/summer :season-name "Summer")])]
+    (is (= [{:jsonld/id (:jsonld/id s)}] (:urpx/appliesInSeason p)))))
+
+(deftest an-explicit-id-resolves-a-keyword-reference
+  (let [p (dsl/dsl-scope
+           (dsl/season :jsonld/id "ex:summer" :season-name "Summer")
+           (pd :name "Summer"
+               :applies-in-season :ex/summer
+               :references-ledger {:jsonld/id "x:l"}))]
+    (is (= [{:jsonld/id "ex:summer"}] (:urpx/appliesInSeason p)))))
+
+(deftest unresolved-references-refuse-together-when-the-scope-exits
+  (let [e (thrown #(dsl/dsl-scope
+                    (dsl/season :as :ex/summer :season-name "Summer")
+                    (pd :name "Winter"
+                        :applies-in-season :ex/winter
+                        :references-ledger :ex/commodity)
+                    (dsl/time-bracket :start-time "16:00:00"
+                                      :end-time "21:00:00"
+                                      :day-type :urpx/allDays
+                                      :applies-in-season [:ex/summer :ex/winter])
+                    (dsl/price :references-price-definition :ex/pd-winter
+                               :unit-price 0.1M)))]
+    (is (= {:unresolved {:ex/commodity #{"urpx:PriceDefinition"}
+                         :ex/pd-winter #{"urpx:Price"}
+                         :ex/winter #{"urpx:PriceDefinition" "urpx:TimeBracket"}}}
+           (ex-data e)))
+    (is (= (str "dsl-scope has unresolved references "
+                ":ex/commodity (from urpx:PriceDefinition), "
+                ":ex/pd-winter (from urpx:Price), "
+                ":ex/winter (from urpx:PriceDefinition, urpx:TimeBracket)")
+           (ex-message e)))))
+
+(deftest a-repeated-id-refuses
+  (testing "one keyword declared twice"
+    (is (= {:id "ex:summer"
+            :as :ex/summer
+            :type "urpx:Season"
+            :declared-by {:as :ex/summer :type "urpx:Season"}}
+           (ex-data (thrown #(dsl/dsl-scope
+                              (dsl/season :as :ex/summer :season-name "Summer")
+                              (dsl/season :as :ex/summer :season-name "Hot Summer")))))))
+  (testing "two keywords the id-fn sends to one @id"
+    (let [e (thrown #(dsl/dsl-scope
+                      {:id-fn name}
+                      (dsl/season :as :scl/summer :season-name "SCL Summer")
+                      (dsl/season :as :pge/summer :season-name "PG&E Summer")))]
+      (is (re-find #"@id \"summer\" of :pge/summer is already declared by :scl/summer"
+                   (ex-message e)))))
+  (testing "a keyword and an explicit :jsonld/id"
+    (let [e (thrown #(dsl/dsl-scope
+                      (dsl/season :jsonld/id "ex:summer" :season-name "Summer")
+                      (dsl/ledger :as :ex/summer :name "Commodity")))]
+      (is (= {:as nil :type "urpx:Season"} (:declared-by (ex-data e)))))))
+
+(deftest each-dsl-scope-has-its-own-state
+  (testing "one keyword declared in two scopes"
+    (is (= ["ex:summer" "ex:summer"]
+           (map :jsonld/id
+                [(dsl/dsl-scope (dsl/season :as :ex/summer :season-name "A"))
+                 (dsl/dsl-scope (dsl/season :as :ex/summer :season-name "B"))]))))
+  (testing "an inner scope does not see the outer"
+    (is (= {:unresolved {:ex/summer #{"urpx:PriceDefinition"}}}
+           (ex-data (thrown #(dsl/dsl-scope
+                              (dsl/season :as :ex/summer :season-name "Summer")
+                              (dsl/dsl-scope
+                               (pd :name "Summer"
+                                   :applies-in-season :ex/summer
+                                   :references-ledger {:jsonld/id "x:l"})))))))))
 
 (deftest vocabulary-keyword-values-are-urpx-refs
   (let [build #(dsl/time-bracket :start-time "16:00:00"
@@ -369,13 +418,13 @@
       (is (= want (select-keys (dsl/dsl-scope (build)) (keys want)))))
     (testing "alongside a local ref"
       (let [tb (dsl/dsl-scope
-                (dsl/season ::summer :season-name "Summer")
+                (dsl/season :as :ex/summer :season-name "Summer")
                 (dsl/time-bracket :start-time "16:00:00"
                                   :end-time "21:00:00"
                                   :day-type :urpx/allDays
-                                  :applies-in-season [::summer]))]
+                                  :applies-in-season [:ex/summer]))]
         (is (= {:jsonld/id "urpx:allDays"} (:urpx/dayType tb)))
-        (is (= [{:jsonld/id "summer"}] (:urpx/appliesInSeason tb)))))))
+        (is (= [{:jsonld/id "ex:summer"}] (:urpx/appliesInSeason tb)))))))
 
 (deftest unknown-keys-refuse
   (testing "a misspelled short key and a misspelled canonical key, named with
@@ -391,7 +440,7 @@
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"refuses unknown keys \[:id\]"
                           (dsl/season {:id "x:s" :season-name "S"})))
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"refuses unknown keys"
-                          (dsl/dsl-scope (dsl/season ::s :season-name "S" :foo 1)))))
+                          (dsl/dsl-scope (dsl/season :as :ex/s :season-name "S" :foo 1)))))
   (testing "a nil value does not excuse an unknown key"
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"refuses unknown keys"
                           (dsl/season :season-name "S" :foo nil))))
@@ -569,67 +618,68 @@
    short-form kwargs, raw inputs that auto-coerce."
   []
   (dsl/dsl-scope
-   (let [summer    (dsl/season ::summer
+   (let [summer    (dsl/season :as :ex/summer
                                :season-name "Summer"
                                :month [5 6 7 8 9 10])
-         winter    (dsl/season ::winter
+         winter    (dsl/season :as :ex/winter
                                :season-name "Winter"
                                :month [11 12 1 2 3 4])
-         mi-energy (dsl/metric-input ::mi-energy
+         mi-energy (dsl/metric-input :as :ex/mi-energy
                                      :name "kWh"
                                      :metric-input-type {:jsonld/id "urpx:profileMetricInput"}
                                      :has-metric-specification
                                      (dsl/metric-specification
                                       :measurement-kind {:jsonld/id "urpx:energy"}
                                       :unit-of-measure  {:jsonld/id "urpx:kWh"}))
-         l-comm    (dsl/ledger ::ledger-commodity
+         l-comm    (dsl/ledger :as :ex/ledger-commodity
                                :name "Commodity"
                                :ledger-type {:jsonld/id "urpx:supplyLedger"}
-                               :references-metric-input [::mi-energy])
-         l-dist    (dsl/ledger ::ledger-distribution
+                               :references-metric-input [:ex/mi-energy])
+         l-dist    (dsl/ledger :as :ex/ledger-distribution
                                :name "Distribution"
                                :ledger-type {:jsonld/id "urpx:distributionLedger"}
-                               :references-metric-input [::mi-energy])
-         l-pb      (dsl/ledger ::ledger-public-benefits
+                               :references-metric-input [:ex/mi-energy])
+         l-pb      (dsl/ledger :as :ex/ledger-public-benefits
                                :name "Public Benefits"
                                :ledger-type {:jsonld/id "urpx:bundledLedger"}
-                               :references-metric-input [::mi-energy])
-         pd-cs     (dsl/price-definition ::pd-commodity-summer
+                               :references-metric-input [:ex/mi-energy])
+         pd-cs     (dsl/price-definition :as :ex/pd-commodity-summer
                                          :name "Commodity Summer"
-                                         :applies-in-season ::summer
-                                         :references-ledger ::ledger-commodity)
-         pd-cw     (dsl/price-definition ::pd-commodity-winter
+                                         :applies-in-season :ex/summer
+                                         :references-ledger :ex/ledger-commodity)
+         pd-cw     (dsl/price-definition :as :ex/pd-commodity-winter
                                          :name "Commodity Winter"
-                                         :applies-in-season ::winter
-                                         :references-ledger ::ledger-commodity)
-         pd-ds     (dsl/price-definition ::pd-distribution-summer
+                                         :applies-in-season :ex/winter
+                                         :references-ledger :ex/ledger-commodity)
+         pd-ds     (dsl/price-definition :as :ex/pd-distribution-summer
                                          :name "Distribution Summer"
-                                         :applies-in-season ::summer
-                                         :references-ledger ::ledger-distribution)
-         pd-dw     (dsl/price-definition ::pd-distribution-winter
+                                         :applies-in-season :ex/summer
+                                         :references-ledger :ex/ledger-distribution)
+         pd-dw     (dsl/price-definition :as :ex/pd-distribution-winter
                                          :name "Distribution Winter"
-                                         :applies-in-season ::winter
-                                         :references-ledger ::ledger-distribution)
-         pd-pbs    (dsl/price-definition ::pd-public-benefits-summer
+                                         :applies-in-season :ex/winter
+                                         :references-ledger :ex/ledger-distribution)
+         pd-pbs    (dsl/price-definition :as :ex/pd-public-benefits-summer
                                          :name "Public Benefits Summer"
-                                         :applies-in-season ::summer
-                                         :references-ledger ::ledger-public-benefits)
-         pd-pbw    (dsl/price-definition ::pd-public-benefits-winter
+                                         :applies-in-season :ex/summer
+                                         :references-ledger :ex/ledger-public-benefits)
+         pd-pbw    (dsl/price-definition :as :ex/pd-public-benefits-winter
                                          :name "Public Benefits Winter"
-                                         :applies-in-season ::winter
-                                         :references-ledger ::ledger-public-benefits)
+                                         :applies-in-season :ex/winter
+                                         :references-ledger :ex/ledger-public-benefits)
          price-of  (fn [pd-ref unit]
                      (dsl/price :references-price-definition pd-ref
                                 :unit-price unit
                                 :start-date "2025-07-01"))]
      (dsl/rate-plan
+      :as :ex/cpau-e-2
       :timezone-identifier "America/Los_Angeles"
       :rate-plan-unique-identifier "TEST-CPAU-E-2"
       :name "Non-TOU two-season test plan"
       :initial-effective-date "2025-07-01"
       :has-rate-plan-version
       (dsl/rate-plan-version
-       :for-rate-plan {:jsonld/id "ex:parent"}
+       :for-rate-plan :ex/cpau-e-2
        :has-coverage-claim {:jsonld/type "urpx:CoverageClaim"
                             :urpx/completenessResult {:jsonld/id "urpx:complete"}}
        :change-reason {:jsonld/id "urpx:rateCase"}
@@ -648,18 +698,24 @@
        (dsl/prices
         :has-price-set
         [(dsl/price-set
-          :has-price [(price-of ::pd-commodity-summer        0.15075M)
-                      (price-of ::pd-commodity-winter        0.09334M)
-                      (price-of ::pd-distribution-summer     0.10806M)
-                      (price-of ::pd-distribution-winter     0.07352M)
-                      (price-of ::pd-public-benefits-summer  0.00604M)
-                      (price-of ::pd-public-benefits-winter  0.00604M)])]))))))
+          :has-price [(price-of :ex/pd-commodity-summer        0.15075M)
+                      (price-of :ex/pd-commodity-winter        0.09334M)
+                      (price-of :ex/pd-distribution-summer     0.10806M)
+                      (price-of :ex/pd-distribution-winter     0.07352M)
+                      (price-of :ex/pd-public-benefits-summer  0.00604M)
+                      (price-of :ex/pd-public-benefits-winter  0.00604M)])]))))))
 
 (deftest cpau-e-2-via-dsl-validates
   (testing "a CPAU-E-2-shaped plan authored via the DSL passes
             full RatePlan schema validation"
     (let [plan (cpau-e-2-via-dsl)]
       (is (nil? (coerce/explain schema/RatePlan plan))))))
+
+(deftest cpau-e-2-via-dsl-version-names-its-enclosing-plan
+  (let [plan (cpau-e-2-via-dsl)]
+    (is (= "ex:cpau-e-2" (:jsonld/id plan)))
+    (is (= {:jsonld/id "ex:cpau-e-2"}
+           (-> plan :urpx/hasRatePlanVersion :urpx/forRatePlan)))))
 
 (deftest cpau-e-2-via-dsl-resolves-summer
   (testing "the DSL plan resolves at a Summer probe instant to
