@@ -22,7 +22,12 @@ CLOJARS_PASSWORD="$CLOJARS_TOKEN_ENERGY_GRID" clojure -T:build release
 
 The token is group-scoped: `CLOJARS_TOKEN_ENERGY_GRID` covers `energy.grid-coordination/*`. `deps-deploy` only reads `CLOJARS_PASSWORD`, which is why it is passed inline rather than exported.
 
-Afterwards, bump `version` to the next `-SNAPSHOT`, commit, and push both the branch and the tag.
+Afterwards, bump `version` to the next `-SNAPSHOT`, commit, and push both the branch and the tag. Then publish the GitHub release from that version's CHANGELOG section:
+
+```bash
+awk '/^## \[X.Y.Z\]/{f=1; next} /^## \[/{f=0} f' CHANGELOG.md > /tmp/notes.md
+gh release create vX.Y.Z --title vX.Y.Z --notes-file /tmp/notes.md --latest
+```
 
 ## Why `release` exists as one task
 
