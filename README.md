@@ -54,7 +54,7 @@ Three paths share the same typed entity model:
 `deps.edn`:
 
 ```clojure
-{:deps {energy.grid-coordination/clj-urpx {:mvn/version "0.40.0"}}}
+{:deps {energy.grid-coordination/clj-urpx {:mvn/version "0.41.0"}}}
 ```
 
 ## Getting started
