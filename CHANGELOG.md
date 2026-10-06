@@ -14,6 +14,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 ### Fixed
 
 - **xsd:time `24:00:00` decodes to midnight**, on read and in `urpx.dsl` builders, with any fraction of zeros and an optional offset, and encodes as `00:00:00`. It threw `:urpx.schema/malformed-time`. A `urpx:TimeBracket` ending `24:00:00` runs to midnight. Bare `24:00` and any other hour-24 time still refuse.
+- **`urpx.dsl` builders read a `:urpx/X` keyword value as the vocabulary term `{:jsonld/id "urpx:X"}`**, inside a `dsl-scope` or not, element-wise in a vector. Inside a scope it threw `DSL local ref not declared`; outside, the keyword failed validation.
 - **`urpx.dsl/condition-expression` accepts kebab-case short keys** (`:root-node`), as every other builder does.
 
 ## [0.40.0] — 2026-10-06

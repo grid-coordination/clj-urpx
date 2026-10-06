@@ -314,6 +314,27 @@
       (is (= [{:jsonld/id "summer"}] (:urpx/appliesInSeason pd)))
       (is (= {:jsonld/id "commodity"} (:urpx/referencesLedger pd))))))
 
+(deftest vocabulary-keyword-values-are-urpx-refs
+  (let [build #(dsl/time-bracket :start-time "16:00:00"
+                                 :end-time "21:00:00"
+                                 :day-type :urpx/customDays
+                                 :days-of-week [:urpx/monday {:jsonld/id "urpx:friday"}])
+        want  {:urpx/dayType {:jsonld/id "urpx:customDays"}
+               :urpx/daysOfWeek [{:jsonld/id "urpx:monday"} {:jsonld/id "urpx:friday"}]}]
+    (testing "outside a scope"
+      (is (= want (select-keys (build) (keys want)))))
+    (testing "inside a scope"
+      (is (= want (select-keys (dsl/dsl-scope (build)) (keys want)))))
+    (testing "alongside a local ref"
+      (let [tb (dsl/dsl-scope
+                (dsl/season ::summer :season-name "Summer")
+                (dsl/time-bracket :start-time "16:00:00"
+                                  :end-time "21:00:00"
+                                  :day-type :urpx/allDays
+                                  :applies-in-season [::summer]))]
+        (is (= {:jsonld/id "urpx:allDays"} (:urpx/dayType tb)))
+        (is (= [{:jsonld/id "summer"}] (:urpx/appliesInSeason tb)))))))
+
 ;; ---------------------------------------------------------------------------
 ;; Kebab-case kwarg aliases
 ;; ---------------------------------------------------------------------------

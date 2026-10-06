@@ -42,6 +42,9 @@
       carries an offset),
       `--MM` xsd:gMonth → int month-of-year,
       ISO 8601 string → `Duration` / `Period`.
+    - Reads a `:urpx/X` keyword value as the vocabulary term
+      `{:jsonld/id \"urpx:X\"}` (`:day-type :urpx/allDays`), element-wise
+      in a vector.
     - Drops `nil`-valued kwargs (so `(builder :foo (when … x))` cleanly
       omits the field). Explicit `false` is preserved.
     - Validates the assembled entity against the schema and throws
@@ -52,8 +55,8 @@
     - Accept an optional leading qualified-keyword arg as the entity's
       local `@id` (e.g. `(season ::summer …)` registers `::summer` in the
       scope and sets `:jsonld/id \"summer\"`).
-    - Resolve qualified-keyword kwarg values against the scope's registry
-      to produce `{:jsonld/id …}` Ref maps. Vector-typed kwargs walk
+    - Resolve other qualified-keyword kwarg values against the scope's
+      registry to produce `{:jsonld/id …}` Ref maps. Vector-typed kwargs walk
       element-wise.
 
   Resolution is eager (declare-before-reference): an unknown ref or a
@@ -83,7 +86,8 @@
   "Establish a local-symbol-ref scope. Inside the body, builders accept an
    optional leading qualified-keyword argument as the entity's local @id
    (registered in the scope), and qualified-keyword values in kwarg
-   positions resolve to {:jsonld/id ...} maps via the registry.
+   positions other than `:urpx/*` vocabulary terms resolve to
+   {:jsonld/id ...} maps via the registry.
 
    Resolution is eager (declare-before-reference): a reference to an
    undeclared keyword throws ex-info. Multiple declarations of the same
@@ -118,15 +122,24 @@
     (throw (ex-info (str "DSL local ref not declared: " sym)
                     {:sym sym :declared (keys @*local-refs*)}))))
 
+(defn- vocabulary-keyword?
+  "True if `v` names a URPX vocabulary term, such as `:urpx/allDays`."
+  [v]
+  (and (qualified-keyword? v)
+       (= "urpx" (namespace v))))
+
 (defn- resolve-refs-in-value
-  "Walk a kwarg value and replace qualified-keyword leaves (treated as
-   local-ref intents) with {:jsonld/id ...} maps from the registry. Vectors
-   are walked element-wise; other shapes pass through unchanged."
+  "Walk a kwarg value and replace keyword leaves with {:jsonld/id ...} maps.
+   A `:urpx/X` keyword names the vocabulary term `urpx:X`; inside a
+   `dsl-scope`, any other qualified keyword is a local ref resolved from the
+   registry. Vectors are walked element-wise; other shapes pass through
+   unchanged."
   [v]
   (cond
-    (qualified-keyword? v) (resolve-local-ref v)
-    (vector? v)            (mapv resolve-refs-in-value v)
-    :else                  v))
+    (vocabulary-keyword? v)                  {:jsonld/id (str "urpx:" (name v))}
+    (and (in-scope?) (qualified-keyword? v)) (resolve-local-ref v)
+    (vector? v)                              (mapv resolve-refs-in-value v)
+    :else                                    v))
 
 (defn- local-id-arg?
   "True if `v` looks like a DSL local-id: a qualified keyword whose
@@ -218,6 +231,8 @@
        qualified-keyword as the entity's local @id (registered in the scope's
        registry); qualified-keyword values in kwarg positions resolve to
        Ref maps via the same registry.
+     - Reads a `:urpx/X` keyword value as the Ref `{:jsonld/id \"urpx:X\"}`,
+       inside a scope or not.
      - Drops kwargs whose value is nil so optional fields can be supplied
        conditionally without producing present-but-nil entries.
      - Runs urpx.coerce/coerce against the schema — already-typed values pass
@@ -242,9 +257,9 @@
             ;; back at the in-progress entity.
             id (when local-id-arg (register-local-id! local-id-arg))
             opts (canonicalize-keys opts aliases)
-            opts* (if (in-scope?)
-                    (into {} (map (fn [[k v]] [k (resolve-refs-in-value v)])) opts)
-                    opts)
+            opts* (into {}
+                        (map (fn [[k v]] [k (resolve-refs-in-value v)]))
+                        opts)
             raw (cond-> (assoc (strip-nils opts*) :jsonld/type t)
                   id (assoc :jsonld/id id))
             coerced (coerce/coerce schema raw)]
