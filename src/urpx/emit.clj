@@ -23,10 +23,9 @@
   (parse → coerce → write → re-parse → re-coerce yields a structurally
   equal entity). Byte-for-byte equality with the input is NOT a goal —
   key ordering, single-vs-vector property emission, and @context
-  recreation may differ from the source document. The vendored-fixture
-  round-trip suite in urpx.emit-test pins the `=`-equality contract over
-  every PG&E filing in test/resources/urpx-fixtures/ plus a URPXDocument-
-  wrapped E-ELEC test case from the URPX upstream.
+  recreation may differ from the source document. urpx.emit-test pins the
+  `=`-equality contract over the PG&E @graph bundles in its
+  `vendored-fixtures`.
 
   @context emission: every write-* function accepts an optional opts map
   with `:context`. Three states:
