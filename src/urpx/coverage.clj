@@ -4,7 +4,7 @@
   Every urpx:RatePlanVersion and urpx:RatePlanModifierVersion carries a
   urpx:CoverageClaim: a verdict on what can be answered from that snapshot under
   stated conditions. The verdict is the standard's own answer to \"what am I
-  holding?\", and this library modeled it and read it nowhere until now.
+  holding?\".
 
   NOT A JUDGEMENT OF THIS LIBRARY'S. Per the ontology, CoverageClaim instances
   \"are produced by an implementation or publishing workflow\", so a claim says

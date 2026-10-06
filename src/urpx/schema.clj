@@ -727,7 +727,7 @@
    mi-energy while its ledger names mi-meter-count. Reading this property as a
    pointer to the ledger a container belongs to would therefore strip the
    bounds off a monthly fixed charge tiered by consumption, which is a real
-   filing shape rather than a modeling error (URPX-c0d).
+   filing shape rather than a modeling error.
 
    No ServiceTiers in the vendored fixtures carries either qualifier. The PG&E
    E-TOU-C baseline-tier modifier is not the per-cell shape: it carries one
@@ -1107,9 +1107,8 @@
     [:vector Ref]]
    [:urpx/baseQuantity {:optional true} Decimal]
    [:urpx/priceCurrency {:optional true} :string]
-   ;; sh:minCount 0 sh:maxCount 1 upstream: a conformant Price may omit it.
-   ;; Required here until now, which rejected such a Price; PriceSetAlternative
-   ;; already modeled it optional, so the two disagreed with each other too.
+   ;; sh:minCount 0 sh:maxCount 1 upstream: a conformant Price may omit it,
+   ;; and PriceSetAlternative models it optional too.
    ;; Both readers, urpx.price/scoped-prices and price-active-at-tou?,
    ;; nil-thread through get-in.
    [:urpx/referencesPriceDefinition {:optional true} Ref]

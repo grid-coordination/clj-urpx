@@ -1,8 +1,8 @@
 (ns urpx.core
-  "URPX rate plan loading and price resolution.
+  "URPX rate plan parsing and loading.
 
-  Parses URPX JSON-LD rate plan documents into Clojure data structures
-  and resolves prices for any given timestamp and timezone."
+  Parses URPX JSON-LD rate plan documents into Clojure data structures.
+  Price resolution is in urpx.price."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.string :as str]

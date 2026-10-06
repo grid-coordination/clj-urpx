@@ -1,8 +1,9 @@
 (ns urpx.validate
-  "Command-line validator for a single URPX JSON-LD file.
+  "Command-line validator for URPX JSON-LD files.
 
-  Checks any one file, which is what a conversion smoke test needs while a set
-  of filings migrates utility by utility and carries two vocabularies at once.
+  Checks one or more files, each on its own, which is what a conversion smoke
+  test needs while a set of filings migrates utility by utility and carries two
+  vocabularies at once.
 
       clojure -M:validate path/to/filing.jsonld [more.jsonld ...]
 

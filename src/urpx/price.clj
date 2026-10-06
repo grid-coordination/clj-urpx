@@ -599,8 +599,8 @@
    Both scopes qualify a candidate and they compose. The two properties on the
    urpx:ServiceTiers container decide whether that container's tiers are in
    effect at all; the same two on the urpx:ServiceBracket decide which of a
-   tier's brackets states the bounds. Reading one and not the other leaves the
-   other a silent no-op, which is what both were until now.
+   tier's brackets states the bounds. Reading one and not the other would leave the
+   other a silent no-op.
 
    Returns nil when the number names no tier, {:tier-name s :bracket b} when
    one set of bounds is determined, {:tier-name s :mark m} when it is not and
@@ -1223,7 +1223,7 @@
    reachable from the documents in scope and over one query date.
 
    There were three readers of this property and they disagreed about more than
-   strictness (URPX-8yp): one skipped an unresolvable ref silently, one refused
+   strictness: one skipped an unresolvable ref silently, one refused
    on several refs, and one distinguished a Season carrying no urpx:month from a
    Season that excludes the month. Tier selection, PriceDefinition gating and
    urpx:PriceSummary member gating now ask the same question here.
@@ -2072,8 +2072,7 @@
          ;; bracket name a urpx:Season a modifier document declares. It covers
          ;; only this document when resolving alone, so it is then a no-op.
          ;; ONE season reader for this instant, shared by tier selection, the
-         ;; PriceDefinition filter and the summary-member gate. Three readers
-         ;; disagreeing about one property is what URPX-8yp was.
+         ;; PriceDefinition filter and the summary-member gate.
          season-status (make-season-status seasons by-id date)
          tier-ctx      {:alt-status alt-status :season-status season-status}
          ;; Ledger-independent, so it is built once rather than per ledger, and
@@ -2164,10 +2163,9 @@
       ;; cover the instant is the confident wrong number this library refuses.
       ;; No per-instant field, the same rule the modifier ledger mark follows.
       ;; This map sits on the RESULT rather than on a ledger, so same-ledgers?
-      ;; never saw it and price-schedule was unaffected; price-segments merges
-      ;; on the whole resolved value and was not. A base filing queried across a
-      ;; window it does not cover returned 31 segments over a month where it
-      ;; returns 1, every one holding identical prices, from 0.22.0 until now.
+      ;; never sees it, but price-segments merges on the whole resolved value:
+      ;; a per-instant field here would split one uncovered window into many
+      ;; segments holding identical prices.
       ;; :version-id, :effective and :expires identify the window; the instant
       ;; the caller asked about is the caller's own. :plan-id is the key
       ;; :versions-by-plan is looked up by.
