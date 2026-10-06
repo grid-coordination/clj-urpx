@@ -19,7 +19,8 @@
   Schemas are bare def vars referenced by symbol — there is no central registry
   except inside ConditionExpression, where the recursive Comparison/Boolean
   operand tree uses a local Malli registry."
-  (:require [malli.core :as m])
+  (:require [clojure.string :as str]
+            [malli.core :as m])
   (:import [java.math BigDecimal]
            [java.time DateTimeException Duration LocalDate LocalDateTime LocalTime
             OffsetDateTime OffsetTime Period ZoneId ZoneOffset ZonedDateTime]
@@ -257,15 +258,22 @@
        v)
       v)))
 
+(def ^:private end-of-day #"^24:00:00(?:\.0+)?(?=$|Z|[+-])")
+
 (defn- ->time
-  "xsd:time. Without an offset, a LocalTime; with one, an OffsetTime."
+  "xsd:time. Without an offset, a LocalTime; with one, an OffsetTime.
+
+   `24:00:00` (with any fraction of zeros) is the same value as `00:00:00`
+   (XSD 1.1 Part 2, 3.3.8), so it decodes to midnight and encodes back as
+   `00:00:00`."
   [v]
   (let [v (literal-value v)]
     (if (string? v)
       (parse-temporal
        :urpx.schema/malformed-time "xsd:time"
        (fn [^String s]
-         (if (re-find offset-suffix s) (OffsetTime/parse s) (LocalTime/parse s)))
+         (let [s (str/replace-first s end-of-day "00:00:00")]
+           (if (re-find offset-suffix s) (OffsetTime/parse s) (LocalTime/parse s))))
        v)
       v)))
 
