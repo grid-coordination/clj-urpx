@@ -1,7 +1,7 @@
 (ns urpx.service-bracket-offset-samples-test
   "The urpx-dev service bracket offset samples: a PG&E Medical Baseline
   modifier whose adjusting brackets add 16.438 kWh per day to the E-TOU-C
-  baseline-tier ladder, and twelve negatives that each break one constraint.
+  baseline-tier ladder, and negatives that each break one constraint.
 
   Each sample is merged with the urpx test case it names, vendored beside it.
   The samples are in JSON-LD flattened form."

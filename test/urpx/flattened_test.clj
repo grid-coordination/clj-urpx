@@ -44,10 +44,13 @@
 
 (deftest the-flattened-fixtures-are-flattened
   (doseq [n flattened
-          :let [g (get (json/read-str (slurp (flat n))) "@graph")]]
+          :let [doc     (json/read-str (slurp (flat n)))
+                g       (get doc "@graph")
+                version #{"urpx:RatePlanVersion" "urpx:RatePlanModifierVersion"}]]
     (is (every? #(contains? % "@id") g) n)
-    (is (not-any? #(= "urpx:RatePlanVersion" (get % "@type")) (graph (json/read-str (slurp (flat n)))))
-        (str n ": no version is left at the top level"))))
+    (is (some #(version (get % "@type")) g) (str n ": a version sits at the top level"))
+    (is (not-any? #(version (:jsonld/type %)) (graph doc))
+        (str n ": parse-graph leaves no version at the top level"))))
 
 (deftest a-flattened-plan-resolves-as-its-nested-original
   (doseq [[n opts] [["pge-e-1-2026-03-01" {}]
