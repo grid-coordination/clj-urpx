@@ -186,6 +186,17 @@
                          (str (.getSimpleName (class t)) ": " (.getMessage t)))))))))
           (finally (remove-ns ns-sym)))))))
 
+(deftest readme-installation-names-the-latest-release
+  (testing "the Installation coordinate is the newest version in CHANGELOG.md,
+            so a release that forgets to bump it fails here"
+    (let [shown  (some->> (section (doc "README.md") "Installation")
+                          (re-find #"clj-urpx \{:mvn/version \"([^\"]+)\"\}")
+                          second)
+          latest (second (re-find #"(?m)^## \[(\d+\.\d+\.\d+)\]" (doc "CHANGELOG.md")))]
+      (is (some? latest) "CHANGELOG.md has a released version")
+      (is (= latest shown)
+          (str "README Installation shows " (pr-str shown) ", CHANGELOG's latest is " latest)))))
+
 (deftest readme-getting-started-launch-command-has-the-classpath-it-needs
   (testing "the suite evaluates Getting started under :test, so it cannot see
             the classpath of the command the README tells a reader to run.

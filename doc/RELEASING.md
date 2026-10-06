@@ -13,7 +13,7 @@ That is the whole thing. It runs the tests, builds the jar, verifies the artifac
 
 ## Before you start
 
-Land every change, update `CHANGELOG.md`, set `version` in `build.clj` to the release version (drop `-SNAPSHOT`), commit, then:
+Land every change, update `CHANGELOG.md` and the README Installation coordinate, set `version` in `build.clj` to the release version (drop `-SNAPSHOT`), commit, then:
 
 ```bash
 clojure -T:build tag                                    # tags HEAD as v<version>
