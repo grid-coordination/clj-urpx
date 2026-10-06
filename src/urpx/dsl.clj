@@ -220,8 +220,7 @@
 
 (defn- canonicalize-keys
   "Translate any short-form keys in `opts` to their canonical :urpx/* form
-   via `aliases`. Unknown keys pass through (schema validation surfaces
-   typos)."
+   via `aliases`. Other keys pass through unchanged."
   [opts aliases]
   (reduce-kv (fn [acc k v]
                (assoc acc (or (aliases k) k) v))
@@ -240,6 +239,9 @@
        Ref maps via the same registry.
      - Reads a `:urpx/X` keyword value as the Ref `{:jsonld/id \"urpx:X\"}`,
        inside a scope or not.
+     - Refuses a key that is neither a key of the schema, a short form of
+       one, a `:jsonld/*` key, nor in `:passthrough`, naming the key and the
+       entity type, so a misspelled key throws instead of being emitted.
      - Drops kwargs whose value is nil so optional fields can be supplied
        conditionally without producing present-but-nil entries.
      - Runs urpx.coerce/coerce against the schema — already-typed values pass
@@ -249,31 +251,48 @@
        (with the Malli explanation attached) on validation failure.
 
    The schema must carry a :jsonld/type entry with shape `[:= \"urpx:X\"]`
-   so the @type can be inferred."
-  [schema]
-  (let [t (entity-type schema)
-        aliases (alias-map schema)]
-    (when-not t
-      (throw (ex-info "make-builder: schema must have a :jsonld/type [:= ...] entry"
-                      {:schema (m/form schema)})))
-    (fn build [& args]
-      (let [[local-id-arg opts] (normalize-args args)
-            ;; Register the local-id BEFORE resolving the rest of the opts —
-            ;; an entity can't reference itself, but registering early keeps
-            ;; the registry consistent if any value resolution were to look
-            ;; back at the in-progress entity.
-            id (when local-id-arg (register-local-id! local-id-arg))
-            opts (canonicalize-keys opts aliases)
-            opts* (into {}
-                        (map (fn [[k v]] [k (resolve-refs-in-value v)]))
-                        opts)
-            raw (cond-> (assoc (strip-nils opts*) :jsonld/type t)
-                  id (assoc :jsonld/id id))
-            coerced (coerce/coerce schema raw)]
-        (when-let [err (coerce/explain schema coerced)]
-          (throw (ex-info (str "DSL builder produced an invalid " t)
-                          {:type t :input raw :explanation err})))
-        coerced))))
+   so the @type can be inferred.
+
+   Options:
+
+     - `:passthrough`, a set of further keys the constructor admits, for a
+       property the schema does not model:
+
+         (make-builder schema/RatePlanVersion {:passthrough #{:urpx/offeredBy}})"
+  ([schema] (make-builder schema {}))
+  ([schema {:keys [passthrough] :or {passthrough #{}}}]
+   (let [t (entity-type schema)
+         aliases (alias-map schema)
+         schema-keys (set (map first (m/entries (m/deref schema))))
+         admitted? (fn [k]
+                     (or (contains? schema-keys k)
+                         (and (qualified-keyword? k) (= "jsonld" (namespace k)))
+                         (contains? passthrough k)))]
+     (when-not t
+       (throw (ex-info "make-builder: schema must have a :jsonld/type [:= ...] entry"
+                       {:schema (m/form schema)})))
+     (fn build [& args]
+       (let [[local-id-arg opts] (normalize-args args)
+             opts (canonicalize-keys opts aliases)
+             _ (when-let [unknown (seq (remove admitted? (keys opts)))]
+                 (throw (ex-info (str "DSL builder for " t " refuses unknown keys "
+                                      (pr-str (vec (sort-by str unknown))))
+                                 {:type t :unknown-keys (set unknown)})))
+             ;; Register the local-id BEFORE resolving the rest of the opts —
+             ;; an entity can't reference itself, but registering early keeps
+             ;; the registry consistent if any value resolution were to look
+             ;; back at the in-progress entity.
+             id (when local-id-arg (register-local-id! local-id-arg))
+             opts* (into {}
+                         (map (fn [[k v]] [k (resolve-refs-in-value v)]))
+                         opts)
+             raw (cond-> (assoc (strip-nils opts*) :jsonld/type t)
+                   id (assoc :jsonld/id id))
+             coerced (coerce/coerce schema raw)]
+         (when-let [err (coerce/explain schema coerced)]
+           (throw (ex-info (str "DSL builder produced an invalid " t)
+                           {:type t :input raw :explanation err})))
+         coerced)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Named builders for every entity in urpx.schema

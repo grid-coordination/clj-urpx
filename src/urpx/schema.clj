@@ -528,6 +528,7 @@
   [:map
    [:jsonld/type [:= "urpx:MetricSpecification"]]
    [:jsonld/id {:optional true} :string]
+   [:urpx/commodity       {:optional true} Ref]
    [:urpx/measurementKind {:optional true} Ref]
    [:urpx/unitOfMeasure   {:optional true} Ref]
    [:urpx/flowDirection   {:optional true} Ref]

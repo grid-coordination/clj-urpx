@@ -344,6 +344,50 @@
         (is (= {:jsonld/id "urpx:allDays"} (:urpx/dayType tb)))
         (is (= [{:jsonld/id "summer"}] (:urpx/appliesInSeason tb)))))))
 
+(deftest unknown-keys-refuse
+  (testing "a misspelled short key and a misspelled canonical key, named with
+            the entity type"
+    (let [e (try (dsl/season :seasn-name "t" :urpx/seasonNmae "t2")
+                 nil
+                 (catch clojure.lang.ExceptionInfo e e))]
+      (is (re-find #"urpx:Season" (ex-message e)))
+      (is (re-find #":seasn-name" (ex-message e)))
+      (is (= {:type "urpx:Season" :unknown-keys #{:seasn-name :urpx/seasonNmae}}
+             (ex-data e)))))
+  (testing "in the trailing-map form and inside a scope"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"refuses unknown keys \[:id\]"
+                          (dsl/season {:id "x:s" :season-name "S"})))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"refuses unknown keys"
+                          (dsl/dsl-scope (dsl/season ::s :season-name "S" :foo 1)))))
+  (testing "a nil value does not excuse an unknown key"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"refuses unknown keys"
+                          (dsl/season :season-name "S" :foo nil))))
+  (testing "schema keys, short forms and :jsonld/* keys are admitted"
+    (is (= {:jsonld/type "urpx:Season"
+            :jsonld/id "x:s"
+            :urpx/seasonName "S"
+            :urpx/month [6]}
+           (dsl/season :jsonld/id "x:s" :season-name "S" :urpx/month [6])))))
+
+(deftest a-passthrough-set-admits-further-keys
+  (let [build (dsl/make-builder schema/Season {:passthrough #{:urpx/offeredBy :skos/notation}})
+        s     (build :season-name "S"
+                     :urpx/offeredBy {:jsonld/id "x:org"}
+                     :skos/notation "S1")]
+    (is (= {:jsonld/id "x:org"} (:urpx/offeredBy s)))
+    (is (= "S1" (:skos/notation s)))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"refuses unknown keys \[:foo\]"
+                          (build :season-name "S" :foo 1)))
+    (testing "the named builder admits neither"
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (dsl/season :season-name "S" :urpx/offeredBy {:jsonld/id "x:org"}))))))
+
+(deftest read-side-coercion-keeps-unknown-keys
+  (is (= "kept" (:urpx/notModeled (coerce/coerce schema/Season
+                                                 {:jsonld/type "urpx:Season"
+                                                  :urpx/seasonName "S"
+                                                  :urpx/notModeled "kept"})))))
+
 ;; ---------------------------------------------------------------------------
 ;; Kebab-case kwarg aliases
 ;; ---------------------------------------------------------------------------

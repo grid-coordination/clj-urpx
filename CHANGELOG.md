@@ -11,6 +11,15 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking: `urpx.dsl` builders refuse unknown keys.** A key that is neither a key of the entity's schema, a kebab-case short form of one, nor a `:jsonld/*` key throws, naming the keys and the entity type under `:unknown-keys` and `:type`. Such a key was emitted as written, so a misspelling produced a wrong document. Coercion on read still keeps unknown keys.
+
+### Added
+
+- **`urpx.dsl/make-builder` takes an options map**; `:passthrough` is a set of further keys the constructor admits, for properties the schema does not model.
+- **`urpx.schema/MetricSpecification` admits `urpx:commodity`**, as a Ref.
+
 ### Fixed
 
 - **xsd:time `24:00:00` decodes to midnight**, on read and in `urpx.dsl` builders, with any fraction of zeros and an optional offset, and encodes as `00:00:00`. It threw `:urpx.schema/malformed-time`. A `urpx:TimeBracket` ending `24:00:00` runs to midnight. Bare `24:00` and any other hour-24 time still refuse.

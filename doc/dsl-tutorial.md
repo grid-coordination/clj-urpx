@@ -31,7 +31,7 @@ Via the DSL — auto-coercion of `--MM` strings into ints, kebab-case kwargs, `@
 
 ```clojure
 (dsl/season
-  :id "ex:season-summer"
+  :jsonld/id "ex:season-summer"
   :season-name "Summer"
   :month ["--06" "--07" "--08" "--09"]
   :yearly-recurrence true)
@@ -73,12 +73,12 @@ Via the DSL — nested entities are themselves builder calls, and Refs are plain
 
 ```clojure
 (dsl/metric-input
-  :id "ex:metric-input-energy"
+  :jsonld/id "ex:metric-input-energy"
   :name "Standard Energy Measurement"
   :metric-input-type {:jsonld/id "urpx:measuredMetricInput"}
   :has-metric-specification
   (dsl/metric-specification
-    :id "ex:metric-spec-energy-supply"
+    :jsonld/id "ex:metric-spec-energy-supply"
     :commodity        {:jsonld/id "urpx:electricity"}
     :measurement-kind {:jsonld/id "urpx:energy"}
     :unit-of-measure  {:jsonld/id "urpx:kWh"}))

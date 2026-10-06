@@ -924,6 +924,7 @@ The DSL handles the boring parts so authoring code stays declarative:
 - **Auto-coercion** of raw Clojure inputs through the schema's `:decode/urpx-jsonld` decoders: numbers → `BigDecimal`, ISO strings → `LocalDate` / `LocalDateTime` / `LocalTime`, or the zoned forms when a dateTime or time carries an offset, `--MM` xsd:gMonth → int.
 - **Validation on construct** — every builder throws `ex-info` with the Malli explanation if the entity doesn't validate against its schema, so shape drift surfaces at the call site.
 - **Two kwarg forms** — canonical `:urpx/seasonName` or auto-derived kebab-case `:season-name` (both work, can be mixed in one call).
+- **Unknown keys refuse.** A key that is neither in the schema, a kebab-case form of one, nor `:jsonld/*` throws, naming the key and the entity type. `(dsl/make-builder schema/X {:passthrough #{…}})` builds a constructor that admits further keys.
 
 ### Local-symbol refs
 
