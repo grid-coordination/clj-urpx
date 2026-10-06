@@ -137,9 +137,21 @@
     (let [parsed (json/read-str (emit/write-rate-plan minimal-rate-plan))
           ctx    (get parsed "@context")]
       (is (map? ctx))
-      (is (= "https://urpx-org.github.io/urpx/ontology/" (get ctx "urpx")))
+      (is (= "https://urpx.org/ns/ontology/" (get ctx "urpx")))
       (is (= "http://www.w3.org/2001/XMLSchema#" (get ctx "xsd")))
       (is (= {"@type" "xsd:decimal"} (get ctx "urpx:unitPrice"))))))
+
+(deftest default-context-urpx-prefix-matches-the-vendored-fixtures
+  (testing "the default binds `urpx` to the IRI every vendored fixture declares"
+    (let [dir   (java.io.File. "test/resources/urpx-fixtures")
+          files (filter #(.endsWith (.getName ^java.io.File %) ".jsonld") (.listFiles dir))
+          iris  (set (for [f files
+                           :let [ctx (get (json/read-str (slurp f)) "@context")]
+                           m (if (map? ctx) [ctx] (filter map? ctx))
+                           :when (contains? m "urpx")]
+                       (get m "urpx")))]
+      (is (seq files))
+      (is (= #{(get emit/default-context "urpx")} iris)))))
 
 (defn- temporal-keys
   "Every map key under `root` whose value schema is schema/Date, DateTime or
@@ -185,7 +197,7 @@
 
 (deftest caller-supplied-context-overrides-default
   (testing "URPX-awl: passing :context replaces the default verbatim"
-    (let [my-ctx {"urpx" "https://urpx-org.github.io/urpx/ontology/"
+    (let [my-ctx {"urpx" "https://urpx.org/ns/ontology/"
                   "ex"   "https://example.com/test/"}
           parsed (json/read-str (emit/write-rate-plan minimal-rate-plan
                                                       {:context my-ctx}))]
@@ -201,7 +213,7 @@
 (deftest existing-context-on-input-is-preserved
   (testing "URPX-awl: an entity carrying :jsonld/context keeps its own
             @context unchanged — the default doesn't clobber it"
-    (let [bespoke-ctx {:urpx "https://urpx-org.github.io/urpx/ontology/"
+    (let [bespoke-ctx {:urpx "https://urpx.org/ns/ontology/"
                        :ex   "https://example.com/preserved/"}
           plan-with-ctx (assoc minimal-rate-plan :jsonld/context bespoke-ctx)
           parsed (json/read-str (emit/write-rate-plan plan-with-ctx))]

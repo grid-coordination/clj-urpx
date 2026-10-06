@@ -876,7 +876,7 @@ By default, every write-* function emits a baseline `@context` with the canonica
 (emit/write-rate-plan plan)
 
 ;; Caller-supplied context (replaces the default verbatim)
-(emit/write-rate-plan plan {:context {"urpx" "https://urpx-org.github.io/urpx/ontology/"
+(emit/write-rate-plan plan {:context {"urpx" "https://urpx.org/ns/ontology/"
                                       "ex"   "https://example.com/foo/"}})
 
 ;; Suppress @context entirely

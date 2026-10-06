@@ -113,7 +113,7 @@
       (finally (.delete tmp)))))
 
 (def context
-  {"urpx" "https://urpx-org.github.io/urpx/ontology/"})
+  {"urpx" "https://urpx.org/ns/ontology/"})
 
 (def single-entity-doc
   {"@type" "urpx:RatePlan"

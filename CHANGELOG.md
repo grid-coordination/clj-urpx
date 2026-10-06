@@ -11,6 +11,10 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 ## [Unreleased]
 
+### Changed
+
+- **`urpx.emit/default-context` binds `urpx` to `https://urpx.org/ns/ontology/`**, the namespace the URPX v0.5.1 documents declare. It bound the earlier `https://urpx-org.github.io/urpx/ontology/`, so emitted CURIEs expanded to IRIs no URPX document uses.
+
 ### Fixed
 
 - **The README Getting started walkthrough runs from a fresh clone.** The `:nrepl` alias now puts `test` and `test/resources` on the classpath, so `urpx.test-fixtures` and the vendored fixtures load.
