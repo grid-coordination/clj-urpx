@@ -94,7 +94,7 @@ A `rejects-valid` defect nobody had noticed: `Price.referencesPriceDefinition` w
 |---|---|
 | Keep hand-written Malli | No SHACL engine, no runtime RDF dependency. Vocabulary changes are concrete schema edits. |
 | Validate the compact document tree | `urpx.emit` round-trips to authored shape. Flattening would collapse the inline-vs-reference ambiguity and make generation easier, at the cost of the authoring contract. |
-| Report `sh:closed`, do not enforce it | A closed shape rejects every property it does not list, so enforcing it would reject the v0.2.x spellings this library accepts. The one `{:closed true}` map here is `ExclusiveRef`, and its closedness is reference-vs-node discrimination, not `sh:closed` mirroring. |
+| Report `sh:closed`, do not enforce it | A closed shape rejects every property it does not list, so enforcing it would reject the v0.2.x spellings this library accepts. `{:closed true}` on `ExclusiveRef` and `RdfList` tells a reference or a list object from a node; it does not mirror `sh:closed`. |
 | Accept both vocabularies | Filings migrate utility by utility and carry both at once. Reference arms are `[:or X ExclusiveRef]`, never `[:or X Ref]`, because the open form is the vacuous one. |
 
 ## Where the hand-written schemas stand

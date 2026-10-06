@@ -659,10 +659,12 @@
     (doseq [build [version modifier-version]
             value [scl org {:jsonld/id "org:utility-scl"}]]
       (is (= value (:urpx/offeredBy (build value)))))
-    (testing "a value that is no organization refuses"
-      (doseq [build [version modifier-version]]
-        (is (thrown? clojure.lang.ExceptionInfo
-                     (build {:jsonld/type "urpx:Season" :urpx/seasonName "S"})))))))
+    (testing "a value that is no organization, or an organization without
+              urpx:organizationType, refuses"
+      (doseq [build [version modifier-version]
+              value [{:jsonld/type "urpx:Season" :urpx/seasonName "S"}
+                     {:jsonld/type "urpx:Organization" :urpx/legalName "X"}]]
+        (is (thrown? clojure.lang.ExceptionInfo (build value)))))))
 
 (deftest rdf-list-builds-an-ordered-list
   (let [values (dsl/rdf-list [{:jsonld/value "P" :jsonld/type "xsd:string"}

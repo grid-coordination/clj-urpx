@@ -19,6 +19,15 @@
                 file yielding nothing recognizable is visible as such"
         (is (some #{"urpx:ProgramEnrollment"} skipped))))))
 
+(deftest check-file-checks-every-type-coerce-doc-dispatches
+  (let [path (.getPath (fixtures/fixture-resource "pge-e-tou-d-2026-03-27"))
+        {:keys [checked skipped]} (validate/check-file path)
+        types (set (map :type checked))]
+    (is (contains? types "urpx:SourcePublication"))
+    (is (contains? types "urpx:RateCase"))
+    (is (every? nil? (map :error checked)))
+    (is (= #{"urpx:ProgramEnrollment"} (set skipped)))))
+
 (deftest check-file-reports-the-failing-path
   (testing "a missing required key surfaces as an error naming it"
     (let [plan (fixtures/load-rate-plan "pge-e-1-2026-03-01")

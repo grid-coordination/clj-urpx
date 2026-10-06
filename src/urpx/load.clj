@@ -138,9 +138,8 @@
        :urpx.load/unresolved-references [{:jsonld/id id :package-id p :property k} ...]}
 
   THE DISCARD IS THE POINT. `document-xf` drops every entity this library does
-  not model, such as urpx:ProgramEnrollment, urpx:SourcePublication and
-  urpx:RateCase. That none of those is a version is luck rather than design,
-  and the unlucky form of exactly this cost a whole rate plan once: a version
+  not model, such as urpx:ProgramEnrollment. That none of those is a version
+  is luck rather than design, and the unlucky form of exactly this cost a whole rate plan once: a version
   stating only urpx:effectiveDate was dropped by a filter that read only
   urpx:effectiveDateTime, and nothing said so.
 

@@ -1351,7 +1351,7 @@
 ;; An organization carries 0..N urpx:hasIdentity, each naming it by one
 ;; urpx:OrganizationName over a validity window and listing its typed
 ;; identifiers. urpx:UtilityOperator is a subclass of urpx:Organization with
-;; its own closed shape. Read from urpx-shacl at urpx-org/urpx 6bccd004.
+;; its own closed shape.
 ;; ---------------------------------------------------------------------------
 
 (def OrganizationName
@@ -2045,14 +2045,11 @@
 
    Dual-accept: the @type admits both the v0.5.1 urpx:SourcePublication and the
    v0.2.x urpx:TariffPublication, because a set of filings migrating utility by
-   utility carries both at once. That is also why this schema has no DSL
-   builder: `urpx.dsl/make-builder` requires a `[:= \"...\"]` type entry and
-   throws on an `:enum`.
+   utility carries both at once. `urpx.dsl/source-publication` writes the first.
 
    urpx-shacl:SourcePublicationShape requires nothing. The entries after its
-   paths are v0.2.1 TariffPublicationShape paths that v0.5.1 drops; the
-   vendored PG&E fixtures carry hasRatePlan and hasRatePlanModifier, so omitting
-   them would break the suite."
+   paths are v0.2.1 TariffPublicationShape paths that v0.5.1 drops, so a v0.2.x
+   publication validates."
   [:map
    [:jsonld/type [:enum "urpx:SourcePublication" "urpx:TariffPublication"]]
    [:jsonld/id {:optional true} :string]

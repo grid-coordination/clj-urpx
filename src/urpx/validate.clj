@@ -31,7 +31,10 @@
    "urpx:RatePlanModifierVersion"  schema/RatePlanModifierVersion
    "urpx:URPXDocument"             schema/URPXDocument
    "urpx:URPXPackage"              schema/URPXPackage
-   "urpx:ScenarioCostModel"        schema/ScenarioCostModel})
+   "urpx:ScenarioCostModel"        schema/ScenarioCostModel
+   "urpx:SourcePublication"        schema/SourcePublication
+   "urpx:TariffPublication"        schema/SourcePublication
+   "urpx:RateCase"                 schema/RateCase})
 
 (def ^:private version-types
   #{"urpx:RatePlanVersion" "urpx:RatePlanModifierVersion"})
