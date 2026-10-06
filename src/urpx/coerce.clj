@@ -91,8 +91,9 @@
    RatePlanModifier, wrapper (urpx:URPXDocument in v0.2.x, urpx:URPXPackage
    from v0.3.0 on), a top-level version snapshot (urpx:RatePlanVersion /
    urpx:RatePlanModifierVersion, which v0.5.1 documents may carry as siblings
-   of the identity entity rather than nested inside it), or a
-   urpx:ScenarioCostModel. Returns nil for unknown types."
+   of the identity entity rather than nested inside it), a
+   urpx:ScenarioCostModel, a urpx:SourcePublication (or its v0.2.x spelling
+   urpx:TariffPublication) or a urpx:RateCase. Returns nil for other types."
   [raw]
   (case (:jsonld/type raw)
     "urpx:RatePlan"         (coerce-rate-plan raw)
@@ -102,6 +103,9 @@
     "urpx:RatePlanVersion"         (coerce-rate-plan-version raw)
     "urpx:RatePlanModifierVersion" (coerce-rate-plan-modifier-version raw)
     "urpx:ScenarioCostModel"       (coerce-scenario-cost-model raw)
+    "urpx:SourcePublication"       (coerce schema/SourcePublication raw)
+    "urpx:TariffPublication"       (coerce schema/SourcePublication raw)
+    "urpx:RateCase"                (coerce schema/RateCase raw)
     nil))
 
 (def ^:private uncoerced-re #"^(\d{2}:\d{2}|\d{4}-\d{2}-\d{2})")

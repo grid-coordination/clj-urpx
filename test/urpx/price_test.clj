@@ -1018,9 +1018,9 @@
         [{:jsonld/type "urpx:AlternativeDimension"
           :urpx/dimensionDisplayName "Income Tier"
           :urpx/dimensionProperty "https://schema.urpx.org/incomeTier"
-          :urpx/hasPossibleValues [{:jsonld/id "urpx:incomeTierCare"}
-                                   {:jsonld/id "urpx:incomeTierFera"}
-                                   {:jsonld/id "urpx:incomeTierStandard"}]}]}
+          :urpx/hasPossibleValues [{:jsonld/list [{:jsonld/id "urpx:incomeTierCare"}
+                                                  {:jsonld/id "urpx:incomeTierFera"}
+                                                  {:jsonld/id "urpx:incomeTierStandard"}]}]}]}
        :urpx/hasProfileAlternative
        [{:jsonld/type "urpx:ProfileAlternative"
          :jsonld/id "test:bsc-care"

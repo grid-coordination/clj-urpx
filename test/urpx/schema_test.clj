@@ -354,16 +354,26 @@
   (let [d {:jsonld/type "urpx:AlternativeDimension"
            :urpx/dimensionDisplayName "Income Tier"
            :urpx/dimensionProperty "https://schema.urpx.org/incomeTier"
-           :urpx/hasPossibleValues [{:jsonld/id "urpx:incomeTierCare"}
-                                    {:jsonld/id "urpx:incomeTierFera"}
-                                    {:jsonld/id "urpx:incomeTierStandard"}]}]
+           :urpx/hasPossibleValues [{:jsonld/list [{:jsonld/id "urpx:incomeTierCare"}
+                                                   {:jsonld/id "urpx:incomeTierFera"}
+                                                   {:jsonld/id "urpx:incomeTierStandard"}]}]}]
     (is (m/validate s/AlternativeDimension d))
-    (testing "single-or-vec decoder normalizes a single hasPossibleValue"
-      (let [coerced (coerce/coerce s/AlternativeDimension
-                                   (assoc d :urpx/hasPossibleValues
-                                          {:jsonld/id "urpx:onlyOne"}))]
-        (is (vector? (:urpx/hasPossibleValues coerced)))
-        (is (= 1 (count (:urpx/hasPossibleValues coerced))))))
+    (testing "hasPossibleValues holds list objects of at least one member"
+      (doseq [v [[{:jsonld/id "urpx:incomeTierCare"}
+                  {:jsonld/id "urpx:incomeTierFera"}]
+                 {:jsonld/id "urpx:incomeTierCare"}
+                 {:jsonld/list []}
+                 {:jsonld/list [{:jsonld/id "urpx:incomeTierCare"}]
+                  :jsonld/id "x:list"}]]
+        (is (some? (coerce/explain s/AlternativeDimension
+                                   (coerce/coerce s/AlternativeDimension
+                                                  (assoc d :urpx/hasPossibleValues v))))
+            (pr-str v)))
+      (is (= (:urpx/hasPossibleValues d)
+             (:urpx/hasPossibleValues
+              (coerce/coerce s/AlternativeDimension
+                             (update d :urpx/hasPossibleValues first))))
+          "one list object coerces to a vector of it, its members in order"))
     (testing "customDimensionProperty fallback (urpx-org/urpx#30): exactly
               one of dimensionProperty / customDimensionProperty per SHACL,
               both shapes pass Malli validation"
@@ -391,8 +401,8 @@
               [{:jsonld/type "urpx:AlternativeDimension"
                 :urpx/dimensionDisplayName "Income Tier"
                 :urpx/dimensionProperty "https://schema.urpx.org/incomeTier"
-                :urpx/hasPossibleValues [{:jsonld/id "urpx:incomeTierCare"}
-                                         {:jsonld/id "urpx:incomeTierStandard"}]}]}
+                :urpx/hasPossibleValues [{:jsonld/list [{:jsonld/id "urpx:incomeTierCare"}
+                                                        {:jsonld/id "urpx:incomeTierStandard"}]}]}]}
              :urpx/hasProfileAlternative [pa-care pa-std]}]
     (is (m/validate s/ProfileAlternatives pas))
     (testing "missing required name is rejected"
@@ -427,8 +437,8 @@
                 [{:jsonld/type "urpx:AlternativeDimension"
                   :urpx/dimensionDisplayName "Income Tier"
                   :urpx/dimensionProperty "https://schema.urpx.org/incomeTier"
-                  :urpx/hasPossibleValues [{:jsonld/id "urpx:incomeTierCare"}
-                                           {:jsonld/id "urpx:incomeTierStandard"}]}]}
+                  :urpx/hasPossibleValues [{:jsonld/list [{:jsonld/id "urpx:incomeTierCare"}
+                                                          {:jsonld/id "urpx:incomeTierStandard"}]}]}]}
                :urpx/hasProfileAlternative
                [{:jsonld/type "urpx:ProfileAlternative" :urpx/name "CARE"
                  :urpx/hasConditionExpression trivial-condition-expression}
@@ -846,9 +856,11 @@
     (testing "both skos:notation and urpx:scheme are sh:minCount 1"
       (is (not (m/validate s/RatePlanIdentifier (dissoc rin :skos/notation))))
       (is (not (m/validate s/RatePlanIdentifier (dissoc rin :urpx/scheme)))))
-    (testing "identifierJurisdiction is the optional third path"
+    (testing "identifierJurisdiction is the optional third path, an xsd:string"
       (is (m/validate s/RatePlanIdentifier
-                      (assoc rin :urpx/identifierJurisdiction {:jsonld/id "urpx:us-ca"}))))
+                      (assoc rin :urpx/identifierJurisdiction "US")))
+      (is (not (m/validate s/RatePlanIdentifier
+                           (assoc rin :urpx/identifierJurisdiction {:jsonld/id "urpx:us-ca"})))))
     (testing "urpx:IdentifierScheme is an OPEN class: the ontology says an
               implementer may mint its own scheme IRI, and there is no sh:in on
               the path, so an unrecognized scheme must be accepted"

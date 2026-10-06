@@ -21,6 +21,7 @@
 
     - `dsl-scope`             macro naming entities by keyword
     - `curie`                 the default keyword -> @id function
+    - `rdf-list`              an ordered RDF list value
     - `make-builder`          generator: schema → constructor function
     - `entity-type`           introspect a schema for its @type literal
     - a named builder for every entity-type schema in `urpx.schema`
@@ -240,18 +241,36 @@
   (and (qualified-keyword? v)
        (= "urpx" (namespace v))))
 
+(defn- list-object?
+  "True if `v` is an RDF list value, `{:jsonld/list [...]}`."
+  [v]
+  (and (map? v)
+       (= [:jsonld/list] (keys v))))
+
 (defn- resolve-refs-in-value
   "Walk a kwarg value given to a builder of @type `t` and replace keyword
    leaves with {:jsonld/id ...} maps. A `:urpx/X` keyword names the
    vocabulary term `urpx:X`; inside a `dsl-scope`, any other qualified
-   keyword outside `jsonld` is a reference. Vectors are walked element-wise;
-   other shapes pass through unchanged."
+   keyword outside `jsonld` is a reference. Vectors and the members of an
+   `rdf-list` are walked element-wise; other shapes pass through unchanged."
   [t v]
   (cond
     (vocabulary-keyword? v)               {:jsonld/id (str "urpx:" (name v))}
     (and *scope* (local-keyword? v))      (reference! v t)
     (vector? v)                           (mapv (partial resolve-refs-in-value t) v)
+    (list-object? v)                      (update v :jsonld/list (partial resolve-refs-in-value t))
     :else                                 v))
+
+(defn rdf-list
+  "The ordered RDF list of `members`, `{:jsonld/list [...]}`, emitted as a
+   JSON-LD `@list`. A member is written as given, except that a builder
+   reads a keyword member as it reads a keyword value:
+
+     (dsl/rdf-list [{:jsonld/value \"P\" :jsonld/type \"xsd:string\"}
+                    {:jsonld/value \"Q\" :jsonld/type \"xsd:string\"}])
+     (dsl/rdf-list [:ex/summer :ex/winter])   ; in a dsl-scope"
+  [members]
+  {:jsonld/list (vec members)})
 
 (defn- normalize-args
   "A builder's varargs, alternating keys and values or one trailing map, as
@@ -347,7 +366,7 @@
      - `:passthrough`, a collection of further keys the constructor admits,
        for a property the schema does not model:
 
-         (make-builder schema/RatePlanVersion {:passthrough #{:urpx/offeredBy}})"
+         (make-builder schema/RatePlanVersion {:passthrough #{:ex/note}})"
   ([schema] (make-builder schema {}))
   ([schema {:keys [passthrough]}]
    (let [t (entity-type schema)
@@ -427,6 +446,8 @@
 (def object-operand-node       (make-builder schema/ObjectOperandNode))
 (def datatype-operand-node     (make-builder schema/DatatypeOperandNode))
 (def custom-operand-node       (make-builder schema/CustomOperandNode))
+(def comparison-node           (make-builder schema/ComparisonNode))
+(def boolean-operation-node    (make-builder schema/BooleanOperationNode))
 (def condition-expression      (make-builder schema/ConditionExpression))
 (def applicability-group       (make-builder schema/ApplicabilityGroup))
 (def applicability-rule        (make-builder schema/ApplicabilityRule))
@@ -442,6 +463,9 @@
 
 ;; Metadata
 (def organization              (make-builder schema/Organization))
+(def utility-operator          (make-builder schema/UtilityOperator))
+(def organization-identity     (make-builder schema/OrganizationIdentity))
+(def organization-name         (make-builder schema/OrganizationName))
 (def tariff-book-reference     (make-builder schema/TariffBookReference))
 (def data-source-reference     (make-builder schema/DataSourceReference))
 (def rate-case                 (make-builder schema/RateCase))

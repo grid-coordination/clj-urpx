@@ -16,9 +16,9 @@
   applied in `urpx.coerce`. Reference resolution keeps :jsonld/id references
   intact; consumers dereference via an entity index.
 
-  Schemas are bare def vars referenced by symbol — there is no central registry
-  except inside ConditionExpression, where the recursive Comparison/Boolean
-  operand tree uses a local Malli registry."
+  Schemas are bare def vars referenced by symbol. The one registry is local to
+  the recursive operand tree of ComparisonNode, BooleanOperationNode and
+  ConditionExpression."
   (:require [clojure.string :as str]
             [malli.core :as m])
   (:import [java.math BigDecimal]
@@ -419,6 +419,13 @@
    and openness costs nothing."
   [:map {:closed true}
    [:jsonld/id :string]])
+
+(def RdfList
+  "A JSON-LD list object, `{:jsonld/list [...]}`: an ordered RDF list of at
+   least one member. Members are as written: a Ref, a value object such as
+   `{:jsonld/value \"P\" :jsonld/type \"xsd:string\"}`, or a plain literal."
+  [:map {:closed true}
+   [:jsonld/list [:vector {:min 1} :any]]])
 
 (def Context
   "A JSON-LD @context, in any of the three forms the spec permits: an inline
@@ -891,45 +898,55 @@
    [:urpx/stringValue   {:optional true} :string]
    [:urpx/timeValue     {:optional true} Time]])
 
+(def ^:private condition-registry
+  "The local registry for the mutually recursive operand tree: an operand is an
+   ObjectOperandNode, DatatypeOperandNode, CustomOperandNode, ComparisonNode or
+   BooleanOperationNode, and the last two take operands."
+  {::Operand
+   [:multi {:dispatch :jsonld/type}
+    ["urpx:ObjectOperandNode"     ObjectOperandNode]
+    ["urpx:DatatypeOperandNode"   DatatypeOperandNode]
+    ["urpx:CustomOperandNode"     CustomOperandNode]
+    ["urpx:ComparisonNode"        [:ref ::ComparisonNode]]
+    ["urpx:BooleanOperationNode"  [:ref ::BooleanOperationNode]]]
+   ::ComparisonNode
+   [:map
+    [:jsonld/type [:= "urpx:ComparisonNode"]]
+    [:jsonld/id   {:optional true} :string]
+    [:urpx/name   {:optional true} :string]
+    [:urpx/description {:optional true} :string]
+    [:urpx/logicExpression {:optional true} :string]
+    [:urpx/operator Ref]
+    [:urpx/leftOperand  [:ref ::Operand]]
+    [:urpx/rightOperand [:ref ::Operand]]]
+   ::BooleanOperationNode
+   [:map
+    [:jsonld/type [:= "urpx:BooleanOperationNode"]]
+    [:jsonld/id   {:optional true} :string]
+    [:urpx/description {:optional true} :string]
+    [:urpx/logicExpression {:optional true} :string]
+    [:urpx/operator Ref]
+    [:urpx/operandNodes
+     {:decode/urpx-jsonld single-or-vec->vec}
+     [:vector [:ref ::Operand]]]]})
+
+(def ComparisonNode
+  "A comparison of a left and a right operand by urpx:operator. Each operand
+   is an ObjectOperandNode, DatatypeOperandNode, CustomOperandNode,
+   ComparisonNode or BooleanOperationNode."
+  [:schema {:registry condition-registry}
+   (::ComparisonNode condition-registry)])
+
+(def BooleanOperationNode
+  "urpx:operator (and, or, not) over urpx:operandNodes, each an operand as in
+   `ComparisonNode`."
+  [:schema {:registry condition-registry}
+   (::BooleanOperationNode condition-registry)])
+
 (def ConditionExpression
-  "Recursive condition tree. Uses a local Malli registry to express the
-   ComparisonNode / BooleanOperationNode mutual recursion.
-
-   Tree shape:
-     ConditionExpression.rootNode → ComparisonNode | BooleanOperationNode
-     ComparisonNode.{leftOperand,rightOperand} → any operand (recursively)
-     BooleanOperationNode.operandNodes → vector of operands
-
-   Where 'operand' is one of: ObjectOperandNode, DatatypeOperandNode,
-   CustomOperandNode, ComparisonNode, BooleanOperationNode."
-  [:schema
-   {:registry
-    {::Operand
-     [:multi {:dispatch :jsonld/type}
-      ["urpx:ObjectOperandNode"     ObjectOperandNode]
-      ["urpx:DatatypeOperandNode"   DatatypeOperandNode]
-      ["urpx:CustomOperandNode"     CustomOperandNode]
-      ["urpx:ComparisonNode"        [:ref ::ComparisonNode]]
-      ["urpx:BooleanOperationNode"  [:ref ::BooleanOperationNode]]]
-     ::ComparisonNode
-     [:map
-      [:jsonld/type [:= "urpx:ComparisonNode"]]
-      [:jsonld/id   {:optional true} :string]
-      [:urpx/name   {:optional true} :string]
-      [:urpx/description {:optional true} :string]
-      [:urpx/logicExpression {:optional true} :string]
-      [:urpx/operator Ref]
-      [:urpx/leftOperand  [:ref ::Operand]]
-      [:urpx/rightOperand [:ref ::Operand]]]
-     ::BooleanOperationNode
-     [:map
-      [:jsonld/type [:= "urpx:BooleanOperationNode"]]
-      [:jsonld/id   {:optional true} :string]
-      [:urpx/logicExpression {:optional true} :string]
-      [:urpx/operator Ref]
-      [:urpx/operandNodes
-       {:decode/urpx-jsonld single-or-vec->vec}
-       [:vector [:ref ::Operand]]]]}}
+  "A condition tree whose urpx:rootNode is a ComparisonNode or a
+   BooleanOperationNode."
+  [:schema {:registry condition-registry}
    [:map
     [:jsonld/type [:= "urpx:ConditionExpression"]]
     [:jsonld/id   {:optional true} :string]
@@ -967,7 +984,7 @@
    [:urpx/customDimensionProperty {:optional true} :string]   ; xsd:string fallback
    [:urpx/hasPossibleValues
     {:decode/urpx-jsonld single-or-vec->vec}
-    [:vector :any]]
+    [:vector {:min 1} RdfList]]
    [:urpx/referencesMetricInput
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]])
@@ -1229,17 +1246,6 @@
 ;; Top-level metadata
 ;; ---------------------------------------------------------------------------
 
-(def Organization
-  "v0.2.0: legalName is now optional; organizationType is required.
-   urpx:eiaId is gone — utility identifiers now live under hasIdentity →
-   urpx:OrganizationIdentity (not modeled here yet)."
-  [:map
-   [:jsonld/type [:= "urpx:Organization"]]
-   [:jsonld/id {:optional true} :string]
-   [:urpx/legalName       {:optional true} :string]
-   [:urpx/alternateName   {:optional true} :string]
-   [:urpx/organizationType Ref]])
-
 (def TariffBookReference
   "v0.2.x only. urpx:TariffBookReference was DELETED upstream in bbaea780 and
    has zero occurrences in the v0.5.1 ontology and SHACL; its fields moved
@@ -1313,7 +1319,7 @@
    ;; urpx:caMidasRinScheme and urpx:utilityTariffCodeScheme, which it says
    ;; "cover the common registers".
    [:urpx/scheme Ref]
-   [:urpx/identifierJurisdiction {:optional true} Ref]])
+   [:urpx/identifierJurisdiction {:optional true} :string]])
 
 (def RatePlanIdentifier
   "A typed external identifier for a urpx:RatePlan, e.g. a CPUC MIDAS RIN."
@@ -1338,6 +1344,81 @@
          [:jsonld/type [:= "urpx:OrganizationIdentifier"]]
          [:jsonld/id {:optional true} :string]]
         identifier-entries))
+
+;; ---------------------------------------------------------------------------
+;; Organizations (URPX v0.5.1)
+;;
+;; An organization carries 0..N urpx:hasIdentity, each naming it by one
+;; urpx:OrganizationName over a validity window and listing its typed
+;; identifiers. urpx:UtilityOperator is a subclass of urpx:Organization with
+;; its own closed shape. Read from urpx-shacl at urpx-org/urpx 6bccd004.
+;; ---------------------------------------------------------------------------
+
+(def OrganizationName
+  "One name of an organization, hung off urpx:hasName."
+  [:map
+   [:jsonld/type [:= "urpx:OrganizationName"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/name         {:optional true} :string]
+   [:urpx/abbreviation {:optional true} :string]
+   [:urpx/isCanonical  {:optional true} :boolean]
+   [:urpx/isPreferred  {:optional true} :boolean]
+   [:urpx/nameType     {:optional true} Ref]])
+
+(def OrganizationIdentity
+  "An organization's name and identifiers over a validity window, hung off
+   urpx:hasIdentity."
+  [:map
+   [:jsonld/type [:= "urpx:OrganizationIdentity"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/hasName [:or OrganizationName ExclusiveRef]]
+   [:urpx/hasIdentifier
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or OrganizationIdentifier ExclusiveRef]]]
+   [:urpx/identityValidFrom {:optional true} DateTime]
+   [:urpx/identityValidTo   {:optional true} DateTime]])
+
+(def ^:private organization-entries
+  "The properties urpx-shacl:OrganizationShape and UtilityOperatorShape share."
+  [[:jsonld/id {:optional true} :string]
+   [:urpx/legalName      {:optional true} :string]
+   [:urpx/alternateName  {:optional true} :string]
+   [:urpx/organizationType Ref]
+   [:urpx/commodity
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/hasIdentity
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or OrganizationIdentity ExclusiveRef]]]
+   [:urpx/hasLocationDataSet
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/operatesIn
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/offers
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]])
+
+(def Organization
+  "An organization. urpx-shacl:OrganizationShape is open upstream; utility
+   identifiers live under urpx:hasIdentity."
+  (-> [:map
+       [:jsonld/type [:= "urpx:Organization"]]]
+      (into organization-entries)
+      (conj [:urpx/url {:optional true} :string])))
+
+(def UtilityOperator
+  "A urpx:Organization that operates a utility."
+  (-> [:map
+       [:jsonld/type [:= "urpx:UtilityOperator"]]]
+      (into organization-entries)
+      (conj [:urpx/ownershipType {:optional true} Ref])))
+
+(def OfferingOrganization
+  "The value of urpx:offeredBy: an Organization or a UtilityOperator inline,
+   or a reference."
+  [:or Organization UtilityOperator ExclusiveRef])
 
 ;; ---------------------------------------------------------------------------
 ;; Coverage machinery (URPX v0.5.1)
@@ -1621,6 +1702,7 @@
    [:urpx/minimumTenure     {:optional true} IsoDuration]
    [:urpx/url               {:optional true} :string]
    [:urpx/publishedBy {:optional true} Organization]
+   [:urpx/offeredBy   {:optional true} OfferingOrganization]
    [:urpx/supersedes  {:optional true} Ref]
    [:urpx/hasDataSourceReference
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
@@ -1742,6 +1824,7 @@
    [:urpx/modifierType     {:optional true} Ref]
    [:urpx/modifierCategory {:optional true} Ref]
    [:urpx/publishedBy {:optional true} Organization]
+   [:urpx/offeredBy   {:optional true} OfferingOrganization]
    [:urpx/supersedes  {:optional true} Ref]
    [:urpx/hasDataSourceReference
     {:optional true :decode/urpx-jsonld single-or-vec->vec}

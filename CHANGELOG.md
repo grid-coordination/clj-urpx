@@ -17,10 +17,20 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 - **Breaking: a `dsl-scope` names `@id`s with a function of the keyword, by default `urpx.dsl/curie`.** `:scl/summer` gives `"scl:summer"`; it gave `"summer"`. `(dsl/dsl-scope {:id-fn f} …)` supplies another function.
 - **Breaking: a `dsl-scope` checks keyword references when its body finishes.** A reference may come before its declaration, so a version can name its enclosing plan. The scope first realizes every lazy sequence in the body's value, so a builder inside `for` or `map` runs in the scope. Every keyword referenced but not declared in the scope throws in one `ex-info`, naming each keyword and the `@type` of each builder that used it, under `:unresolved`. A reference to an undeclared keyword threw `DSL local ref not declared` at the call.
 - **Breaking: a `dsl-scope` refuses an `@id` declared twice**, by `:as` or by an explicit `:jsonld/id`, naming both declarations under `:declared-by`. The messages and `ex-data` of the former refusals are replaced.
+- **Breaking: each `urpx:hasPossibleValues` value is an RDF list object**, `{:jsonld/list [...]}` with at least one member (`urpx.schema/RdfList`). A vector of bare members, which emitted an unordered set, refuses. The vendored fixtures, the urpx test cases and urpx-rate-plans write only list objects.
+- **Breaking: `Organization` models the v0.5.1 properties**, among them `urpx:hasIdentity`, which coerces to a vector of `OrganizationIdentity`; a bare identity coerced to a map.
+- **Breaking: `urpx:identifierJurisdiction` is an xsd:string** on the three identifier schemas, as the SHACL has it; it was a Ref. The urpx test cases write `"US"`.
+- **`urpx.coerce/coerce-doc` dispatches `urpx:SourcePublication`, its v0.2.x spelling `urpx:TariffPublication`, and `urpx:RateCase`**, so `urpx.load/documents` yields them and `urpx.load/scan` no longer lists them as uncoercible.
+- **`urpx.core/containment-properties` includes `urpx:hasIdentity` and `urpx:hasName`.**
 
 ### Added
 
 - **`urpx.dsl/curie`**, the default `dsl-scope` `:id-fn`.
+- **`urpx:offeredBy` on `RatePlanVersion` and `RatePlanModifierVersion`**, optional, valued by `urpx.schema/OfferingOrganization`: an `Organization` or `UtilityOperator` inline, or a reference. A builder takes `:offered-by`.
+- **`ComparisonNode` and `BooleanOperationNode` schemas**, with `urpx.dsl/comparison-node` and `urpx.dsl/boolean-operation-node`. `BooleanOperationNode` admits `urpx:description`.
+- **`UtilityOperator`, `OrganizationIdentity` and `OrganizationName` schemas** from the v0.5.1 SHACL, with `urpx.dsl/utility-operator`, `organization-identity` and `organization-name`.
+- **`urpx.dsl/rdf-list`**, an ordered RDF list value. A builder reads a keyword member as it reads a keyword value.
+- **`urpx.emit/default-context` types `urpx:identityValidFrom` and `urpx:identityValidTo`** as xsd:dateTime.
 
 ## [0.41.0] — 2026-10-06
 

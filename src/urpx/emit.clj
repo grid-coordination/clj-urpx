@@ -115,6 +115,8 @@
    "urpx:dateTimeModified"    {"@type" "xsd:dateTime"}
    "urpx:cancelledOnDateTime" {"@type" "xsd:dateTime"}
    "urpx:evaluatedOn"         {"@type" "xsd:dateTime"}
+   "urpx:identityValidFrom"   {"@type" "xsd:dateTime"}
+   "urpx:identityValidTo"     {"@type" "xsd:dateTime"}
 
    ;; xsd:time
    "urpx:startTime"  {"@type" "xsd:time"}

@@ -122,9 +122,9 @@
     :urpx/hasCalculationMethod :urpx/hasConditionExpression :urpx/hasCoverageClaim
     :urpx/hasCustomerProfile :urpx/hasDataSourceReference :urpx/hasEligibilityRule
     :urpx/hasGeneralRule :urpx/hasHoliday :urpx/hasHolidayCalendar :urpx/hasIdentifier
-    :urpx/hasLedger :urpx/hasMetricInput :urpx/hasMetricSpecification
-    :urpx/hasModelExclusion :urpx/hasPlanElements :urpx/hasPossibleValues :urpx/hasPrice
-    :urpx/hasPriceDefinition :urpx/hasPriceDefinitionReference :urpx/hasPriceSet
+    :urpx/hasIdentity :urpx/hasLedger :urpx/hasMetricInput :urpx/hasMetricSpecification
+    :urpx/hasModelExclusion :urpx/hasName :urpx/hasPlanElements :urpx/hasPossibleValues
+    :urpx/hasPrice :urpx/hasPriceDefinition :urpx/hasPriceDefinitionReference :urpx/hasPriceSet
     :urpx/hasPriceSetAlternative :urpx/hasPriceSetAlternatives :urpx/hasPriceSummary
     :urpx/hasPrices :urpx/hasProfileAlternative :urpx/hasProfileAlternatives
     :urpx/hasRatePlan :urpx/hasRatePlanModifier :urpx/hasRatePlanModifierVersion

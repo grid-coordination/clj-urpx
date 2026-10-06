@@ -11,7 +11,7 @@
             [urpx.core :as core]
             [urpx.load :as load])
   (:import [java.io StringReader]
-           [java.time LocalDateTime]))
+           [java.time LocalDate LocalDateTime]))
 
 (defn- src
   "A source carrying `json`. New reader per call: a Reader is consumed once, and
@@ -202,7 +202,7 @@
 (deftest scan-reports-what-document-xf-discards
   (testing "THE POINT OF scan. coerce-doc returns nil for an entity type this
             library does not model, so document-xf drops it silently:
-            urpx:ProgramEnrollment, urpx:SourcePublication, urpx:RateCase.
+            urpx:ProgramEnrollment.
 
             None of those is a version, which is luck rather than design. The
             unlucky form of the same thing cost a whole rate plan once: a
@@ -214,6 +214,23 @@
       (is (= [{:jsonld/type "urpx:ProgramEnrollment" :jsonld/id "x:enrol"}]
              uncoercible)
           "the discard is named, with enough to identify it and no more"))))
+
+(deftest publications-and-rate-cases-are-documents
+  (let [json (str "{" ctx ",\"@graph\":["
+                  "{\"@id\":\"x:pub\",\"@type\":\"urpx:SourcePublication\","
+                  "\"urpx:name\":\"Advice Letter\",\"urpx:effectiveDate\":\"2026-03-01\"},"
+                  "{\"@id\":\"x:old\",\"@type\":\"urpx:TariffPublication\","
+                  "\"urpx:dateReceived\":\"2025-12-01\"},"
+                  "{\"@id\":\"x:case\",\"@type\":\"urpx:RateCase\","
+                  "\"urpx:caseNumber\":\"A.24-01-001\",\"urpx:url\":\"https://example.com\"},"
+                  "{\"@id\":\"x:enrol\",\"@type\":\"urpx:ProgramEnrollment\"}]}")
+        {:urpx.load/keys [documents uncoercible]} (load/scan [(src json)])
+        by-id (into {} (map (juxt :jsonld/id identity)) documents)]
+    (is (= #{"x:pub" "x:old" "x:case"} (set (keys by-id))))
+    (is (= (LocalDate/of 2026 3 1) (get-in by-id ["x:pub" :urpx/effectiveDate])))
+    (is (= (LocalDate/of 2025 12 1) (get-in by-id ["x:old" :urpx/dateReceived])))
+    (is (= "A.24-01-001" (get-in by-id ["x:case" :urpx/caseNumber])))
+    (is (= [{:jsonld/type "urpx:ProgramEnrollment" :jsonld/id "x:enrol"}] uncoercible))))
 
 (deftest a-caller-can-assert-that-no-version-was-discarded
   (testing "the assertion that was unavailable before, written the way a

@@ -1,5 +1,6 @@
 (ns urpx.dsl-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.data.json :as json]
+            [clojure.test :refer [deftest is testing]]
             [malli.core :as m]
             [urpx.coerce :as coerce]
             [urpx.core :as core]
@@ -552,6 +553,148 @@
                         :urpx/rightOperand {:jsonld/type "urpx:CustomOperandNode"
                                             :urpx/stringValue "y"}})]
     (is (= "urpx:ComparisonNode" (get-in ce [:urpx/rootNode :jsonld/type])))))
+
+;; ---------------------------------------------------------------------------
+;; Condition nodes, organizations and RDF lists
+;; ---------------------------------------------------------------------------
+
+(defn- reread
+  "`entity` encoded by `schema`, written as JSON, parsed and coerced again."
+  [schema entity]
+  (->> (coerce/encode schema entity)
+       core/keys->jsonld
+       json/write-str
+       java.io.StringReader.
+       core/parse-rate-plan
+       (coerce/coerce schema)))
+
+(defn- customer-kind-comparison
+  [k kind]
+  (dsl/comparison-node
+   :as k
+   :operator :urpx/equalsOperator
+   :left-operand (dsl/object-operand-node :condition-property :urpx/hasCustomerKind)
+   :right-operand (dsl/object-operand-node :references-value kind)))
+
+(deftest condition-nodes-build
+  (let [ce (dsl/dsl-scope
+            (dsl/condition-expression
+             :as :ex/ce
+             :root-node
+             (dsl/boolean-operation-node
+              :as :ex/either
+              :description "Residential or commercial"
+              :operator :urpx/orOperator
+              :operand-nodes
+              [(customer-kind-comparison :ex/residential :urpx/residentialKind)
+               (customer-kind-comparison :ex/commercial :urpx/commercialKind)])))
+        root (:urpx/rootNode ce)]
+    (is (nil? (coerce/explain schema/ConditionExpression ce)))
+    (is (nil? (coerce/explain schema/BooleanOperationNode root)))
+    (is (= ["ex:residential" "ex:commercial"]
+           (mapv :jsonld/id (:urpx/operandNodes root))))
+    (is (= {:jsonld/id "urpx:equalsOperator"}
+           (:urpx/operator (first (:urpx/operandNodes root)))))
+    (is (= ce (reread schema/ConditionExpression ce)))
+    (testing "a comparison needs both operands"
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (dsl/comparison-node :operator :urpx/equalsOperator
+                                        :left-operand (dsl/datatype-operand-node
+                                                       :integer-value 1)))))))
+
+(def ^:private scl
+  (dsl/dsl-scope
+   (dsl/utility-operator
+    :as :org/utility-scl
+    :legal-name "Seattle City Light"
+    :organization-type :urpx/utilityOrganization
+    :ownership-type :urpx/municipalOwnership
+    :has-identity
+    (dsl/organization-identity
+     :as :org/utility-scl-identity
+     :identity-valid-from "2020-01-01T00:00:00"
+     :has-name (dsl/organization-name :as :org/utility-scl-name
+                                      :name "Seattle City Light"
+                                      :abbreviation "SCL"
+                                      :is-preferred true)
+     :has-identifier (dsl/organization-identifier :as :org/utility-scl-eia
+                                                  :scheme :urpx/eiaScheme
+                                                  :skos/notation "16868")))))
+
+(deftest organization-builders-build-a-utility-operator
+  (let [[identity :as identities] (:urpx/hasIdentity scl)]
+    (is (nil? (coerce/explain schema/UtilityOperator scl)))
+    (is (= 1 (count identities)))
+    (is (= java.time.LocalDateTime (type (:urpx/identityValidFrom identity))))
+    (is (= "SCL" (get-in identity [:urpx/hasName :urpx/abbreviation])))
+    (is (= ["16868"] (mapv :skos/notation (:urpx/hasIdentifier identity))))
+    (is (= scl (reread schema/UtilityOperator scl))))
+  (testing "an organization identity needs a name"
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (dsl/organization-identity)))))
+
+(deftest a-version-takes-offered-by
+  (let [version #(dsl/rate-plan-version
+                  :offered-by %
+                  :change-reason :urpx/rateCase
+                  :service-role :urpx/bundledServiceRole
+                  :has-plan-elements {:jsonld/type "urpx:PlanElements"
+                                      :urpx/hasMetricInput []
+                                      :urpx/hasBillingModel {:jsonld/type "urpx:BillingModel"
+                                                             :urpx/hasPriceDefinition []}}
+                  :has-prices {:jsonld/type "urpx:Prices"})
+        modifier-version #(dsl/rate-plan-modifier-version
+                           :offered-by %
+                           :modifier-version-number "1"
+                           :change-reason :urpx/rateCase
+                           :service-role :urpx/bundledServiceRole
+                           :has-plan-elements {:jsonld/type "urpx:PlanElements"
+                                               :urpx/hasMetricInput []
+                                               :urpx/hasBillingModel
+                                               {:jsonld/type "urpx:BillingModel"
+                                                :urpx/hasPriceDefinition []}}
+                           :has-prices {:jsonld/type "urpx:Prices"})
+        org (dsl/organization :legal-name "Example Utility"
+                              :organization-type :urpx/utilityOrganization)]
+    (doseq [build [version modifier-version]
+            value [scl org {:jsonld/id "org:utility-scl"}]]
+      (is (= value (:urpx/offeredBy (build value)))))
+    (testing "a value that is no organization refuses"
+      (doseq [build [version modifier-version]]
+        (is (thrown? clojure.lang.ExceptionInfo
+                     (build {:jsonld/type "urpx:Season" :urpx/seasonName "S"})))))))
+
+(deftest rdf-list-builds-an-ordered-list
+  (let [values (dsl/rdf-list [{:jsonld/value "P" :jsonld/type "xsd:string"}
+                              {:jsonld/value "Q" :jsonld/type "xsd:string"}])
+        dim (dsl/alternative-dimension :dimension-display-name "Territory"
+                                       :custom-dimension-property "baselineTerritory"
+                                       :has-possible-values values)]
+    (is (= {:jsonld/list [{:jsonld/value "P" :jsonld/type "xsd:string"}
+                          {:jsonld/value "Q" :jsonld/type "xsd:string"}]}
+           values))
+    (is (= [values] (:urpx/hasPossibleValues dim)))
+    (is (= [{"@list" [{"@value" "P" "@type" "xsd:string"}
+                      {"@value" "Q" "@type" "xsd:string"}]}]
+           (get (core/keys->jsonld (coerce/encode schema/AlternativeDimension dim))
+                "urpx:hasPossibleValues")))
+    (is (= dim (reread schema/AlternativeDimension dim))))
+  (testing "a keyword member reads as a keyword value does"
+    (is (= [{:jsonld/list [{:jsonld/id "ex:summer"}
+                           {:jsonld/id "urpx:allDays"}]}]
+           (:urpx/hasPossibleValues
+            (dsl/dsl-scope
+             (dsl/season :as :ex/summer :season-name "Summer" :month [6 7 8])
+             (dsl/alternative-dimension :dimension-display-name "Season"
+                                        :custom-dimension-property "season"
+                                        :has-possible-values
+                                        (dsl/rdf-list [:ex/summer :urpx/allDays])))))))
+  (testing "a vector of members or an empty list refuses"
+    (doseq [v [["P" "Q"] (dsl/rdf-list [])]]
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (dsl/alternative-dimension :dimension-display-name "Territory"
+                                              :custom-dimension-property "t"
+                                              :has-possible-values v))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Sample of new named builders — spot-check coverage across the
