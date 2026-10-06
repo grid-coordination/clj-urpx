@@ -189,10 +189,10 @@ Pulling it together: a non-TOU two-season plan modeled on the published CPAU E-2
        :has-price-set
        [(dsl/price-set
          :has-price [(dsl/price :references-price-definition ::pd-commodity-summer
-                                :unit-price 0.15075       ; ← number auto-coerces to BigDecimal
+                                :unit-price 0.15075M      ; ← a double refuses: write M or a string
                                 :start-date "2025-07-01")
                      (dsl/price :references-price-definition ::pd-commodity-winter
-                                :unit-price 0.09334
+                                :unit-price 0.09334M
                                 :start-date "2025-07-01")])])))))
 ```
 

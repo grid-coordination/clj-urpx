@@ -11,7 +11,9 @@
             [malli.transform :as mt]
             [urpx.schema :as schema]))
 
-(def ^:private jsonld-transformer
+(def jsonld-transformer
+  "The Malli transformer `coerce` and `encode` apply, for composing with
+   another transformer."
   (mt/transformer
    {:name :urpx-jsonld
     :decoders {:map schema/date-offsets-decoder}

@@ -14,10 +14,12 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 ### Changed
 
 - **Breaking: `urpx.dsl` builders refuse unknown keys.** A key that is neither a key of the entity's schema, a kebab-case short form of one, nor a `:jsonld/*` key throws, naming the keys and the entity type under `:unknown-keys` and `:type`. Such a key was emitted as written, so a misspelling produced a wrong document. Coercion on read still keeps unknown keys.
+- **Breaking: `urpx.dsl` builders refuse a double, a float or a ratio with no terminating decimal expansion for an xsd:decimal field**, throwing `:reason :urpx.dsl/inexact-decimal` with each field's path and value under `:fields`. A double has already lost its written scale: `0.1610` emitted `"0.161"`. Write `0.1610M` or `"0.1610"`; integers and exact ratios are accepted. Coercion on read still accepts doubles.
 
 ### Added
 
 - **`urpx.dsl/make-builder` takes an options map**; `:passthrough` is a set of further keys the constructor admits, for properties the schema does not model.
+- **`urpx.coerce/jsonld-transformer`** is public, for composing with another Malli transformer.
 - **`urpx.schema/MetricSpecification` admits `urpx:commodity`**, as a Ref.
 
 ### Fixed

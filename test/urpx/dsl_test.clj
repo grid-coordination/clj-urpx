@@ -188,15 +188,48 @@
 ;; Auto-coercion of raw Clojure numbers
 ;; ---------------------------------------------------------------------------
 
-(deftest dsl-builders-accept-clojure-number-literals-for-decimal-fields
-  (testing "a builder for an entity with a Decimal field accepts
-            an idiomatic Clojure number — the user no longer has to write
-            (BigDecimal. \"0.15075\") at every call site"
-    (let [build-price (dsl/make-builder schema/Price)
-          p (build-price :urpx/unitPrice 0.15075
-                         :urpx/referencesPriceDefinition {:jsonld/id "x:pd"})]
-      (is (instance? BigDecimal (:urpx/unitPrice p)))
-      (is (= (BigDecimal. "0.15075") (:urpx/unitPrice p))))))
+(defn- unit-price [v]
+  (:urpx/unitPrice (dsl/price :unit-price v
+                              :references-price-definition {:jsonld/id "x:pd"})))
+
+(deftest decimal-fields-take-exact-numbers
+  (is (= 0.1610M (unit-price 0.1610M)))
+  (is (= 4 (.scale ^BigDecimal (unit-price 0.1610M))))
+  (is (= 0.1610M (unit-price "0.1610")))
+  (is (= 4 (.scale ^BigDecimal (unit-price "0.1610"))))
+  (is (= 2M (unit-price 2)))
+  (is (= 2M (unit-price (biginteger 2))))
+  (is (= 0.25M (unit-price 1/4))))
+
+(defn- inexact-refusal [v]
+  (try (unit-price v)
+       nil
+       (catch clojure.lang.ExceptionInfo e e)))
+
+(deftest decimal-fields-refuse-inexact-numbers
+  (doseq [v [0.1610 (float 0.5) 1/3]]
+    (let [e (inexact-refusal v)]
+      (is (= {:type "urpx:Price"
+              :reason :urpx.dsl/inexact-decimal
+              :fields [{:in [:urpx/unitPrice] :value v}]}
+             (ex-data e))
+          (pr-str v))
+      (is (re-find #"\[:urpx/unitPrice\]" (str (ex-message e))) (pr-str v))))
+  (testing "nested and in a vector, each named by its path"
+    (let [e (try (dsl/price-set
+                  :has-price [{:jsonld/type "urpx:Price"
+                               :urpx/unitPrice 0.5
+                               :urpx/referencesPriceDefinition {:jsonld/id "x:pd"}}
+                              {:jsonld/type "urpx:Price"
+                               :urpx/unitPrice 0.5M
+                               :urpx/referencesPriceDefinition {:jsonld/id "x:pd"}}])
+                 nil
+                 (catch clojure.lang.ExceptionInfo e e))]
+      (is (= [{:in [:urpx/hasPrice 0 :urpx/unitPrice] :value 0.5}]
+             (:fields (ex-data e)))))))
+
+(deftest read-side-coercion-still-takes-doubles
+  (is (= 0.161M (coerce/coerce schema/Decimal 0.1610))))
 
 (deftest dsl-builders-pass-through-pre-typed-decimals
   (testing "callers who already have a BigDecimal in hand can pass
@@ -213,7 +246,7 @@
   (testing "every leaf decoder routes its own input shape; a single
             builder call can mix raw and pre-typed values across fields"
     (let [build-price (dsl/make-builder schema/Price)
-          p (build-price :urpx/unitPrice 0.15075                                  ; double
+          p (build-price :urpx/unitPrice "0.15075"                                ; numeric string
                          :urpx/startDate "2026-03-01"                             ; ISO string
                          :urpx/endDate (java.time.LocalDate/of 2026 12 31)        ; pre-typed
                          :urpx/referencesPriceDefinition {:jsonld/id "x:pd"})]
@@ -610,12 +643,12 @@
        (dsl/prices
         :has-price-set
         [(dsl/price-set
-          :has-price [(price-of ::pd-commodity-summer        0.15075)
-                      (price-of ::pd-commodity-winter        0.09334)
-                      (price-of ::pd-distribution-summer     0.10806)
-                      (price-of ::pd-distribution-winter     0.07352)
-                      (price-of ::pd-public-benefits-summer  0.00604)
-                      (price-of ::pd-public-benefits-winter  0.00604)])]))))))
+          :has-price [(price-of ::pd-commodity-summer        0.15075M)
+                      (price-of ::pd-commodity-winter        0.09334M)
+                      (price-of ::pd-distribution-summer     0.10806M)
+                      (price-of ::pd-distribution-winter     0.07352M)
+                      (price-of ::pd-public-benefits-summer  0.00604M)
+                      (price-of ::pd-public-benefits-winter  0.00604M)])]))))))
 
 (deftest cpau-e-2-via-dsl-validates
   (testing "a CPAU-E-2-shaped plan authored via the DSL passes

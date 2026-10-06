@@ -41,8 +41,8 @@
    - string: parse as xsd:decimal
    - anything else: pass-through (let validation surface the type mismatch)
 
-   The number form lets DSL callers write `:urpx/unitPrice 0.15075`
-   instead of `(BigDecimal. \"0.15075\")`."
+   `urpx.dsl` builders refuse doubles before this runs, since a double has
+   already lost the written scale."
   [v]
   (cond
     (instance? BigDecimal v) v
@@ -353,6 +353,7 @@
 
 (def Decimal
   [:fn {:error/message "should be a BigDecimal"
+        ::xsd-decimal true
         :decode/urpx-jsonld ->decimal
         :encode/urpx-jsonld <-decimal}
    #(instance? BigDecimal %)])

@@ -37,7 +37,9 @@
       `:urpx/*` keys (`:urpx/seasonName`) or auto-derived kebab-case short
       forms (`:season-name`); both can be mixed in one call.
     - Auto-coerces raw inputs through the schema's `:decode/urpx-jsonld`
-      decoders: number → `BigDecimal`, ISO string → `LocalDate` /
+      decoders: BigDecimal, integer, exact ratio or numeric string →
+      `BigDecimal` (a double, a float or an inexact ratio refuses, since
+      it has already lost the written scale), ISO string → `LocalDate` /
       `LocalDateTime` / `LocalTime` (zoned forms when a dateTime or time
       carries an offset),
       `--MM` xsd:gMonth → int month-of-year,
@@ -60,12 +62,59 @@
       element-wise.
 
   Resolution is eager (declare-before-reference): an unknown ref, a
-  duplicate declaration, or two declarations with the same @id throws. Each `dsl-scope` has its own registry —
-  scopes don't leak."
+  duplicate declaration, or two declarations with the same @id throws.
+  Each `dsl-scope` has its own registry — scopes don't leak."
   (:require [clojure.string :as str]
             [malli.core :as m]
+            [malli.transform :as mt]
             [urpx.coerce :as coerce]
             [urpx.schema :as schema]))
+
+;; ---------------------------------------------------------------------------
+;; xsd:decimal inputs
+;; ---------------------------------------------------------------------------
+
+(deftype ^:private InexactDecimal [value]
+  Object
+  (toString [_] (str value)))
+
+(defn- exact-decimal
+  "`v` unchanged, or wrapped in an InexactDecimal when it is a number that
+   cannot be an xsd:decimal exactly: a double or float, whose written scale
+   is already lost, or a ratio with no terminating decimal expansion."
+  [v]
+  (cond
+    (or (double? v) (float? v)) (InexactDecimal. v)
+    (ratio? v)                  (try (bigdec v)
+                                     (catch ArithmeticException _ (InexactDecimal. v)))
+    :else                       v))
+
+(def ^:private authoring-transformer
+  "`coerce/jsonld-transformer`, preceded by `exact-decimal` on every
+   `schema/Decimal`, so an inexact number survives decoding unconverted and
+   fails validation at its own path."
+  (mt/transformer
+   {:name :urpx-authoring
+    :decoders {:fn {:compile (fn [schema _]
+                               (when (::schema/xsd-decimal (m/properties schema))
+                                 exact-decimal))}}}
+   coerce/jsonld-transformer))
+
+(defn- inexact-decimal-error
+  "An ex-info naming every xsd:decimal field in `explanation` that was given
+   an inexact number, or nil if none was."
+  [t explanation]
+  (when-let [fields (seq (for [{:keys [in value]} (:errors explanation)
+                               :when (instance? InexactDecimal value)]
+                           {:in in :value (.-value ^InexactDecimal value)}))]
+    (ex-info (str "DSL builder for " t " refuses an inexact number for xsd:decimal "
+                  (str/join ", " (map (fn [{:keys [in value]}]
+                                        (str (pr-str in) " (" (pr-str value) ")"))
+                                      fields))
+                  "; pass a BigDecimal (0.15M), an integer or a numeric string")
+             {:type t
+              :reason ::inexact-decimal
+              :fields (vec fields)})))
 
 ;; ---------------------------------------------------------------------------
 ;; Local-symbol refs: dsl-scope + registry
@@ -247,6 +296,8 @@
      - Runs urpx.coerce/coerce against the schema — already-typed values pass
        through; raw values (numbers, strings, gMonth strings, …) are decoded
        per the schema's :decode/urpx-jsonld decoders.
+     - Refuses a double, a float or an inexact ratio for an xsd:decimal
+       field, naming the field, under `:reason ::inexact-decimal`.
      - Validates the assembled entity against the schema; throws ex-info
        (with the Malli explanation attached) on validation failure.
 
@@ -288,10 +339,11 @@
                          opts)
              raw (cond-> (assoc (strip-nils opts*) :jsonld/type t)
                    id (assoc :jsonld/id id))
-             coerced (coerce/coerce schema raw)]
+             coerced (m/decode schema raw authoring-transformer)]
          (when-let [err (coerce/explain schema coerced)]
-           (throw (ex-info (str "DSL builder produced an invalid " t)
-                           {:type t :input raw :explanation err})))
+           (throw (or (inexact-decimal-error t err)
+                      (ex-info (str "DSL builder produced an invalid " t)
+                               {:type t :input raw :explanation err}))))
          coerced)))))
 
 ;; ---------------------------------------------------------------------------
