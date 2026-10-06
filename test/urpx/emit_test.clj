@@ -183,9 +183,9 @@
             (str k))))))
 
 (deftest default-context-round-trips-as-an-added-key
-  (testing "a loaded plan carries no :jsonld/context, so the default @context
-            comes back as the only difference, which is why the README's
-            round-trip passes {:context nil}"
+  (testing "a plan loaded from an @graph bundle carries no :jsonld/context,
+            so the default @context comes back as the only difference, which
+            is why the README's round-trip passes {:context nil}"
     (let [original   (fixtures/load-rate-plan "pge-e-1-2026-03-01")
           re-coerced (-> (emit/write-rate-plan original)
                          java.io.StringReader.
