@@ -36,7 +36,8 @@
 
 (defn validate!
   "`value` if it satisfies `(kind-schema kind)` with every map in the schema
-   closed (a map that says `{:closed false}` stays open). Otherwise throws
+   closed (a map that says `{:closed false}` stays open, and a map reached
+   through a `:ref` keeps its own `:closed` property). Otherwise throws
    ex-info whose message names `kind` and the definition at `where` (a map
    of `:ns`, `:name`, `:file` and `:line`), then one line per failing Malli
    `:in` path; the ex-data carries `:kind`, `:where` and the humanized
@@ -80,10 +81,11 @@
   "(defurpx kind name doc? value): def `name` to `value`, with var metadata
    `{:urpx/kind kind}`, the docstring, `:file` and `:line`.
 
-   `kind` must be a keyword literal. At macroexpansion the value form is
-   evaluated and validated with `validate!`, so an unknown kind or an
-   invalid value throws before the `def`, and a failed re-evaluation leaves
-   an existing var as it was. The `def` evaluates the value form again."
+   `kind` must be a keyword literal. At macroexpansion an unknown kind
+   throws, then the value form is evaluated and validated with `validate!`,
+   so an invalid value throws before the `def`, and a failed re-evaluation
+   leaves an existing var as it was. The `def` evaluates the value form
+   again."
   [kind name & body]
   (when-not (keyword? kind)
     (throw (ex-info (str "defurpx kind must be a keyword literal, not " (pr-str kind))
@@ -97,6 +99,7 @@
                :name name
                :file *file*
                :line line}]
+    (kind-schema kind)
     (validate! kind (eval value) where)
     `(def ~(vary-meta name
                       merge
@@ -113,5 +116,5 @@
   (->> nses
        (mapcat (comp vals ns-interns the-ns))
        (filter #(= kind (:urpx/kind (meta %))))
-       (sort-by str)
+       (sort-by symbol)
        vec))

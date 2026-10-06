@@ -987,7 +987,7 @@ For a longer worked walkthrough that mirrors selected examples from the upstream
   ```
 
   The `ex-data` carries `:kind`, `:where` and the humanized `:errors`.
-- **Closed schemas.** Every map in a kind's schema is closed unless it says `{:closed false}`, so a misspelled key refuses.
+- **Closed schemas.** Every map in a kind's schema is closed unless it says `{:closed false}`, so a misspelled key refuses. A map reached through a `:ref` keeps its own `:closed` property.
 - **Kinds.** `kind-schema` is a multimethod; its `:default` refuses. The kind is a keyword literal. The `urpx.kind` namespace is reserved for kinds clj-urpx defines; qualify your own kinds in your namespace.
 - **No registry.** The kind is in the var's metadata as `:urpx/kind`, with the docstring, `:file` and `:line`. `defs-of-kind` reads the vars interned in the namespaces you pass, so an unmapped var is not returned.
 

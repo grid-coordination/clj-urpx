@@ -20,6 +20,15 @@
   [:map {:closed false}
    [:key :string]])
 
+(defmethod defs/kind-schema ::linked
+  [_]
+  [:schema
+   {:registry {::link [:map
+                       [:key :string]
+                       [:next {:optional true} [:ref ::link]]]}}
+   [:map
+    [:head [:ref ::link]]]])
+
 (defurpx ::rates loaded-rates
   "Defined as the file loads."
   {:peak 16.10M})
@@ -109,6 +118,10 @@
     (is (= "Unknown defurpx kind :urpx.defs-test/ratez" (ex-message e)))
     (is (= {:kind ::ratez} (ex-data e)))
     (is (not (interned? n 'r)))
+    (testing "before the value form is evaluated"
+      (is (= "Unknown defurpx kind :urpx.defs-test/ratez"
+             (ex-message (thrown #(eval-in n '(defurpx :urpx.defs-test/ratez r
+                                                (throw (ex-info "evaluated" {})))))))))
     (remove-ns (ns-name n))))
 
 (deftest kind-schema-default-refuses
@@ -147,7 +160,27 @@
     (testing "a map that says {:closed false} stays open"
       (is (= {:key "scl" :extra 1}
              @(eval-in n '(defurpx :urpx.defs-test/open o {:key "scl" :extra 1})))))
+    (testing "a map reached through a :ref keeps its own :closed property"
+      (is (= {:disallowed-key ["disallowed key"]}
+             (:errors (ex-data (thrown #(eval-in n '(defurpx :urpx.defs-test/linked l1
+                                                      {:head {:key "a"}
+                                                       :disallowed-key 1})))))))
+      (is (= {:head {:key "a" :extra 1}}
+             @(eval-in n '(defurpx :urpx.defs-test/linked l2
+                            {:head {:key "a" :extra 1}})))))
     (remove-ns (ns-name n))))
+
+(deftest defs-of-kind-sorts-by-symbol
+  (let [a (create-ns 'urpx.defs-test.order)
+        b (create-ns 'urpx.defs-test.order-x)]
+    (doseq [n [b a]]
+      (binding [*ns* n]
+        (refer 'urpx.defs :only '[defurpx]))
+      (eval-in n '(defurpx :urpx.defs-test/rates r {:peak 1M})))
+    (is (= ['urpx.defs-test.order/r 'urpx.defs-test.order-x/r]
+           (map symbol (defs/defs-of-kind ::rates [b a]))))
+    (remove-ns (ns-name a))
+    (remove-ns (ns-name b))))
 
 (deftest defs-of-kind-reads-var-metadata-in-the-namespaces-given
   (let [a (scratch-ns)
