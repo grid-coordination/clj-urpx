@@ -57,7 +57,7 @@ Each check exists because the thing it checks for happened, or because the artif
 `release` runs the test suite through `ci` and stops on failure. The rest are not wired into the build because they need a URPX checkout or a linter that is not a project dependency, so run them by hand before tagging:
 
 ```bash
-clj-kondo --lint src test dev
+clj-kondo --lint src test dev corpus
 clojure -M:validate test/resources/urpx-fixtures/*.jsonld
 scripts/shacl-drift.sh [path-to-urpx-checkout]    # defaults to $URPX_DIR
 markdownlint-cli2 README.md CHANGELOG.md 'doc/*.md'

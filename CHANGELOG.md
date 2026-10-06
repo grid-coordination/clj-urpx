@@ -382,7 +382,7 @@ Version windows on modifiers, and two schedule defects that made `price-schedule
 
   Marked, not dropped: every ledger a non-covering modifier produces carries `:urpx.resolved/outside-version-window`, and `marginal-unit-rate` refuses. Dropping a superseded discount would quietly raise a bill, and a caller reading tiers off a superseded filing deliberately is not blocked. Scoped to prices that would actually be summed, so an expired modifier contributing only non-energy or already-excluded prices costs nothing and does not refuse.
 
-  Reported by the urpx-rate-plans session, which had prepared end bounds for three modifier versions and found them inert in the consumer.
+  Reported from urpx-rate-plans, where end bounds prepared for three modifier versions were inert in the consumer.
 
 - **`price-schedule` merged across a version boundary and reported one side's answer for the whole span.** `same-ledgers?` compares `:urpx.resolved/ledgers`, but a base plan's version-window mark sits on the *result*, so a boundary that changed nothing else was invisible. Both directions were wrong, and the false-refusal one was reachable on an unmodified vendored fixture with no mutation: `sce-d-2026-03-20` takes effect on the 20th, and a March window returned **one** interval carrying the not-yet-effective mark, so `marginal-unit-rate` refused for the whole month including the twelve days the filing covers, while `price-segments` split correctly and a direct resolve returned `0.31085`. A version expiring mid-window failed the other way, carrying the covered side's rate past the bound.
 
@@ -420,7 +420,7 @@ Version windows on modifiers, and two schedule defects that made `price-schedule
 
 **Upgrading:** measured across the production corpus, **35 of 172 composed resolutions** change from a number to a refusal, on **five base plans**: PG&E E-ELEC, and SCE D, TOU-D-4-9PM, TOU-D-5-8PM and TOU-D-PRIME. Every one of those numbers was wrong, and the ones driven by CRS were wrong by more than half the base rate. The remaining 137 are unchanged.
 
-Discounts are **not** affected. A `urpx:PriceSummary` whose members carried a gated price would have propagated the refusal into every CARE and FERA composition; measured, none does, and SCE Schedule D still returns `0.19804875` with CARE and `0.2550770` with FERA, identical with and without `:assume-conditions-hold? true`. Flagged by the urpx-rate-plans session before release, and checked rather than assumed.
+Discounts are **not** affected. A `urpx:PriceSummary` whose members carried a gated price would have propagated the refusal into every CARE and FERA composition; measured, none does, and SCE Schedule D still returns `0.19804875` with CARE and `0.2550770` with FERA, identical with and without `:assume-conditions-hold? true`. Flagged from urpx-rate-plans before release, and checked rather than assumed.
 
 Where the gated set is mutually exclusive, the filing wants `urpx:ProfileAlternatives` and the refusal becomes a selection you can make; where the gate is a genuine predicate, `:assume-conditions-hold? true` restores the previous value explicitly.
 
@@ -450,7 +450,7 @@ Where the gated set is mutually exclusive, the filing wants `urpx:ProfileAlterna
 
 - **Withholding refuses the marginal rate only when it would make the sum short.** `marginal-unit-rate` refused whenever a withheld energy ledger was present, whatever had been withheld. An event-driven price (`urpx:hasDynamicPricing`) or a recurring charge is already outside a non-event per-unit marginal, so hiding it changes no number; the refusal is now decided by the same predicate that excludes a tier from the sum. Asking for the during-event upper bound with `:include-dynamic-pricing? true` wants that price again, and the same document refuses again.
 
-  Without this, moving a set of event-driven prices onto the selection layer would convert a correct rate into a refusal no caller could clear. CPAU's E-HRA cells are the utility's own reserve level and generation band, reset by council vote; a consumer has no source for either, so the selection the refusal demands could never be supplied. Vintage-PCIA is the case that keeps the refusal, being an ordinary per-kWh price and an attribute of the customer the caller does know. Raised by the urpx-tariffs session before authoring against the new slot.
+  Without this, moving a set of event-driven prices onto the selection layer would convert a correct rate into a refusal no caller could clear. CPAU's E-HRA cells are the utility's own reserve level and generation band, reset by council vote; a consumer has no source for either, so the selection the refusal demands could never be supplied. Vintage-PCIA is the case that keeps the refusal, being an ordinary per-kWh price and an attribute of the customer the caller does know. Raised from urpx-rate-plans before authoring against the new slot.
 
 - **A recurring modifier price is now excluded from the per-kWh marginal.** `urpx:intervalDuration` is read from the `PriceDefinition` on the modifier path as it always was on the base plan. It was unreachable there, because the modifier path never called the function that stamps it, so the exclusion `marginal-unit-rate` documents for recurring charges could not fire for any modifier tier. No vendored fixture changes: the modifier definitions that carry an interval today all sit on non-energy ledgers.
 
@@ -501,11 +501,11 @@ The last two findings from the silent-drop sweep, which share one cause: the uns
 
   `tier-info` has read both placements since long before, three hundred lines up in the same file. Writing a second, narrower rule instead of reusing it was the defect. Both placements now give −0.10070125, and a test pins both, because a test covering one placement is exactly what let the narrow version through.
 
-  Reported by the urpx-tariffs session, who declined to work around it on the data side: putting the discriminator back on the Price would have made SCE D the only filing in 73 doing so, which is the anomaly that caused the 3.09× SDG&E defect in the first place.
+  Reported from urpx-rate-plans, which declined to work around it on the data side: putting the discriminator back on the Price would have made SCE D the only filing in 73 doing so, which is the anomaly that caused the 3.09× SDG&E defect in the first place.
 
 ## [0.22.0] — 2026-09-21
 
-Silent losses. A sweep looked for every way a SHACL-conformant document can lose content or produce a wrong number with no diagnostic; it returned seven confirmed findings, rejected nineteen candidates as correct gating or existing loud refusals, and caught four overclaims among its own results. Two more came from the urpx-tariffs session. **Resolved prices change on filings that carry any of these shapes.**
+Silent losses. A sweep looked for every way a SHACL-conformant document can lose content or produce a wrong number with no diagnostic; it returned seven confirmed findings, rejected nineteen candidates as correct gating or existing loud refusals, and caught four overclaims among its own results. Two more came from urpx-rate-plans. **Resolved prices change on filings that carry any of these shapes.**
 
 ### Fixed
 

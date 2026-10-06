@@ -21,7 +21,7 @@ Discussions are open-ended — a good place to think out loud or scope something
 Use [Issues](https://github.com/grid-coordination/clj-urpx/issues) for actionable changes:
 
 - Bugs in parsing, coercion, schema validation, or price resolution against real URPX fixtures
-- SHACL classes that aren't yet modeled and that a real consumer needs (`urpx:TariffPublication`, `urpx:ProgramEnrollment`, the non-RatePlan URPXDocument subclasses, etc. — see [README §Status](README.md#status) for the running list)
+- SHACL classes that aren't yet modeled and that a real consumer needs (`urpx:ProgramEnrollment`, the non-RatePlan URPXDocument subclasses, etc. — see [README §Status](README.md#status) for the running list)
 - Test failures or unexpected behavior with concrete repro steps
 - Schema gaps surfaced by a real filing (one that should validate but doesn't, or coerces into a shape the resolver can't handle)
 - Documentation errors, unclear explanations, or stale prose in `README.md`, `doc/dsl-tutorial.md`, or namespace docstrings
@@ -35,16 +35,17 @@ Pull requests are welcome.
 
 - For small fixes (typos, broken links, single-test corrections backed by an existing fixture, single-decoder bug fixes), open a PR directly.
 - For substantive changes (new schema classes, new DSL builders, new resolver behavior, write-side capabilities, new namespaces), open a Discussion or Issue first so we can align on scope before you invest the effort.
-- All changes pass `clojure -M:test` (Kaocha) and `clj-kondo --lint src test` cleanly.
+- All changes pass `clojure -M:test` (Kaocha) and `clj-kondo --lint src test dev corpus` cleanly.
 - Match the existing tone and structure. The library composes parse → coerce → {resolve, emit, dsl} as roughly orthogonal tiers; patches that fit cleanly into one tier without leaking concerns across them are the easiest to land.
 - One commit per logical change is fine; we don't require squash or any particular branch naming.
+- Contributions are accepted under the [MIT License](LICENSE). Vendored fixtures keep their source license, recorded in each `.license` sidecar.
 
 ## Development
 
 ```bash
-clojure -M:test                 # run the Kaocha test suite (~150 tests)
-clojure -M:nrepl                # nREPL on the port written to .nrepl-port
-clj-kondo --lint src test       # lint
+clojure -M:test                        # run the Kaocha test suite
+clojure -M:nrepl                       # nREPL on the port written to .nrepl-port
+clj-kondo --lint src test dev corpus   # lint
 ```
 
 ### Configuration
@@ -64,7 +65,7 @@ Copy `.env.example` to `.env` (gitignored), edit it, and load it with `set -a; .
 
 Every Clojure block in [`doc/dsl-tutorial.md`](doc/dsl-tutorial.md) is **evaluated**, in order, in one namespace, the way a reader working through the page would hit them. If you add a block there, it has to run.
 
-README blocks are illustrative snippets that reference bindings they never define, so running them is not meaningful. Instead, every `urpx.*` function they name must still **resolve** — which is what actually goes wrong: a rename that leaves the prose behind.
+Most README blocks are illustrative snippets that reference bindings they never define, so every `urpx.*` function they name must still **resolve**, which catches a rename that leaves the prose behind. The README Getting started walkthrough is self-contained, so it is **evaluated** like the tutorial, and each `;; =>` value it shows must be what the code above it returns.
 
 Both tiers exist because prose about code rots silently. A missing DSL builder is not a failing test, and a tutorial that throws is not a failing test. Both happened here: the tutorial's `rate-plan-version` example became a throw the moment two properties were made required, and nothing noticed until someone re-read it.
 

@@ -148,7 +148,9 @@ That covers the consume side end-to-end. For emit and authoring, jump to [Writin
 ;;      :urpx.resolved/unit-price -0.01011M ...}]}
 ;;   {:urpx.resolved/ledger-name "Energy Delivery Prices"
 ;;    :urpx.resolved/tiers [{:urpx.resolved/unit-price 0.20388M ...} ...]}
-;;   {:urpx.resolved/ledger-name "Adjustment Prices" ...}]}
+;;   {:urpx.resolved/ledger-name "Adjustment Prices" ...}
+;;   {:urpx.resolved/ledger-name "Base Services Charge"
+;;    :urpx.resolved/tiers []}]}
 
 ;; 3. Marginal $/kWh — sum of the lowest-tier unit-price across all ledgers
 (price/marginal-unit-rate *1)
@@ -600,7 +602,7 @@ So a segment from `segments-for` and a coverage window compare with no conversio
 (ti/relation segment (cov/coverage-interval report zone)) ; => :during
 ```
 
-**`verdict-applies?` refuses when a claim states no coverage scope.** No shape requires one, so `:coverage-scope-absent` is what a price server should expect to meet first. That is not a bug: returning `false` would claim the verdict does not cover the window, which no document said, and `true` would be worse. A caller that publishes anyway is choosing its own policy, and catching a named reason is how it says so.
+**`verdict-applies?` refuses when a claim states no coverage scope.** No shape requires one, so `:urpx.coverage/coverage-scope-absent` is what a price server should expect to meet first. That is not a bug: returning `false` would claim the verdict does not cover the window, which no document said, and `true` would be worse. A caller that publishes anyway is choosing its own policy, and catching a named reason is how it says so.
 
 ### What it refuses
 
@@ -665,12 +667,12 @@ They differ only when a modifier names some version, and only about a base versi
 
 | `:repeated-ids` policy | Does |
 |--------|--------|
-| `repeated-ids-refuse` (default) | refuses `:conflicting-version-id`, naming every offending `@id` at once. An `@id` identifies a thing, so two different things under one is a contradiction rather than a choice |
+| `repeated-ids-refuse` (default) | refuses `:urpx.scenario-cost-model/conflicting-version-id`, naming every offending `@id` at once. An `@id` identifies a thing, so two different things under one is a contradiction rather than a choice |
 | `repeated-ids-union` | merges them property by property, the RDF reading of several documents describing one IRI |
 
 Byte-identical repeats are never a conflict under either: one version published in two filings is one version, and it is deduplicated.
 
-`repeated-ids-union` has two costs worth knowing. **RDF merges triples, not meanings**: merging a copy that states `applicableToRatePlanVersion` with one that omits it yields a node that *has* the property, which under `named-versions-narrow` restricts the modifier to exactly those versions — while the omitting copy meant no restriction at all. And it silently reconciles a version `@id` whose content is time-varying, which is a defect on any reading. Only vector-valued properties union; two differing scalars refuse `:unmergeable-property`, since URPX gives many of those `sh:maxCount 1`.
+`repeated-ids-union` has two costs worth knowing. **RDF merges triples, not meanings**: merging a copy that states `applicableToRatePlanVersion` with one that omits it yields a node that *has* the property, which under `named-versions-narrow` restricts the modifier to exactly those versions — while the omitting copy meant no restriction at all. And it silently reconciles a version `@id` whose content is time-varying, which is a defect on any reading. Only vector-valued properties union; two differing scalars refuse `:urpx.scenario-cost-model/unmergeable-property`, since URPX gives many of those `sh:maxCount 1`.
 
 **What a zone on a package counts for is a fourth policy**, `:package-zones`, taken by `enumerate`, `plan-versions` and `applicable-modifiers`. `urpx:timezoneIdentifier` is admitted on the version, its plan or modifier, and the `urpx:URPXPackage` containing it, and URPX gives no precedence among them. A package counts when it names the version, its identity or its source document by `urpx:packages`, `urpx:hasRatePlan` or `urpx:hasRatePlanModifier`.
 
@@ -927,7 +929,9 @@ Inside a `dsl-scope`, builders accept an optional leading qualified-keyword as t
 (dsl/dsl-scope
   (dsl/season ::summer :season-name "Summer" :month [5 6 7 8 9 10])
   (dsl/season ::winter :season-name "Winter" :month [11 12 1 2 3 4])
+  (dsl/ledger ::commodity :name "Commodity" :ledger-type {:jsonld/id "urpx:supplyLedger"})
   (dsl/price-definition ::pd-summer
+                        :name "Summer commodity"
                         :applies-in-season ::summer    ; → {:jsonld/id "summer"}
                         :references-ledger ::commodity))
 ```
@@ -990,7 +994,6 @@ Covered:
 - `Price.hasApplicabilityRule` and `PriceSetAlternative.hasApplicabilityRule` take either an inline `urpx:ApplicabilityRule` or a bare `@id` reference to one defined elsewhere in the document, since RDF merges a reference with its definition. The reference arm is closed to `@id` alone, so a malformed inline node cannot pass as a reference
 - `@context` in all three JSON-LD encodings: a definition object, an IRI string, or an array mixing the two, which is the form every shipped v0.5.1 example uses
 - Timezone inference reads `urpx:offeredBy` on a snapshot, the v0.5.1 successor to `urpx:publishedBy`, which was removed from the version shapes
-- `Price.hasApplicabilityRule` and `PriceSetAlternative.hasApplicabilityRule` take either an inline `urpx:ApplicabilityRule` or a bare `@id` reference to one defined elsewhere in the document, since RDF merges a reference with its definition
 - Modifier filings in all three packaging shapes — bundled with a base RatePlan in `@graph`, carried by a wrapper, or standalone (no in-document target linkage; consumer-side composition expected) — load via `core/load-rate-plan-modifier`
 - `urpx:ConditionExpression` tree (Comparison/Boolean nodes with Object/Datatype/Custom operand leaves) parses and coerces; recursive operands are validated through a local Malli registry
 - `BillingModel.hasPriceDefinition` traversal (the PriceDefinition lives at the BillingModel level with `referencesLedger` pointing back) for price resolution
@@ -1011,7 +1014,7 @@ Known gaps:
 - `urpx:referencesServiceBracket` on `Price`, `PriceDefinition`, `PriceSet` and `PriceSetAlternative` is modeled and round-trips, but is read by no resolver: a Price naming one bracket directly while tier selection picks a different one will disagree, with nothing in the result to say so
 - A container-level `urpx:referencesMetricInput` does not narrow a tier-number clash: two `urpx:ServiceTiers` declaring one `urpx:serviceTierNumber` with different bounds refuse even when each is scoped to a different metric
 - Programmatic interpretation of `urpx:ConditionExpression` for active-tier selection in matrix-style modifiers: the caller picks the active value by `price-id` after walking the condition tree itself
-- A handful of SHACL classes that appear as references but aren't deeply modeled — `urpx:TariffPublication`, `urpx:ProgramEnrollment`, `urpx:ServicePointProfile`, plus the non-RatePlan URPXDocument subclasses (`urpx:TariffStatementDocument`, `urpx:DERExportsDocument`, `urpx:HighlyDynamicPricesDocument`, `urpx:SupplyChargesDocument`). They round-trip correctly as opaque maps via `:map`-typed payload pointers; deeper modeling (named builders, validation) lands as consumers need it.
+- A handful of SHACL classes that appear as references but aren't deeply modeled — `urpx:ProgramEnrollment`, `urpx:ServicePointProfile`, plus the non-RatePlan URPXDocument subclasses (`urpx:TariffStatementDocument`, `urpx:DERExportsDocument`, `urpx:HighlyDynamicPricesDocument`, `urpx:SupplyChargesDocument`). They round-trip correctly as opaque maps via `:map`-typed payload pointers; deeper modeling (named builders, validation) lands as consumers need it.
 
 ## Checking for drift against the standard
 
@@ -1049,4 +1052,4 @@ Issues, Discussions, and pull requests are welcome — see [CONTRIBUTING.md](CON
 
 Copyright (c) 2026 Clark Communications Corporation. [MIT License](LICENSE).
 
-The vendored test fixtures under `test/resources/urpx-fixtures/` are licensed [CDLA-Permissive-2.0](LICENSES/CDLA-Permissive-2.0.txt).
+The vendored test fixtures under `test/resources/urpx-fixtures/` and the vendored `test/resources/corpus.schema.json` are licensed [CDLA-Permissive-2.0](LICENSES/CDLA-Permissive-2.0.txt).
