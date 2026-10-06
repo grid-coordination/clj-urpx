@@ -855,8 +855,10 @@ Each function takes a coerced (or already-typed EDN) entity, runs the schema's `
               core/load-rate-plan
               coerce/coerce-rate-plan))
 
-;; emit → JSON-LD string → re-parse → re-coerce
-(def re-coerced (-> (emit/write-rate-plan plan)
+;; emit → JSON-LD string → re-parse → re-coerce. A coerced plan carries no
+;; :jsonld/context, so {:context nil} keeps the default @context from coming
+;; back as a key the original lacks.
+(def re-coerced (-> (emit/write-rate-plan plan {:context nil})
                     StringReader.
                     core/parse-rate-plan
                     coerce/coerce-rate-plan))
