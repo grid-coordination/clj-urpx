@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: 2026 Clark Communications Corporation
+# SPDX-License-Identifier: MIT
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-java@v6.0.1
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: DeLaGuardo/setup-clojure@13.7.0
+        with:
+          cli: 1.12.6.1673
+          clj-kondo: 2026.08.04
+
+      - uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.m2
+            ~/.gitlibs
+          key: deps-${{ runner.os }}-${{ hashFiles('deps.edn') }}
+          restore-keys: deps-${{ runner.os }}-
+
+      - name: Lint
+        run: clj-kondo --lint src test dev corpus
+
+      - name: Test
+        run: clojure -M:test
