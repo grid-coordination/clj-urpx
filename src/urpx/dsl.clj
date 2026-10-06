@@ -293,9 +293,10 @@
        entity type, so a misspelled key throws instead of being emitted.
      - Drops kwargs whose value is nil so optional fields can be supplied
        conditionally without producing present-but-nil entries.
-     - Runs urpx.coerce/coerce against the schema — already-typed values pass
-       through; raw values (numbers, strings, gMonth strings, …) are decoded
-       per the schema's :decode/urpx-jsonld decoders.
+     - Decodes against the schema with `urpx.coerce/jsonld-transformer`:
+       already-typed values pass through; raw values (numbers, strings,
+       gMonth strings, …) are decoded per the schema's :decode/urpx-jsonld
+       decoders.
      - Refuses a double, a float or an inexact ratio for an xsd:decimal
        field, naming the field, under `:reason ::inexact-decimal`.
      - Validates the assembled entity against the schema; throws ex-info
@@ -306,13 +307,14 @@
 
    Options:
 
-     - `:passthrough`, a set of further keys the constructor admits, for a
-       property the schema does not model:
+     - `:passthrough`, a collection of further keys the constructor admits,
+       for a property the schema does not model:
 
          (make-builder schema/RatePlanVersion {:passthrough #{:urpx/offeredBy}})"
   ([schema] (make-builder schema {}))
-  ([schema {:keys [passthrough] :or {passthrough #{}}}]
+  ([schema {:keys [passthrough]}]
    (let [t (entity-type schema)
+         passthrough (set passthrough)
          aliases (alias-map schema)
          schema-keys (set (map first (m/entries (m/deref schema))))
          admitted? (fn [k]

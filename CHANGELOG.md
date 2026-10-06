@@ -18,7 +18,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 ### Added
 
-- **`urpx.dsl/make-builder` takes an options map**; `:passthrough` is a set of further keys the constructor admits, for properties the schema does not model.
+- **`urpx.dsl/make-builder` takes an options map**; `:passthrough` is a collection of further keys the constructor admits, for properties the schema does not model.
 - **`urpx.coerce/jsonld-transformer`** is public, for composing with another Malli transformer.
 - **`urpx.schema/MetricSpecification` admits `urpx:commodity`**, as a Ref.
 

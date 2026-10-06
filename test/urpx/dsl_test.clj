@@ -413,7 +413,12 @@
                           (build :season-name "S" :foo 1)))
     (testing "the named builder admits neither"
       (is (thrown? clojure.lang.ExceptionInfo
-                   (dsl/season :season-name "S" :urpx/offeredBy {:jsonld/id "x:org"}))))))
+                   (dsl/season :season-name "S" :urpx/offeredBy {:jsonld/id "x:org"}))))
+    (testing "any collection of keys"
+      (let [build (dsl/make-builder schema/Season {:passthrough [:urpx/offeredBy]})]
+        (is (= {:jsonld/id "x:org"}
+               (:urpx/offeredBy (build :season-name "S"
+                                       :urpx/offeredBy {:jsonld/id "x:org"}))))))))
 
 (deftest read-side-coercion-keeps-unknown-keys
   (is (= "kept" (:urpx/notModeled (coerce/coerce schema/Season
