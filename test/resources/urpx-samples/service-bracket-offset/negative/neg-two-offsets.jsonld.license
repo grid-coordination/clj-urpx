@@ -1,0 +1,7 @@
+SPDX-FileCopyrightText: The URPX Authors
+SPDX-License-Identifier: CDLA-Permissive-2.0
+
+Derived from https://github.com/urpx-org/urpx-dev
+at 99a0eb8, branch dcj/service-bracket-offset-samples, path dev-docs/samples/service-bracket-offset/negative/neg-two-offsets.jsonld
+Vendored as a frozen specimen. This records where the bytes came from;
+it is not a pin to be kept current.

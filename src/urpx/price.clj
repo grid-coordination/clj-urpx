@@ -2773,16 +2773,6 @@
          ;; moment and resolving its halves in different frames would
          ;; reintroduce the disagreement this projection exists to remove.
          ^ZonedDateTime zdt (.withZoneSameInstant zdt (require-zone rate-plan))
-         ;; One @id index spanning the base plan and every modifier. This is
-         ;; what lets a discount Price in a modifier dereference a
-         ;; urpx:PriceSummary defined in the base plan filing: the caller has
-         ;; already supplied both documents here, so no cross-file lookup is
-         ;; invented, the index simply covers what was handed in. Built once
-         ;; rather than per modifier.
-         opts            (update opts :by-id
-                                 #(or % (reduce (fn [acc doc]
-                                                  (merge acc (index/build-index doc)))
-                                                {} (cons rate-plan modifiers))))
          plan-id         (:jsonld/id rate-plan)
          base-version    (plan-version rate-plan opts :urpx/hasRatePlanVersion zdt)
          ;; ONE index over every document in the composition, because there is
@@ -2806,6 +2796,17 @@
                                         (plan-version
                                          % opts :urpx/hasRatePlanModifierVersion zdt))
                                      modifiers))
+         ;; One @id index spanning the base plan, every modifier and the
+         ;; versions resolved, which :versions-by-plan may supply from outside
+         ;; the plan and modifier documents. This is what lets a discount Price
+         ;; in a modifier dereference a urpx:PriceSummary defined in the base
+         ;; plan filing: the caller has already supplied both documents here,
+         ;; so no cross-file lookup is invented, the index simply covers what
+         ;; was handed in. Built once rather than per modifier.
+         opts            (update opts :by-id
+                                 #(or % (reduce (fn [acc doc]
+                                                  (merge acc (index/build-index doc)))
+                                                {} (concat (cons rate-plan modifiers) versions))))
          opts            (assoc opts :alt-index
                                 (or (:alt-index opts)
                                     (reduce (fn [idx v]

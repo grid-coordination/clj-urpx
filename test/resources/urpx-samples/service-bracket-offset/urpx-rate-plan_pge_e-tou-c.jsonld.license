@@ -1,0 +1,7 @@
+SPDX-FileCopyrightText: 2026 Clark Communications Corporation
+SPDX-License-Identifier: CDLA-Permissive-2.0
+
+Derived from https://github.com/urpx-org/urpx
+at ae73f6e5, branch dcj/service-bracket-offset, path test-cases/pge-e-tou-c/data/urpx-rate-plan_pge_e-tou-c.jsonld
+Vendored as a frozen specimen. This records where the bytes came from;
+it is not a pin to be kept current.

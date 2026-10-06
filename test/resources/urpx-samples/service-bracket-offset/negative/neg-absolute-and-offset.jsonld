@@ -1,0 +1,146 @@
+{
+  "@context": {
+    "urpx": "https://urpx.org/ns/ontology/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "org": "https://urpx-org.github.io/urpx/fixtures/org/",
+    "pge": "https://urpx-org.github.io/urpx/fixtures/pge/",
+    "urpx:initialEffectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:lowerBound": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:upperBound": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:lowerBoundOffset": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:upperBoundOffset": {
+      "@type": "xsd:decimal"
+    }
+  },
+  "@graph": [
+    {
+      "@id": "pge:medical-baseline",
+      "@type": "urpx:RatePlanModifier",
+      "urpx:name": "Standard Medical Baseline Quantity",
+      "urpx:description": "Synthetic test data supporting review of proposed vocabulary; not for production use. Raises the baseline allowance of the E-TOU-C baseline-tier ladder by the Electric Rule 19 standard medical baseline quantity of 16.438 kWh per day. Negative case: an adjusting bracket also carries an absolute bound.",
+      "urpx:modifierUniqueIdentifier": "MEDICAL-BASELINE",
+      "urpx:initialEffectiveDate": "2023-03-23",
+      "urpx:offeredBy": {
+        "@id": "org:utility-pge"
+      }
+    },
+    {
+      "@id": "pge:medical-baseline-2023-03-23",
+      "@type": "urpx:RatePlanModifierVersion",
+      "urpx:forRatePlanModifier": {
+        "@id": "pge:medical-baseline"
+      },
+      "urpx:applicableToRatePlan": {
+        "@id": "pge:e-tou-c"
+      },
+      "urpx:modifierVersionNumber": "2023-03-23",
+      "urpx:changeReason": {
+        "@id": "urpx:rateCase"
+      },
+      "urpx:serviceRole": {
+        "@id": "urpx:bundledServiceRole"
+      },
+      "urpx:hasCoverageClaim": {
+        "@type": "urpx:CoverageClaim",
+        "urpx:completenessResult": {
+          "@id": "urpx:partial"
+        },
+        "urpx:selfContained": true,
+        "urpx:confidence": {
+          "@id": "urpx:estimated"
+        },
+        "urpx:explainedBy": {
+          "@type": "urpx:Evaluation",
+          "urpx:description": "Standard quantity only; Additional Medical Baseline Quantities are not modeled."
+        }
+      },
+      "urpx:hasPrices": {
+        "@type": "urpx:Prices"
+      },
+      "urpx:hasPlanElements": {
+        "@type": "urpx:PlanElements",
+        "urpx:hasMetricInput": {
+          "@id": "pge:mi-energy-medical"
+        },
+        "urpx:hasBillingModel": {
+          "@id": "pge:bm-medical"
+        }
+      }
+    },
+    {
+      "@id": "pge:mi-energy-medical",
+      "@type": "urpx:MetricInput",
+      "urpx:name": "Energy consumption (kWh)",
+      "urpx:metricInputType": {
+        "@id": "urpx:measuredMetricInput"
+      },
+      "urpx:hasMetricSpecification": {
+        "@type": "urpx:MetricSpecification",
+        "urpx:commodity": {
+          "@id": "urpx:electricity"
+        },
+        "urpx:measurementKind": {
+          "@id": "urpx:energy"
+        },
+        "urpx:unitOfMeasure": {
+          "@id": "urpx:kWh"
+        }
+      }
+    },
+    {
+      "@id": "pge:bm-medical",
+      "@type": "urpx:BillingModel",
+      "urpx:hasServiceTiers": {
+        "@id": "pge:tiers-medical"
+      }
+    },
+    {
+      "@id": "pge:tiers-medical",
+      "@type": "urpx:ServiceTiers",
+      "urpx:referencesMetricInput": {
+        "@id": "pge:mi-energy-medical"
+      },
+      "urpx:hasServiceTier": {
+        "@id": "pge:tier-medical-host"
+      }
+    },
+    {
+      "@id": "pge:tier-medical-host",
+      "@type": "urpx:ServiceTier",
+      "urpx:name": "Medical baseline adjustments",
+      "urpx:hasServiceBracket": [
+        {
+          "@id": "pge:medical-baseline-t1"
+        },
+        {
+          "@id": "pge:medical-baseline-t2"
+        }
+      ]
+    },
+    {
+      "@id": "pge:medical-baseline-t1",
+      "@type": "urpx:ServiceBracket",
+      "urpx:adjustsServiceTier": {
+        "@id": "pge:tier-baseline-t1"
+      },
+      "urpx:upperBoundOffset": "16.438",
+      "urpx:upperBound": "30"
+    },
+    {
+      "@id": "pge:medical-baseline-t2",
+      "@type": "urpx:ServiceBracket",
+      "urpx:adjustsServiceTier": {
+        "@id": "pge:tier-baseline-t2"
+      },
+      "urpx:lowerBoundOffset": "16.438"
+    }
+  ]
+}
