@@ -166,9 +166,9 @@
                       {:tou-period-id   (:jsonld/id period)
                        :time-bracket-id (:jsonld/id bracket)})]
     (when (seq unspecified)
-      (throw (ex-info (str "urpx:TimeBracket " (pr-str (vec unspecified)) " has urpx:dayType "
-                           "urpx:customDays and no urpx:daysOfWeek, so the days it applies "
-                           "on are not stated.")
+      (throw (ex-info (str "A urpx:TimeBracket with urpx:dayType urpx:customDays lists no "
+                           "urpx:daysOfWeek, so the days it applies on are not stated: "
+                           (pr-str (vec unspecified)))
                       {:reason       :urpx.price/custom-days-unspecified
                        :brackets     (vec unspecified)
                        :schedule-ids (mapv :jsonld/id tou-schedules)})))))
@@ -2038,7 +2038,9 @@
 
    The TOU period keys are nil only for a version with no urpx:TOUSchedule. A
    version with one that no period covers at `zdt` refuses
-   `:urpx.price/no-tou-period`.
+   `:urpx.price/no-tou-period`. A version whose schedule holds a urpx:customDays
+   urpx:TimeBracket listing no urpx:daysOfWeek refuses
+   `:urpx.price/custom-days-unspecified`.
 
    A plan with no version snapshot, neither nested nor supplied through
    `:version` or `:versions-by-plan`, refuses `:urpx.price/no-version`."

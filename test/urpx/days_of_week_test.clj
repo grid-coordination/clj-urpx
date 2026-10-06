@@ -86,6 +86,12 @@
   (testing "Sat 2026-07-11"
     (is (= 1 (period-at plan (at 2026 7 11 18))))))
 
+(deftest the-day-is-the-plan-zone-day
+  (testing "Sun 2026-07-12 18:00 in Los Angeles is Mon 01:00 UTC"
+    (is (= 2 (period-at plan (ZonedDateTime/of 2026 7 13 1 0 0 0 (ZoneId/of "UTC"))))))
+  (testing "Sat 2026-07-11 18:00 in Los Angeles is Sun 10:00 in Tokyo"
+    (is (= 1 (period-at plan (ZonedDateTime/of 2026 7 12 10 0 0 0 (ZoneId/of "Asia/Tokyo")))))))
+
 (deftest a-holiday-monday-is-mid-peak
   (testing "Mon 2026-09-07, Labor Day in the embedded calendar"
     (is (= 2 (period-at plan (at 2026 9 7 18))))

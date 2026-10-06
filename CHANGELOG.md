@@ -17,7 +17,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 ### Changed
 
-- **A `urpx:TimeBracket` with `urpx:dayType` `urpx:customDays` matches the days it lists in `urpx:daysOfWeek`.** It matched every day. A `urpx:TOUSchedule` holding one that lists none refuses `:urpx.price/custom-days-unspecified`, naming each such bracket under `:brackets`.
+- **A `urpx:TimeBracket` with `urpx:dayType` `urpx:customDays` matches the days it lists in `urpx:daysOfWeek`.** It matched every day. `resolve-prices` refuses `:urpx.price/custom-days-unspecified` against a `urpx:TOUSchedule` holding one that lists none, naming each such bracket under `:brackets`.
 - **`urpx.emit/default-context` binds `urpx` to `https://urpx.org/ns/ontology/`**, the namespace URPX moved to in v0.5.0. It bound the earlier `https://urpx-org.github.io/urpx/ontology/`.
 
 ### Removed
