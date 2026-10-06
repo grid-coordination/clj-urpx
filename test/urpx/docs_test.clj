@@ -28,7 +28,8 @@
                          walkthrough composes PG&E's vintage-PCIA modifier, so
                          the first thing a new reader ran would have thrown.
                          A symbol check cannot catch that; only running it can."
-  (:require [clojure.java.io :as io]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
             [clojure.set :as set]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]))
@@ -184,6 +185,27 @@
                        (catch Throwable t
                          (str (.getSimpleName (class t)) ": " (.getMessage t)))))))))
           (finally (remove-ns ns-sym)))))))
+
+(deftest readme-getting-started-launch-command-has-the-classpath-it-needs
+  (testing "the suite evaluates Getting started under :test, so it cannot see
+            the classpath of the command the README tells a reader to run.
+            That command's alias must carry every path the walkthrough loads
+            from: the urpx.test-fixtures namespace and the vendored fixtures."
+    (let [body    (section (doc "README.md") "Getting started")
+          [_ cmd] (some->> (fenced-blocks (or body "") "bash")
+                           (some #(re-find #"(?m)^clojure (-M\S+)" %)))
+          aliases (when cmd
+                    (map keyword (remove str/blank? (str/split (subs cmd 2) #":"))))
+          deps    (edn/read-string (slurp "deps.edn"))
+          paths   (into (set (:paths deps))
+                        (mapcat #(get-in deps [:aliases % :extra-paths]))
+                        aliases)
+          on-cp?  (fn [rel] (some #(.exists (io/file % rel)) paths))]
+      (is (some? cmd) "Getting started shows a `clojure -M:<alias>` command")
+      (is (on-cp? "urpx/test_fixtures.clj")
+          (str cmd " does not put urpx.test-fixtures on the classpath"))
+      (is (on-cp? "urpx-fixtures/pge-e-1-2026-03-01.jsonld")
+          (str cmd " does not put the vendored fixtures on the classpath")))))
 
 (deftest every-vendored-fixture-records-its-provenance
   (testing "a specimen whose origin is unrecorded is a provenance gap, and this

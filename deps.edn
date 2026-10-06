@@ -37,7 +37,7 @@
                           com.dcj/build-provenance {:mvn/version "0.2.0"}}
                    :ns-default build}
 
-           :nrepl {:extra-paths ["dev"]
+           :nrepl {:extra-paths ["dev" "test" "test/resources"]
                    :extra-deps {nrepl/nrepl {:mvn/version "1.6.0"}
                                 cider/cider-nrepl {:mvn/version "0.50.3"}
                                 com.dcj/clj-doc-browse {:mvn/version "0.1.0"}}
