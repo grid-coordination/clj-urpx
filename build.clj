@@ -8,11 +8,14 @@
             [clojure.tools.build.api :as b]
             [codox.md.build :as doc]
             [deps-deploy.deps-deploy :as dd])
-  (:import [java.util.zip ZipFile]))
+  (:import [java.util.zip ZipFile]
+           [javax.xml.parsers DocumentBuilderFactory]))
 
 (def lib 'energy.grid-coordination/clj-urpx)
 (def version "0.39.0-SNAPSHOT")
 (def class-dir "target/classes")
+(def ^:private description "Clojure library for URPX utility rate plan exchange")
+(def ^:private url "https://github.com/grid-coordination/clj-urpx")
 
 (defn test "Run all the tests." [opts]
   (let [basis    (b/create-basis {:aliases [:test]})
@@ -28,14 +31,16 @@
   (assoc opts
          :lib lib :version version
          :jar-file (format "target/%s-%s.jar" (name lib) version)
-         :description "Clojure library for URPX utility rate plan exchange"
-         :url "https://github.com/grid-coordination/clj-urpx"
-         :pom-data [[:licenses
+         :description description
+         :url url
+         :pom-data [[:description description]
+                    [:url url]
+                    [:licenses
                      [:license
                       [:name "MIT"]
                       [:url "https://opensource.org/licenses/MIT"]]]]
          :scm {:tag (str "v" version)
-               :url "https://github.com/grid-coordination/clj-urpx"}
+               :url url}
          :basis (b/create-basis {})
          :class-dir class-dir
          :target "target"
@@ -62,6 +67,34 @@
     (when-not (.getEntry z license-entry)
       (throw (ex-info (str jar-file " lacks " license-entry)
                       {:jar-file jar-file :entry license-entry})))))
+
+(def ^:private pom-entry
+  (format "META-INF/maven/%s/%s/pom.xml" (namespace lib) (name lib)))
+
+(defn- pom-project-children
+  "The text of each direct child of the pom's <project>, by tag name."
+  [in]
+  (let [root  (.getDocumentElement
+               (.parse (.newDocumentBuilder (DocumentBuilderFactory/newInstance)) in))
+        ^org.w3c.dom.NodeList nodes (.getChildNodes root)]
+    (into {}
+          (for [i (range (.getLength nodes))
+                :let [n (.item nodes (int i))]
+                :when (instance? org.w3c.dom.Element n)]
+            [(.getTagName ^org.w3c.dom.Element n) (str/trim (.getTextContent n))]))))
+
+(defn- check-jar-pom!
+  "Throw unless the jar's pom names the project's description and url, which
+   Clojars and cljdoc show."
+  [{:keys [jar-file description url]}]
+  (with-open [z (ZipFile. (io/file jar-file))]
+    (let [e        (.getEntry z pom-entry)
+          children (when e (with-open [in (.getInputStream z e)] (pom-project-children in)))
+          wanted   {"description" description "url" url}
+          missing  (into [] (remove #(= (wanted %) (get children %))) (keys wanted))]
+      (when (seq missing)
+        (throw (ex-info (str jar-file " pom lacks " (str/join ", " missing))
+                        {:jar-file jar-file :entry pom-entry :missing missing}))))))
 
 (declare git jar-provenance)
 
@@ -97,6 +130,7 @@
     (b/jar opts)
     (check-jar-docs! opts)
     (check-jar-license! opts)
+    (check-jar-pom! opts)
     (check-jar-provenance! opts))
   opts)
 

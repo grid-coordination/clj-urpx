@@ -18,14 +18,14 @@
            :drift {:extra-paths ["dev"]
                    :main-opts ["-m" "drift"]}
 
-           ;; Dev only. babashka/fs and tools.gitlibs are corpus-walking tools
-           ;; for dev/corpus_sweep.clj; the library itself does no filesystem
-           ;; traversal and fetches nothing, so neither is a runtime dep.
            ;; Example corpus walkers. Not on the library :paths, never in the
            ;; jar: finding filings is layout-specific, turning them into
            ;; documents is not.
            :corpus {:extra-paths ["corpus"]}
 
+           ;; Dev only. babashka/fs and tools.gitlibs are corpus-walking tools
+           ;; for dev/corpus_sweep.clj; the library itself does no filesystem
+           ;; traversal and fetches nothing, so neither is a runtime dep.
            :dev {:extra-paths ["dev" "corpus"]
                  :extra-deps {babashka/fs {:mvn/version "0.5.22"}
                               org.clojure/tools.gitlibs {:mvn/version "2.5.197"}}}
