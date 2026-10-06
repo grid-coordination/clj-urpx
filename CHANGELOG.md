@@ -13,7 +13,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 ### Changed
 
-- **`urpx.emit/default-context` binds `urpx` to `https://urpx.org/ns/ontology/`**, the namespace the URPX v0.5.1 documents declare. It bound the earlier `https://urpx-org.github.io/urpx/ontology/`, so emitted CURIEs expanded to IRIs no URPX document uses.
+- **`urpx.emit/default-context` binds `urpx` to `https://urpx.org/ns/ontology/`**, the namespace URPX moved to in v0.5.0. It bound the earlier `https://urpx-org.github.io/urpx/ontology/`.
 
 ### Fixed
 
