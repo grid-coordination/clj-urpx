@@ -285,6 +285,15 @@
           (dsl/season ::summer :urpx/seasonName "Summer")
           (dsl/season ::summer :urpx/seasonName "Hot Summer"))))))
 
+(deftest two-local-ids-with-one-jsonld-id-throw
+  (let [e (try (dsl/dsl-scope
+                (dsl/season :scl/summer :urpx/seasonName "SCL Summer")
+                (dsl/season :pge/summer :urpx/seasonName "PG&E Summer"))
+               nil
+               (catch clojure.lang.ExceptionInfo e e))]
+    (is (re-find #"already declared by :scl/summer" (ex-message e)))
+    (is (= {:sym :pge/summer :id "summer" :declared-by :scl/summer} (ex-data e)))))
+
 (deftest each-dsl-scope-has-its-own-registry
   (testing "scopes don't leak — the same local sym can be declared
             in two distinct scopes without collision"

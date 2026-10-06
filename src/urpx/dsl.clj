@@ -59,8 +59,8 @@
       registry to produce `{:jsonld/id …}` Ref maps. Vector-typed kwargs walk
       element-wise.
 
-  Resolution is eager (declare-before-reference): an unknown ref or a
-  duplicate declaration throws. Each `dsl-scope` has its own registry —
+  Resolution is eager (declare-before-reference): an unknown ref, a
+  duplicate declaration, or two declarations with the same @id throws. Each `dsl-scope` has its own registry —
   scopes don't leak."
   (:require [clojure.string :as str]
             [malli.core :as m]
@@ -91,7 +91,7 @@
 
    Resolution is eager (declare-before-reference): a reference to an
    undeclared keyword throws ex-info. Multiple declarations of the same
-   keyword also throw.
+   keyword, or of two keywords with the same @id, also throw.
 
    Implementation: the scope binds `*local-refs*` to a fresh `volatile!`
    holding a persistent map. Builders mutate it via `vswap!` during the
@@ -102,17 +102,24 @@
      ~@body))
 
 (defn- ->local-id
-  "Project a qualified keyword to a string @id form. The default is the
-   keyword's local name (`::summer` → \"summer\"); collision with an
-   existing declaration in the registry throws."
+  "Project a qualified keyword to a string @id form: the keyword's local
+   name (`::summer` → \"summer\")."
   [sym]
   (name sym))
 
-(defn- register-local-id! [sym]
+(defn- register-local-id!
+  "Register `sym` in the scope and return its @id. Throws if `sym` is
+   already declared, or if another keyword in the scope already projects to
+   the same @id, since two entities sharing an @id merge in RDF."
+  [sym]
   (let [id (->local-id sym)]
     (when (contains? @*local-refs* sym)
       (throw (ex-info (str "DSL local ref already declared: " sym)
                       {:sym sym :existing (get @*local-refs* sym)})))
+    (when-let [other (some (fn [[k v]] (when (= id v) k)) @*local-refs*)]
+      (throw (ex-info (str "DSL local ref " sym " has the @id " (pr-str id)
+                           " already declared by " other)
+                      {:sym sym :id id :declared-by other})))
     (vswap! *local-refs* assoc sym id)
     id))
 
