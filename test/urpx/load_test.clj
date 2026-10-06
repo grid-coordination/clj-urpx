@@ -108,8 +108,8 @@
 
 (deftest a-by-reference-payload-is-not-a-discard
   (testing "a package naming its payloads by @id alone, the entities themselves
-            being @graph siblings, discards nothing: the references stay on the
-            shell and the siblings load"
+            being @graph siblings, discards nothing: the siblings load once each
+            and the shell keeps the references"
     (let [json (str "{" ctx ",\"@graph\":["
                     "{\"@id\":\"x:pkg\",\"@type\":\"urpx:URPXPackage\","
                     "\"urpx:packages\":[{\"@id\":\"x:p\"},{\"@id\":\"x:m\"}],"
@@ -119,8 +119,8 @@
                     "{\"@id\":\"x:m\",\"@type\":\"urpx:RatePlanModifier\"}]}")
           {:urpx.load/keys [documents uncoercible]} (load/scan [(src json)])]
       (is (= [] uncoercible))
-      (is (= ["x:pkg" "x:p" "x:m"] (mapv :jsonld/id documents)))
-      (is (= [{:jsonld/id "x:p"} {:jsonld/id "x:m"}] (:urpx/packages (first documents))))))
+      (is (= ["x:p" "x:m" "x:pkg"] (mapv :jsonld/id documents)))
+      (is (= [{:jsonld/id "x:p"} {:jsonld/id "x:m"}] (:urpx/packages (last documents))))))
   (testing "expand-document-entities still returns the references"
     (let [json (str "{" ctx ",\"@id\":\"x:pkg\",\"@type\":\"urpx:URPXPackage\","
                     "\"urpx:packages\":{\"@id\":\"x:p\"}}")]

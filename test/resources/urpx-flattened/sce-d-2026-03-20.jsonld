@@ -1,0 +1,1069 @@
+{
+  "@context": {
+    "urpx": "https://urpx.org/ns/ontology/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "org": "https://rate-plans.grid-coordination.energy/organizations/",
+    "sce": "https://rate-plans.grid-coordination.energy/sce/",
+    "urpx:unitPrice": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:effectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:effectiveDateTime": {
+      "@type": "xsd:dateTime"
+    },
+    "urpx:baseQuantity": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:lowerBound": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:upperBound": {
+      "@type": "xsd:decimal"
+    },
+    "urpx:initialEffectiveDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:startDate": {
+      "@type": "xsd:date"
+    },
+    "urpx:url": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:month": {
+      "@type": "xsd:gMonth"
+    },
+    "urpx:intervalDuration": {
+      "@type": "xsd:duration"
+    },
+    "urpx:serviceTierNumber": {
+      "@type": "xsd:integer"
+    },
+    "urpx:pageStart": {
+      "@type": "xsd:integer"
+    },
+    "urpx:pageEnd": {
+      "@type": "xsd:integer"
+    },
+    "urpx:accessURL": {
+      "@type": "xsd:anyURI"
+    },
+    "urpx:dateRetrieved": {
+      "@type": "xsd:date"
+    },
+    "urpx:targetURPXVersion": {
+      "@type": "xsd:anyURI"
+    },
+    "skos": "http://www.w3.org/2004/02/skos/core#"
+  },
+  "@graph": [
+    {
+      "@id": "_:b0",
+      "@type": "urpx:DataSourceReference",
+      "urpx:accessURL": "https://edisonintl.sharepoint.com/teams/Public/TM2/Shared%20Documents/Public/Regulatory/Tariff-SCE%20Tariff%20Books/Electric/Schedules/Residential%20Rates/ELECTRIC_SCHEDULES_D.pdf",
+      "urpx:dataSourceType": {
+        "@id": "urpx:utilityWebsiteSource"
+      },
+      "urpx:dateRetrieved": "2026-05-04",
+      "urpx:fileName": "ELECTRIC_SCHEDULES_D.pdf",
+      "urpx:leafEnd": "91033-E",
+      "urpx:leafStart": "90841-E",
+      "urpx:mediaType": {
+        "@id": "urpx:applicationPdf"
+      },
+      "urpx:pageEnd": 7,
+      "urpx:pageStart": 2
+    },
+    {
+      "@id": "_:b1",
+      "@type": "urpx:ApplicabilityRule",
+      "urpx:month": [
+        "--04",
+        "--10"
+      ]
+    },
+    {
+      "@id": "org:utility-sce",
+      "@type": "urpx:Organization",
+      "urpx:hasIdentity": {
+        "@id": "org:utility-sce-identity"
+      },
+      "urpx:legalName": "Southern California Edison Company",
+      "urpx:organizationType": {
+        "@id": "urpx:utilityOrganization"
+      }
+    },
+    {
+      "@id": "org:utility-sce-eia",
+      "@type": "urpx:OrganizationIdentifier",
+      "skos:notation": "17609",
+      "urpx:scheme": {
+        "@id": "urpx:eiaScheme"
+      }
+    },
+    {
+      "@id": "org:utility-sce-identity",
+      "@type": "urpx:OrganizationIdentity",
+      "urpx:hasIdentifier": {
+        "@id": "org:utility-sce-eia"
+      },
+      "urpx:hasName": {
+        "@id": "org:utility-sce-name"
+      }
+    },
+    {
+      "@id": "org:utility-sce-name",
+      "@type": "urpx:OrganizationName",
+      "urpx:name": "Southern California Edison Company"
+    },
+    {
+      "@id": "sce:cc-d-2026-03-20",
+      "@type": "urpx:CoverageClaim",
+      "urpx:completenessResult": {
+        "@id": "urpx:complete"
+      },
+      "urpx:selfContained": true
+    },
+    {
+      "@id": "sce:d",
+      "@type": "urpx:RatePlan",
+      "urpx:hasRatePlanVersion": {
+        "@id": "sce:d-2026-03-20"
+      },
+      "urpx:initialEffectiveDate": "1949-08-01",
+      "urpx:name": "Schedule D Domestic Service",
+      "urpx:ratePlanUniqueIdentifier": "D",
+      "urpx:timezoneIdentifier": "America/Los_Angeles"
+    },
+    {
+      "@id": "sce:d-2026-03-20",
+      "@type": "urpx:RatePlanVersion",
+      "urpx:changeReason": {
+        "@id": "urpx:rateCase"
+      },
+      "urpx:commodity": {
+        "@id": "urpx:electricity"
+      },
+      "urpx:customerChoice": {
+        "@id": "urpx:voluntaryChoice"
+      },
+      "urpx:description": "Tiered residential schedule (no time-of-use). Generation, distribution, and most flat-rate surcharges do not vary by tier or season. The two-tier structure (baseline / nonbaseline) is implemented via the Conservation Incentive Adjustment (CIA): customers receive a CIA credit of $-0.03740/kWh for usage at-or-below their daily baseline allocation, and pay a CIA charge of $+0.06368/kWh for usage above. The 10.108¢ swing matches the Baseline Credit modeled in SCE TOU-D options. Baseline allocations vary by Baseline Region (5/6/8/9/10/13/14/15/16), season (Summer = June-September; Winter = October-May), and whether the customer's primary heat source is electric (Basic vs All-Electric) per Preliminary Statement Part H. Schedule D is the legacy default destination for residential customers who opt out of the CPUC TOU mass-migration default schedules (TOU-D-4-9PM, TOU-D-5-8PM); enrollment is declining as opt-outs migrate to TOU over time. Replaces the prior Basic Charge + Minimum Charge structure with an income-graduated Base Services Charge (BSC) of $0.794/meter/day per Decision 24-05-028, with a Deed-Restricted discount of $(0.332)/meter/day. CARE/FERA discounts (32.5% and 18% respectively) and the related BSC surcharge exemption + BSC discount adjustments are documented in Special Conditions and modeled separately as RatePlanModifiers at ca/iou/sce/care/ and ca/iou/sce/fera/; the Deed-Restricted discount referenced above is modeled at ca/iou/sce/deed-restricted/.",
+      "urpx:effectiveDateTime": "2026-03-20T00:00:00",
+      "urpx:forRatePlan": {
+        "@id": "sce:d"
+      },
+      "urpx:hasCoverageClaim": {
+        "@id": "sce:cc-d-2026-03-20"
+      },
+      "urpx:hasDataSourceReference": {
+        "@id": "_:b0"
+      },
+      "urpx:hasEligibilityRule": {
+        "@id": "sce:d-2026-03-20-er-residential"
+      },
+      "urpx:hasPlanElements": {
+        "@id": "sce:d-2026-03-20-plan-elements"
+      },
+      "urpx:hasPrices": {
+        "@id": "sce:d-2026-03-20-prices"
+      },
+      "urpx:isDefault": false,
+      "urpx:offeredBy": {
+        "@id": "org:utility-sce"
+      },
+      "urpx:priceCurrency": "USD",
+      "urpx:serviceRole": {
+        "@id": "urpx:bundledServiceRole"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-cn-residential",
+      "@type": "urpx:ComparisonNode",
+      "urpx:leftOperand": {
+        "@id": "sce:d-2026-03-20-cn-residential-left-operand"
+      },
+      "urpx:operator": {
+        "@id": "urpx:equalsOperator"
+      },
+      "urpx:rightOperand": {
+        "@id": "sce:d-2026-03-20-cn-residential-right-operand"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-cn-residential-left-operand",
+      "@type": "urpx:ObjectOperandNode",
+      "urpx:conditionProperty": {
+        "@id": "urpx:hasCustomerKind"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-cn-residential-right-operand",
+      "@type": "urpx:ObjectOperandNode",
+      "urpx:referencesValue": {
+        "@id": "urpx:residentialKind"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-cx-residential",
+      "@type": "urpx:ConditionExpression",
+      "urpx:rootNode": {
+        "@id": "sce:d-2026-03-20-cn-residential"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-er-residential",
+      "@type": "urpx:EligibilityRule",
+      "urpx:description": "Available to residential customers individually metered by SCE living in single-family accommodations or individually-metered single-family dwellings in a Multifamily Accommodation (e.g., houses, townhouses, condominiums, apartments, rental units, manufactured houses, mobile homes). Voluntary opt-in; primary destination for customers electing to leave a CPUC TOU default schedule (TOU-D-4-9PM or TOU-D-5-8PM). 12-month minimum stay applies to elective rate changes; customers placed on a TOU schedule by SCE default may make an additional rate change within a 12-month window of being defaulted.",
+      "urpx:hasConditionExpression": {
+        "@id": "sce:d-2026-03-20-cx-residential"
+      },
+      "urpx:name": "Eligibility for Schedule D Domestic Service"
+    },
+    {
+      "@id": "sce:d-2026-03-20-ledger-adjustments",
+      "@type": "urpx:Ledger",
+      "urpx:ledgerType": {
+        "@id": "urpx:bundledLedger"
+      },
+      "urpx:name": "Bundled Energy Adjustments",
+      "urpx:referencesMetricInput": {
+        "@id": "sce:d-2026-03-20-mi-energy"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-ledger-base-services-charge",
+      "@type": "urpx:Ledger",
+      "urpx:ledgerType": {
+        "@id": "urpx:bundledLedger"
+      },
+      "urpx:name": "Base Services Charge",
+      "urpx:referencesMetricInput": {
+        "@id": "sce:d-2026-03-20-mi-meter-count"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-ledger-cia",
+      "@type": "urpx:Ledger",
+      "urpx:ledgerType": {
+        "@id": "urpx:bundledLedger"
+      },
+      "urpx:name": "Conservation Incentive Adjustment (tier-varying)",
+      "urpx:referencesMetricInput": {
+        "@id": "sce:d-2026-03-20-mi-energy"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-ledger-climate-credit",
+      "@type": "urpx:Ledger",
+      "urpx:ledgerType": {
+        "@id": "urpx:bundledLedger"
+      },
+      "urpx:name": "California Climate Credit",
+      "urpx:referencesMetricInput": {
+        "@id": "sce:d-2026-03-20-mi-household-count"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-ledger-energy-delivery",
+      "@type": "urpx:Ledger",
+      "urpx:ledgerType": {
+        "@id": "urpx:deliveryLedger"
+      },
+      "urpx:name": "Energy Delivery Prices",
+      "urpx:referencesMetricInput": {
+        "@id": "sce:d-2026-03-20-mi-energy"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-ledger-energy-supply",
+      "@type": "urpx:Ledger",
+      "urpx:ledgerType": {
+        "@id": "urpx:supplyLedger"
+      },
+      "urpx:name": "Energy Supply Prices (Generation)",
+      "urpx:referencesMetricInput": {
+        "@id": "sce:d-2026-03-20-mi-energy"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-mi-energy",
+      "@type": "urpx:MetricInput",
+      "urpx:hasMetricSpecification": {
+        "@id": "sce:ms-energy"
+      },
+      "urpx:metricInputType": {
+        "@id": "urpx:measuredMetricInput"
+      },
+      "urpx:name": "kWh Energy Consumption Prices"
+    },
+    {
+      "@id": "sce:d-2026-03-20-mi-household-count",
+      "@type": "urpx:MetricInput",
+      "urpx:metricInputType": {
+        "@id": "urpx:profileMetricInput"
+      },
+      "urpx:name": "Per Household Prices",
+      "urpx:profileMetricProperty": {
+        "@id": "urpx:householdCount"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-mi-meter-count",
+      "@type": "urpx:MetricInput",
+      "urpx:metricInputType": {
+        "@id": "urpx:profileMetricInput"
+      },
+      "urpx:name": "Per Meter Prices",
+      "urpx:profileMetricProperty": {
+        "@id": "urpx:numberOfMeters"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-pd-base-services-charge",
+      "@type": "urpx:PriceDefinition",
+      "urpx:baseQuantity": "1",
+      "urpx:billPortion": {
+        "@id": "urpx:bundledPortion"
+      },
+      "urpx:chargeCategory": {
+        "@id": "urpx:serviceCharge"
+      },
+      "urpx:chargeType": {
+        "@id": "urpx:minimumBill"
+      },
+      "urpx:hasCalculationMethod": {
+        "@id": "sce:d-2026-03-20-pd-base-services-charge-calculation-method"
+      },
+      "urpx:name": "Base Services Charge (BSC)",
+      "urpx:referencesLedger": {
+        "@id": "sce:d-2026-03-20-ledger-base-services-charge"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-pd-base-services-charge-calculation-method",
+      "@type": "urpx:CalculationMethod",
+      "urpx:intervalDuration": "P1D"
+    },
+    {
+      "@id": "sce:d-2026-03-20-pd-cia-baseline",
+      "@type": "urpx:PriceDefinition",
+      "urpx:billPortion": {
+        "@id": "urpx:deliveryPortion"
+      },
+      "urpx:chargeCategory": {
+        "@id": "urpx:adjustment"
+      },
+      "urpx:chargeType": {
+        "@id": "urpx:adjustmentPowerCost"
+      },
+      "urpx:name": "Conservation Incentive Adjustment (CIA), Baseline Service (Tier 1)",
+      "urpx:referencesLedger": {
+        "@id": "sce:d-2026-03-20-ledger-cia"
+      },
+      "urpx:serviceTierNumber": 1
+    },
+    {
+      "@id": "sce:d-2026-03-20-pd-cia-nonbaseline",
+      "@type": "urpx:PriceDefinition",
+      "urpx:billPortion": {
+        "@id": "urpx:deliveryPortion"
+      },
+      "urpx:chargeCategory": {
+        "@id": "urpx:adjustment"
+      },
+      "urpx:chargeType": {
+        "@id": "urpx:adjustmentPowerCost"
+      },
+      "urpx:name": "Conservation Incentive Adjustment (CIA), Nonbaseline Service (Tier 2)",
+      "urpx:referencesLedger": {
+        "@id": "sce:d-2026-03-20-ledger-cia"
+      },
+      "urpx:serviceTierNumber": 2
+    },
+    {
+      "@id": "sce:d-2026-03-20-pd-climate-credit",
+      "@type": "urpx:PriceDefinition",
+      "urpx:baseQuantity": "1",
+      "urpx:billPortion": {
+        "@id": "urpx:bundledPortion"
+      },
+      "urpx:chargeCategory": {
+        "@id": "urpx:environmental"
+      },
+      "urpx:chargeType": {
+        "@id": "urpx:creditEnergy"
+      },
+      "urpx:hasApplicabilityRule": {
+        "@id": "_:b1"
+      },
+      "urpx:name": "California Climate Credit",
+      "urpx:referencesLedger": {
+        "@id": "sce:d-2026-03-20-ledger-climate-credit"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-pd-distribution",
+      "@type": "urpx:PriceDefinition",
+      "urpx:billPortion": {
+        "@id": "urpx:deliveryPortion"
+      },
+      "urpx:chargeCategory": {
+        "@id": "urpx:auxiliaryCharge"
+      },
+      "urpx:chargeType": {
+        "@id": "urpx:usageCharge"
+      },
+      "urpx:name": "Distribution",
+      "urpx:referencesLedger": {
+        "@id": "sce:d-2026-03-20-ledger-energy-delivery"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-pd-dwra",
+      "@type": "urpx:PriceDefinition",
+      "urpx:billPortion": {
+        "@id": "urpx:deliveryPortion"
+      },
+      "urpx:chargeCategory": {
+        "@id": "urpx:adjustment"
+      },
+      "urpx:chargeType": {
+        "@id": "urpx:adjustmentPowerCost"
+      },
+      "urpx:name": "DWR Refund (DWRA) — refund relating to DWR power purchases during the 2000-2001 energy crisis",
+      "urpx:referencesLedger": {
+        "@id": "sce:d-2026-03-20-ledger-energy-delivery"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-pd-fixed-recovery-charge",
+      "@type": "urpx:PriceDefinition",
+      "urpx:billPortion": {
+        "@id": "urpx:bundledPortion"
+      },
+      "urpx:chargeCategory": {
+        "@id": "urpx:adjustment"
+      },
+      "urpx:chargeType": {
+        "@id": "urpx:recoverySurcharge"
+      },
+      "urpx:name": "Fixed Recovery Charge",
+      "urpx:referencesLedger": {
+        "@id": "sce:d-2026-03-20-ledger-adjustments"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-pd-generation",
+      "@type": "urpx:PriceDefinition",
+      "urpx:billPortion": {
+        "@id": "urpx:supplyPortion"
+      },
+      "urpx:chargeCategory": {
+        "@id": "urpx:auxiliaryCharge"
+      },
+      "urpx:chargeType": {
+        "@id": "urpx:usageCharge"
+      },
+      "urpx:name": "Generation (UG)",
+      "urpx:referencesLedger": {
+        "@id": "sce:d-2026-03-20-ledger-energy-supply"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-pd-mcam",
+      "@type": "urpx:PriceDefinition",
+      "urpx:billPortion": {
+        "@id": "urpx:bundledPortion"
+      },
+      "urpx:chargeCategory": {
+        "@id": "urpx:adjustment"
+      },
+      "urpx:chargeType": {
+        "@id": "urpx:adjustmentPowerCost"
+      },
+      "urpx:name": "Modified Cost Allocation Mechanism Charge (MCAM)",
+      "urpx:referencesLedger": {
+        "@id": "sce:d-2026-03-20-ledger-adjustments"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-pd-ndc",
+      "@type": "urpx:PriceDefinition",
+      "urpx:billPortion": {
+        "@id": "urpx:deliveryPortion"
+      },
+      "urpx:chargeCategory": {
+        "@id": "urpx:environmental"
+      },
+      "urpx:chargeType": {
+        "@id": "urpx:environmentalFunding"
+      },
+      "urpx:name": "Nuclear Decommissioning Charge (NDC)",
+      "urpx:referencesLedger": {
+        "@id": "sce:d-2026-03-20-ledger-energy-delivery"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-pd-nsgc",
+      "@type": "urpx:PriceDefinition",
+      "urpx:billPortion": {
+        "@id": "urpx:deliveryPortion"
+      },
+      "urpx:chargeCategory": {
+        "@id": "urpx:adjustment"
+      },
+      "urpx:chargeType": {
+        "@id": "urpx:usageCharge"
+      },
+      "urpx:name": "New System Generation Charge (NSGC)",
+      "urpx:referencesLedger": {
+        "@id": "sce:d-2026-03-20-ledger-energy-delivery"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-pd-pppc",
+      "@type": "urpx:PriceDefinition",
+      "urpx:billPortion": {
+        "@id": "urpx:deliveryPortion"
+      },
+      "urpx:chargeCategory": {
+        "@id": "urpx:regulatory"
+      },
+      "urpx:chargeType": {
+        "@id": "urpx:publicBenefits"
+      },
+      "urpx:name": "Public Purpose Programs Charge (PPPC)",
+      "urpx:referencesLedger": {
+        "@id": "sce:d-2026-03-20-ledger-energy-delivery"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-pd-pucrf",
+      "@type": "urpx:PriceDefinition",
+      "urpx:billPortion": {
+        "@id": "urpx:deliveryPortion"
+      },
+      "urpx:chargeCategory": {
+        "@id": "urpx:regulatory"
+      },
+      "urpx:chargeType": {
+        "@id": "urpx:recoverySurcharge"
+      },
+      "urpx:name": "PUC Reimbursement Fee (PUCRF)",
+      "urpx:referencesLedger": {
+        "@id": "sce:d-2026-03-20-ledger-energy-delivery"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-pd-transmission",
+      "@type": "urpx:PriceDefinition",
+      "urpx:billPortion": {
+        "@id": "urpx:deliveryPortion"
+      },
+      "urpx:chargeCategory": {
+        "@id": "urpx:adjustment"
+      },
+      "urpx:chargeType": {
+        "@id": "urpx:transmission"
+      },
+      "urpx:name": "Transmission (Trans, includes TOTCA components)",
+      "urpx:referencesLedger": {
+        "@id": "sce:d-2026-03-20-ledger-energy-delivery"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-pd-wfc",
+      "@type": "urpx:PriceDefinition",
+      "urpx:billPortion": {
+        "@id": "urpx:deliveryPortion"
+      },
+      "urpx:chargeCategory": {
+        "@id": "urpx:environmental"
+      },
+      "urpx:chargeType": {
+        "@id": "urpx:environmentalFunding"
+      },
+      "urpx:name": "Wildfire Fund Non-Bypassable Charge (WFC)",
+      "urpx:referencesLedger": {
+        "@id": "sce:d-2026-03-20-ledger-energy-delivery"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-plan-elements",
+      "@type": "urpx:PlanElements",
+      "urpx:hasBillingModel": {
+        "@id": "sce:d-2026-03-20-plan-elements-billing-model"
+      },
+      "urpx:hasMetricInput": [
+        {
+          "@id": "sce:d-2026-03-20-mi-energy"
+        },
+        {
+          "@id": "sce:d-2026-03-20-mi-meter-count"
+        },
+        {
+          "@id": "sce:d-2026-03-20-mi-household-count"
+        }
+      ],
+      "urpx:hasSeasons": [
+        {
+          "@id": "sce:d-2026-03-20-season-summer"
+        },
+        {
+          "@id": "sce:d-2026-03-20-season-winter"
+        }
+      ]
+    },
+    {
+      "@id": "sce:d-2026-03-20-plan-elements-billing-model",
+      "@type": "urpx:BillingModel",
+      "urpx:hasLedger": [
+        {
+          "@id": "sce:d-2026-03-20-ledger-energy-supply"
+        },
+        {
+          "@id": "sce:d-2026-03-20-ledger-energy-delivery"
+        },
+        {
+          "@id": "sce:d-2026-03-20-ledger-cia"
+        },
+        {
+          "@id": "sce:d-2026-03-20-ledger-adjustments"
+        },
+        {
+          "@id": "sce:d-2026-03-20-ledger-base-services-charge"
+        },
+        {
+          "@id": "sce:d-2026-03-20-ledger-climate-credit"
+        }
+      ],
+      "urpx:hasPriceDefinition": [
+        {
+          "@id": "sce:d-2026-03-20-pd-generation"
+        },
+        {
+          "@id": "sce:pd-generation-dwrec"
+        },
+        {
+          "@id": "sce:d-2026-03-20-pd-distribution"
+        },
+        {
+          "@id": "sce:d-2026-03-20-pd-transmission"
+        },
+        {
+          "@id": "sce:d-2026-03-20-pd-nsgc"
+        },
+        {
+          "@id": "sce:d-2026-03-20-pd-ndc"
+        },
+        {
+          "@id": "sce:d-2026-03-20-pd-pppc"
+        },
+        {
+          "@id": "sce:d-2026-03-20-pd-cia-baseline"
+        },
+        {
+          "@id": "sce:d-2026-03-20-pd-cia-nonbaseline"
+        },
+        {
+          "@id": "sce:d-2026-03-20-pd-wfc"
+        },
+        {
+          "@id": "sce:d-2026-03-20-pd-dwra"
+        },
+        {
+          "@id": "sce:d-2026-03-20-pd-pucrf"
+        },
+        {
+          "@id": "sce:d-2026-03-20-pd-fixed-recovery-charge"
+        },
+        {
+          "@id": "sce:d-2026-03-20-pd-mcam"
+        },
+        {
+          "@id": "sce:d-2026-03-20-pd-base-services-charge"
+        },
+        {
+          "@id": "sce:d-2026-03-20-pd-climate-credit"
+        }
+      ],
+      "urpx:hasServiceTiers": {
+        "@id": "sce:d-2026-03-20-tiers-baseline-nonbaseline"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-price-base-services-charge",
+      "@type": "urpx:Price",
+      "urpx:name": "Base Services Charge",
+      "urpx:referencesPriceDefinition": {
+        "@id": "sce:d-2026-03-20-pd-base-services-charge"
+      },
+      "urpx:startDate": "2026-01-01",
+      "urpx:unitPrice": "0.794"
+    },
+    {
+      "@id": "sce:d-2026-03-20-price-climate-credit",
+      "@type": "urpx:Price",
+      "urpx:name": "California Climate Credit",
+      "urpx:referencesPriceDefinition": {
+        "@id": "sce:d-2026-03-20-pd-climate-credit"
+      },
+      "urpx:startDate": "2026-01-01",
+      "urpx:unitPrice": "-36.00"
+    },
+    {
+      "@id": "sce:d-2026-03-20-price-dwra",
+      "@type": "urpx:Price",
+      "urpx:name": "DWR Refund (DWRA)",
+      "urpx:referencesPriceDefinition": {
+        "@id": "sce:d-2026-03-20-pd-dwra"
+      },
+      "urpx:unitPrice": "0.00000"
+    },
+    {
+      "@id": "sce:d-2026-03-20-price-fixed-recovery-charge",
+      "@type": "urpx:Price",
+      "urpx:name": "Fixed Recovery Charge",
+      "urpx:referencesPriceDefinition": {
+        "@id": "sce:d-2026-03-20-pd-fixed-recovery-charge"
+      },
+      "urpx:unitPrice": "0.00619"
+    },
+    {
+      "@id": "sce:d-2026-03-20-price-mcam",
+      "@type": "urpx:Price",
+      "urpx:name": "Modified Cost Allocation Mechanism Charge",
+      "urpx:referencesPriceDefinition": {
+        "@id": "sce:d-2026-03-20-pd-mcam"
+      },
+      "urpx:unitPrice": "0.00223"
+    },
+    {
+      "@id": "sce:d-2026-03-20-price-ndc",
+      "@type": "urpx:Price",
+      "urpx:name": "Nuclear Decommissioning Charge",
+      "urpx:referencesPriceDefinition": {
+        "@id": "sce:d-2026-03-20-pd-ndc"
+      },
+      "urpx:unitPrice": "0.00003"
+    },
+    {
+      "@id": "sce:d-2026-03-20-price-nsgc",
+      "@type": "urpx:Price",
+      "urpx:name": "New System Generation Charge",
+      "urpx:referencesPriceDefinition": {
+        "@id": "sce:d-2026-03-20-pd-nsgc"
+      },
+      "urpx:unitPrice": "0.00829"
+    },
+    {
+      "@id": "sce:d-2026-03-20-price-pppc",
+      "@type": "urpx:Price",
+      "urpx:name": "Public Purpose Programs Charge",
+      "urpx:referencesPriceDefinition": {
+        "@id": "sce:d-2026-03-20-pd-pppc"
+      },
+      "urpx:unitPrice": "0.00527"
+    },
+    {
+      "@id": "sce:d-2026-03-20-price-pucrf",
+      "@type": "urpx:Price",
+      "urpx:name": "PUC Reimbursement Fee",
+      "urpx:referencesPriceDefinition": {
+        "@id": "sce:d-2026-03-20-pd-pucrf"
+      },
+      "urpx:unitPrice": "0.00100"
+    },
+    {
+      "@id": "sce:d-2026-03-20-price-transmission",
+      "@type": "urpx:Price",
+      "urpx:name": "Transmission",
+      "urpx:referencesPriceDefinition": {
+        "@id": "sce:d-2026-03-20-pd-transmission"
+      },
+      "urpx:unitPrice": "0.02586"
+    },
+    {
+      "@id": "sce:d-2026-03-20-price-wfc",
+      "@type": "urpx:Price",
+      "urpx:name": "Wildfire Fund Non-Bypassable Charge",
+      "urpx:referencesPriceDefinition": {
+        "@id": "sce:d-2026-03-20-pd-wfc"
+      },
+      "urpx:unitPrice": "0.00591"
+    },
+    {
+      "@id": "sce:d-2026-03-20-prices",
+      "@type": "urpx:Prices",
+      "urpx:hasPrice": [
+        {
+          "@id": "sce:d-2026-03-20-price-base-services-charge"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-climate-credit"
+        }
+      ],
+      "urpx:hasPriceSet": {
+        "@id": "sce:ps-energy-charges-2026-03-20"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-season-summer",
+      "@type": "urpx:Season",
+      "urpx:month": [
+        "--06",
+        "--07",
+        "--08",
+        "--09"
+      ],
+      "urpx:seasonName": "Summer"
+    },
+    {
+      "@id": "sce:d-2026-03-20-season-winter",
+      "@type": "urpx:Season",
+      "urpx:month": [
+        "--10",
+        "--11",
+        "--12",
+        "--01",
+        "--02",
+        "--03",
+        "--04",
+        "--05"
+      ],
+      "urpx:seasonName": "Winter"
+    },
+    {
+      "@id": "sce:d-2026-03-20-summary-discountable",
+      "@type": "urpx:PriceSummary",
+      "urpx:includesPrice": [
+        {
+          "@id": "sce:price-generation-2026-03-20"
+        },
+        {
+          "@id": "sce:price-generation-dwrec-2026-03-20"
+        },
+        {
+          "@id": "sce:price-distribution-2026-03-20"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-transmission"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-nsgc"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-ndc"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-pppc"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-wfc"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-dwra"
+        },
+        {
+          "@id": "sce:price-cia-baseline-2026-03-20"
+        },
+        {
+          "@id": "sce:price-cia-nonbaseline-2026-03-20"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-fixed-recovery-charge"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-mcam"
+        }
+      ],
+      "urpx:name": "Discountable subtotal for D. The 13 bill components the CARE and FERA percentage discounts both apply to. Schedule D-CARE Sheet 1 applies the discount before the PUCRF, user fees, taxes and late payment charges, so the PUCRF is excluded, and the California Climate Credit is excluded because Special Condition 12 applies it after those taxes. Both programs discount the same components and differ only in rate, so one subtotal serves both."
+    },
+    {
+      "@id": "sce:d-2026-03-20-tier-baseline",
+      "@type": "urpx:ServiceTier",
+      "urpx:hasServiceBracket": {
+        "@id": "sce:d-2026-03-20-tier-baseline-bracket"
+      },
+      "urpx:name": "Tier 1 — Baseline Service (kWh up to applicable Baseline allocation per Preliminary Statement Part H; allocation varies by Baseline Region, Season, and Basic vs All-Electric service)",
+      "urpx:serviceTierNumber": 1
+    },
+    {
+      "@id": "sce:d-2026-03-20-tier-baseline-bracket",
+      "@type": "urpx:ServiceBracket",
+      "urpx:lowerBound": "0",
+      "urpx:lowerBoundOperator": {
+        "@id": "urpx:greaterThanOrEqualOperator"
+      },
+      "urpx:upperBound": "1.0",
+      "urpx:upperBoundOperator": {
+        "@id": "urpx:lessThanOrEqualOperator"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-tier-nonbaseline",
+      "@type": "urpx:ServiceTier",
+      "urpx:hasServiceBracket": {
+        "@id": "sce:d-2026-03-20-tier-nonbaseline-bracket"
+      },
+      "urpx:name": "Tier 2 — Nonbaseline Service (kWh in excess of applicable Baseline allocation; rate sheet quotes 101%-400% range, but no separate >400% surcharge applies on Schedule D)",
+      "urpx:serviceTierNumber": 2
+    },
+    {
+      "@id": "sce:d-2026-03-20-tier-nonbaseline-bracket",
+      "@type": "urpx:ServiceBracket",
+      "urpx:lowerBound": "1.0",
+      "urpx:lowerBoundOperator": {
+        "@id": "urpx:greaterThanOperator"
+      }
+    },
+    {
+      "@id": "sce:d-2026-03-20-tiers-baseline-nonbaseline",
+      "@type": "urpx:ServiceTiers",
+      "urpx:hasServiceTier": [
+        {
+          "@id": "sce:d-2026-03-20-tier-baseline"
+        },
+        {
+          "@id": "sce:d-2026-03-20-tier-nonbaseline"
+        }
+      ],
+      "urpx:referencesMetricInput": {
+        "@id": "sce:d-2026-03-20-mi-energy"
+      }
+    },
+    {
+      "@id": "sce:doc-d-2026-03-20",
+      "@type": "urpx:URPXPackage",
+      "urpx:hasRatePlan": {
+        "@id": "sce:d"
+      },
+      "urpx:targetURPXVersion": "https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl"
+    },
+    {
+      "@id": "sce:ms-energy",
+      "@type": "urpx:MetricSpecification",
+      "urpx:measurementKind": {
+        "@id": "urpx:energy"
+      },
+      "urpx:unitOfMeasure": {
+        "@id": "urpx:kWh"
+      }
+    },
+    {
+      "@id": "sce:pd-generation-dwrec",
+      "@type": "urpx:PriceDefinition",
+      "urpx:billPortion": {
+        "@id": "urpx:supplyPortion"
+      },
+      "urpx:chargeCategory": {
+        "@id": "urpx:adjustment"
+      },
+      "urpx:chargeType": {
+        "@id": "urpx:adjustmentPowerCost"
+      },
+      "urpx:name": "Generation — DWR Energy Credit (DWREC)",
+      "urpx:referencesLedger": {
+        "@id": "sce:d-2026-03-20-ledger-energy-supply"
+      }
+    },
+    {
+      "@id": "sce:price-cia-baseline-2026-03-20",
+      "@type": "urpx:Price",
+      "urpx:name": "Conservation Incentive Adjustment — Tier 1 (Baseline credit)",
+      "urpx:referencesPriceDefinition": {
+        "@id": "sce:d-2026-03-20-pd-cia-baseline"
+      },
+      "urpx:unitPrice": "-0.03740"
+    },
+    {
+      "@id": "sce:price-cia-nonbaseline-2026-03-20",
+      "@type": "urpx:Price",
+      "urpx:name": "Conservation Incentive Adjustment — Tier 2 (Nonbaseline charge)",
+      "urpx:referencesPriceDefinition": {
+        "@id": "sce:d-2026-03-20-pd-cia-nonbaseline"
+      },
+      "urpx:unitPrice": "0.06368"
+    },
+    {
+      "@id": "sce:price-distribution-2026-03-20",
+      "@type": "urpx:Price",
+      "urpx:name": "Distribution",
+      "urpx:referencesPriceDefinition": {
+        "@id": "sce:d-2026-03-20-pd-distribution"
+      },
+      "urpx:unitPrice": "0.17586"
+    },
+    {
+      "@id": "sce:price-generation-2026-03-20",
+      "@type": "urpx:Price",
+      "urpx:name": "Generation (UG)",
+      "urpx:referencesPriceDefinition": {
+        "@id": "sce:d-2026-03-20-pd-generation"
+      },
+      "urpx:unitPrice": "0.11761"
+    },
+    {
+      "@id": "sce:price-generation-dwrec-2026-03-20",
+      "@type": "urpx:Price",
+      "urpx:name": "Generation — DWR Energy Credit (DWREC)",
+      "urpx:referencesPriceDefinition": {
+        "@id": "sce:pd-generation-dwrec"
+      },
+      "urpx:unitPrice": "0.00000"
+    },
+    {
+      "@id": "sce:ps-energy-charges-2026-03-20",
+      "@type": "urpx:PriceSet",
+      "urpx:hasPrice": [
+        {
+          "@id": "sce:price-generation-2026-03-20"
+        },
+        {
+          "@id": "sce:price-generation-dwrec-2026-03-20"
+        },
+        {
+          "@id": "sce:price-distribution-2026-03-20"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-transmission"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-nsgc"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-ndc"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-pppc"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-wfc"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-dwra"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-pucrf"
+        },
+        {
+          "@id": "sce:price-cia-baseline-2026-03-20"
+        },
+        {
+          "@id": "sce:price-cia-nonbaseline-2026-03-20"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-fixed-recovery-charge"
+        },
+        {
+          "@id": "sce:d-2026-03-20-price-mcam"
+        }
+      ],
+      "urpx:hasPriceSummary": {
+        "@id": "sce:d-2026-03-20-summary-discountable"
+      },
+      "urpx:startDate": "2026-01-01"
+    }
+  ]
+}

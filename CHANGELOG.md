@@ -16,10 +16,16 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 - **Adjusting `urpx:ServiceBracket`s** (proposed in urpx-org/urpx#80). A bracket carrying `urpx:adjustsServiceTier` and `urpx:lowerBoundOffset` or `urpx:upperBoundOffset` adds each offset to the same bound of the named tier's applicable bracket when its own season and profile-alternative qualifiers hold, across every document in a composition. Offsets on one bound sum, a bracket repeated by `@id` counts once, and operators are unchanged. An adjusted tier carries the adjusted value under `:urpx.resolved/tier-lower-bound` or `:urpx.resolved/tier-upper-bound`, with `:urpx.resolved/tier-{lower,upper}-bound-base`, `:urpx.resolved/tier-{lower,upper}-bound-offset` and `:urpx.resolved/tier-adjusting-bracket-ids`. An adjusting bracket is never a bound of the tier hosting it.
 - **Refusals for adjusting brackets:** `:unresolvable-adjusted-tier`, `:adjusted-tier-not-service-tier`, `:multiple-adjusted-tiers`, `:adjusted-tier-adjusts` (a target hosting adjusting brackets, its own host included), `:adjusted-tier-unit-absent` and `:adjusted-tier-unit-mismatch` at any instant, and `:adjusted-bound-absent` and `:adjusted-bounds-inverted` where an offset applies. An adjusting bracket whose qualifiers cannot be decided withholds the tier's bounds under `:urpx.resolved/tier-bounds-unresolved` with `:reason :adjustment-unresolved`.
 - **`urpx.schema/ServiceBracket` admits `urpx:adjustsServiceTier`**, decoding a bare value to a one-element vector, and both offsets as decimals; `urpx.emit/default-context` types the offsets `xsd:decimal`.
+- **`urpx.core/containment-properties`**, the properties under which `parse-graph` embeds a referenced node.
 
 ### Changed
 
+- **`urpx.core/expand-document-entities` returns each distinct payload once.** A package naming one payload under several of its payload properties returned it once per property.
 - **`urpx:serviceTierNumber` on `urpx.schema/ServiceTier` and `urpx:hasPriceDefinition` on `urpx.schema/BillingModel` are optional**, so a modifier whose host tier carries no number and whose billing model only moves bounds validates.
+
+### Fixed
+
+- **A document in JSON-LD flattened form reads as its nested equivalent.** Its nodes sit at the top level linked by bare `@id` references, and every loader read past them: a billing model or an adjusting bracket named by reference contributed nothing, with no error. `urpx.core/parse-graph` now replaces a bare reference under a property in `containment-properties`, or to a blank node referenced once, with the node of that `@id` when exactly one top-level entity in the document states it, and that entity leaves the top level. A node already on the path stays a reference, as does every reference under another property, to a node the document does not state, or to an `@id` stated twice. A blank node identifier left occurring once is dropped.
 
 ## [0.39.0] — 2026-10-06
 

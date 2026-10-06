@@ -114,6 +114,130 @@
           (index/as-vec g))
     [node]))
 
+(def containment-properties
+  "The properties whose bare @id reference `parse-graph` replaces with the node
+   of that @id stated in the same document."
+  #{:urpx/hasAlternativeDimension :urpx/hasAlternativeDimensions
+    :urpx/hasApplicabilityGroup :urpx/hasApplicabilityRule :urpx/hasBillingModel
+    :urpx/hasCalculationMethod :urpx/hasConditionExpression :urpx/hasCoverageClaim
+    :urpx/hasCustomerProfile :urpx/hasDataSourceReference :urpx/hasEligibilityRule
+    :urpx/hasGeneralRule :urpx/hasHoliday :urpx/hasHolidayCalendar :urpx/hasIdentifier
+    :urpx/hasLedger :urpx/hasMetricInput :urpx/hasMetricSpecification
+    :urpx/hasModelExclusion :urpx/hasPlanElements :urpx/hasPossibleValues :urpx/hasPrice
+    :urpx/hasPriceDefinition :urpx/hasPriceDefinitionReference :urpx/hasPriceSet
+    :urpx/hasPriceSetAlternative :urpx/hasPriceSetAlternatives :urpx/hasPriceSummary
+    :urpx/hasPrices :urpx/hasProfileAlternative :urpx/hasProfileAlternatives
+    :urpx/hasRatePlan :urpx/hasRatePlanModifier :urpx/hasRatePlanModifierVersion
+    :urpx/hasRatePlanVersion :urpx/hasSeasons :urpx/hasServiceBracket
+    :urpx/hasServiceTier :urpx/hasServiceTiers :urpx/hasTOUPeriod :urpx/hasTOUSchedule
+    :urpx/hasTOUTier :urpx/hasTariffBookReference :urpx/hasTariffPublication
+    :urpx/hasTemporalPeriod :urpx/hasTemporalScope :urpx/hasTimeBracket
+    :urpx/rootNode :urpx/leftOperand :urpx/rightOperand :urpx/operandNodes
+    :urpx/explainedBy :urpx/packages})
+
+(defn- bare-ref-id
+  "The @id of `v` when `v` is a map holding nothing but an @id."
+  [v]
+  (when (and (map? v) (= 1 (count v)))
+    (let [id (:jsonld/id v)]
+      (when (string? id) id))))
+
+(defn- blank-id? [id]
+  (and (string? id) (str/starts-with? id "_:")))
+
+(defn- map-entries-seq
+  "Every [k v] entry of every map within `x`, @context excluded."
+  [x]
+  (cond
+    (map? x) (mapcat (fn [[k v]]
+                       (when-not (= :jsonld/context k)
+                         (cons [k v] (map-entries-seq v))))
+                     x)
+    (sequential? x) (mapcat map-entries-seq x)
+    :else nil))
+
+(defn- maps-seq
+  "Every map within `x`, `x` included, @context excluded."
+  [x]
+  (cond
+    (map? x) (cons x (mapcat (fn [[k v]] (when-not (= :jsonld/context k) (maps-seq v))) x))
+    (sequential? x) (mapcat maps-seq x)
+    :else nil))
+
+(defn- embed-graph
+  "`entities` with each embeddable bare reference replaced by the top-level
+   entity it names, recursively, and each embedded entity removed from the top
+   level.
+
+   A reference is embeddable when exactly one top-level entity states its @id
+   and either its property is in `containment-properties` or it names a blank
+   node referenced once. A node already on the current path, or kept at the top
+   level, stays a reference. An entity no embedding reaches stays at the top
+   level, in document order. A blank node identifier left occurring once is
+   dropped."
+  [entities]
+  (let [targets  (->> entities
+                      (filter #(and (map? %) (> (count %) 1) (string? (:jsonld/id %))))
+                      (group-by :jsonld/id)
+                      (into {} (keep (fn [[id es]] (when (= 1 (count es)) [id (first es)])))))
+        once     (into #{} (keep (fn [[id n]] (when (and (= 1 n) (blank-id? id)) id)))
+                       (frequencies (keep bare-ref-id (mapcat maps-seq entities))))
+        target   (fn [k v]
+                   (when-let [id (bare-ref-id v)]
+                     (when (and (targets id) (or (containment-properties k) (once id)))
+                       id)))
+        targeted (into #{} (keep (fn [[k v]] (target k v)))
+                       (for [[k v] (map-entries-seq entities)
+                             x (index/as-vec v)]
+                         [k x]))]
+    (if (empty? targeted)
+      entities
+      (let [reached (volatile! #{})
+            rooted  (volatile! #{})
+            walk    (fn walk [x path]
+                      (cond
+                        (map? x)
+                        (persistent!
+                         (reduce-kv
+                          (fn [acc k v]
+                            (let [one (fn [e]
+                                        (let [id (target k e)]
+                                          (if (and id (not (path id)) (not (@rooted id)))
+                                            (do (vswap! reached conj id)
+                                                (walk (targets id) (conj path id)))
+                                            (walk e path))))]
+                              (assoc! acc k (cond
+                                              (= :jsonld/context k) v
+                                              (sequential? v) (mapv one v)
+                                              :else (one v)))))
+                          (transient {}) x))
+                        (sequential? x) (mapv #(walk % path) x)
+                        :else x))
+            root    (fn [e]
+                      (let [id (:jsonld/id e)]
+                        (when id (vswap! rooted conj id))
+                        (walk e (if id #{id} #{}))))
+            initial (into {} (keep-indexed (fn [i e] (when-not (targeted (:jsonld/id e)) [i (root e)])))
+                          entities)
+            out     (reduce (fn [acc [i e]]
+                              (if (or (contains? acc i) (@reached (:jsonld/id e)))
+                                acc
+                                (assoc acc i (root e))))
+                            initial (map-indexed vector entities))
+            out     (mapv val (sort-by key out))
+            blanks  (frequencies (filter blank-id? (map :jsonld/id (mapcat maps-seq out))))
+            prune   (fn prune [x]
+                      (cond
+                        (map? x)
+                        (let [x  (into {} (map (fn [[k v]] [k (if (= :jsonld/context k) v (prune v))])) x)
+                              id (:jsonld/id x)]
+                          (if (and (blank-id? id) (= 1 (blanks id)) (> (count x) 1))
+                            (dissoc x :jsonld/id)
+                            x))
+                        (sequential? x) (mapv prune x)
+                        :else x))]
+        (mapv prune out)))))
+
 (defn parse-graph
   "Parse a URPX JSON-LD document and return a vector of the entities in its
    graphs, nested graphs included.
@@ -129,11 +253,18 @@
 
    Graph names are not kept: the result is the union of the document's graphs.
 
+   A document in JSON-LD flattened form, its nodes at the top level linked by
+   bare `@id` references, reads as its nested equivalent: a reference under a
+   property in `containment-properties`, or to a blank node referenced once, is
+   replaced by the node it names when exactly one top-level entity states it,
+   and that entity leaves the top level. Every other reference stays a
+   reference.
+
    Always returns a vector so callers can use the same code path for every
    shape; dispatch on each entity's `:jsonld/type` to decide what to do
    with it (e.g. via `urpx.coerce/coerce-doc`)."
   [src]
-  (flatten-graph (parse-rate-plan src)))
+  (embed-graph (flatten-graph (parse-rate-plan src))))
 
 (defn load-graph
   "Load a URPX JSON-LD document from `src` — anything `clojure.java.io/reader`
@@ -160,8 +291,8 @@
    If `entity` is one of `wrapper-types`, return its embedded payload
    entities: urpx:hasRatePlan and urpx:hasRatePlanModifier (both wrappers),
    urpx:hasTariffPublication (v0.2.x URPXDocument only), and urpx:packages
-   (the general containment pointer added in v0.3.0). Otherwise return
-   `[entity]` unchanged.
+   (the general containment pointer added in v0.3.0), each distinct payload
+   once. Otherwise return `[entity]` unchanged.
 
    Used by `load-rate-plan` and `load-rate-plan-modifier` to descend
    transparently through the wrapper so consumers can target inner entities
@@ -169,10 +300,10 @@
    single-entity, or `@graph`-bundled."
   [entity]
   (if (contains? wrapper-types (:jsonld/type entity))
-    (vec (concat (index/as-vec (:urpx/hasRatePlan entity))
-                 (index/as-vec (:urpx/hasRatePlanModifier entity))
-                 (index/as-vec (:urpx/hasTariffPublication entity))
-                 (index/as-vec (:urpx/packages entity))))
+    (vec (distinct (concat (index/as-vec (:urpx/hasRatePlan entity))
+                           (index/as-vec (:urpx/hasRatePlanModifier entity))
+                           (index/as-vec (:urpx/hasTariffPublication entity))
+                           (index/as-vec (:urpx/packages entity)))))
     [entity]))
 
 (defn load-rate-plan

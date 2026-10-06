@@ -1,0 +1,5 @@
+SPDX-FileCopyrightText: 2026 Clark Communications Corporation
+SPDX-License-Identifier: CDLA-Permissive-2.0
+
+The JSON-LD flattened form of ../urpx-fixtures/pge-e-tou-c-baseline-tier-2026-03-01.jsonld,
+written by scripts/flatten-fixtures.py.
