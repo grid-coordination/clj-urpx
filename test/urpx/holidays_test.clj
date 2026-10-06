@@ -136,18 +136,20 @@
             (is (not (h? d)) (str holiday " " d))))))))
 
 (deftest monday-if-sunday-observance-at-the-year-boundary
-  (doseq [[label date observed not-observed]
+  (doseq [[label rule date observed not-observed]
           [["Jan 1 2023 (Sun) is observed Mon Jan 2 2023"
-            (ld 2023 1 1) (ld 2023 1 2) [(ld 2023 1 1) (ld 2022 12 30)]]
+            "January 1" (ld 2023 1 1) (ld 2023 1 2) [(ld 2023 1 1) (ld 2022 12 30)]]
            ["Jan 1 2028 (Sat) stays Jan 1 2028"
-            (ld 2028 1 1) (ld 2028 1 1) [(ld 2027 12 31) (ld 2028 1 3)]]]]
+            "January 1" (ld 2028 1 1) (ld 2028 1 1) [(ld 2027 12 31) (ld 2028 1 3)]]
+           ["Dec 31 2028 (Sun) is observed Mon Jan 1 2029"
+            "December 31" (ld 2028 12 31) (ld 2029 1 1) [(ld 2028 12 31) (ld 2028 12 29)]]]]
     (testing label
-      (doseq [holiday [{:urpx/holidayRule "January 1"}
+      (doseq [holiday [{:urpx/holidayRule rule}
                        {:urpx/holidayDate date}]]
         (let [h? (holidays/derive-predicate
                   (calendar-plan
                    [(merge {:jsonld/type "urpx:Holiday"
-                            :urpx/holidayName "New Year's Day"
+                            :urpx/holidayName rule
                             :urpx/observanceRule {:jsonld/id "urpx:mondayIfSundayObservance"}}
                            holiday)]))]
           (is (h? observed) (str holiday))
