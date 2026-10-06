@@ -233,6 +233,9 @@
       (fn ^Boolean [^LocalDate d]
         (let [year (.getYear d)
               dates (or (.get cache year)
-                        (let [s (into #{} (keep #(% year)) year-fns)]
+                        (let [s (into #{}
+                                      (comp (mapcat (fn [y] (keep #(% y) year-fns)))
+                                            (filter #(= year (.getYear ^LocalDate %))))
+                                      [(dec year) year (inc year)])]
                           (or (.putIfAbsent cache year s) s)))]
           (contains? dates d)))))))

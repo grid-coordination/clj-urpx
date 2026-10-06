@@ -9,6 +9,12 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Fixed
+
+- **A holiday whose observed date falls in the adjacent calendar year now counts on that date.** New Year's Day 2028, a Saturday, is observed Friday 2027-12-31 under `urpx:nearestWeekdayObservance` or `urpx:fridayIfWeekendObservance`, and a Sunday December 31 is observed Monday January 1 under `urpx:nearestWeekdayObservance` or `urpx:mondayIfWeekendObservance`, for both `urpx:holidayRule` and `urpx:holidayDate` holidays.
+
 ## [0.38.0] — 2026-10-05
 
 ### Fixed

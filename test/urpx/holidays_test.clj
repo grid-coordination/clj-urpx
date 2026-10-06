@@ -175,3 +175,68 @@
           h? (holidays/derive-predicate plan)]
       ;; January 2026 has Fridays on 2, 9, 16, 23, 30 — 5th = Jan 30
       (is (h? (ld 2026 1 30))))))
+
+(deftest observance-crossing-into-the-previous-year
+  (testing "Jan 1 2028 (Sat) is observed Fri Dec 31 2027"
+    (doseq [obs ["urpx:nearestWeekdayObservance" "urpx:fridayIfWeekendObservance"]
+            holiday [{:urpx/holidayRule "January 1"}
+                     {:urpx/holidayDate (ld 2028 1 1)}]]
+      (let [h? (holidays/derive-predicate
+                (calendar-plan
+                 [(merge {:jsonld/type "urpx:Holiday"
+                          :urpx/holidayName "New Year's Day"
+                          :urpx/observanceRule {:jsonld/id obs}}
+                         holiday)]))]
+        (is (h? (ld 2027 12 31)) (str obs " " holiday))
+        (is (not (h? (ld 2028 1 1))) (str obs " " holiday)))))
+  (testing "'(legally observed)' implies nearest weekday across the year boundary"
+    (let [h? (holidays/derive-predicate
+              (calendar-plan
+               [{:jsonld/type "urpx:Holiday"
+                 :urpx/holidayName "New Year's Day"
+                 :urpx/holidayRule "January 1 (legally observed)"}]))]
+      (is (h? (ld 2027 12 31)))
+      (is (h? (ld 2027 1 1)) "Jan 1 2027 (Fri) on its own date"))))
+
+(deftest observance-crossing-into-the-next-year
+  (testing "Dec 31 2023 (Sun) is observed Mon Jan 1 2024"
+    (doseq [obs ["urpx:nearestWeekdayObservance" "urpx:mondayIfWeekendObservance"]
+            holiday [{:urpx/holidayRule "December 31"}
+                     {:urpx/holidayDate (ld 2023 12 31)}]]
+      (let [h? (holidays/derive-predicate
+                (calendar-plan
+                 [(merge {:jsonld/type "urpx:Holiday"
+                          :urpx/holidayName "New Year's Eve"
+                          :urpx/observanceRule {:jsonld/id obs}}
+                         holiday)]))]
+        (is (h? (ld 2024 1 1)) (str obs " " holiday))
+        (is (not (h? (ld 2023 12 31))) (str obs " " holiday))))))
+
+(deftest observance-near-the-year-boundary-within-the-year
+  (let [h? (holidays/derive-predicate
+            (calendar-plan
+             [{:jsonld/type "urpx:Holiday"
+               :urpx/holidayName "New Year's Eve"
+               :urpx/holidayRule "December 31"
+               :urpx/observanceRule {:jsonld/id "urpx:nearestWeekdayObservance"}}
+              {:jsonld/type "urpx:Holiday"
+               :urpx/holidayName "New Year's Day"
+               :urpx/holidayRule "January 1"
+               :urpx/observanceRule {:jsonld/id "urpx:nearestWeekdayObservance"}}]))]
+    (testing "Dec 31 2022 (Sat) is observed Fri Dec 30 2022"
+      (is (h? (ld 2022 12 30)))
+      (is (not (h? (ld 2022 12 31)))))
+    (testing "Jan 1 2023 (Sun) is observed Mon Jan 2 2023"
+      (is (h? (ld 2023 1 2)))
+      (is (not (h? (ld 2023 1 1)))))))
+
+(deftest holiday-date-observed-in-another-year-only-there
+  (let [h? (holidays/derive-predicate
+            (calendar-plan
+             [{:jsonld/type "urpx:Holiday"
+               :urpx/holidayName "New Year's Day"
+               :urpx/holidayDate (ld 2028 1 1)
+               :urpx/observanceRule {:jsonld/id "urpx:nearestWeekdayObservance"}}]))]
+    (is (h? (ld 2027 12 31)))
+    (is (not (h? (ld 2026 12 31))))
+    (is (not (h? (ld 2028 12 29))))))
