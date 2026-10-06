@@ -17,6 +17,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 ### Fixed
 
+- **The jar carries the MIT notice at `META-INF/LICENSE`.** `clojure -T:build ci` refuses a jar without it.
 - **The README Getting started walkthrough runs from a fresh clone.** The `:nrepl` alias now puts `test` and `test/resources` on the classpath, so `urpx.test-fixtures` and the vendored fixtures load.
 - **A holiday whose observed date falls in the adjacent calendar year now counts on that date.** New Year's Day 2028, a Saturday, is observed Friday 2027-12-31 under `urpx:nearestWeekdayObservance` or `urpx:fridayIfWeekendObservance`, and a Sunday December 31 is observed Monday January 1 under `urpx:nearestWeekdayObservance` or `urpx:mondayIfWeekendObservance`, for both `urpx:holidayRule` and `urpx:holidayDate` holidays.
 

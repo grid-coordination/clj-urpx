@@ -52,6 +52,17 @@
       (throw (ex-info (str jar-file " lacks " changelog-entry)
                       {:jar-file jar-file :entry changelog-entry})))))
 
+(def ^:private license-entry "META-INF/LICENSE")
+
+(defn- check-jar-license!
+  "Throw unless the jar carries the MIT notice, which the license requires in
+   all copies."
+  [{:keys [jar-file]}]
+  (with-open [z (ZipFile. (io/file jar-file))]
+    (when-not (.getEntry z license-entry)
+      (throw (ex-info (str jar-file " lacks " license-entry)
+                      {:jar-file jar-file :entry license-entry})))))
+
 (declare git jar-provenance)
 
 (defn- check-jar-provenance!
@@ -79,11 +90,13 @@
     (println "\nCopying source...")
     (b/copy-dir {:src-dirs ["resources" "src" "target/doc-resources"]
                  :target-dir class-dir})
+    (b/copy-file {:src "LICENSE" :target (str class-dir "/" license-entry)})
     (println "\nWriting build provenance...")
     (bp/write! {:lib lib :version version :class-dir class-dir})
     (println "\nBuilding JAR...")
     (b/jar opts)
     (check-jar-docs! opts)
+    (check-jar-license! opts)
     (check-jar-provenance! opts))
   opts)
 
