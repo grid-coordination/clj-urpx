@@ -359,10 +359,11 @@
            (:reason (refusal schema/Decimal {:jsonld/value "1E3" :jsonld/type "xsd:decimal"}))))
     (is (= :urpx.schema/malformed-integer
            (:reason (refusal schema/Int {:jsonld/value "3.0" :jsonld/type "xsd:integer"})))))
-  (testing "a value object of another datatype, or none, stays as written and
-            fails validation"
+  (testing "a value object of another datatype, of none, or with an @language,
+            stays as written and fails validation"
     (doseq [[s v] [[schema/Decimal {:jsonld/value "0.1" :jsonld/type "xsd:double"}]
                    [schema/Decimal {:jsonld/value "0.1"}]
+                   [schema/Decimal {:jsonld/value "0.1" :jsonld/type "xsd:decimal" :jsonld/language "en"}]
                    [schema/Int {:jsonld/value "3" :jsonld/type "xsd:decimal"}]]]
       (is (= v (coerce/coerce s v)) (pr-str v))
       (is (not (coerce/validate s v)) (pr-str v))))

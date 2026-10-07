@@ -41,10 +41,11 @@
 
 (defn- typed-literal-value
   "The @value of `v` when `v` is a JSON-LD value object whose @type is
-   `datatype`, as a CURIE or the full IRI, else `v`."
+   `datatype`, as a CURIE or the full IRI, and that has no @language, else `v`."
   [v datatype]
   (if (and (map? v)
            (contains? v :jsonld/value)
+           (not (contains? v :jsonld/language))
            (contains? #{datatype (str "http://www.w3.org/2001/XMLSchema#" (subs datatype 4))}
                       (:jsonld/type v)))
     (:jsonld/value v)

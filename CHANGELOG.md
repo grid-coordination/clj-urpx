@@ -17,7 +17,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 ### Fixed
 
-- An xsd:decimal or xsd:integer field decodes a JSON-LD value object of its datatype, such as `{"@value": "0.1", "@type": "xsd:decimal"}`, by its `@value`, holding it to the datatype's lexical space. A value object of another `@type`, or none, stays as written and fails validation.
+- An xsd:decimal or xsd:integer field decodes a JSON-LD value object of its datatype, such as `{"@value": "0.1", "@type": "xsd:decimal"}`, by its `@value`, holding it to the datatype's lexical space. A value object of another `@type`, of none, or with an `@language`, stays as written and fails validation.
 - An xsd:decimal field refuses a ratio with no terminating decimal expansion, such as `1/3`, with `:urpx.schema/non-terminating-ratio`, carrying the value; it threw a bare ArithmeticException.
 - An xsd:gMonth field accepts only `--MM` (`--01` to `--12`) with an optional timezone. Any other string, such as `"--+6"`, `"--1e3"`, a bare `"6"` or non-ASCII digits, refuses with `:urpx.schema/malformed-g-month`, carrying the value; `"--+6"` and an Arabic-Indic digit decoded as 6, and `"--1e3"` threw a bare NumberFormatException.
 
