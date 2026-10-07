@@ -531,9 +531,8 @@
 ;; ---------------------------------------------------------------------------
 
 (def ProgramEnrollment
-  "urpx-shacl:ProgramEnrollmentShape: a utility program, named by the required
-   urpx:programName. A top-level node, or inline where `or-program-enrollment`
-   admits it."
+  "urpx-shacl:ProgramEnrollmentShape: a customer's enrollment in a utility
+   program."
   [:map
    [:jsonld/type [:= "urpx:ProgramEnrollment"]]
    [:jsonld/id {:optional true} :string]
