@@ -575,6 +575,32 @@ Each model is the composition a `urpx:ScenarioCostModel` prices.
 
 Computing the set at runtime starts with walking the corpus, which is the caller's job: the corpus's own walker, or its `corpus.json`. Load what the walk finds with [`urpx.load/documents`](#loading-documents-and-who-walks-the-corpus), which takes any `clojure.java.io/reader` source including classpath URLs, and pass the documents to `scm/enumerate`; `scm/node` makes each model a `urpx:ScenarioCostModel` node, and `scm/rate-plans-iri` and `scm/rate-plans-name` give it the `@id` and `urpx:name` urpx-rate-plans uses.
 
+### Preparing documents once
+
+`plan-versions`, `applicable-modifiers`, `enumerate`, `enumerate-pairs` and `from-node` each read every document on every call. `scm/prepare` does that reading once, and each of them takes its value in place of the documents:
+
+```clojure
+(def prepared (scm/prepare docs))
+
+(scm/enumerate prepared {:at now})
+(mapv #(scm/from-node prepared % {:context ctx}) nodes)
+```
+
+`:repeated-ids` and `:package-zones` decide what is read, so `prepare` takes them and they are fixed there. A call may restate either with the prepared value; another value refuses `:urpx.scenario-cost-model/prepared-option-conflict`. Every other option, `:at`, `:combine`, `:compatibility` and `:context` among them, belongs to the call.
+
+The prepared value is the caller's to keep, and so is the policy for keeping it. A caller that rereads its corpus can cache `prepare` around a cheap identity of the corpus, such as a commit SHA, a tag or the files' modification times, rather than around the document collection itself:
+
+```clojure
+(require '[clojure.core.memoize :as memo])
+
+(def prepared-at
+  (memo/lru (fn [commit-sha]
+              (scm/prepare (load/documents (corpus-files commit-sha))))
+            :lru/threshold 4))
+```
+
+clj-urpx itself depends on no caching library.
+
 ### A model has no verdict of its own
 
 `of-model` returns every part's report, a frequency map of the verdicts, and conjunction predicates. It returns **no rolled-up `completeness`**, and the absence is the design rather than an omission — a test pins the exact key set so that adding one fails.

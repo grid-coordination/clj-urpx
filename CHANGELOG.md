@@ -14,6 +14,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 ### Added
 
 - **`urpx:mondayIfSundayObservance`** (urpx-org/urpx#77): a holiday on Sunday is observed the following Monday, and a holiday on Saturday on its date. `urpx.holidays/derive-predicate` applies it to `urpx:holidayRule` and `urpx:holidayDate` holidays, and `urpx.schema/ObservanceRule` accepts it.
+- **`urpx.scenario-cost-model/prepare`** reads a document set once: its version snapshots under the `:repeated-ids` policy, and its zone index under `:package-zones`. `plan-versions`, `applicable-modifiers`, `enumerate`, `enumerate-pairs` and `from-node` take the prepared value in place of the documents and give the same answers. The two options are fixed at `prepare`; a call stating another value refuses `:urpx.scenario-cost-model/prepared-option-conflict`. `prepared?` recognizes the value. Every existing arity prepares internally.
 
 ## [0.42.0] — 2026-10-06
 

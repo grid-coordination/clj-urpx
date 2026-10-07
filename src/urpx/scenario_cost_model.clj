@@ -594,6 +594,88 @@
           (sort-by key dims)))
 
 ;; ---------------------------------------------------------------------------
+;; Prepared documents
+;; ---------------------------------------------------------------------------
+
+(defrecord Prepared [documents repeated-ids package-zones versions find-zone])
+
+(defn prepared?
+  "True if `x` is what `prepare` returns."
+  [x]
+  (instance? Prepared x))
+
+(def ^:private version-kinds ["urpx:RatePlanVersion" "urpx:RatePlanModifierVersion"])
+
+(defn- prepare*
+  "`prepare`, reading only the version `kinds` and naming `who` in the
+   uncoerced-document refusal."
+  [documents opts kinds who]
+  (check-coerced! documents who)
+  (let [repeated (or (:repeated-ids opts) repeated-ids-refuse)
+        mode     (package-zone-mode opts)]
+    (map->Prepared
+     {:documents     documents
+      :repeated-ids  repeated
+      :package-zones mode
+      :versions      (repeated (into {}
+                                     (map (fn [kind]
+                                            [kind (mapcat #(versions-in % kind) documents)]))
+                                     kinds))
+      :find-zone     (zone-finder documents mode)})))
+
+(defn prepare
+  "`documents` read once for every call that takes them.
+
+   Each of `plan-versions`, `applicable-modifiers`, `enumerate`,
+   `enumerate-pairs` and `from-node` reads every document's version snapshots,
+   applies the `:repeated-ids` policy to them and indexes the documents for
+   zoning. Handed the value this returns in place of `documents`, it reads them
+   from here instead.
+
+   `documents` and `opts` are what `enumerate` takes. `:repeated-ids` and
+   `:package-zones` decide what is read, so they are fixed here. A call handed
+   the prepared value may restate either with the prepared value; another
+   value refuses `:urpx.scenario-cost-model/prepared-option-conflict`, naming
+   both under `:conflict`. Every other option belongs to the call.
+
+   Refuses uncoerced documents, an unknown `:package-zones` and what the
+   `:repeated-ids` policy refuses, as `enumerate` does."
+  ([documents] (prepare documents nil))
+  ([documents opts]
+   (prepare* documents opts version-kinds "urpx.scenario-cost-model/prepare")))
+
+(defn- check-prepared-opts!
+  "Refuse `opts` restating a value `prepared` fixed with another."
+  [prepared opts who]
+  (let [called   (cond-> {}
+                   (contains? opts :repeated-ids)
+                   (assoc :repeated-ids (or (:repeated-ids opts) repeated-ids-refuse))
+                   (contains? opts :package-zones)
+                   (assoc :package-zones (package-zone-mode opts)))
+        conflict (into (sorted-map)
+                       (keep (fn [[k v]]
+                               (when (not= v (get prepared k))
+                                 [k {:prepared (get prepared k) :called v}])))
+                       called)]
+    (when (seq conflict)
+      (throw (ex-info (str who " was handed prepared documents and "
+                           (str/join " and " (map pr-str (keys conflict)))
+                           " differing from the value they were prepared with. "
+                           "Prepare the documents again with the value wanted.")
+                      {:reason   :urpx.scenario-cost-model/prepared-option-conflict
+                       :who      who
+                       :conflict conflict})))
+    prepared))
+
+(defn- prepared-for
+  "`documents` when prepared, checked against `opts`; else `documents` prepared
+   with `opts` for the version `kinds`."
+  [documents opts kinds who]
+  (if (prepared? documents)
+    (check-prepared-opts! documents opts who)
+    (prepare* documents opts kinds who)))
+
+;; ---------------------------------------------------------------------------
 ;; Public API
 ;; ---------------------------------------------------------------------------
 
@@ -602,17 +684,15 @@
 
    `:at` restricts to the version of each plan identity in force at that
    instant. Omit it for every version the documents carry, which reads no zone.
-   `:package-zones` is as `enumerate` takes it."
+   `documents` and `:package-zones` are as `enumerate` takes them."
   ([documents] (plan-versions documents nil))
   ([documents opts]
-   (let [_       (check-coerced! documents "urpx.scenario-cost-model/plan-versions")
-         t       (:at opts)
-         repeated (or (:repeated-ids opts) repeated-ids-refuse)
-         triples (-> {"urpx:RatePlanVersion"
-                      (mapcat #(versions-in % "urpx:RatePlanVersion") documents)}
-                     repeated (get "urpx:RatePlanVersion"))]
-     (->> (current-versions triples t (zone-requirer
-                                       (zone-finder documents (package-zone-mode opts))))
+   (let [{:keys [versions find-zone]}
+         (prepared-for documents opts ["urpx:RatePlanVersion"]
+                       "urpx.scenario-cost-model/plan-versions")]
+     (->> (current-versions (get versions "urpx:RatePlanVersion")
+                            (:at opts)
+                            (zone-requirer find-zone))
           vals
           (mapcat #(map second %))
           (sort-by :jsonld/id)
@@ -620,7 +700,7 @@
 
 (defn applicable-modifiers
   "The urpx:RatePlanModifierVersions in `documents` that MAY apply to
-   `base-version`.
+   `base-version`. `documents` is as `enumerate` takes it.
 
    This is the query a consumer actually wants, and it is the half URPX can
    answer. urpx:applicableToRatePlan states compatibility with a plan identity;
@@ -660,16 +740,14 @@
      :package-zones  as `enumerate` takes it."
   ([documents base-version] (applicable-modifiers documents base-version nil))
   ([documents base-version opts]
-   (let [_       (check-coerced! documents "urpx.scenario-cost-model/applicable-modifiers")
-         t       (:at opts)
+   (let [{:keys [versions find-zone]}
+         (prepared-for documents opts ["urpx:RatePlanModifierVersion"]
+                       "urpx.scenario-cost-model/applicable-modifiers")
          compat  (or (:compatibility opts) named-versions-narrow)
-         plan-id (:jsonld/id (:urpx/forRatePlan base-version))
-         repeated (or (:repeated-ids opts) repeated-ids-refuse)
-         triples (-> {"urpx:RatePlanModifierVersion"
-                      (mapcat #(versions-in % "urpx:RatePlanModifierVersion") documents)}
-                     repeated (get "urpx:RatePlanModifierVersion"))]
-     (->> (current-versions triples t (zone-requirer
-                                       (zone-finder documents (package-zone-mode opts))))
+         plan-id (:jsonld/id (:urpx/forRatePlan base-version))]
+     (->> (current-versions (get versions "urpx:RatePlanModifierVersion")
+                            (:at opts)
+                            (zone-requirer find-zone))
           vals
           (mapcat #(map second %))
           (filter #(compat % base-version plan-id))
@@ -733,7 +811,8 @@
   "Every scenario cost model `documents` expresses, as a vector.
 
    `documents` is a seq of coerced urpx:RatePlan and urpx:RatePlanModifier
-   documents, the same values urpx.price takes.
+   documents, the same values urpx.price takes, or the value `prepare` returns
+   for them.
 
    Options:
      :at       a ZonedDateTime. Restricts to models whose every component
@@ -795,17 +874,12 @@
    documents gives the same order. Nothing here consults wall-clock time."
   ([documents] (enumerate documents nil))
   ([documents opts]
-   (let [_       (check-coerced! documents "urpx.scenario-cost-model/enumerate")
+   (let [{merged :versions find-zone :find-zone}
+         (prepared-for documents opts version-kinds "urpx.scenario-cost-model/enumerate")
          combine (or (:combine opts) one-modifier-at-most)
          compat  (or (:compatibility opts) named-versions-narrow)
-         repeated (or (:repeated-ids opts) repeated-ids-refuse)
-         t     (:at opts)
-         plans (mapcat #(versions-in % "urpx:RatePlanVersion") documents)
-         mods  (mapcat #(versions-in % "urpx:RatePlanModifierVersion") documents)
-         merged (repeated {"urpx:RatePlanVersion"         plans
-                           "urpx:RatePlanModifierVersion" mods})
-         find-zone  (zone-finder documents (package-zone-mode opts))
-         zone-of    (zone-requirer find-zone)
+         t       (:at opts)
+         zone-of (zone-requirer find-zone)
          live-plans (current-versions (get merged "urpx:RatePlanVersion") t zone-of)
          live-mods  (current-versions (get merged "urpx:RatePlanModifierVersion") t zone-of)
          ;; Base version and modifier versions are carried as [id version doc]
@@ -867,11 +941,11 @@
    pending choice is one row or several while agreeing completely about what
    composes with what.
 
-   `opts` is what `enumerate` takes. PIN EVERY POLICY EXPLICITLY when the
-   result is an expected value in a gate: `:at`, `:combine`, `:compatibility`,
-   `:repeated-ids` and `:package-zones` each change the answer, and matching
-   defaults across two implementations is agreement by coincidence rather than
-   by construction."
+   `documents` and `opts` are what `enumerate` takes. PIN EVERY POLICY
+   EXPLICITLY when the result is an expected value in a gate: `:at`,
+   `:combine`, `:compatibility`, `:repeated-ids` and `:package-zones` each
+   change the answer, and matching defaults across two implementations is
+   agreement by coincidence rather than by construction."
   ([documents] (enumerate-pairs documents nil))
   ([documents opts]
    (into #{}
@@ -1118,16 +1192,11 @@
      dimension-unselected      a container has no alternative selected"
   ([documents node] (from-node documents node nil))
   ([documents node opts]
-   (let [_        (check-coerced! documents "urpx.scenario-cost-model/from-node")
+   (let [{merged :versions find-zone :find-zone}
+         (prepared-for documents opts version-kinds "urpx.scenario-cost-model/from-node")
          compat   (or (:compatibility opts) named-versions-narrow)
-         repeated (or (:repeated-ids opts) repeated-ids-refuse)
-         find-zone (zone-finder documents (package-zone-mode opts))
          prefixes (prefix-bindings (:context opts))
          key-of   #(or (expand-iri prefixes %) %)
-         merged   (repeated {"urpx:RatePlanVersion"
-                             (mapcat #(versions-in % "urpx:RatePlanVersion") documents)
-                             "urpx:RatePlanModifierVersion"
-                             (mapcat #(versions-in % "urpx:RatePlanModifierVersion") documents)})
          by-key   (fn [kind]
                     (reduce (fn [m tr]
                               (let [k (key-of (:jsonld/id (second tr)))]
