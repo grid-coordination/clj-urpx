@@ -86,7 +86,7 @@
     (if (or (not (zero? (.signum (.remainder exact BigDecimal/ONE))))
             (>= (.compareTo (.abs exact) ^BigDecimal double-threshold) 0))
       (throw (double-not-decimal v (if floating?
-                                     (.stripTrailingZeros (BigDecimal/valueOf (double v)))
+                                     (.stripTrailingZeros (BigDecimal. (str v)))
                                      exact)))
       (.setScale exact 0))))
 
@@ -142,13 +142,17 @@
 (defn- <-decimal
   "BigDecimal → plain-string form, preserving scale so a round-trip yields a
    BigDecimal equal to the original. `.toPlainString` avoids scientific
-   notation that JSON-LD parsers wouldn't expect for xsd:decimal. Any other
-   number passes through when `->decimal` would read it back, and throws as
-   `->decimal` does when it would not."
+   notation that JSON-LD parsers wouldn't expect for xsd:decimal. A ratio
+   `->decimal` reads becomes the plain string of its decimal expansion, since
+   JSON would write it as a double. Any other number passes through when
+   `->decimal` would read it back, and throws as `->decimal` does when it
+   would not. A value object typed xsd:decimal has its @value encoded so."
   [v]
   (cond
     (instance? BigDecimal v) (.toPlainString ^BigDecimal v)
+    (ratio? v)               (.toPlainString ^BigDecimal (->decimal v))
     (number? v)              (do (->decimal v) v)
+    (not= v (typed-literal-value v "xsd:decimal")) (update v :jsonld/value <-decimal)
     :else                    v))
 
 ;; xsd:time and xsd:dateTime require seconds. java.time's toString omits them

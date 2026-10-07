@@ -1,5 +1,6 @@
 (ns urpx.coerce-test
   (:require [clojure.data.json :as json]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [urpx.coerce :as coerce]
             [urpx.core :as core]
@@ -91,8 +92,11 @@
              (refusal schema/Decimal v))
           (pr-str v))))
   (testing "the message gives the value as a string to write"
-    (is (re-find #"\"0.161\"" (ex-message (try (coerce/coerce schema/Decimal 0.1610)
-                                              (catch clojure.lang.ExceptionInfo e e))))))
+    (doseq [[v written] [[0.1610 "\"0.161\""] [(float 0.1) "\"0.1\""]]]
+      (is (str/includes? (ex-message (try (coerce/coerce schema/Decimal v)
+                                          (catch clojure.lang.ExceptionInfo e e)))
+                         written)
+          (pr-str v))))
   (testing "as the JSON reader gives it"
     (doseq [[s ok] [["0.1610" nil] ["1e-5" nil] ["1000000000000000000000" nil]
                     ["3" 3M] ["3.0" 3M] ["1e20" 100000000000000000000M]]]
@@ -111,10 +115,18 @@
           v)))
   (testing "encoding refuses what decoding would"
     (is (= 3 (coerce/encode schema/Decimal 3)))
-    (is (= :urpx.schema/double-not-decimal
-           (:reason (try (coerce/encode schema/Decimal 0.5)
-                         nil
-                         (catch clojure.lang.ExceptionInfo e (ex-data e))))))))
+    (doseq [[v reason] [[0.5 :urpx.schema/double-not-decimal]
+                        [{:jsonld/value 0.5 :jsonld/type "xsd:decimal"} :urpx.schema/double-not-decimal]
+                        [1/3 :urpx.schema/non-terminating-ratio]]]
+      (is (= reason
+             (:reason (try (coerce/encode schema/Decimal v)
+                           nil
+                           (catch clojure.lang.ExceptionInfo e (ex-data e)))))
+          (pr-str v))))
+  (testing "encoding writes a ratio as a string, which JSON would write as a double"
+    (is (= "0.25" (coerce/encode schema/Decimal 1/4)))
+    (is (= {:jsonld/value "0.25" :jsonld/type "xsd:decimal"}
+           (coerce/encode schema/Decimal {:jsonld/value 1/4 :jsonld/type "xsd:decimal"})))))
 
 (deftest integer-strings-must-be-xsd-integer-lexical-forms
   (testing "accepted"
