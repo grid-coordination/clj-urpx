@@ -3,8 +3,8 @@
 
   Symmetric to the existing parse + coerce path. Given a coerced
   urpx:RatePlan / urpx:RatePlanModifier / urpx:URPXDocument / urpx:URPXPackage
-  / urpx:ScenarioCostModel (or an EDN map shaped like one with
-  namespaced-keyword keys + already-string values),
+  / urpx:ScenarioCostModel / urpx:ProgramEnrollment (or an EDN map shaped
+  like one with namespaced-keyword keys + already-string values),
   emit a SHACL-valid JSON-LD string ready to write to disk or send to a
   consumer.
 
@@ -100,6 +100,8 @@
    "urpx:dateValue"            {"@type" "xsd:date"}
    "urpx:dateModified"         {"@type" "xsd:date"}
    "urpx:cancelledOn"          {"@type" "xsd:date"}
+   "urpx:enrollmentStartDate"  {"@type" "xsd:date"}
+   "urpx:enrollmentEndDate"    {"@type" "xsd:date"}
 
    ;; xsd:dateTime
    "urpx:effectiveDateTime"   {"@type" "xsd:dateTime"}
@@ -213,6 +215,15 @@
   ([model] (write-scenario-cost-model model nil))
   ([model opts]
    (emit-via-schema schema/ScenarioCostModel model opts)))
+
+(defn write-program-enrollment
+  "Serialize a coerced urpx:ProgramEnrollment to a JSON-LD string. Inverse of
+   urpx.coerce/coerce-doc on a urpx:ProgramEnrollment node.
+
+   See `write-rate-plan` for `opts`."
+  ([enrollment] (write-program-enrollment enrollment nil))
+  ([enrollment opts]
+   (emit-via-schema schema/ProgramEnrollment enrollment opts)))
 
 (def ^:private payload-schemas
   "@type → schema for the payload entities a wrapper can embed under the

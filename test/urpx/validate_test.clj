@@ -10,14 +10,11 @@
             only, so a wrapper-wrapped document must be descended or the inner
             RatePlan is never checked and the file reads as ok"
     (let [path (.getPath (fixtures/fixture-resource "pge-e-1-2026-03-01"))
-          {:keys [checked skipped]} (validate/check-file path)
+          {:keys [checked]} (validate/check-file path)
           types (set (map :type checked))]
       (is (contains? types "urpx:RatePlan"))
       (is (contains? types "urpx:RatePlanModifier"))
-      (is (every? nil? (map :error checked)) "the vendored fixture is valid")
-      (testing "unmodeled types are reported rather than silently dropped, so a
-                file yielding nothing recognizable is visible as such"
-        (is (some #{"urpx:ProgramEnrollment"} skipped))))))
+      (is (every? nil? (map :error checked)) "the vendored fixture is valid"))))
 
 (deftest check-file-checks-every-type-coerce-doc-dispatches
   (let [path (.getPath (fixtures/fixture-resource "pge-e-tou-d-2026-03-27"))
@@ -25,8 +22,9 @@
         types (set (map :type checked))]
     (is (contains? types "urpx:SourcePublication"))
     (is (contains? types "urpx:RateCase"))
+    (is (contains? types "urpx:ProgramEnrollment"))
     (is (every? nil? (map :error checked)))
-    (is (= #{"urpx:ProgramEnrollment"} (set skipped)))))
+    (is (empty? skipped))))
 
 (deftest check-file-reports-the-failing-path
   (testing "a missing required key surfaces as an error naming it"
@@ -56,6 +54,21 @@
     (.getPath f)))
 
 (defn- findings [json] (:findings (validate/check-file (tmp-doc json))))
+
+(deftest unmodeled-types-are-reported-as-skipped
+  (testing "a file yielding nothing recognizable is visible as such rather than
+            silently dropped"
+    (let [{:keys [skipped]} (validate/check-file
+                             (tmp-doc (str "{" ctx ",\"@id\":\"x:prior\","
+                                           "\"@type\":\"urpx:PriorRatePlan\"}")))]
+      (is (= ["urpx:PriorRatePlan"] skipped)))))
+
+(deftest a-program-enrollment-without-a-name-fails
+  (let [{:keys [checked]} (validate/check-file
+                           (tmp-doc (str "{" ctx ",\"@id\":\"x:enrol\","
+                                         "\"@type\":\"urpx:ProgramEnrollment\"}")))]
+    (is (= ["urpx:ProgramEnrollment"] (map :type checked)))
+    (is (some #(= [:urpx/programName] (:in %)) (:errors (:error (first checked)))))))
 
 (defn- plan-json
   "A wrapper targeting `target`, holding a plan whose version carries `version-extra`."

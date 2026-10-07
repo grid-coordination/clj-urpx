@@ -43,7 +43,8 @@
    ["urpx:OrganizationName" schema/OrganizationName]
    ["urpx:AlternativeDimension" schema/AlternativeDimension]
    ["urpx:SourcePublication" schema/SourcePublication]
-   ["urpx:RateCase" schema/RateCase]])
+   ["urpx:RateCase" schema/RateCase]
+   ["urpx:ProgramEnrollment" schema/ProgramEnrollment]])
 
 (deftest every-fixture-node-round-trips
   (doseq [[t schema] modeled]

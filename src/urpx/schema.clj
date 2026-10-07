@@ -420,13 +420,6 @@
   [:map {:closed true}
    [:jsonld/id :string]])
 
-(def RdfList
-  "A JSON-LD list object, `{:jsonld/list [...]}`: an ordered RDF list of at
-   least one member. Members are as written: a Ref, a value object such as
-   `{:jsonld/value \"P\" :jsonld/type \"xsd:string\"}`, or a plain literal."
-  [:map {:closed true}
-   [:jsonld/list [:vector {:min 1} :any]]])
-
 (def Context
   "A JSON-LD @context, in any of the three forms the spec permits: an inline
    definition object, an IRI string pointing at a remote context, or an array
@@ -521,6 +514,52 @@
             ;; urpx:TariffPublication carrying it, and this library advertises
             ;; v0.2.x acceptance.
             "regulatoryFiling"))
+
+(def ProgramType
+  "urpx:ProgramTypeValue, 8 members."
+  (enum-ref "demandResponseProgram" "energyEfficiencyProgram" "greenEnergyProgram"
+            "lowIncomeProgram" "moderateIncomeProgram" "timeOfUseProgram"
+            "communityChoiceAggregation" "communitySolar"))
+
+(def EnrollmentStatus
+  "urpx:EnrollmentStatusValue, 6 members."
+  (enum-ref "activeStatus" "expiredStatus" "inactiveStatus" "pendingStatus"
+            "suspendedStatus" "terminatedStatus"))
+
+;; ---------------------------------------------------------------------------
+;; Program enrollment
+;; ---------------------------------------------------------------------------
+
+(def ProgramEnrollment
+  "urpx-shacl:ProgramEnrollmentShape: a utility program, named by the required
+   urpx:programName. A top-level node, or inline where `or-program-enrollment`
+   admits it."
+  [:map
+   [:jsonld/type [:= "urpx:ProgramEnrollment"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/programName :string]
+   [:urpx/programType         {:optional true} ProgramType]
+   [:urpx/enrollmentStatus    {:optional true} EnrollmentStatus]
+   [:urpx/enrollmentStartDate {:optional true} Date]
+   [:urpx/enrollmentEndDate   {:optional true} Date]
+   [:urpx/minimumTenure       {:optional true} IsoDuration]
+   [:urpx/url                 {:optional true} :string]])
+
+(defn- or-program-enrollment
+  "`otherwise`, except that a node typed urpx:ProgramEnrollment is a
+   `ProgramEnrollment`."
+  [otherwise]
+  [:multi {:dispatch :jsonld/type}
+   ["urpx:ProgramEnrollment" ProgramEnrollment]
+   [::m/default otherwise]])
+
+(def RdfList
+  "A JSON-LD list object, `{:jsonld/list [...]}`: an ordered RDF list of at
+   least one member. Members are as written: a Ref, a value object such as
+   `{:jsonld/value \"P\" :jsonld/type \"xsd:string\"}`, a plain literal, or
+   an inline node; an inline urpx:ProgramEnrollment is a `ProgramEnrollment`."
+  [:map {:closed true}
+   [:jsonld/list [:vector {:min 1} (or-program-enrollment :any)]]])
 
 ;; ---------------------------------------------------------------------------
 ;; Plan elements
@@ -858,7 +897,7 @@
    [:jsonld/type [:= "urpx:ObjectOperandNode"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/conditionProperty    {:optional true} Ref]
-   [:urpx/referencesValue      {:optional true} Ref]
+   [:urpx/referencesValue      {:optional true} (or-program-enrollment Ref)]
    [:urpx/referencesMetricInput {:optional true} Ref]])
 
 (def DatatypeOperandNode
@@ -1088,7 +1127,10 @@
    ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
    [:urpx/entityType
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
-    [:vector Ref]]])
+    [:vector Ref]]
+   [:urpx/hasProgramEnrollment
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector [:or ProgramEnrollment ExclusiveRef]]]])
 
 (def Scenario
   "v0.2.0: NEW. EligibilityRule.hasCustomerProfile moved here. SHACL's sh:or

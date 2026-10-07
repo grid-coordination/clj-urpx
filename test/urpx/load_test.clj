@@ -39,7 +39,7 @@
        "\"urpx:hasRatePlan\":{\"@id\":\"x:p\",\"@type\":\"urpx:RatePlan\"}}"))
 
 (def ^:private unmodelled
-  (str "{" ctx ",\"@id\":\"x:enrol\",\"@type\":\"urpx:ProgramEnrollment\"}"))
+  (str "{" ctx ",\"@id\":\"x:prior\",\"@type\":\"urpx:PriorRatePlan\"}"))
 
 (deftest document-xf-is-the-four-step-form-under-a-name
   (testing "nothing new happens here. The point is that the composition exists
@@ -94,11 +94,11 @@
     (let [json (str "{" ctx ",\"@graph\":[{\"@graph\":["
                     "{\"@id\":\"x:pkg\",\"@type\":\"urpx:URPXPackage\","
                     "\"urpx:hasRatePlan\":{\"@id\":\"x:p\",\"@type\":\"urpx:RatePlan\"}},"
-                    "{\"@id\":\"x:enrol\",\"@type\":\"urpx:ProgramEnrollment\"}]}]}")
+                    "{\"@id\":\"x:prior\",\"@type\":\"urpx:PriorRatePlan\"}]}]}")
           {:urpx.load/keys [documents uncoercible]} (load/scan [(src json)])]
       (is (= ["x:p" "x:pkg"] (mapv :jsonld/id documents)))
       (is (= [{:jsonld/id "x:p"}] (:urpx/hasRatePlan (second documents))) "the shell")
-      (is (= [{:jsonld/type "urpx:ProgramEnrollment" :jsonld/id "x:enrol"}] uncoercible)))))
+      (is (= [{:jsonld/type "urpx:PriorRatePlan" :jsonld/id "x:prior"}] uncoercible)))))
 
 (deftest a-by-reference-package-is-already-a-shell
   (let [json (str "{" ctx ",\"@id\":\"x:pkg\",\"@type\":\"urpx:URPXPackage\","
@@ -202,7 +202,7 @@
 (deftest scan-reports-what-document-xf-discards
   (testing "THE POINT OF scan. coerce-doc returns nil for an entity type this
             library does not model, so document-xf drops it silently:
-            urpx:ProgramEnrollment.
+            urpx:PriorRatePlan.
 
             None of those is a version, which is luck rather than design. The
             unlucky form of the same thing cost a whole rate plan once: a
@@ -211,11 +211,11 @@
     (let [{:urpx.load/keys [documents uncoercible]}
           (load/scan [(src (plan-json "x:p" "x:p-v1")) (src unmodelled)])]
       (is (= ["x:p"] (mapv :jsonld/id documents)))
-      (is (= [{:jsonld/type "urpx:ProgramEnrollment" :jsonld/id "x:enrol"}]
+      (is (= [{:jsonld/type "urpx:PriorRatePlan" :jsonld/id "x:prior"}]
              uncoercible)
           "the discard is named, with enough to identify it and no more"))))
 
-(deftest publications-and-rate-cases-are-documents
+(deftest publications-rate-cases-and-program-enrollments-are-documents
   (let [json (str "{" ctx ",\"@graph\":["
                   "{\"@id\":\"x:pub\",\"@type\":\"urpx:SourcePublication\","
                   "\"urpx:name\":\"Advice Letter\",\"urpx:effectiveDate\":\"2026-03-01\"},"
@@ -223,14 +223,17 @@
                   "\"urpx:dateReceived\":\"2025-12-01\"},"
                   "{\"@id\":\"x:case\",\"@type\":\"urpx:RateCase\","
                   "\"urpx:caseNumber\":\"A.24-01-001\",\"urpx:url\":\"https://example.com\"},"
-                  "{\"@id\":\"x:enrol\",\"@type\":\"urpx:ProgramEnrollment\"}]}")
+                  "{\"@id\":\"x:enrol\",\"@type\":\"urpx:ProgramEnrollment\","
+                  "\"urpx:programName\":\"CARE\",\"urpx:enrollmentStartDate\":\"2025-06-01\"},"
+                  "{\"@id\":\"x:prior\",\"@type\":\"urpx:PriorRatePlan\"}]}")
         {:urpx.load/keys [documents uncoercible]} (load/scan [(src json)])
         by-id (into {} (map (juxt :jsonld/id identity)) documents)]
-    (is (= #{"x:pub" "x:old" "x:case"} (set (keys by-id))))
+    (is (= #{"x:pub" "x:old" "x:case" "x:enrol"} (set (keys by-id))))
     (is (= (LocalDate/of 2026 3 1) (get-in by-id ["x:pub" :urpx/effectiveDate])))
     (is (= (LocalDate/of 2025 12 1) (get-in by-id ["x:old" :urpx/dateReceived])))
     (is (= "A.24-01-001" (get-in by-id ["x:case" :urpx/caseNumber])))
-    (is (= [{:jsonld/type "urpx:ProgramEnrollment" :jsonld/id "x:enrol"}] uncoercible))))
+    (is (= (LocalDate/of 2025 6 1) (get-in by-id ["x:enrol" :urpx/enrollmentStartDate])))
+    (is (= [{:jsonld/type "urpx:PriorRatePlan" :jsonld/id "x:prior"}] uncoercible))))
 
 (deftest a-caller-can-assert-that-no-version-was-discarded
   (testing "the assertion that was unavailable before, written the way a

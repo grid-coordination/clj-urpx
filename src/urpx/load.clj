@@ -137,8 +137,8 @@
        :urpx.load/uncoercible           [{:jsonld/type t :jsonld/id id} ...]
        :urpx.load/unresolved-references [{:jsonld/id id :package-id p :property k} ...]}
 
-  THE DISCARD IS THE POINT. `document-xf` drops every entity this library does
-  not model, such as urpx:ProgramEnrollment. That none of those is a version
+  THE DISCARD IS THE POINT. `document-xf` drops every entity whose type
+  `coerce-doc` does not dispatch. That none of those is a version
   is luck rather than design, and the unlucky form of exactly this cost a whole rate plan once: a version
   stating only urpx:effectiveDate was dropped by a filter that read only
   urpx:effectiveDateTime, and nothing said so.
@@ -149,9 +149,8 @@
                       (:urpx.load/uncoercible (scan sources))))
 
   Note that \"this library does not model it\" and \"it does not matter\" are
-  different statements. urpx:ProgramEnrollment is modeled nowhere here; whether
-  that matters is the caller's call, and it cannot be made at all while the
-  discard is invisible.
+  different statements. Whether a discard matters is the caller's call, and it
+  cannot be made at all while the discard is invisible.
 
   Entries carry `@type` and `@id` only, not the entity, so scanning a large
   corpus does not retain every graph it walked past.

@@ -127,8 +127,9 @@
     :urpx/hasPrice :urpx/hasPriceDefinition :urpx/hasPriceDefinitionReference :urpx/hasPriceSet
     :urpx/hasPriceSetAlternative :urpx/hasPriceSetAlternatives :urpx/hasPriceSummary
     :urpx/hasPrices :urpx/hasProfileAlternative :urpx/hasProfileAlternatives
-    :urpx/hasRatePlan :urpx/hasRatePlanModifier :urpx/hasRatePlanModifierVersion
-    :urpx/hasRatePlanVersion :urpx/hasSeasons :urpx/hasServiceBracket
+    :urpx/hasProgramEnrollment :urpx/hasRatePlan :urpx/hasRatePlanModifier
+    :urpx/hasRatePlanModifierVersion :urpx/hasRatePlanVersion :urpx/hasSeasons
+    :urpx/hasServiceBracket
     :urpx/hasServiceTier :urpx/hasServiceTiers :urpx/hasTOUPeriod :urpx/hasTOUSchedule
     :urpx/hasTOUTier :urpx/hasTariffBookReference :urpx/hasTariffPublication
     :urpx/hasTemporalPeriod :urpx/hasTemporalScope :urpx/hasTimeBracket

@@ -93,7 +93,8 @@
    urpx:RatePlanModifierVersion, which v0.5.1 documents may carry as siblings
    of the identity entity rather than nested inside it), a
    urpx:ScenarioCostModel, a urpx:SourcePublication (or its v0.2.x spelling
-   urpx:TariffPublication) or a urpx:RateCase. Returns nil for other types."
+   urpx:TariffPublication), a urpx:RateCase or a urpx:ProgramEnrollment.
+   Returns nil for other types."
   [raw]
   (case (:jsonld/type raw)
     "urpx:RatePlan"         (coerce-rate-plan raw)
@@ -106,6 +107,7 @@
     "urpx:SourcePublication"       (coerce schema/SourcePublication raw)
     "urpx:TariffPublication"       (coerce schema/SourcePublication raw)
     "urpx:RateCase"                (coerce schema/RateCase raw)
+    "urpx:ProgramEnrollment"       (coerce schema/ProgramEnrollment raw)
     nil))
 
 (def ^:private uncoerced-re #"^(\d{2}:\d{2}|\d{4}-\d{2}-\d{2})")

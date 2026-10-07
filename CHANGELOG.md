@@ -9,6 +9,17 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Added
+
+- **`urpx.schema/ProgramEnrollment`**, from urpx-shacl:ProgramEnrollmentShape at v0.5.1, with the `ProgramType` and `EnrollmentStatus` vocabularies. `urpx.coerce/coerce-doc` dispatches it, `urpx.validate` checks it, `urpx.emit/write-program-enrollment` writes it, and `urpx.dsl/program-enrollment` builds it. `urpx.emit/default-context` types `urpx:enrollmentStartDate` and `urpx:enrollmentEndDate` as xsd:date.
+- A urpx:ProgramEnrollment stated inline under `urpx:referencesValue`, in a `urpx:hasPossibleValues` list, or under `urpx:CustomerProfile`'s `urpx:hasProgramEnrollment` coerces and validates as one. `urpx:hasProgramEnrollment` is a containment property.
+
+### Changed
+
+- `urpx.load/documents` and `urpx.load/scan` return each urpx:ProgramEnrollment as a document, and `scan` no longer lists it under `:urpx.load/uncoercible`. `urpx.validate` checks it instead of reporting it unmodeled.
+
 ## [0.43.0] — 2026-10-06
 
 ### Added

@@ -469,6 +469,7 @@
 (def tariff-book-reference     (make-builder schema/TariffBookReference))
 (def data-source-reference     (make-builder schema/DataSourceReference))
 (def rate-case                 (make-builder schema/RateCase))
+(def program-enrollment        (make-builder schema/ProgramEnrollment))
 
 ;; Alternatives (declarative customer-or-configuration choices)
 (def alternative-dimension     (make-builder schema/AlternativeDimension))

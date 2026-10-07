@@ -758,7 +758,7 @@ That list is not hypothetical. A consumer composing these by hand from an earlie
 
 ### What gets discarded, and how to notice
 
-`coerce-doc` returns `nil` for an entity type this library does not model, so `document-xf` drops it **silently**, for example `urpx:ProgramEnrollment`.
+`coerce-doc` returns `nil` for an entity type this library does not model, so `document-xf` drops it **silently**, for example `urpx:PriorRatePlan`.
 
 Nothing guarantees a discarded type is never a version. `scan` does the same work in one pass and reports the discards, so a caller can assert what it could not before:
 
@@ -771,7 +771,7 @@ Nothing guarantees a discarded type is never a version. `scan` does the same wor
 
 `scan` also reports `:urpx.load/unresolved-references`: each package payload reference whose entity no source states, as `{:jsonld/id id :package-id p :property k}`.
 
-"This library does not model it" and "it does not matter" are different statements. `ProgramEnrollment` is modeled nowhere here; whether that matters is yours to decide, and it cannot be decided while the discard is invisible.
+"This library does not model it" and "it does not matter" are different statements. Whether a discard matters is yours to decide, and it cannot be decided while the discard is invisible.
 
 ### Example walkers
 
@@ -1038,7 +1038,7 @@ clj-kondo --lint "$(clojure -Spath)" --copy-configs --skip-lint
 | `urpx.price`         | `resolve-prices`, `resolve-modifier-prices`, `resolve-prices-with-modifiers`, `marginal-unit-rate`, `measurement-kinds`, `has-energy-ledger?`; `version-effective-at`, `version-expired-by?` and `version-covers?` are the single readers of a version window |
 | `urpx.schedule`      | `price-segments` (exact boundaries, derived); `price-schedule`, `price-schedule-days`, `price-schedule-with-modifiers`, `price-schedule-days-with-modifiers` (stepped) |
 | `urpx.tz-inference`  | `infer-zone` (opt-in fallback when `urpx:timezoneIdentifier` is absent) |
-| `urpx.emit`          | Write-side: `write-rate-plan`, `write-rate-plan-modifier`, `write-urpx-document`, `write-urpx-package`, `write-scenario-cost-model` |
+| `urpx.emit`          | Write-side: `write-rate-plan`, `write-rate-plan-modifier`, `write-urpx-document`, `write-urpx-package`, `write-scenario-cost-model`, `write-program-enrollment` |
 | `urpx.validate`      | Single-file CLI checker (`clojure -M:validate <file.jsonld>`), tri-state exit |
 | `urpx.dsl`           | Authoring DSL: `dsl-scope`, `make-builder`, named builders for every entity type |
 | `urpx.defs`          | Typed definitions: `defurpx`, `kind-schema`, `defs-of-kind` |
@@ -1089,7 +1089,7 @@ Known gaps:
 - `urpx:referencesServiceBracket` on `Price`, `PriceDefinition`, `PriceSet` and `PriceSetAlternative` is modeled and round-trips, but is read by no resolver: a Price naming one bracket directly while tier selection picks a different one will disagree, with nothing in the result to say so
 - A container-level `urpx:referencesMetricInput` does not narrow a tier-number clash: two `urpx:ServiceTiers` declaring one `urpx:serviceTierNumber` with different bounds refuse even when each is scoped to a different metric
 - Programmatic interpretation of `urpx:ConditionExpression` for active-tier selection in matrix-style modifiers: the caller picks the active value by `price-id` after walking the condition tree itself
-- A handful of SHACL classes that appear as references but aren't deeply modeled — `urpx:ProgramEnrollment`, `urpx:ServicePointProfile`, plus the non-RatePlan URPXDocument subclasses (`urpx:TariffStatementDocument`, `urpx:DERExportsDocument`, `urpx:HighlyDynamicPricesDocument`, `urpx:SupplyChargesDocument`). They round-trip correctly as opaque maps via `:map`-typed payload pointers; deeper modeling (named builders, validation) lands as consumers need it.
+- A handful of SHACL classes that appear as references but aren't deeply modeled — `urpx:ServicePointProfile`, plus the non-RatePlan URPXDocument subclasses (`urpx:TariffStatementDocument`, `urpx:DERExportsDocument`, `urpx:HighlyDynamicPricesDocument`, `urpx:SupplyChargesDocument`). They round-trip correctly as opaque maps via `:map`-typed payload pointers; deeper modeling (named builders, validation) lands as consumers need it.
 
 ## Checking for drift against the standard
 
