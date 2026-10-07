@@ -306,6 +306,17 @@
     (is (nil? (coerce/explain schema/URPXDocument
                               (coerce/coerce-doc valid-urpx-document-raw))))))
 
+(deftest g-month-strings-must-be-xsd-g-month-lexical-forms
+  (testing "accepted, the timezone dropped"
+    (doseq [[s n] [["--01" 1] ["--12" 12] ["--06Z" 6] ["--06-08:00" 6] ["--06+14:00" 6]]]
+      (is (= n (coerce/coerce schema/MonthNumber s)) s)))
+  (testing "refused, naming the value"
+    (doseq [s ["--+6" "--6" "--13" "--00" "--1e3" "6" "06" "--06 " "--06+15:00"
+               "--\u0666" "--0\u0666"]]
+      (is (= {:reason :urpx.schema/malformed-g-month :datatype "xsd:gMonth" :value s}
+             (refusal schema/MonthNumber s))
+          (pr-str s)))))
+
 (deftest numeric-value-objects-unwrap
   (testing "a value object of the field's datatype decodes by its @value"
     (is (= 0.1M (coerce/coerce schema/Decimal {:jsonld/value "0.1" :jsonld/type "xsd:decimal"})))

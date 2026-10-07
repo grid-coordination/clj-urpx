@@ -150,9 +150,7 @@
     :else v))
 
 (defn- <-g-month
-  "Month-of-year int → xsd:gMonth string '--MM' (zero-padded). The decoder
-   parses both '--06' and bare numerics; the encoder emits the canonical
-   '--06' form regardless."
+  "Month-of-year int → xsd:gMonth string '--MM' (zero-padded)."
   [v]
   (if (int? v) (format "--%02d" v) v))
 (defn- literal-value
@@ -358,14 +356,25 @@
     (.contains ^String v "T") (Duration/parse v)
     :else (Period/parse v)))
 
+(def ^:private xsd-g-month-lexical
+  "The xsd:gMonth lexical space, XSD 1.1 Part 2 section 3.3.14, capturing the
+   month."
+  #"--(0[1-9]|1[0-2])(?:Z|[+-](?:(?:0[0-9]|1[0-3]):[0-5][0-9]|14:00))?")
+
 (defn- ->g-month
-  "xsd:gMonth strings look like '--06'. Strip the leading '--' and parse to int."
+  "An xsd:gMonth string, '--06' with an optional timezone, as its month
+   number; the timezone is dropped. Any other string throws ex-info with
+   reason `:urpx.schema/malformed-g-month` and the value."
   [v]
-  (cond
-    (int? v) v
-    (and (string? v) (.startsWith ^String v "--")) (Long/parseLong (subs v 2))
-    (string? v) (Long/parseLong v)
-    :else v))
+  (if (string? v)
+    (if-let [[_ mm] (re-matches xsd-g-month-lexical v)]
+      (Long/parseLong mm)
+      (throw (ex-info (str "Malformed xsd:gMonth " (pr-str v)
+                           ": not --MM with an optional timezone")
+                      {:reason :urpx.schema/malformed-g-month
+                       :datatype "xsd:gMonth"
+                       :value v})))
+    v))
 
 (defn- ->long
   "An xsd:integer string as a long. A string outside the xsd:integer lexical
