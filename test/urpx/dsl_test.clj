@@ -229,6 +229,23 @@
       (is (= [{:in [:urpx/hasPrice 0 :urpx/unitPrice] :value 0.5}]
              (:fields (ex-data e)))))))
 
+(deftest decimal-fields-refuse-inexact-numbers-in-value-objects
+  (doseq [t ["xsd:decimal" "http://www.w3.org/2001/XMLSchema#decimal"]
+          v [0.1610 3.0 (float 0.5) 1/3]]
+    (is (= {:type "urpx:Price"
+            :reason :urpx.dsl/inexact-decimal
+            :fields [{:in [:urpx/unitPrice] :value v}]}
+           (ex-data (inexact-refusal {:jsonld/value v :jsonld/type t})))
+        (pr-str t v)))
+  (testing "exact numbers in a value object decode"
+    (is (= 0.25M (unit-price {:jsonld/value 1/4 :jsonld/type "xsd:decimal"})))
+    (is (= 0.10M (unit-price {:jsonld/value "0.10" :jsonld/type "xsd:decimal"}))))
+  (testing "a value object of another datatype stays as written and fails validation"
+    (let [v {:jsonld/value 0.5 :jsonld/type "xsd:double"}
+          data (ex-data (inexact-refusal v))]
+      (is (= v (get-in data [:input :urpx/unitPrice])))
+      (is (contains? data :explanation)))))
+
 (deftest decimal-fields-refuse-an-exponent-string
   (is (= :urpx.schema/malformed-decimal
          (:reason (ex-data (inexact-refusal "1E3"))))))

@@ -75,13 +75,17 @@
 (defn- exact-decimal
   "`v` unchanged, or wrapped in an InexactDecimal when it is a number that
    cannot be an xsd:decimal exactly: a double or float, whose written scale
-   is already lost, or a ratio with no terminating decimal expansion."
+   is already lost, or a ratio with no terminating decimal expansion. A
+   JSON-LD value object typed xsd:decimal has its @value treated so."
   [v]
   (cond
-    (or (double? v) (float? v)) (InexactDecimal. v)
-    (ratio? v)                  (try (bigdec v)
-                                     (catch ArithmeticException _ (InexactDecimal. v)))
-    :else                       v))
+    (or (double? v) (float? v))  (InexactDecimal. v)
+    (ratio? v)                   (try (bigdec v)
+                                      (catch ArithmeticException _ (InexactDecimal. v)))
+    (not= v (@#'schema/typed-literal-value v "xsd:decimal"))
+    (update v :jsonld/value exact-decimal)
+
+    :else                        v))
 
 (def ^:private authoring-transformer
   "`coerce/jsonld-transformer`, preceded by `exact-decimal` on every
