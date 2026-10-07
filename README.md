@@ -588,7 +588,7 @@ Computing the set at runtime starts with walking the corpus, which is the caller
 
 `:repeated-ids` and `:package-zones` decide what is read, so `prepare` takes them and they are fixed there. A call may restate either with the prepared value; another value refuses `:urpx.scenario-cost-model/prepared-option-conflict`. Every other option, `:at`, `:combine`, `:compatibility` and `:context` among them, belongs to the call.
 
-The prepared value is the caller's to keep, and so is the policy for keeping it. A caller that rereads its corpus can cache `prepare` around a cheap identity of the corpus, such as a commit SHA, a tag or the files' modification times, rather than around the document collection itself:
+The prepared value is the caller's to keep, and so is the policy for keeping it. A caller that rereads its corpus can cache `prepare` keyed on a cheap identity of the corpus, such as a commit SHA, a tag or the files' modification times. The example takes `org.clojure/core.memoize` as the caller's own dependency:
 
 ```clojure
 (require '[clojure.core.memoize :as memo])
@@ -598,8 +598,6 @@ The prepared value is the caller's to keep, and so is the policy for keeping it.
               (scm/prepare (load/documents (corpus-files commit-sha))))
             :lru/threshold 4))
 ```
-
-clj-urpx itself depends on no caching library.
 
 ### A model has no verdict of its own
 

@@ -114,3 +114,29 @@
     (is (some (comp seq second) (scm/enumerate-pairs prepared)))
     (is (= (scm/enumerate-pairs docs none) (scm/enumerate-pairs prepared none)))
     (is (every? (comp empty? second) (scm/enumerate-pairs prepared none)))))
+
+(defn- modifier-doc
+  ([id vid] (modifier-doc id vid nil))
+  ([id vid extra]
+   {:jsonld/id id :jsonld/type "urpx:RatePlanModifier" :urpx/timezoneIdentifier "America/Los_Angeles"
+    :urpx/hasRatePlanModifierVersion
+    (merge {:jsonld/id vid :jsonld/type "urpx:RatePlanModifierVersion"
+            :urpx/forRatePlanModifier {:jsonld/id id}
+            :urpx/applicableToRatePlan [{:jsonld/id "x:p"}]
+            :urpx/effectiveDateTime (LocalDateTime/of 2026 1 1 0 0)}
+           extra)}))
+
+(deftest unprepared-discovery-reads-only-its-own-kind
+  (let [plan       (plan-doc "x:p" "x:p-v")
+        modifier   (modifier-doc "x:m" "x:m-v")
+        bv         (:urpx/hasRatePlanVersion plan)
+        mod-twice  [plan modifier (modifier-doc "x:m" "x:m-v" {:urpx/version "differs"})]
+        plan-twice (conj conflicting modifier)]
+    (testing "plan-versions reads past conflicting modifier version @ids"
+      (is (= ["x:p-v"] (mapv :jsonld/id (scm/plan-versions mod-twice))))
+      (is (= :urpx.scenario-cost-model/conflicting-version-id
+             (:reason (refusal #(scm/prepare mod-twice))))))
+    (testing "applicable-modifiers reads past conflicting plan version @ids"
+      (is (= ["x:m-v"] (mapv :jsonld/id (scm/applicable-modifiers plan-twice bv))))
+      (is (= :urpx.scenario-cost-model/conflicting-version-id
+             (:reason (refusal #(scm/prepare plan-twice))))))))
