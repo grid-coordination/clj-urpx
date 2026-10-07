@@ -13,7 +13,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 ### Changed
 
-- **Breaking: an xsd:decimal field refuses a number with a non-zero fractional part, or of magnitude 1E21 or more,** with `:urpx.schema/double-not-decimal`, carrying the value; the message says to write the value as a string. The JSON-LD 1.1 API's object to RDF conversion reads such a JSON number as an xsd:double, so SHACL rejects it, and the JSON reader had already dropped its written scale (`0.1610` decoded as `0.161M`). This applies to a parsed document, bare or as a value object's `@value`, to a Clojure number given to `urpx.coerce/coerce`, and to `urpx.coerce/encode` and the `urpx.emit` writers, which now write a ratio as a string rather than a JSON number. An integral number, `3.0` included, decodes as before, with scale 0.
+- **Breaking: an xsd:decimal field refuses a number with a non-zero fractional part, or of magnitude 1E21 or more,** with `:urpx.schema/double-not-decimal`, carrying the value; the message says to write the value as a string. The JSON-LD 1.1 API's object to RDF conversion reads such a JSON number as an xsd:double, so SHACL rejects it, and the JSON reader had already dropped its written scale (`0.1610` decoded as `0.161M`). This applies to a parsed document, bare or as a value object's `@value`, to a Clojure number given to `urpx.coerce/coerce`, and to `urpx.coerce/encode` and the `urpx.emit` writers, which now write a ratio as a string rather than a JSON number. An integral number, `3.0` included, decodes as before, with scale 0. A `urpx.dsl` builder accepts an exact integer of magnitude 1E21 or more, and the `urpx.emit` writers write it as a string.
 
 ### Fixed
 

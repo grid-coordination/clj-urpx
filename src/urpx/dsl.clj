@@ -75,10 +75,13 @@
 (defn- exact-decimal
   "`v` unchanged, or wrapped in an InexactDecimal when it is a number that
    cannot be an xsd:decimal exactly: a double or float, whose written scale
-   is already lost, or a ratio with no terminating decimal expansion. A
-   JSON-LD value object typed xsd:decimal has its @value treated so."
+   is already lost, or a ratio with no terminating decimal expansion. An
+   integer becomes a BigDecimal, so one of magnitude 1E21 or more, which
+   `urpx.coerce/coerce` refuses, is accepted. A JSON-LD value object typed
+   xsd:decimal has its @value treated so."
   [v]
   (cond
+    (integer? v)                 (bigdec v)
     (or (double? v) (float? v))  (InexactDecimal. v)
     (ratio? v)                   (try (bigdec v)
                                       (catch ArithmeticException _ (InexactDecimal. v)))

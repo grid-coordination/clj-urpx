@@ -246,6 +246,21 @@
       (is (= v (get-in data [:input :urpx/unitPrice])))
       (is (contains? data :explanation)))))
 
+(deftest decimal-fields-take-integers-of-1e21-or-more
+  (doseq [[v bd] [[1000000000000000000000N 1000000000000000000000M]
+                  [(biginteger "-12345678901234567890123") -12345678901234567890123M]
+                  [{:jsonld/value 1000000000000000000000N :jsonld/type "xsd:decimal"}
+                   1000000000000000000000M]]]
+    (let [d (unit-price v)]
+      (is (= [bd 0] [d (.scale ^BigDecimal d)]) (pr-str v))))
+  (testing "emitted as a string, which reads back"
+    (let [p (dsl/price :unit-price 1000000000000000000000N
+                       :references-price-definition {:jsonld/id "x:pd"})
+          out (json/write-str (core/keys->jsonld (coerce/encode schema/Price p)))]
+      (is (= "1000000000000000000000" (get (json/read-str out) "urpx:unitPrice")))
+      (is (= p (coerce/coerce schema/Price
+                              (core/parse-rate-plan (java.io.StringReader. out))))))))
+
 (deftest decimal-fields-refuse-an-exponent-string
   (is (= :urpx.schema/malformed-decimal
          (:reason (ex-data (inexact-refusal "1E3"))))))
