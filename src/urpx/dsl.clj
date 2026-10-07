@@ -41,7 +41,7 @@
       `:urpx/*` keys (`:urpx/seasonName`) or auto-derived kebab-case short
       forms (`:season-name`); both can be mixed in one call.
     - Auto-coerces raw inputs through the schema's `:decode/urpx-jsonld`
-      decoders: BigDecimal, integer, exact ratio or numeric string →
+      decoders: BigDecimal, integer, exact ratio or xsd:decimal string →
       `BigDecimal` (a double, a float or an inexact ratio refuses, since
       it has already lost the written scale), ISO string → `LocalDate` /
       `LocalDateTime` / `LocalTime` (zoned forms when a dateTime or time
@@ -105,7 +105,7 @@
                   (str/join ", " (map (fn [{:keys [in value]}]
                                         (str (pr-str in) " (" (pr-str value) ")"))
                                       fields))
-                  "; pass a BigDecimal (0.15M), an integer or a numeric string")
+                  "; pass a BigDecimal (0.15M), an integer or an xsd:decimal string")
              {:type t
               :reason ::inexact-decimal
               :fields (vec fields)})))

@@ -39,6 +39,15 @@
   "The xsd:integer lexical space, XSD 1.1 Part 2."
   #"[+-]?[0-9]+")
 
+(defn- malformed-decimal
+  "The ex-info refusing `v` as an xsd:decimal."
+  [v]
+  (ex-info (str "Malformed xsd:decimal " (pr-str v)
+                ": not an optional sign and digits with an optional fraction")
+           {:reason :urpx.schema/malformed-decimal
+            :datatype "xsd:decimal"
+            :value v}))
+
 (defn- ->decimal
   "Coerce raw input forms to BigDecimal:
    - BigDecimal: pass-through
@@ -47,8 +56,9 @@
      `(bigdec 0.1)` → `0.1M`, NOT the binary-float garbage that `(BigDecimal. 0.1)`
      produces)
    - string in the xsd:decimal lexical space: parse it
-   - any other string (an exponent, NaN, INF, whitespace): throw ex-info with
-     reason `:urpx.schema/malformed-decimal` and the value
+   - any other string (an exponent, NaN, INF, whitespace), or a NaN or
+     infinite double or float: throw ex-info with reason
+     `:urpx.schema/malformed-decimal` and the value
    - anything else: pass-through (let validation surface the type mismatch)
 
    `urpx.dsl` builders refuse doubles before this runs, since a double has
@@ -56,15 +66,13 @@
   [v]
   (cond
     (instance? BigDecimal v) v
-    (number? v)              (bigdec v)
+    (number? v)              (if (and (or (double? v) (float? v))
+                                      (not (Double/isFinite (double v))))
+                               (throw (malformed-decimal v))
+                               (bigdec v))
     (string? v)              (if (re-matches xsd-decimal-lexical v)
                                (BigDecimal. ^String v)
-                               (throw (ex-info (str "Malformed xsd:decimal " (pr-str v)
-                                                    ": not an optional sign and digits with an"
-                                                    " optional fraction")
-                                               {:reason :urpx.schema/malformed-decimal
-                                                :datatype "xsd:decimal"
-                                                :value v})))
+                               (throw (malformed-decimal v)))
     :else                    v))
 
 ;; ---------------------------------------------------------------------------

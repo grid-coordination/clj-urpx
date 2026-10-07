@@ -13,7 +13,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 ### Fixed
 
-- Decoding refuses a string outside the xsd:decimal lexical space (an exponent such as `"-9e-05"`, `NaN`, `INF`, whitespace) with `:urpx.schema/malformed-decimal`, and one outside the xsd:integer lexical space with `:urpx.schema/malformed-integer` (`:urpx.schema/integer-out-of-range` beyond a long); each carries the value.
+- Decoding refuses a string outside the xsd:decimal lexical space (an exponent such as `"-9e-05"`, `NaN`, `INF`, whitespace), or a NaN or infinite double, with `:urpx.schema/malformed-decimal`, and a string outside the xsd:integer lexical space with `:urpx.schema/malformed-integer` (`:urpx.schema/integer-out-of-range` beyond a long); each carries the value.
 
 ## [0.45.0] — 2026-10-07
 

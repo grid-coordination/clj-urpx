@@ -53,7 +53,8 @@
 (deftest decimal-strings-must-be-xsd-decimal-lexical-forms
   (testing "accepted"
     (doseq [[s bd] [["1" 1M] ["-1.50" -1.50M] ["+1.0" 1.0M] [".5" 0.5M] ["5." 5M]
-                    ["-0.00009" -0.00009M]]]
+                    ["-0.00009" -0.00009M] ["+0" 0M] ["-0.0" 0.0M] ["007.10" 7.10M]
+                    ["-.5" -0.5M]]]
       (is (= bd (coerce/coerce schema/Decimal s)) s)))
   (testing "refused, naming the value"
     (doseq [s ["-9e-05" "1E3" "NaN" "INF" "-INF" " 1" "1 " "" "." "+" "1,5" "0x10" "\u0661"]]
@@ -66,6 +67,18 @@
                              (core/parse-rate-plan
                               (java.io.StringReader.
                                "{\"@type\": \"urpx:Price\", \"urpx:unitPrice\": \"-9e-05\"}"))))))))
+
+(deftest decimal-refuses-non-finite-doubles
+  (doseq [v [##NaN ##Inf ##-Inf (float ##NaN)]]
+    (let [{:keys [reason datatype value]} (refusal schema/Decimal v)]
+      (is (= [:urpx.schema/malformed-decimal "xsd:decimal"] [reason datatype]) (pr-str v))
+      (is (identical? v value) (pr-str v)))))
+
+(deftest decimal-encodes-without-an-exponent
+  (doseq [bd [1E-7M 1E+3M -1.5E-20M]]
+    (let [s (coerce/encode schema/Decimal bd)]
+      (is (re-matches #"-?[0-9]+(\.[0-9]+)?" s) (pr-str bd))
+      (is (zero? (compare bd (coerce/coerce schema/Decimal s))) (pr-str bd)))))
 
 (deftest decimal-json-numbers-decode-as-clojure-numbers
   (testing "a JSON number reaches the decoder as the long or double the JSON
