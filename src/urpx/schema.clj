@@ -70,6 +70,8 @@
    - any other string (an exponent, NaN, INF, whitespace), or a NaN or
      infinite double or float: throw ex-info with reason
      `:urpx.schema/malformed-decimal` and the value
+   - a ratio with no terminating decimal expansion, such as 1/3: throw
+     ex-info with reason `:urpx.schema/non-terminating-ratio` and the value
    - a JSON-LD value object typed xsd:decimal: its @value, as above
    - anything else: pass-through (let validation surface the type mismatch)
 
@@ -79,6 +81,15 @@
   (let [v (typed-literal-value v "xsd:decimal")]
     (cond
       (instance? BigDecimal v) v
+      (ratio? v)               (try
+                                 (bigdec v)
+                                 (catch ArithmeticException e
+                                   (throw (ex-info (str "Ratio " v " is not an xsd:decimal: it has"
+                                                        " no terminating decimal expansion")
+                                                   {:reason :urpx.schema/non-terminating-ratio
+                                                    :datatype "xsd:decimal"
+                                                    :value v}
+                                                   e))))
       (number? v)              (if (and (or (double? v) (float? v))
                                         (not (Double/isFinite (double v))))
                                  (throw (malformed-decimal v))

@@ -74,6 +74,13 @@
       (is (= [:urpx.schema/malformed-decimal "xsd:decimal"] [reason datatype]) (pr-str v))
       (is (identical? v value) (pr-str v)))))
 
+(deftest decimal-refuses-a-non-terminating-ratio
+  (is (= 0.25M (coerce/coerce schema/Decimal 1/4)))
+  (doseq [r [1/3 -2/7]]
+    (is (= {:reason :urpx.schema/non-terminating-ratio :datatype "xsd:decimal" :value r}
+           (refusal schema/Decimal r))
+        (pr-str r))))
+
 (deftest decimal-encodes-without-an-exponent
   (doseq [bd [1E-7M 1E+3M -1.5E-20M]]
     (let [s (coerce/encode schema/Decimal bd)]
