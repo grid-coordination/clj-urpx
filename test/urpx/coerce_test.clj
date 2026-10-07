@@ -306,6 +306,34 @@
     (is (nil? (coerce/explain schema/URPXDocument
                               (coerce/coerce-doc valid-urpx-document-raw))))))
 
+(deftest numeric-value-objects-unwrap
+  (testing "a value object of the field's datatype decodes by its @value"
+    (is (= 0.1M (coerce/coerce schema/Decimal {:jsonld/value "0.1" :jsonld/type "xsd:decimal"})))
+    (is (= 2 (.scale ^BigDecimal (coerce/coerce schema/Decimal
+                                                {:jsonld/value "0.10"
+                                                 :jsonld/type "http://www.w3.org/2001/XMLSchema#decimal"}))))
+    (is (= 3 (coerce/coerce schema/Int {:jsonld/value "3" :jsonld/type "xsd:integer"})))
+    (is (= 3 (coerce/coerce schema/Int {:jsonld/value 3 :jsonld/type "xsd:integer"}))))
+  (testing "the @value is held to the datatype's lexical space"
+    (is (= :urpx.schema/malformed-decimal
+           (:reason (refusal schema/Decimal {:jsonld/value "1E3" :jsonld/type "xsd:decimal"}))))
+    (is (= :urpx.schema/malformed-integer
+           (:reason (refusal schema/Int {:jsonld/value "3.0" :jsonld/type "xsd:integer"})))))
+  (testing "a value object of another datatype, or none, stays as written and
+            fails validation"
+    (doseq [[s v] [[schema/Decimal {:jsonld/value "0.1" :jsonld/type "xsd:double"}]
+                   [schema/Decimal {:jsonld/value "0.1"}]
+                   [schema/Int {:jsonld/value "3" :jsonld/type "xsd:decimal"}]]]
+      (is (= v (coerce/coerce s v)) (pr-str v))
+      (is (not (coerce/validate s v)) (pr-str v))))
+  (testing "in a parsed document"
+    (let [doc (core/parse-rate-plan
+               (java.io.StringReader.
+                (str "{\"@type\": \"urpx:Price\", \"urpx:unitPrice\":"
+                     " {\"@value\": \"0.1610\", \"@type\": \"xsd:decimal\"}}")))
+          bd (:urpx/unitPrice (coerce/coerce schema/Price doc))]
+      (is (= [0.1610M 4] [bd (.scale ^BigDecimal bd)])))))
+
 ;; ---------------------------------------------------------------------------
 ;; Encoder spike — verify malli's transformer system handles
 ;; bidirectional encode + decode on a single schema without duplication

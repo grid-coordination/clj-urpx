@@ -39,6 +39,17 @@
   "The xsd:integer lexical space, XSD 1.1 Part 2."
   #"[+-]?[0-9]+")
 
+(defn- typed-literal-value
+  "The @value of `v` when `v` is a JSON-LD value object whose @type is
+   `datatype`, as a CURIE or the full IRI, else `v`."
+  [v datatype]
+  (if (and (map? v)
+           (contains? v :jsonld/value)
+           (contains? #{datatype (str "http://www.w3.org/2001/XMLSchema#" (subs datatype 4))}
+                      (:jsonld/type v)))
+    (:jsonld/value v)
+    v))
+
 (defn- malformed-decimal
   "The ex-info refusing `v` as an xsd:decimal."
   [v]
@@ -59,21 +70,23 @@
    - any other string (an exponent, NaN, INF, whitespace), or a NaN or
      infinite double or float: throw ex-info with reason
      `:urpx.schema/malformed-decimal` and the value
+   - a JSON-LD value object typed xsd:decimal: its @value, as above
    - anything else: pass-through (let validation surface the type mismatch)
 
    `urpx.dsl` builders refuse doubles before this runs, since a double has
    already lost the written scale."
   [v]
-  (cond
-    (instance? BigDecimal v) v
-    (number? v)              (if (and (or (double? v) (float? v))
-                                      (not (Double/isFinite (double v))))
-                               (throw (malformed-decimal v))
-                               (bigdec v))
-    (string? v)              (if (re-matches xsd-decimal-lexical v)
-                               (BigDecimal. ^String v)
-                               (throw (malformed-decimal v)))
-    :else                    v))
+  (let [v (typed-literal-value v "xsd:decimal")]
+    (cond
+      (instance? BigDecimal v) v
+      (number? v)              (if (and (or (double? v) (float? v))
+                                        (not (Double/isFinite (double v))))
+                                 (throw (malformed-decimal v))
+                                 (bigdec v))
+      (string? v)              (if (re-matches xsd-decimal-lexical v)
+                                 (BigDecimal. ^String v)
+                                 (throw (malformed-decimal v)))
+      :else                    v)))
 
 ;; ---------------------------------------------------------------------------
 ;; Encoder helpers (consumed by `:encode/urpx-jsonld` properties below)
@@ -358,24 +371,25 @@
   "An xsd:integer string as a long. A string outside the xsd:integer lexical
    space throws ex-info with reason `:urpx.schema/malformed-integer`, one
    outside the range of a long `:urpx.schema/integer-out-of-range`; both carry
-   the value."
+   the value. A JSON-LD value object typed xsd:integer is read by its @value."
   [v]
-  (if (string? v)
-    (if (re-matches xsd-integer-lexical v)
-      (try
-        (Long/parseLong v)
-        (catch NumberFormatException e
-          (throw (ex-info (str "xsd:integer " (pr-str v) " is outside the range of a long")
-                          {:reason :urpx.schema/integer-out-of-range
-                           :datatype "xsd:integer"
-                           :value v}
-                          e))))
-      (throw (ex-info (str "Malformed xsd:integer " (pr-str v)
-                           ": not an optional sign and digits")
-                      {:reason :urpx.schema/malformed-integer
-                       :datatype "xsd:integer"
-                       :value v})))
-    v))
+  (let [v (typed-literal-value v "xsd:integer")]
+    (if (string? v)
+      (if (re-matches xsd-integer-lexical v)
+        (try
+          (Long/parseLong v)
+          (catch NumberFormatException e
+            (throw (ex-info (str "xsd:integer " (pr-str v) " is outside the range of a long")
+                            {:reason :urpx.schema/integer-out-of-range
+                             :datatype "xsd:integer"
+                             :value v}
+                            e))))
+        (throw (ex-info (str "Malformed xsd:integer " (pr-str v)
+                             ": not an optional sign and digits")
+                        {:reason :urpx.schema/malformed-integer
+                         :datatype "xsd:integer"
+                         :value v})))
+      v)))
 
 (defn- single-or-vec->vec
   "URPX allows a 0..N field to hold one value or a vector of them; normalize to
