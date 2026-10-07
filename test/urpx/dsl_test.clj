@@ -208,7 +208,7 @@
        (catch clojure.lang.ExceptionInfo e e)))
 
 (deftest decimal-fields-refuse-inexact-numbers
-  (doseq [v [0.1610 (float 0.5) 1/3]]
+  (doseq [v [0.1610 3.0 (float 0.5) 1/3]]
     (let [e (inexact-refusal v)]
       (is (= {:type "urpx:Price"
               :reason :urpx.dsl/inexact-decimal
@@ -233,8 +233,12 @@
   (is (= :urpx.schema/malformed-decimal
          (:reason (ex-data (inexact-refusal "1E3"))))))
 
-(deftest read-side-coercion-still-takes-doubles
-  (is (= 0.161M (coerce/coerce schema/Decimal 0.1610))))
+(deftest read-side-coercion-refuses-non-integral-doubles
+  (is (= :urpx.schema/double-not-decimal
+         (:reason (try (coerce/coerce schema/Decimal 0.1610)
+                       nil
+                       (catch clojure.lang.ExceptionInfo e (ex-data e))))))
+  (is (= 3M (coerce/coerce schema/Decimal 3.0))))
 
 (deftest dsl-builders-pass-through-pre-typed-decimals
   (testing "callers who already have a BigDecimal in hand can pass

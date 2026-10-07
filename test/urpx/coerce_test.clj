@@ -34,16 +34,13 @@
     (let [bd (BigDecimal. "1.5")]
       (is (identical? bd (coerce/coerce schema/Decimal bd))))))
 
-(deftest decimal-coerces-clojure-numbers
-  (testing "number literals (long, double, ratio) coerce to BigDecimal
-            so DSL callers can write idiomatic Clojure numbers"
-    (is (= (BigDecimal. "0.15075") (coerce/coerce schema/Decimal 0.15075)))
-    (is (= (BigDecimal. "1")       (coerce/coerce schema/Decimal 1)))
-    (is (= (BigDecimal. "1.5")     (coerce/coerce schema/Decimal 3/2))))
-  (testing "double precision: BigDecimal/valueOf form (via bigdec) preserves
-            the canonical short-form scale rather than the binary-float bits
-            (`(BigDecimal. 0.1)` would produce 0.1000…025 garbage)"
-    (is (= (BigDecimal. "0.1") (coerce/coerce schema/Decimal 0.1)))))
+(deftest decimal-coerces-integral-numbers-and-exact-ratios
+  (testing "an integral number, with scale 0"
+    (doseq [[v bd] [[1 1M] [(biginteger 7) 7M] [3.0 3M] [(float 2.0) 2M] [-0.0 0M]]]
+      (let [d (coerce/coerce schema/Decimal v)]
+        (is (= [bd 0] [d (.scale ^BigDecimal d)]) (pr-str v)))))
+  (testing "a terminating ratio"
+    (is (= 1.5M (coerce/coerce schema/Decimal 3/2)))))
 
 (defn- refusal [schema v]
   (try (coerce/coerce schema v)
@@ -87,12 +84,37 @@
       (is (re-matches #"-?[0-9]+(\.[0-9]+)?" s) (pr-str bd))
       (is (zero? (compare bd (coerce/coerce schema/Decimal s))) (pr-str bd)))))
 
-(deftest decimal-json-numbers-decode-as-clojure-numbers
-  (testing "a JSON number reaches the decoder as the long or double the JSON
-            reader gives it, and decodes as any Clojure number does"
-    (is (= 0.000010M (coerce/coerce schema/Decimal (json/read-str "1e-5"))))
-    (is (= 0.1M (coerce/coerce schema/Decimal (json/read-str "0.10"))))
-    (is (= 3M (coerce/coerce schema/Decimal (json/read-str "3"))))))
+(deftest decimal-refuses-a-number-json-ld-reads-as-xsd-double
+  (testing "a non-integral number, or one of magnitude 1E21 or more"
+    (doseq [v [0.1610 -0.5 (float 0.5) 1e-5 1e21 -1e22 (bigint 1e21)]]
+      (is (= {:reason :urpx.schema/double-not-decimal :datatype "xsd:decimal" :value v}
+             (refusal schema/Decimal v))
+          (pr-str v))))
+  (testing "the message gives the value as a string to write"
+    (is (re-find #"\"0.161\"" (ex-message (try (coerce/coerce schema/Decimal 0.1610)
+                                              (catch clojure.lang.ExceptionInfo e e))))))
+  (testing "as the JSON reader gives it"
+    (doseq [[s ok] [["0.1610" nil] ["1e-5" nil] ["1000000000000000000000" nil]
+                    ["3" 3M] ["3.0" 3M] ["1e20" 100000000000000000000M]]]
+      (if ok
+        (is (= ok (coerce/coerce schema/Decimal (json/read-str s))) s)
+        (is (= :urpx.schema/double-not-decimal
+               (:reason (refusal schema/Decimal (json/read-str s))))
+            s))))
+  (testing "in a parsed document, bare and as a value object"
+    (doseq [v ["0.1610" "{\"@value\": 0.1610, \"@type\": \"xsd:decimal\"}"]]
+      (is (= :urpx.schema/double-not-decimal
+             (:reason (refusal schema/Price
+                               (core/parse-rate-plan
+                                (java.io.StringReader.
+                                 (str "{\"@type\": \"urpx:Price\", \"urpx:unitPrice\": " v "}"))))))
+          v)))
+  (testing "encoding refuses what decoding would"
+    (is (= 3 (coerce/encode schema/Decimal 3)))
+    (is (= :urpx.schema/double-not-decimal
+           (:reason (try (coerce/encode schema/Decimal 0.5)
+                         nil
+                         (catch clojure.lang.ExceptionInfo e (ex-data e))))))))
 
 (deftest integer-strings-must-be-xsd-integer-lexical-forms
   (testing "accepted"

@@ -59,13 +59,44 @@
             :datatype "xsd:decimal"
             :value v}))
 
+(def ^:private double-threshold
+  "The magnitude from which the JSON-LD 1.1 API's object to RDF conversion
+   writes a JSON number as an xsd:double."
+  (BigDecimal. "1E21"))
+
+(defn- double-not-decimal
+  "The ex-info refusing number `v`, which JSON-LD reads as an xsd:double,
+   suggesting the string of `suggested`."
+  [v ^BigDecimal suggested]
+  (ex-info (str "Number " v " at an xsd:decimal is an xsd:double in JSON-LD;"
+                " write the value as a string, such as \"" (.toPlainString suggested) "\"")
+           {:reason :urpx.schema/double-not-decimal
+            :datatype "xsd:decimal"
+            :value v}))
+
+(defn- json-number->decimal
+  "Integer or finite floating-point `v` as a BigDecimal, as the JSON-LD 1.1
+   API's object to RDF conversion reads a JSON number: one with a non-zero
+   fractional part, or of magnitude 1E21 or more, is an xsd:double and throws
+   `double-not-decimal`; any other is an integer."
+  ^BigDecimal [v]
+  (let [floating? (or (double? v) (float? v))
+        exact     (if floating? (BigDecimal. (double v)) (bigdec v))]
+    (if (or (not (zero? (.signum (.remainder exact BigDecimal/ONE))))
+            (>= (.compareTo (.abs exact) ^BigDecimal double-threshold) 0))
+      (throw (double-not-decimal v (if floating?
+                                     (.stripTrailingZeros (BigDecimal/valueOf (double v)))
+                                     exact)))
+      (.setScale exact 0))))
+
 (defn- ->decimal
   "Coerce raw input forms to BigDecimal:
    - BigDecimal: pass-through
-   - number (long, double, ratio, BigInteger): coerce via clojure.core/bigdec,
-     which uses BigDecimal/valueOf for floats (canonical short-form scale —
-     `(bigdec 0.1)` → `0.1M`, NOT the binary-float garbage that `(BigDecimal. 0.1)`
-     produces)
+   - integer, or finite double or float, as the JSON number it would be:
+     an integral value of magnitude below 1E21 decodes with scale 0 (3.0 as
+     3M); any other throws ex-info with reason `:urpx.schema/double-not-decimal`
+     and the value, since JSON-LD reads it as an xsd:double
+   - terminating ratio: its decimal expansion
    - string in the xsd:decimal lexical space: parse it
    - any other string (an exponent, NaN, INF, whitespace), or a NaN or
      infinite double or float: throw ex-info with reason
@@ -75,8 +106,8 @@
    - a JSON-LD value object typed xsd:decimal: its @value, as above
    - anything else: pass-through (let validation surface the type mismatch)
 
-   `urpx.dsl` builders refuse doubles before this runs, since a double has
-   already lost the written scale."
+   `urpx.dsl` builders refuse every double before this runs, since a double
+   has already lost the written scale."
   [v]
   (let [v (typed-literal-value v "xsd:decimal")]
     (cond
@@ -93,7 +124,7 @@
       (number? v)              (if (and (or (double? v) (float? v))
                                         (not (Double/isFinite (double v))))
                                  (throw (malformed-decimal v))
-                                 (bigdec v))
+                                 (json-number->decimal v))
       (string? v)              (if (re-matches xsd-decimal-lexical v)
                                  (BigDecimal. ^String v)
                                  (throw (malformed-decimal v)))
@@ -110,9 +141,14 @@
 (defn- <-decimal
   "BigDecimal → plain-string form, preserving scale so a round-trip yields a
    BigDecimal equal to the original. `.toPlainString` avoids scientific
-   notation that JSON-LD parsers wouldn't expect for xsd:decimal."
+   notation that JSON-LD parsers wouldn't expect for xsd:decimal. Any other
+   number passes through when `->decimal` would read it back, and throws as
+   `->decimal` does when it would not."
   [v]
-  (if (instance? BigDecimal v) (.toPlainString ^BigDecimal v) v))
+  (cond
+    (instance? BigDecimal v) (.toPlainString ^BigDecimal v)
+    (number? v)              (do (->decimal v) v)
+    :else                    v))
 
 ;; xsd:time and xsd:dateTime require seconds. java.time's toString omits them
 ;; when they are zero, so these formatters spell them out, adding a fraction
