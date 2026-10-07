@@ -1046,7 +1046,7 @@ clj-kondo --lint "$(clojure -Spath)" --copy-configs --skip-lint
 
 ## Status
 
-Targets **URPX v0.5.1** (urpx-org/urpx `95eb8e22`) while continuing to accept **v0.2.x** in full.
+Targets the **URPX v0.5.1** release while continuing to accept **v0.2.x** in full.
 
 That dual acceptance is deliberate, not transitional debt: a set of filings migrating utility by utility carries both vocabularies at once for the whole migration, so anything phrased as a hard cut is wrong until the last filing migrates. Where v0.5.1 renamed or moved something, both spellings validate; where it made something required that v0.2.x never had, clj-urpx models it optional and says so at the site.
 

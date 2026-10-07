@@ -186,7 +186,7 @@
    answer; the caller that knows which window it wants passes it explicitly
    instead (`:version` in the resolve-prices opts). Which snapshot applies to a
    given instant is a selection question the vocabulary does not yet settle:
-   urpx:hasTemporalScope carries no sh:path constraints at 95eb8e22."
+   urpx:hasTemporalScope carries no sh:path constraints at v0.5.1."
   [plan nested-key]
   (single (get plan nested-key) "nested version snapshots"))
 

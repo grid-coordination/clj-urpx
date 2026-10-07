@@ -448,7 +448,7 @@
   [& locals]
   [:map [:jsonld/id (into [:enum] (map #(str "urpx:" %)) locals)]])
 
-;; Members transcribed from urpx-shacl sh:in lists at urpx-org/urpx 95eb8e22
+;; Members transcribed from urpx-shacl sh:in lists at urpx-org/urpx v0.5.1
 ;; and counted against them, not re-derived.
 
 (def CompletenessResult
@@ -499,7 +499,7 @@
   "urpx:SourcePublicationTypeValue, the shipped 8 members plus one legacy.
 
    The class was urpx:SourcePublicationType at the epic baseline and is
-   Value-suffixed at 95eb8e22, same 8 members. Do NOT reuse the retired
+   Value-suffixed at v0.5.1, same 8 members. Do NOT reuse the retired
    10-member urpx:PublicationTypeValue, which has zero occurrences at v0.5.1.
 
    urpx:regulatoryFiling, a member of that retired class, is accepted as a
@@ -1468,7 +1468,7 @@
 ;;
 ;; A version snapshot states what it does and does not cover, so a consumer can
 ;; tell a complete resolution from a partial one. Read from urpx-shacl at
-;; urpx-org/urpx 95eb8e22. Enum-valued slots stay bare Refs here; membership
+;; urpx-org/urpx v0.5.1. Enum-valued slots stay bare Refs here; membership
 ;; enforcement is a separate concern.
 ;; ---------------------------------------------------------------------------
 
@@ -1723,8 +1723,8 @@
    [:urpx/changeDescription {:optional true} :string]
    [:urpx/description   {:optional true} :string]
    ;; sh:minCount 0 sh:maxCount 1 on both version shapes, and it was NEVER
-   ;; required upstream: optional at v0.2.1, v0.3.0, v0.4.0, v0.5.0 and at
-   ;; 95eb8e22. clj-urpx required it by its own choice, so a conformant
+   ;; required upstream: optional at v0.2.1, v0.3.0, v0.4.0, v0.5.0 and
+   ;; v0.5.1. clj-urpx required it by its own choice, so a conformant
    ;; snapshot omitting it was rejected.
    [:urpx/effectiveDateTime {:optional true} DateTime]
    [:urpx/effectiveDate     {:optional true} Date]
@@ -1851,8 +1851,8 @@
    [:urpx/changeDescription {:optional true} :string]
    [:urpx/description {:optional true} :string]
    ;; sh:minCount 0 sh:maxCount 1 on both version shapes, and it was NEVER
-   ;; required upstream: optional at v0.2.1, v0.3.0, v0.4.0, v0.5.0 and at
-   ;; 95eb8e22. clj-urpx required it by its own choice, so a conformant
+   ;; required upstream: optional at v0.2.1, v0.3.0, v0.4.0, v0.5.0 and
+   ;; v0.5.1. clj-urpx required it by its own choice, so a conformant
    ;; snapshot omitting it was rejected.
    [:urpx/effectiveDateTime {:optional true} DateTime]
    [:urpx/effectiveDate {:optional true} Date]
@@ -2040,7 +2040,7 @@
    containment pointer (range: RatePlan | RatePlanModifier | RatePlanVersion |
    RatePlanModifierVersion | PricingModel | TariffFiling | SourcePublication),
    while retaining urpx:hasRatePlan and urpx:hasRatePlanModifier. Read from
-   urpx-shacl:URPXPackageShape at urpx-org/urpx 95eb8e22 (v0.5.1-candidate).
+   urpx-shacl:URPXPackageShape at urpx-org/urpx v0.5.1.
 
    As with URPXDocument, only the required field and the payload pointers are
    modeled; other wrapper metadata flows through unvalidated."

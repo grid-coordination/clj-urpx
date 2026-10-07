@@ -231,7 +231,7 @@
       (testing "missing ratePlanUniqueIdentifier rejected"
         (is (not (m/validate s/RatePlan (dissoc plan :urpx/ratePlanUniqueIdentifier)))))
       (testing "v0.5.1: a RatePlan with no nested version is LEGAL. sh:minCount 0
-                on urpx-shacl:RatePlanShape at 95eb8e22; the ontology calls
+                on urpx-shacl:RatePlanShape at v0.5.1; the ontology calls
                 RatePlan the stable identifier with no pricing content, and an
                 un-nested filing states the link as forRatePlan on a sibling
                 snapshot instead. This assertion previously required the nesting."

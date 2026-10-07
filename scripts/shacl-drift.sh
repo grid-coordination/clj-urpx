@@ -33,7 +33,7 @@ if [[ -z "$src_dir" ]]; then
   echo "REFUSED: no urpx checkout; pass a path or set URPX_DIR" >&2
   exit 2
 fi
-rev=${2:-95eb8e22}
+rev=${2:-v0.5.1}
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT

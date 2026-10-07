@@ -67,7 +67,7 @@
   "Return the Organization (a map) that offers or published `plan`.
 
    v0.5.1 moved this key. urpx:publishedBy was sh:minCount 1 on the v0.2.x
-   version shapes; at 95eb8e22 it is absent from them entirely, those shapes
+   version shapes; at v0.5.1 it is absent from them entirely, those shapes
    are sh:closed, and the ontology restricts urpx:publishedBy to PricingModel,
    SourcePublication, TariffFiling and URPXPackage. The successor on a version
    snapshot is urpx:offeredBy, sh:minCount 0 sh:maxCount 1.

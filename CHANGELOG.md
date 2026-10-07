@@ -9,6 +9,12 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Changed
+
+- `scripts/shacl-drift.sh` compares against the urpx-org/urpx `v0.5.1` release tag by default. The shapes at that tag carry the same constraints as the previous pin, and the release's ontology widens the domains of `urpx:description` to include urpx:Evaluation and of `urpx:effectiveDate` to include urpx:RatePlanVersion, both of which `urpx.schema` already models.
+
 ## [0.44.0] — 2026-10-06
 
 ### Added

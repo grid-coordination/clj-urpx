@@ -13,7 +13,7 @@ They could be. A generator was built and it worked. This note records why it is 
 
 SHACL is a large language. URPX uses a small, regular corner of it.
 
-In the v0.5.1 shapes (`urpx-org/urpx` `95eb8e22`), every `sh:path` is a plain predicate IRI, never a blank node holding a path expression. `sh:inversePath`, `sh:alternativePath`, `sh:zeroOrMorePath`, `sh:oneOrMorePath` and `sh:zeroOrOnePath` do not occur, and neither do `sh:sparql`, `sh:qualifiedValueShape`, `sh:not` or `sh:and`. The features that make a general SHACL compiler a research project are simply not used.
+In the v0.5.1 shapes, every `sh:path` is a plain predicate IRI, never a blank node holding a path expression. `sh:inversePath`, `sh:alternativePath`, `sh:zeroOrMorePath`, `sh:oneOrMorePath` and `sh:zeroOrOnePath` do not occur, and neither do `sh:sparql`, `sh:qualifiedValueShape`, `sh:not` or `sh:and`. The features that make a general SHACL compiler a research project are simply not used.
 
 What is used is a short list, each with a clean Malli counterpart:
 
