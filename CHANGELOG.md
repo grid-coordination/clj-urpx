@@ -9,12 +9,12 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
-## [Unreleased]
+## [0.43.0] — 2026-10-06
 
 ### Added
 
 - **`urpx:mondayIfSundayObservance`** (urpx-org/urpx#77): a holiday on Sunday is observed the following Monday, and a holiday on Saturday on its date. `urpx.holidays/derive-predicate` applies it to `urpx:holidayRule` and `urpx:holidayDate` holidays, and `urpx.schema/ObservanceRule` accepts it.
-- **`urpx.scenario-cost-model/prepare`** reads a document set once: its version snapshots under the `:repeated-ids` policy, and its zone index under `:package-zones`. `plan-versions`, `applicable-modifiers`, `enumerate`, `enumerate-pairs` and `from-node` take the prepared value in place of the documents and give the same answers. The two options are fixed at `prepare`; a call stating another value refuses `:urpx.scenario-cost-model/prepared-option-conflict`. `prepared?` recognizes the value. Every existing arity prepares internally.
+- **`urpx.scenario-cost-model/prepare`** reads a document set once: its version snapshots under the `:repeated-ids` policy, and its zone index under `:package-zones`. `plan-versions`, `applicable-modifiers`, `enumerate`, `enumerate-pairs` and `from-node` take the prepared value in place of the documents and give the same answers, except that `prepare` applies `:repeated-ids` to plan and modifier versions together, where `plan-versions` and `applicable-modifiers` given documents each apply it to their own kind. The two options are fixed at `prepare`; a call stating another value refuses `:urpx.scenario-cost-model/prepared-option-conflict`. `prepared?` recognizes the value. Every existing arity prepares internally.
 
 ## [0.42.0] — 2026-10-06
 
@@ -849,6 +849,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.43.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.43.0
 [0.42.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.42.0
 [0.41.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.41.0
 [0.40.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.40.0
