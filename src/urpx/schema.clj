@@ -428,29 +428,55 @@
                        :value v})))
     v))
 
+(defn- integer-out-of-range
+  "The ex-info refusing xsd:integer `v` as outside the range of a long."
+  [v cause]
+  (ex-info (str "xsd:integer " (pr-str v) " is outside the range of a long")
+           {:reason :urpx.schema/integer-out-of-range
+            :datatype "xsd:integer"
+            :value v}
+           cause))
+
+(defn- double->long
+  "Double or float `v` as the long it equals. An integral value of magnitude
+   below 1E21, which the JSON-LD 1.1 API's object to RDF conversion reads as
+   an xsd:integer, decodes; one outside the range of a long throws
+   `integer-out-of-range`. Any other throws ex-info with reason
+   `:urpx.schema/double-not-integer` and the value."
+  [v]
+  (let [d (double v)]
+    (if (and (Double/isFinite d) (== d (Math/rint d)) (< (Math/abs d) 1e21))
+      (try
+        (.longValueExact (BigDecimal. d))
+        (catch ArithmeticException e
+          (throw (integer-out-of-range v e))))
+      (throw (ex-info (str "Number " v " at an xsd:integer is an xsd:double in JSON-LD,"
+                           " not an integer")
+                      {:reason :urpx.schema/double-not-integer
+                       :datatype "xsd:integer"
+                       :value v})))))
+
 (defn- ->long
   "An xsd:integer string as a long. A string outside the xsd:integer lexical
    space throws ex-info with reason `:urpx.schema/malformed-integer`, one
    outside the range of a long `:urpx.schema/integer-out-of-range`; both carry
-   the value. A JSON-LD value object typed xsd:integer is read by its @value."
+   the value. A double or float decodes by `double->long`. A JSON-LD value
+   object typed xsd:integer is read by its @value."
   [v]
   (let [v (typed-literal-value v "xsd:integer")]
-    (if (string? v)
-      (if (re-matches xsd-integer-lexical v)
-        (try
-          (Long/parseLong v)
-          (catch NumberFormatException e
-            (throw (ex-info (str "xsd:integer " (pr-str v) " is outside the range of a long")
-                            {:reason :urpx.schema/integer-out-of-range
-                             :datatype "xsd:integer"
-                             :value v}
-                            e))))
-        (throw (ex-info (str "Malformed xsd:integer " (pr-str v)
-                             ": not an optional sign and digits")
-                        {:reason :urpx.schema/malformed-integer
-                         :datatype "xsd:integer"
-                         :value v})))
-      v)))
+    (cond
+      (string? v)                 (if (re-matches xsd-integer-lexical v)
+                                    (try
+                                      (Long/parseLong v)
+                                      (catch NumberFormatException e
+                                        (throw (integer-out-of-range v e))))
+                                    (throw (ex-info (str "Malformed xsd:integer " (pr-str v)
+                                                         ": not an optional sign and digits")
+                                                    {:reason :urpx.schema/malformed-integer
+                                                     :datatype "xsd:integer"
+                                                     :value v})))
+      (or (double? v) (float? v)) (double->long v)
+      :else                       v)))
 
 (defn- single-or-vec->vec
   "URPX allows a 0..N field to hold one value or a vector of them; normalize to

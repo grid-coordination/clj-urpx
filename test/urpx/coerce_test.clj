@@ -143,6 +143,26 @@
             :value "9223372036854775808"}
            (refusal schema/Int "9223372036854775808")))))
 
+(deftest integer-fields-take-integral-doubles
+  (testing "an integral double or float, bare or as a value object, as a long"
+    (doseq [[v n] [[3.0 3] [-3.0 -3] [-0.0 0] [(float 2.0) 2] [1e18 1000000000000000000]
+                   [{:jsonld/value 3.0 :jsonld/type "xsd:integer"} 3]]]
+      (let [x (coerce/coerce schema/Int v)]
+        (is (= [n Long] [x (class x)]) (pr-str v)))))
+  (testing "as the JSON reader gives it"
+    (is (= 3 (coerce/coerce schema/Int (json/read-str "3.0")))))
+  (testing "an integral double below 1E21 outside the range of a long"
+    (is (= {:reason :urpx.schema/integer-out-of-range :datatype "xsd:integer" :value 1e20}
+           (refusal schema/Int 1e20))))
+  (testing "a fractional, 1E21 or larger, or non-finite double is refused, naming the value"
+    (doseq [v [3.5 (float 0.5) -0.1 1e21 -1e22 ##Inf]]
+      (is (= {:reason :urpx.schema/double-not-integer :datatype "xsd:integer" :value v}
+             (refusal schema/Int v))
+          (pr-str v)))
+    (is (= {:reason :urpx.schema/double-not-integer :datatype "xsd:integer" :value 3.5}
+           (refusal schema/Int {:jsonld/value 3.5 :jsonld/type "xsd:integer"})))
+    (is (Double/isNaN (:value (refusal schema/Int ##NaN))))))
+
 (deftest coerce-pge-e-1
   (let [plan (fixtures/load-rate-plan "pge-e-1-2026-03-01")]
 
