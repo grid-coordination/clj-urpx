@@ -378,6 +378,29 @@
              (refusal schema/MonthNumber s))
           (pr-str s)))))
 
+(deftest g-month-value-objects-unwrap
+  (testing "a value object typed xsd:gMonth decodes by its @value"
+    (doseq [t ["xsd:gMonth" "http://www.w3.org/2001/XMLSchema#gMonth"]]
+      (is (= 6 (coerce/coerce schema/MonthNumber {:jsonld/value "--06" :jsonld/type t})) t)))
+  (testing "the @value is held to the xsd:gMonth lexical space"
+    (doseq [v ["--6" "6" 6]]
+      (is (= {:reason :urpx.schema/malformed-g-month :datatype "xsd:gMonth" :value v}
+             (refusal schema/MonthNumber {:jsonld/value v :jsonld/type "xsd:gMonth"}))
+          (pr-str v))))
+  (testing "a value object of another datatype, of none, or with an @language,
+            stays as written and fails validation"
+    (doseq [v [{:jsonld/value "--06" :jsonld/type "xsd:string"}
+               {:jsonld/value "--06"}
+               {:jsonld/value "--06" :jsonld/type "xsd:gMonth" :jsonld/language "en"}]]
+      (is (= v (coerce/coerce schema/MonthNumber v)) (pr-str v))
+      (is (not (coerce/validate schema/MonthNumber v)) (pr-str v))))
+  (testing "in a parsed document, at a 0..N month field"
+    (let [doc (core/parse-rate-plan
+               (java.io.StringReader.
+                (str "{\"@type\": \"urpx:Season\", \"urpx:seasonName\": \"Summer\","
+                     " \"urpx:month\": {\"@value\": \"--06\", \"@type\": \"xsd:gMonth\"}}")))]
+      (is (= [6] (:urpx/month (coerce/coerce schema/Season doc)))))))
+
 (deftest numeric-value-objects-unwrap
   (testing "a value object of the field's datatype decodes by its @value"
     (is (= 0.1M (coerce/coerce schema/Decimal {:jsonld/value "0.1" :jsonld/type "xsd:decimal"})))

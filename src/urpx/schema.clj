@@ -415,18 +415,20 @@
 
 (defn- ->g-month
   "An xsd:gMonth string, '--06' with an optional timezone, as its month
-   number; the timezone is dropped. Any other string throws ex-info with
-   reason `:urpx.schema/malformed-g-month` and the value."
+   number; the timezone is dropped. Any other string, or a JSON-LD value
+   object typed xsd:gMonth whose @value is not such a string, throws ex-info
+   with reason `:urpx.schema/malformed-g-month` and the value."
   [v]
-  (if (string? v)
-    (if-let [[_ mm] (re-matches xsd-g-month-lexical v)]
-      (Long/parseLong mm)
-      (throw (ex-info (str "Malformed xsd:gMonth " (pr-str v)
-                           ": not --MM with an optional timezone")
-                      {:reason :urpx.schema/malformed-g-month
-                       :datatype "xsd:gMonth"
-                       :value v})))
-    v))
+  (let [lexical (typed-literal-value v "xsd:gMonth")]
+    (if (or (string? lexical) (not= v lexical))
+      (if-let [[_ mm] (and (string? lexical) (re-matches xsd-g-month-lexical lexical))]
+        (Long/parseLong mm)
+        (throw (ex-info (str "Malformed xsd:gMonth " (pr-str lexical)
+                             ": not --MM with an optional timezone")
+                        {:reason :urpx.schema/malformed-g-month
+                         :datatype "xsd:gMonth"
+                         :value lexical})))
+      v)))
 
 (defn- integer-out-of-range
   "The ex-info refusing xsd:integer `v` as outside the range of a long."
