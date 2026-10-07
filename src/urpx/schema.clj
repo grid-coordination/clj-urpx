@@ -31,6 +31,14 @@
 ;; Decoder helpers (consumed by `:decode/urpx-jsonld` properties below)
 ;; ---------------------------------------------------------------------------
 
+(def ^:private xsd-decimal-lexical
+  "The xsd:decimal lexical space, XSD 1.1 Part 2 section 3.3.3."
+  #"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)")
+
+(def ^:private xsd-integer-lexical
+  "The xsd:integer lexical space, XSD 1.1 Part 2."
+  #"[+-]?[0-9]+")
+
 (defn- ->decimal
   "Coerce raw input forms to BigDecimal:
    - BigDecimal: pass-through
@@ -38,7 +46,9 @@
      which uses BigDecimal/valueOf for floats (canonical short-form scale —
      `(bigdec 0.1)` → `0.1M`, NOT the binary-float garbage that `(BigDecimal. 0.1)`
      produces)
-   - string: parse as xsd:decimal
+   - string in the xsd:decimal lexical space: parse it
+   - any other string (an exponent, NaN, INF, whitespace): throw ex-info with
+     reason `:urpx.schema/malformed-decimal` and the value
    - anything else: pass-through (let validation surface the type mismatch)
 
    `urpx.dsl` builders refuse doubles before this runs, since a double has
@@ -47,7 +57,14 @@
   (cond
     (instance? BigDecimal v) v
     (number? v)              (bigdec v)
-    (string? v)              (BigDecimal. ^String v)
+    (string? v)              (if (re-matches xsd-decimal-lexical v)
+                               (BigDecimal. ^String v)
+                               (throw (ex-info (str "Malformed xsd:decimal " (pr-str v)
+                                                    ": not an optional sign and digits with an"
+                                                    " optional fraction")
+                                               {:reason :urpx.schema/malformed-decimal
+                                                :datatype "xsd:decimal"
+                                                :value v})))
     :else                    v))
 
 ;; ---------------------------------------------------------------------------
@@ -329,7 +346,28 @@
     (string? v) (Long/parseLong v)
     :else v))
 
-(defn- ->long [v] (if (string? v) (Long/parseLong v) v))
+(defn- ->long
+  "An xsd:integer string as a long. A string outside the xsd:integer lexical
+   space throws ex-info with reason `:urpx.schema/malformed-integer`, one
+   outside the range of a long `:urpx.schema/integer-out-of-range`; both carry
+   the value."
+  [v]
+  (if (string? v)
+    (if (re-matches xsd-integer-lexical v)
+      (try
+        (Long/parseLong v)
+        (catch NumberFormatException e
+          (throw (ex-info (str "xsd:integer " (pr-str v) " is outside the range of a long")
+                          {:reason :urpx.schema/integer-out-of-range
+                           :datatype "xsd:integer"
+                           :value v}
+                          e))))
+      (throw (ex-info (str "Malformed xsd:integer " (pr-str v)
+                           ": not an optional sign and digits")
+                      {:reason :urpx.schema/malformed-integer
+                       :datatype "xsd:integer"
+                       :value v})))
+    v))
 
 (defn- single-or-vec->vec
   "URPX allows a 0..N field to hold one value or a vector of them; normalize to

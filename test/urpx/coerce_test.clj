@@ -1,5 +1,6 @@
 (ns urpx.coerce-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.data.json :as json]
+            [clojure.test :refer [deftest is testing]]
             [urpx.coerce :as coerce]
             [urpx.core :as core]
             [urpx.schema :as schema]
@@ -43,6 +44,50 @@
             the canonical short-form scale rather than the binary-float bits
             (`(BigDecimal. 0.1)` would produce 0.1000…025 garbage)"
     (is (= (BigDecimal. "0.1") (coerce/coerce schema/Decimal 0.1)))))
+
+(defn- refusal [schema v]
+  (try (coerce/coerce schema v)
+       nil
+       (catch clojure.lang.ExceptionInfo e (ex-data e))))
+
+(deftest decimal-strings-must-be-xsd-decimal-lexical-forms
+  (testing "accepted"
+    (doseq [[s bd] [["1" 1M] ["-1.50" -1.50M] ["+1.0" 1.0M] [".5" 0.5M] ["5." 5M]
+                    ["-0.00009" -0.00009M]]]
+      (is (= bd (coerce/coerce schema/Decimal s)) s)))
+  (testing "refused, naming the value"
+    (doseq [s ["-9e-05" "1E3" "NaN" "INF" "-INF" " 1" "1 " "" "." "+" "1,5" "0x10" "\u0661"]]
+      (is (= {:reason :urpx.schema/malformed-decimal :datatype "xsd:decimal" :value s}
+             (refusal schema/Decimal s))
+          (pr-str s))))
+  (testing "a string in a parsed document is refused"
+    (is (= :urpx.schema/malformed-decimal
+           (:reason (refusal schema/Price
+                             (core/parse-rate-plan
+                              (java.io.StringReader.
+                               "{\"@type\": \"urpx:Price\", \"urpx:unitPrice\": \"-9e-05\"}"))))))))
+
+(deftest decimal-json-numbers-decode-as-clojure-numbers
+  (testing "a JSON number reaches the decoder as the long or double the JSON
+            reader gives it, and decodes as any Clojure number does"
+    (is (= 0.000010M (coerce/coerce schema/Decimal (json/read-str "1e-5"))))
+    (is (= 0.1M (coerce/coerce schema/Decimal (json/read-str "0.10"))))
+    (is (= 3M (coerce/coerce schema/Decimal (json/read-str "3"))))))
+
+(deftest integer-strings-must-be-xsd-integer-lexical-forms
+  (testing "accepted"
+    (doseq [[s n] [["3" 3] ["+3" 3] ["-3" -3] ["007" 7]]]
+      (is (= n (coerce/coerce schema/Int s)) s)))
+  (testing "refused, naming the value"
+    (doseq [s ["3.0" "1e3" " 3" "3 " "" "+" "NaN" "\u0661"]]
+      (is (= {:reason :urpx.schema/malformed-integer :datatype "xsd:integer" :value s}
+             (refusal schema/Int s))
+          (pr-str s))))
+  (testing "a valid xsd:integer outside the range of a long"
+    (is (= {:reason :urpx.schema/integer-out-of-range
+            :datatype "xsd:integer"
+            :value "9223372036854775808"}
+           (refusal schema/Int "9223372036854775808")))))
 
 (deftest coerce-pge-e-1
   (let [plan (fixtures/load-rate-plan "pge-e-1-2026-03-01")]

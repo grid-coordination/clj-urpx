@@ -9,6 +9,12 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Fixed
+
+- Decoding refuses a string outside the xsd:decimal lexical space (an exponent such as `"-9e-05"`, `NaN`, `INF`, whitespace) with `:urpx.schema/malformed-decimal`, and one outside the xsd:integer lexical space with `:urpx.schema/malformed-integer` (`:urpx.schema/integer-out-of-range` beyond a long); each carries the value.
+
 ## [0.45.0] — 2026-10-07
 
 ### Changed

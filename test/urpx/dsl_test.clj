@@ -229,6 +229,10 @@
       (is (= [{:in [:urpx/hasPrice 0 :urpx/unitPrice] :value 0.5}]
              (:fields (ex-data e)))))))
 
+(deftest decimal-fields-refuse-an-exponent-string
+  (is (= :urpx.schema/malformed-decimal
+         (:reason (ex-data (inexact-refusal "1E3"))))))
+
 (deftest read-side-coercion-still-takes-doubles
   (is (= 0.161M (coerce/coerce schema/Decimal 0.1610))))
 
