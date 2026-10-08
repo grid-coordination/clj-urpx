@@ -867,7 +867,13 @@
           "narrow drops Q, although the modifier names Q at plan level and
            names no version of Q: retraction across plans")
       (is (= ["x:m-v"] (ask P narrow))
-          "while P's named version still matches"))))
+          "while P's named version still matches")
+      (is (= #{["x:Q-v" #{}] ["x:Q-v" #{"x:m-v"}]}
+             (scm/enumerate-pairs [Q m]))
+          "enumerate and enumerate-pairs default to add as well")
+      (is (= #{["x:Q-v" #{}]}
+             (scm/enumerate-pairs [Q m] narrow))
+          "and narrow leaves Q base-only"))))
 
 ;; ---------------------------------------------------------------------------
 ;; A version zoned by the nodes it belongs to
