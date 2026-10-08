@@ -113,15 +113,16 @@
           twin (-> (get idx victim)
                    (assoc :jsonld/id "x:undated-twin" :urpx/unitPrice 9.99M)
                    (dissoc :urpx/startDate))
+          ;; in the flat list, where no urpx:PriceSet start is inherited
           doc  (clojure.walk/postwalk
-                (fn [n] (if (and (map? n) (= "urpx:PriceSet" (:jsonld/type n))
-                                 (some #(= victim (:jsonld/id %)) (:urpx/hasPrice n)))
-                          (update n :urpx/hasPrice conj twin)
+                (fn [n] (if (and (map? n) (= "urpx:Prices" (:jsonld/type n)))
+                          (update n :urpx/hasPrice (fnil conj []) twin)
                           n))
                 plan)
           ts (tiers (price/resolve-prices doc (at 2026 7 15)))
           on-pd (filter #(= pd (:urpx.resolved/price-definition-id %)) ts)]
       (is (some? pd))
+      (is (contains? (index/build-index doc) "x:undated-twin"))
       (is (= 1 (count on-pd)) "the PD still contributes one price, not two")
       (is (not= 9.99M (:urpx.resolved/unit-price (first on-pd)))
           "and it is the DATED one that wins"))))

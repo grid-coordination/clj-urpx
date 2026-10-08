@@ -9,6 +9,12 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Fixed
+
+- Of several Prices sharing a cell (PriceDefinition, `urpx:serviceTierNumber`, `urpx:touPeriodNumber`) and a start, the first listed was kept and the rest dropped silently. Now a Price whose every `urpx:basedOnPrice` candidate is absent from the documents passed in is set aside, and a Price with no `urpx:basedOnPrice` always applies. Exactly one must remain; otherwise the cell's tier carries no unit price and a `:urpx.resolved/unvaluable` of reason `:ambiguous-cell` (two or more apply) or `:no-applicable-price` (none does), listing the tied `:price-ids`. A modifier carrying one Price per base plan, such as a credit derived from each base's usage Price, now values the one for the base it is composed with.
+
 ## [0.48.0] — 2026-10-07
 
 ### Changed

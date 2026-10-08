@@ -382,9 +382,67 @@
   (let [n (:urpx/touPeriodNumber price)]
     (or (nil? n) (nil? resolved-period-num) (= n resolved-period-num))))
 
+(defn- applicable-in-composition?
+  "True unless `price` is derived and none of its urpx:basedOnPrice candidates
+   is in `by-id`, the same @id index `price-value` resolves them against."
+  [price by-id]
+  (let [candidates (index/as-vec (:urpx/basedOnPrice price))]
+    (or (empty? candidates)
+        (boolean (some #(contains? by-id (:jsonld/id %)) candidates)))))
+
+(defn- latest-in-cell
+  "The [price start] pair of `pairs`, all in the cell `k`, that applies.
+
+   The latest start wins, and an undated Price sorts behind any dated one.
+   Prices tied at that start are narrowed to those applicable in the
+   composition (`applicable-in-composition?`): a derived Price whose every
+   candidate base is absent belongs to a base plan that was not passed in.
+   Exactly one must remain. Otherwise the result is [price start unvaluable],
+   `price` the first tied, and `unvaluable` names the reason and every tied
+   Price, in the shape `price-value` reports."
+  [k pairs by-id]
+  (let [dated  (filter second pairs)
+        latest (when (seq dated)
+                 (reduce (fn [^ZonedDateTime a ^ZonedDateTime b] (if (.isAfter b a) b a))
+                         (map second dated)))
+        ;; One Price reached twice, listed in two PriceSets, is one Price.
+        tied   (->> (if latest
+                      (filter #(.isEqual ^ZonedDateTime latest (second %)) dated)
+                      pairs)
+                    (reduce (fn [[seen out] [price :as pair]]
+                              (let [id (:jsonld/id price)]
+                                (if (and id (seen id))
+                                  [seen out]
+                                  [(conj seen id) (conj out pair)])))
+                            [#{} []])
+                    second)]
+    (if (= 1 (count tied))
+      (first tied)
+      (let [applicable (filterv #(applicable-in-composition? (first %) by-id) tied)
+            ids        (mapv (comp :jsonld/id first) tied)
+            app-ids    (mapv (comp :jsonld/id first) applicable)
+            [price sd] (first tied)
+            where      (str " share the cell " (pr-str k) " and start " (pr-str latest))]
+        (case (count applicable)
+          1 (first applicable)
+          0 [price sd {:reason    :no-applicable-price
+                       :price-id  (:jsonld/id price)
+                       :price-ids ids
+                       :detail    (str (count ids) " urpx:Price " (pr-str ids) where
+                                       ", and each is derived from a urpx:basedOnPrice none "
+                                       "of whose candidates is in the documents passed to "
+                                       "this call.")}]
+          [price sd {:reason               :ambiguous-cell
+                     :price-id             (:jsonld/id price)
+                     :price-ids            ids
+                     :applicable-price-ids app-ids
+                     :detail               (str (count app-ids) " urpx:Price " (pr-str app-ids)
+                                                where " and all apply here, so which one "
+                                                "prices it is undefined.")}])))))
+
 (defn- latest-by-pd
   "Group [price start] pairs into a map from PriceDefinition id to a
-   vector of pairs, keeping only the latest-starting Price per cell. A cell is
+   vector of `latest-in-cell` results, one per cell. A cell is
    the composite key `(price-definition-id, serviceTierNumber,
    touPeriodNumber)`, so two distinct concrete patterns coexist without
    conflict:
@@ -393,40 +451,29 @@
        multiple Prices, each carrying its own urpx:serviceTierNumber. Every
        tier's Price surfaces under one PD because the keys differ.
      - Temporal versioning: a single cell with multiple Prices over time. The
-       one with the latest start wins. An undated Price sorts behind any dated
-       one, so an explicitly dated Price supersedes an undated sibling.
+       one with the latest start wins.
 
-   For non-tiered ledgers (one PD, one Price, no serviceTierNumber) the
-   vector has a single entry."
-  [pairs]
-  (let [latest-per-key
-        (reduce (fn [acc [price sd]]
-                  ;; Keyed on the TOU period too. Without it, six TOU variants
-                  ;; of one charge sharing a PriceDefinition collide and five
-                  ;; are discarded; the Price-level gate removes the
-                  ;; non-matching ones first, and this keeps them separable if
-                  ;; there is no resolved period to gate against.
-                  (let [k [(get-in price [:urpx/referencesPriceDefinition :jsonld/id])
+   `by-id` is the @id index derived Prices are valued against."
+  [pairs by-id]
+  ;; Keyed on the TOU period too. Without it, six TOU variants of one charge
+  ;; sharing a PriceDefinition collide and five are discarded; the Price-level
+  ;; gate removes the non-matching ones first, and this keeps them separable if
+  ;; there is no resolved period to gate against.
+  (let [cells (group-by (fn [[price _]]
+                          [(get-in price [:urpx/referencesPriceDefinition :jsonld/id])
                            (:urpx/serviceTierNumber price)
-                           (:urpx/touPeriodNumber price)]
-                        [_ existing-sd :as existing] (acc k)]
-                    (if (or (nil? existing)
-                            (and sd (or (nil? existing-sd)
-                                        (.isAfter ^ZonedDateTime sd existing-sd))))
-                      (assoc acc k [price sd])
-                      acc)))
-                {} pairs)]
-    (reduce-kv (fn [acc [pd-id _ _] pair]
-                 (update acc pd-id (fnil conj []) pair))
-               {} latest-per-key)))
+                           (:urpx/touPeriodNumber price)])
+                        pairs)]
+    (reduce-kv (fn [acc [pd-id _ _ :as k] cell-pairs]
+                 (update acc pd-id (fnil conj []) (latest-in-cell k cell-pairs by-id)))
+               {} cells)))
 
 (defn- active-prices-by-pd
-  "Build a map from PriceDefinition id to a vector of currently-active
-   [price start] pairs, the latest per cell (see `latest-by-pd`)."
-  ([prices ^ZonedDateTime q opts] (active-prices-by-pd prices q opts nil))
-  ([prices ^ZonedDateTime q opts resolved-period-num]
-   (latest-by-pd (filter #(price-active-at-tou? (first %) resolved-period-num)
-                         (scoped-prices prices q opts)))))
+  "`latest-by-pd` over the currently-active Prices under `prices`."
+  [prices ^ZonedDateTime q opts resolved-period-num by-id]
+  (latest-by-pd (filter #(price-active-at-tou? (first %) resolved-period-num)
+                        (scoped-prices prices q opts))
+                by-id))
 
 (defn- alternative-price-pairs
   "The started [price start] pairs of each urpx:PriceSetAlternative under
@@ -453,8 +500,8 @@
 (defn- period-cells
   "`latest-by-pd` over the [price start] `pairs` that may apply at
    `resolved-period-num`."
-  [pairs resolved-period-num]
-  (latest-by-pd (filter #(price-active-at-tou? (first %) resolved-period-num) pairs)))
+  [pairs resolved-period-num by-id]
+  (latest-by-pd (filter #(price-active-at-tou? (first %) resolved-period-num) pairs) by-id))
 
 (defn- all-active-prices-by-pd
   "Build a map from PriceDefinition id to a vector of [price start] pairs
@@ -465,20 +512,18 @@
    the flat hasPrice list (CPAU E-HRA shape) and hasPriceSetAlternatives
    nesting (PG&E Vintage-PCIA shape: per-departure-vintage-year prices in
    PriceSetAlternative)."
-  ([prices ^ZonedDateTime q] (all-active-prices-by-pd prices q nil nil))
-  ([prices ^ZonedDateTime q opts] (all-active-prices-by-pd prices q opts nil))
-  ([prices ^ZonedDateTime q opts resolved-period-num]
-   ;; With a selection, surface only the chosen alternative, exactly as the
-   ;; base plan path does. Without one, keep the surface-all contract so a
-   ;; caller reading tiers directly still sees every vintage;
-   ;; `unselected-alternative-ids` then marks the ledger so an AGGREGATE cannot
-   ;; silently pick one of them.
-   (if (seq (:profile-alternatives opts))
-     (active-prices-by-pd prices q opts resolved-period-num)
-     (let [cells #(period-cells % resolved-period-num)]
-       (apply merge-with into
-              (cells (scoped-prices prices q nil))
-              (map cells (all-prices-from-alternatives prices q)))))))
+  [prices ^ZonedDateTime q opts resolved-period-num by-id]
+  ;; With a selection, surface only the chosen alternative, exactly as the
+  ;; base plan path does. Without one, keep the surface-all contract so a
+  ;; caller reading tiers directly still sees every vintage;
+  ;; `unselected-alternative-ids` then marks the ledger so an AGGREGATE cannot
+  ;; silently pick one of them.
+  (if (seq (:profile-alternatives opts))
+    (active-prices-by-pd prices q opts resolved-period-num by-id)
+    (let [cells #(period-cells % resolved-period-num by-id)]
+      (apply merge-with into
+             (cells (scoped-prices prices q nil))
+             (map cells (all-prices-from-alternatives prices q))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Service-tier lookup (block tiers, e.g. CPAU E-1 baseline / over-baseline)
@@ -514,11 +559,11 @@
    The Prices themselves are kept, not just their definition ids, because
    whether a refusal is owed depends on what was withheld: see
    `withheld-price-entry`."
-  [prices selection ^ZonedDateTime q resolved-period-num]
+  [prices selection ^ZonedDateTime q resolved-period-num by-id]
   (let [unselected (remove #(get selection (get-in % [:urpx/referencesProfileAlternatives :jsonld/id]))
                            (index/as-vec (:urpx/hasPriceSetAlternatives prices)))]
     (-> (apply merge-with into {}
-               (map #(period-cells % resolved-period-num)
+               (map #(period-cells % resolved-period-num by-id)
                     (alternative-price-pairs unselected q)))
         (dissoc nil)
         (update-vals #(mapv first %)))))
@@ -1797,12 +1842,15 @@
 
 (defn- price-fields
   "The resolved unit-price entry for `price`, plus :urpx.resolved/unvaluable
-   when there is no value and a reason instead.
+   when there is no value and a reason instead. `tie`, from `latest-in-cell`,
+   is that reason when the cell has no one Price.
 
    One `price-value` call per price, deliberately: valuing a derived price sums
    a summary's members, and a filing carries thousands of prices."
-  [price by-id member-status]
-  (let [{:keys [value unvaluable]} (price-value price by-id member-status)]
+  [price tie by-id member-status]
+  (let [{:keys [value unvaluable]} (if tie
+                                     {:value nil :unvaluable tie}
+                                     (price-value price by-id member-status))]
     (cond-> {:urpx.resolved/unit-price value}
       unvaluable (assoc :urpx.resolved/unvaluable unvaluable))))
 
@@ -2302,7 +2350,6 @@
                                            tou-schedules season zdt holiday?)
          period-num    (:urpx/touPeriodNumber tou-period)
 
-         pd->prices    (active-prices-by-pd prices zdt opts period-num)
          pds           (index/as-vec (:urpx/hasPriceDefinition billing))
          pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
          mi-index      (mi-by-id plan-elements)
@@ -2316,6 +2363,7 @@
          ;; Price or a PriceSummary, and both are looked up here. Scoped to the
          ;; document being resolved, which is the limit of what this library sees.
          by-id         (or (:by-id opts) (index/build-index version))
+         pd->prices    (active-prices-by-pd prices zdt opts period-num by-id)
          ;; Summary members are gated at the instant being resolved. Supplied by
          ;; resolve-prices-with-modifiers when composing, because a discount in a
          ;; modifier names a summary whose members live in the BASE plan and must
@@ -2351,7 +2399,7 @@
          ;; alone left it named in the mark and absent from the evidence, and
          ;; one unrelated excluded price on the same ledger was then enough to
          ;; drop the refusal and answer short.
-         psa-prices    (withheld-prices-by-pd prices (:profile-alternatives opts) zdt period-num)
+         psa-prices    (withheld-prices-by-pd prices (:profile-alternatives opts) zdt period-num by-id)
          member-status (or (:member-status opts)
                            (make-member-status by-id period-num date
                                                rules-by-id season-status alt-status))
@@ -2375,13 +2423,13 @@
                       tier-entries
                       (->> ledger-pds
                            (mapcat (fn [pd]
-                                     (for [[price _] (pd->prices (:jsonld/id pd))
+                                     (for [[price _ tie] (pd->prices (:jsonld/id pd))
                                            :let [gates (condition-gates price pd by-id)]]
                                        (cond-> (merge
                                                 {:urpx.resolved/price-definition-id (:jsonld/id pd)
                                                  :urpx.resolved/price-id            (:jsonld/id price)
                                                  :urpx.resolved/price-name          (:urpx/name price)}
-                                                (price-fields price by-id member-status)
+                                                (price-fields price tie by-id member-status)
                                                 (tier-info pd price tier-cands tier-ctx))
                                          (:urpx/hasDynamicPricing price)
                                          (assoc :urpx.resolved/dynamic-pricing
@@ -2580,7 +2628,7 @@
                                (own-status member)
                                (other-status member))))
                          own-status)
-         pd->prices  (all-active-prices-by-pd prices zdt opts gate-period)
+         pd->prices  (all-active-prices-by-pd prices zdt opts gate-period by-id)
          pds         (index/as-vec (:urpx/hasPriceDefinition billing))
          pds-by-ledger (group-by #(get-in % [:urpx/referencesLedger :jsonld/id]) pds)
         ;; A modifier's PriceDefinitions are scoped by urpx:referencesProfileAlternative
@@ -2589,7 +2637,7 @@
         ;; needed: a matrix of mutually-exclusive cells is a modifier shape, so
         ;; a definition scoped to a cell the caller did not choose was summed
         ;; anyway, unmarked.
-         psa-prices  (withheld-prices-by-pd prices (:profile-alternatives opts) zdt gate-period)
+         psa-prices  (withheld-prices-by-pd prices (:profile-alternatives opts) zdt gate-period by-id)
          unselected  (unselected-alternative-ids psa-prices)
          mi-index    (mi-by-id plan-elts)]
      (vec
@@ -2614,7 +2662,7 @@
                   tier-entries
                   (->> ledger-pds
                        (mapcat (fn [pd]
-                                 (for [[price _] (pd->prices (:jsonld/id pd))
+                                 (for [[price _ tie] (pd->prices (:jsonld/id pd))
                                        :let [gates (condition-gates price pd by-id)]]
                                    ;; tier-info, as on the base path. It carries
                                    ;; the recurring interval, without which a
@@ -2625,7 +2673,7 @@
                                             {:urpx.resolved/price-definition-id (:jsonld/id pd)
                                              :urpx.resolved/price-id            (:jsonld/id price)
                                              :urpx.resolved/price-name          (:urpx/name price)}
-                                            (price-fields price by-id member-status)
+                                            (price-fields price tie by-id member-status)
                                             (tier-info pd price tier-cands tier-ctx))
                                      (:urpx/hasDynamicPricing price)
                                      (assoc :urpx.resolved/dynamic-pricing
