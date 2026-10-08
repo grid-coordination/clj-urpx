@@ -2,7 +2,8 @@
   "Prices tied on cell and start: those whose every urpx:basedOnPrice candidate
   is absent from the composition are set aside, and exactly one must remain.
   Any other count leaves the cell's tier unvaluable, naming the tied Prices."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [urpx.price :as price])
   (:import [java.time LocalDate LocalDateTime ZoneId ZonedDateTime]))
 
@@ -126,7 +127,39 @@
       (is (= 1 (count ts)))
       (is (nil? (:urpx.resolved/unit-price t)))
       (is (= :no-applicable-price (:reason u)))
-      (is (= ["m:credit-a" "m:credit-b"] (:price-ids u))))))
+      (is (= ["m:credit-a" "m:credit-b"] (:price-ids u)))))
+  (testing "the detail names the start as text, not as an object identity"
+    (is (str/includes? (:detail (:urpx.resolved/unvaluable (first (credit-tiers nil per-base))))
+                       "and the start 2026-01-01T00:00-08:00[America/Los_Angeles]"))))
+
+(deftest an-undated-tie-is-broken-the-same-way
+  (let [undated #(dissoc % :urpx/startDate)
+        mod     (modifier [(undated (credit "m:credit-a" jan ["a:usage"]))
+                           (undated (credit "m:credit-b" jan ["b:usage"]))])]
+    (is (= [["m:credit-b" -0.20M]] (credits plan-b mod)))
+    (is (= :no-applicable-price
+           (:reason (:urpx.resolved/unvaluable (first (credit-tiers nil mod))))))))
+
+(deftest a-candidate-list-applies-when-any-candidate-is-present
+  (let [mod (modifier [(credit "m:credit-a" jan ["a:usage"])
+                       (credit "m:credit-b" jan ["b:usage"])
+                       (credit "m:credit-c" jan ["c:usage"])
+                       (credit "m:credit-bd" jan ["d:usage" "b:usage"])])]
+    (is (= [["m:credit-a" -0.30M]] (credits plan-a mod)))
+    (is (= [:ambiguous-cell ["m:credit-b" "m:credit-bd"]]
+           ((juxt :reason :applicable-price-ids)
+            (:urpx.resolved/unvaluable (first (credit-tiers plan-b mod))))))))
+
+(deftest the-tie-break-holds-inside-price-sets
+  (let [undated #(dissoc % :urpx/startDate)
+        a       (undated (credit "m:credit-a" jan ["a:usage"]))
+        b       (undated (credit "m:credit-b" jan ["b:usage"]))
+        mod     (assoc-in (modifier [])
+                          [:urpx/hasRatePlanModifierVersion :urpx/hasPrices :urpx/hasPriceSet]
+                          [{:jsonld/type "urpx:PriceSet" :urpx/startDate jan :urpx/hasPrice [a]}
+                           {:jsonld/type "urpx:PriceSet" :urpx/startDate jan :urpx/hasPrice [a b]}])]
+    (is (= [["m:credit-b" -0.20M]] (credits plan-b mod)))
+    (is (= [["m:credit-a" -0.30M]] (credits plan-a mod)))))
 
 (deftest the-tie-break-holds-within-tier-and-period-cells
   (let [cell (fn [n] {:urpx/serviceTierNumber n :urpx/touPeriodNumber 1})

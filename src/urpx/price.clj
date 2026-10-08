@@ -422,7 +422,8 @@
             ids        (mapv (comp :jsonld/id first) tied)
             app-ids    (mapv (comp :jsonld/id first) applicable)
             [price sd] (first tied)
-            where      (str " share the cell " (pr-str k) " and start " (pr-str latest))]
+            where      (str " share the cell " (pr-str k)
+                            (if latest (str " and the start " latest) " and are undated"))]
         (case (count applicable)
           1 (first applicable)
           0 [price sd {:reason    :no-applicable-price
