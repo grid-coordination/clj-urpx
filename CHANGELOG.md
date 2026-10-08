@@ -9,6 +9,12 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Changed
+
+- **Breaking: `:compatibility` defaults to `named-versions-add`,** so naming a `urpx:applicableToRatePlanVersion` adds to `urpx:applicableToRatePlan` and retracts nothing. This applies to `enumerate`, `enumerate-pairs`, `applicable-modifiers`, `from-node` and everything built on them. A modifier naming plans P and Q and one version of P now applies to Q's versions, where it applied to none of them. Pass `{:compatibility scm/named-versions-narrow}` for the old behavior.
+
 ## [0.47.0] — 2026-10-07
 
 ### Changed

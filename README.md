@@ -688,10 +688,10 @@ Nothing in URPX expresses exclusivity or combinability **between** modifiers, so
 
 | `:compatibility` policy | Reads a named version as |
 |--------|--------|
-| `named-versions-narrow` (default) | those versions and no others, overriding the plan list. Fits the ontology's "which **specific** versions", and is the only reading under which the property can express a restriction. Known cost: **non-monotonic**, so merging a document can *remove* compatibility |
-| `named-versions-add` | an addition to the plan list, never a removal. Sound under RDF merge. Known cost: the property can then only widen, and only to a version whose plan is not already named |
+| `named-versions-add` (default) | an addition to the plan list, never a removal. Sound under RDF merge. Known cost: the property can then only widen, and only to a version whose plan is not already named |
+| `named-versions-narrow` | those versions and no others, overriding the plan list for every plan the modifier names. Fits the ontology's "which **specific** versions", and is the only shipped reading under which the property can express a restriction. Known cost: **non-monotonic**, so merging a document can *remove* compatibility |
 
-They differ only when a modifier names some version, and only about a base version it does not name whose plan it names. Documents that never take that shape cannot settle the choice, which is why both ship.
+They differ only when a modifier names some version, and only about a base version it does not name whose plan it names. A modifier naming plans P and Q and one version of P applies to Q's versions under `named-versions-add` and to none of them under `named-versions-narrow`. A third reading, where naming a version of P restricts P alone, is not shipped. URPX Decision #090 introduced the property.
 
 **What one `@id` naming several different snapshots means is a third policy**, `:repeated-ids`, because URPX does not say and a client reading one filing wants a different answer from a client merging a corpus.
 

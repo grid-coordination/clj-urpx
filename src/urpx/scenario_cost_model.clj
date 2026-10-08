@@ -178,11 +178,11 @@
 
    KNOWN COST, and it is not small. RDF MERGES TRIPLES, NOT MEANINGS. Merging a
    copy that states urpx:applicableToRatePlanVersion with one that omits it
-   yields a node that HAS the property, which under `named-versions-narrow`
-   restricts the modifier to exactly those versions. The omitting copy meant the
-   opposite: no version restriction at all. So the union of the triples narrows
-   where the union of the meanings would widen. Pair this with
-   `named-versions-add` if the widening reading is what you want.
+   yields a node that HAS the property. Under the default `named-versions-add`
+   that node only widens. Under `named-versions-narrow` it restricts the
+   modifier to exactly those versions, while the omitting copy meant no version
+   restriction at all, so the union of the triples narrows where the union of
+   the meanings would widen.
 
    It also SILENTLY RECONCILES a case that is a defect on any reading: a version
    @id whose option list differs between filings because the list is
@@ -413,8 +413,7 @@
 
 ;; A COMPATIBILITY POLICY is `(fn [modifier-version base-version plan-id] ->
 ;; boolean)`. It exists because URPX does not settle what a version-level
-;; statement means alongside a plan-level one, and this library does not invent
-;; the answer any more than it invents which modifiers a customer holds.
+;; statement means alongside a plan-level one.
 ;;
 ;; Both properties are sh:minCount 0 with no sh:maxCount on
 ;; RatePlanModifierVersionShape, and BOTH state compatibility: what may
@@ -422,92 +421,47 @@
 ;; NARROWS the plan-level statement or ADDS to it. urpx:applicableToRatePlanVersion
 ;; is a plain owl:ObjectProperty, owl:FunctionalProperty appears zero times in
 ;; the ontology, and sh:closed closes the property set rather than the value
-;; set, so nothing in the artifacts decides it.
+;; set.
 ;;
-;; WHERE THEY CAN DIFFER AT ALL is narrower than it looks. The two readings
-;; disagree only when a modifier names SOME version, and only about a base
-;; version it does not name whose plan it names by urpx:applicableToRatePlan.
-;; A modifier that names no version gets the same answer under both.
+;; The readings disagree only when a modifier names SOME version, and only
+;; about a base version it does not name whose plan it names by
+;; urpx:applicableToRatePlan. A modifier that names no version gets the same
+;; answer under every reading. Three readings:
 ;;
-;; Which means the choice cannot be settled by testing it against documents
-;; that never take that shape. It is a question about what URPX documents may
-;; say.
-;;
-;; THERE IS ARTIFACT EVIDENCE, THOUGH: URPX Decision #090, which introduced
-;; urpx:applicableToRatePlanVersion
-;; (urpx-org/urpx-dev, dev-docs/decisions/urpx-design-decisions-081-120.md). It
-;; cuts both ways and is recorded here rather than summarized, because a
-;; one-sided reading of it would settle this on half the text.
-;;
-;; FOR `named-versions-add`. The decision records "Breaking Change: None - this
-;; is an additive enhancement", and the alternative it selected is credited with
-;; "Preserves the existing document-level properties for document-scoped
-;; relationships". A property whose mere presence retracted compatibility that
-;; urpx:applicableToRatePlan had established would stop documents composing that
-;; composed before, which is hard to call non-breaking or preserving.
-;;
-;; AGAINST BOTH, AND AGAINST THIS DEFAULT IN PARTICULAR. The same Rationale says
-;; the new properties "avoid ambiguity where a modifier document is broadly
-;; applicable but only certain modifier versions are valid for a particular rate
-;; plan version". That was read here as arguing for narrowing, and it does not:
-;; the restriction runs over MODIFIER versions, scoped to one rate plan version.
-;; It describes version-to-version pairing and says nothing about whether naming
-;; a version of plan P withdraws the modifier from plans Q and R.
-;;
-;; WHICH MAKES THIS DEFAULT THE LEAST SUPPORTED OF THREE READINGS, not two:
-;;
-;;   (a) `named-versions-add`      naming a version retracts nothing.
+;;   (a) `named-versions-add`      naming a version retracts nothing. The
+;;                                 default.
 ;;   (b) scope-their-plan          naming version(s) of plan P restricts to
 ;;                                 those versions OF P, while plans named only
-;;                                 at plan level keep all of theirs. NOT
-;;                                 IMPLEMENTED; see below.
+;;                                 at plan level keep all of theirs. Not
+;;                                 implemented: a policy receives the named
+;;                                 version @ids as strings and cannot learn
+;;                                 which plan each belongs to, so (b) needs a
+;;                                 richer policy signature.
 ;;   (c) `named-versions-narrow`   naming any version retracts everything
-;;                                 unnamed, other plans included. The default.
+;;                                 unnamed, other plans included.
 ;;
-;; Verified: with a modifier naming plans P and Q and one version of P,
-;; `named-versions-narrow` returns nothing for Q's version. That is retraction
-;; across plans, which is (c), and nothing in Decision #090 argues for it. The
-;; Rationale points nearer (b); "preserves the existing document-level properties
-;; for document-scoped relationships" argues against (c) specifically.
-;;
-;; (b) IS NOT SHIPPED because it cannot be, at this signature. A policy receives
-;; `[modifier-version base-version plan-id]`, so it holds the named version @ids
-;; as strings and no way to learn which plan each belongs to. Deciding "does any
-;; named version belong to THIS plan" needs the documents, which means a richer
-;; policy signature rather than another function. Filed rather than approximated.
-;;
-;; "Breaking Change: None" is also weaker than it looks: in a spec changelog that
-;; usually means existing documents stay VALID, which adding an optional property
-;; cannot affect either way. It is a conformance claim, not a semantic one. The
-;; line that IS about meaning is the preserves-document-level one.
-;;
-;; So: evidence, not settlement, and the default is unchanged only because
-;; changing it is a behaviour change nobody has asked for yet. It is the reading
-;; with the least support in the artifacts, which is recorded here rather than
-;; left for the next reader to rediscover.
+;; URPX Decision #090, which introduced urpx:applicableToRatePlanVersion, is
+;; the nearest evidence (urpx-org/urpx-dev,
+;; dev-docs/decisions/urpx-design-decisions-081-120.md).
 ;;
 ;; The two questions are entangled: when copies of one modifier version
 ;; disagree about urpx:applicableToRatePlanVersion, `repeated-ids-union` yields
 ;; a node that states it, and the compatibility policy in force then decides
-;; what that node means. Both policies are shipped so that settling the copies
-;; question does not also require settling this one silently.
+;; what that node means.
 
 (defn named-versions-narrow
-  "The default policy: naming any urpx:applicableToRatePlanVersion means those
-   versions and no others, overriding urpx:applicableToRatePlan.
+  "Reading (c): naming any urpx:applicableToRatePlanVersion means those
+   versions and no others, overriding urpx:applicableToRatePlan, for every
+   plan the modifier names.
 
    Reads with the ontology's own wording, \"Defines which SPECIFIC rate plan
    versions are compatible with this modifier version\", and it is the only
-   reading under which the property can express a restriction at all: under
-   `named-versions-add` a version statement can only widen, and then only to a
-   version whose plan is not already named.
+   shipped reading under which the property can express a restriction.
 
-   KNOWN COST, stated because it is not small. The rule is NON-MONOTONIC.
-   Merging a document that adds a version statement REMOVES compatibility with
-   a plan named only by urpx:applicableToRatePlan, and RDF merge never retracts.
-   A partial view of a corpus can therefore yield MORE models than the
-   whole of it. It is the default because changing it would change behavior,
-   not because it is known right; the evidence on each side is recorded above."
+   KNOWN COST. The rule is NON-MONOTONIC. Merging a document that adds a
+   version statement REMOVES compatibility with a plan named only by
+   urpx:applicableToRatePlan, and RDF merge never retracts. A partial view of a
+   corpus can therefore yield MORE models than the whole of it."
   [mv bv plan-id]
   (let [[by-version by-plan] (applicability mv)]
     (if (seq by-version)
@@ -515,18 +469,18 @@
       (contains? by-plan plan-id))))
 
 (defn named-versions-add
-  "The monotone policy: a version statement ADDS to urpx:applicableToRatePlan
-   and never removes from it.
+  "The default policy, reading (a): a version statement ADDS to
+   urpx:applicableToRatePlan and never removes from it.
 
    Sound under RDF, which is what URPX documents denote: merging graphs adds
    triples and never retracts, so a larger corpus can only ever yield more
-   compatibility. It also stops the plan-level statement being cancelled by
-   triples that never mention the plan it names.
+   compatibility. The plan-level statement is never cancelled by triples that
+   do not mention the plan it names.
 
-   KNOWN COST. It leaves urpx:applicableToRatePlanVersion with almost nothing
-   to do: it can only widen, and only to a version whose plan is not already
-   named. A publisher wanting to say \"this modifier applies only to version X
-   of plan P\" has no way to say it under this reading."
+   KNOWN COST. urpx:applicableToRatePlanVersion can only widen, and only to a
+   version whose plan is not already named. A publisher wanting to say \"this
+   modifier applies only to version X of plan P\" has no way to say it under
+   this reading."
   [mv bv plan-id]
   (let [[by-version by-plan] (applicability mv)]
     (or (contains? by-version (:jsonld/id bv))
@@ -704,14 +658,11 @@
 
    This is the query a consumer actually wants, and it is the half URPX can
    answer. urpx:applicableToRatePlan states compatibility with a plan identity;
-   urpx:applicableToRatePlanVersion states it against a specific version. Where
-   a modifier names any versions, those are taken to be exhaustive, because the
-   version-level statement is the more specific.
+   urpx:applicableToRatePlanVersion states it against a specific version.
 
    WHICH READING applies is a caller policy, `:compatibility`, defaulting to
-   `named-versions-narrow`. URPX does not settle whether naming a version
-   narrows the plan-level statement or adds to it, so this library does not
-   settle it either; see the policies for the evidence on each side.
+   `named-versions-add`: naming a version adds to the plan-level statement.
+   URPX does not settle whether it narrows or adds; see the policies.
 
    WHAT THIS DOES NOT ANSWER, deliberately. Which of these a given customer HAS
    is a fact about the customer, and URPX places customer data outside its
@@ -735,15 +686,15 @@
                reading one filing and a client merging a corpus want different
                answers.
      :compatibility  fn `[modifier-version base-version plan-id] -> boolean`.
-                     Defaults to `named-versions-narrow`; `named-versions-add`
-                     is the monotone alternative.
+                     Defaults to `named-versions-add`; `named-versions-narrow`
+                     is the non-monotone alternative.
      :package-zones  as `enumerate` takes it."
   ([documents base-version] (applicable-modifiers documents base-version nil))
   ([documents base-version opts]
    (let [{:keys [versions find-zone]}
          (prepared-for documents opts ["urpx:RatePlanModifierVersion"]
                        "urpx.scenario-cost-model/applicable-modifiers")
-         compat  (or (:compatibility opts) named-versions-narrow)
+         compat  (or (:compatibility opts) named-versions-add)
          plan-id (:jsonld/id (:urpx/forRatePlan base-version))]
      (->> (current-versions (get versions "urpx:RatePlanModifierVersion")
                             (:at opts)
@@ -825,12 +776,12 @@
                `one-modifier-at-most`.
      :compatibility  fn `[modifier-version base-version plan-id] -> boolean`
                deciding which modifiers MAY apply. Defaults to
-               `named-versions-narrow`; `named-versions-add` is the monotone
-               alternative. TWO POLICIES, not one, because URPX does not say
-               whether naming a urpx:applicableToRatePlanVersion narrows
-               urpx:applicableToRatePlan or adds to it. They differ only when
-               a modifier names some version, about a base version it does not
-               name whose plan it names; see the policies.
+               `named-versions-add`; `named-versions-narrow` is the
+               non-monotone alternative. TWO POLICIES, not one, because URPX
+               does not say whether naming a urpx:applicableToRatePlanVersion
+               narrows urpx:applicableToRatePlan or adds to it. They differ
+               only when a modifier names some version, about a base version
+               it does not name whose plan it names; see the policies.
      :package-zones  what a urpx:timezoneIdentifier on a package counts for
                when zoning a version. A package counts when it
                names the version, its identity or its source document by
@@ -877,7 +828,7 @@
    (let [{merged :versions find-zone :find-zone}
          (prepared-for documents opts version-kinds "urpx.scenario-cost-model/enumerate")
          combine (or (:combine opts) one-modifier-at-most)
-         compat  (or (:compatibility opts) named-versions-narrow)
+         compat  (or (:compatibility opts) named-versions-add)
          t       (:at opts)
          zone-of (zone-requirer find-zone)
          live-plans (current-versions (get merged "urpx:RatePlanVersion") t zone-of)
@@ -1194,7 +1145,7 @@
   ([documents node opts]
    (let [{merged :versions find-zone :find-zone}
          (prepared-for documents opts version-kinds "urpx.scenario-cost-model/from-node")
-         compat   (or (:compatibility opts) named-versions-narrow)
+         compat   (or (:compatibility opts) named-versions-add)
          prefixes (prefix-bindings (:context opts))
          key-of   #(or (expand-iri prefixes %) %)
          by-key   (fn [kind]

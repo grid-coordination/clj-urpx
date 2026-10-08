@@ -409,9 +409,9 @@
             owl:FunctionalProperty appears zero times in the ontology, and
             sh:closed closes the property set rather than the value set.
 
-            The default narrows, matching the ontology's wording. The monotone
-            reading is sound under RDF, where merging adds triples and never
-            retracts, so a larger corpus cannot yield fewer models.
+            The default adds, which is sound under RDF: merging adds triples
+            and never retracts, so a larger corpus cannot yield fewer models.
+            The narrowing reading matches the ontology's wording.
 
             CONSTRUCTED, because the readings differ only when a modifier names
             some version, about a base version it does not name whose plan it
@@ -422,17 +422,17 @@
                               :urpx/applicableToRatePlanVersion [{:jsonld/id "x:other-v"}]})
           bv   (:urpx/hasRatePlanVersion plan)
           ids  #(mapv :jsonld/id (scm/applicable-modifiers [plan m] bv %))]
-      (is (= [] (ids nil))
-          "default: naming a version means those and only those, so naming
-           x:other-v excludes this one even though its PLAN is named")
-      (is (= [] (ids {:compatibility scm/named-versions-narrow}))
-          "stated explicitly, same answer")
-      (is (= ["x:m-v"] (ids {:compatibility scm/named-versions-add}))
-          "monotone: the version statement adds, so the plan statement still
+      (is (= ["x:m-v"] (ids nil))
+          "default: the version statement adds, so the plan statement still
            applies and the modifier is compatible")
-      (is (= [[] ["x:m-v"]]
+      (is (= ["x:m-v"] (ids {:compatibility scm/named-versions-add}))
+          "stated explicitly, same answer")
+      (is (= [] (ids {:compatibility scm/named-versions-narrow}))
+          "narrow: naming a version means those and only those, so naming
+           x:other-v excludes this one even though its PLAN is named")
+      (is (= [[]]
              (mapv :urpx.scenario-cost-model/modifier-version-ids
-                   (scm/enumerate [plan m] {:compatibility scm/named-versions-add})))
+                   (scm/enumerate [plan m] {:compatibility scm/named-versions-narrow})))
           "and the policy reaches models, not only applicable-modifiers"))))
 
 (deftest a-modifier-naming-no-plan-and-no-version-combines-with-nothing
@@ -834,23 +834,16 @@
           (is (= "x:m" (:jsonld/id d))
               "and it is the modifier's OWN filing, whichever order the documents came in"))))))
 
-(deftest the-default-retracts-across-plans-which-is-worth-knowing
-  (testing "naming what the default actually does, because it turned out to be
-            the least supported of THREE readings rather than one of two, and
-            the difference is invisible until a modifier names more than one
-            plan.
+(deftest naming-a-version-of-one-plan-retracts-nothing-by-default
+  (testing "a modifier naming plans P and Q, with a version of P only:
 
-            A modifier naming plans P and Q, with a version of P only:
-
-              add     compatible with both, naming a version retracts nothing
-              narrow  compatible with NEITHER unless the version matches, so Q
-                      loses a modifier its own plan-level statement named
+              add     (default) compatible with both, naming a version
+                      retracts nothing
+              narrow  compatible with neither unless the version matches, so
+                      Q loses a modifier its own plan-level statement named
 
             The middle reading, where naming a version of P restricts P and
-            leaves Q's plan-level statement standing, is what URPX Decision
-            #090's Rationale points nearest and is NOT implemented: a policy
-            receives version @ids as strings and cannot learn which plan each
-            belongs to without the documents. Filed rather than approximated."
+            leaves Q's plan-level statement standing, is not implemented."
     (let [plan (fn [pid vid] {:jsonld/id pid :jsonld/type "urpx:RatePlan"
                               :urpx/timezoneIdentifier "America/Los_Angeles"
                               :urpx/hasRatePlanVersion
@@ -860,20 +853,21 @@
           m    (modifier-doc "x:m" "x:m-v" (ldt 2026 1 1)
                              {:urpx/applicableToRatePlan [{:jsonld/id "x:P"} {:jsonld/id "x:Q"}]
                               :urpx/applicableToRatePlanVersion [{:jsonld/id "x:P-v"}]})
-          ask  (fn [p pol] (mapv :jsonld/id
-                                 (scm/applicable-modifiers [p m] (:urpx/hasRatePlanVersion p)
-                                                           {:compatibility pol})))
+          ask  (fn [p opts] (mapv :jsonld/id
+                                  (scm/applicable-modifiers [p m] (:urpx/hasRatePlanVersion p)
+                                                            opts)))
+          narrow {:compatibility scm/named-versions-narrow}
           P    (plan "x:P" "x:P-v")
           Q    (plan "x:Q" "x:Q-v")]
-      (is (= ["x:m-v"] (ask P scm/named-versions-narrow))
-          "P's named version matches, so the default applies it")
-      (is (= [] (ask Q scm/named-versions-narrow))
-          "but Q loses it, although the modifier names Q at plan level and names
-           no version of Q at all. That is retraction ACROSS plans, and nothing
-           in Decision #090 argues for it")
-      (is (= ["x:m-v"] (ask Q scm/named-versions-add))
-          "the monotone reading keeps Q, which is the behavior the
-           preserves-document-level-properties line supports"))))
+      (is (= ["x:m-v"] (ask Q nil))
+          "the default keeps Q, which the modifier names at plan level")
+      (is (= ["x:m-v"] (ask P nil))
+          "and P, whose version it names")
+      (is (= [] (ask Q narrow))
+          "narrow drops Q, although the modifier names Q at plan level and
+           names no version of Q: retraction across plans")
+      (is (= ["x:m-v"] (ask P narrow))
+          "while P's named version still matches"))))
 
 ;; ---------------------------------------------------------------------------
 ;; A version zoned by the nodes it belongs to
@@ -1400,7 +1394,9 @@
                  (merge {:urpx/applicableToRatePlan [{:jsonld/id "x:p"}]}
                         (containers {"x:c2" ["x:a1"]})))])
 
-(defn- node-refusal [docs n] (refusal #(scm/from-node docs n)))
+(defn- node-refusal
+  ([docs n] (node-refusal docs n nil))
+  ([docs n opts] (refusal #(scm/from-node docs n opts))))
 
 (deftest from-node-keys-each-selection-by-its-container
   (let [m (scm/from-node (from-node-docs) (scm-node "x:p-v1" ["x:m-v"] ["x:z2" "x:a1"]))]
@@ -1445,10 +1441,11 @@
         n    (scm-node "x:p-v1" ["x:m-v"] [])]
     (is (= {:reason :urpx.scenario-cost-model/inapplicable-modifier
             :modifier-version-ids ["x:m-v"]}
-           (select-keys (node-refusal docs n) [:reason :modifier-version-ids]))
-        "named-versions-narrow by default")
+           (select-keys (node-refusal docs n {:compatibility scm/named-versions-narrow})
+                        [:reason :modifier-version-ids])))
     (is (= ["x:p-v1" ["x:m-v"] []]
-           (scm/identity-tuple (scm/from-node docs n {:compatibility scm/named-versions-add}))))))
+           (scm/identity-tuple (scm/from-node docs n)))
+        "named-versions-add by default")))
 
 (deftest from-node-refuses-an-alternative-no-consumed-version-offers
   (is (= {:reason :urpx.scenario-cost-model/unknown-alternative :alternative "x:a1"}
