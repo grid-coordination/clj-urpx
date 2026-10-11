@@ -72,6 +72,23 @@
            (try (corpus-json/paths (tree files) layout ["nope"])
                 (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))))))
 
+(deftest a-kind-walks-its-own-roots
+  (let [layout (assoc-in layout ["kinds" "source"] {"roots"   ["src"]
+                                                    "include" ["**/*.clj"]})
+        dir    (tree (conj files "src/p/q.clj" "a/p/q.clj"))]
+    (testing "a kind declaring roots walks only those"
+      (is (= ["src/p/q.clj"] (corpus-json/paths dir layout ["source"]))))
+    (testing "a kind without roots still walks the layout's"
+      (is (= ["a/x/versions/1/note.toml"] (corpus-json/paths dir layout ["manifest"]))))
+    (testing "--all lists each kind under its own roots"
+      (is (some #{"source\tsrc/p/q.clj"} (corpus-json/lines dir layout ["--all"]))))
+    (testing "the layout conforms to the vendored schema"
+      (is (= #{} (schema-errors (json/write-str (assoc layout
+                                                       "corpus" "t"
+                                                       "walkers" [{"language" "clojure"
+                                                                   "path"     "w"
+                                                                   "cli"      "w"}]))))))))
+
 (defn- matches? [glob path] (boolean (re-matches (corpus-json/glob-regex glob) path)))
 
 (deftest glob-syntax

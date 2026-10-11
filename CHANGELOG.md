@@ -9,6 +9,12 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Fixed
+
+- **`corpus/corpus_json.clj` walks a kind's own `roots` when the kind declares them,** and the layout's `roots` otherwise, as `corpus.json` specifies. It walked only the layout's, so a kind rooted elsewhere, such as urpx-rate-plans' `clojure-source` under `src/`, listed no files.
+
 ## [0.49.0] — 2026-10-08
 
 ### Fixed

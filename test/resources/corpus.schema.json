@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:grid-coordination:urpx-rate-plans:schema:corpus:v1",
   "title": "Corpus layout descriptor",
-  "description": "How to walk this corpus. Each kind's include globs are relative to every root. A walker's CLI, run from the repository root, prints repo-relative POSIX paths one per line in C-locale byte order: with no arguments the files of the kinds listed in documents, with kind names as arguments the files of those kinds, and with --all every kind as kind<TAB>path.",
+  "description": "How to walk this corpus. Each kind's include globs are relative to every root, or to the kind's own roots when it lists them. A walker's CLI, run from the repository root, prints repo-relative POSIX paths one per line in C-locale byte order: with no arguments the files of the kinds listed in documents, with kind names as arguments the files of those kinds, and with --all every kind as kind<TAB>path.",
   "type": "object",
   "required": ["corpus", "roots", "kinds", "documents", "walkers"],
   "additionalProperties": false,
@@ -25,11 +25,17 @@
         "properties": {
           "description": { "type": "string" },
           "media_type": { "type": "string" },
+          "roots": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "pattern": "^[^/*]+$" },
+            "description": "Top-level directories this kind's globs are evaluated under, in place of the corpus roots."
+          },
           "include": {
             "type": "array",
             "minItems": 1,
             "items": { "type": "string" },
-            "description": "Globs relative to each root. * matches within one path segment; ** matches across segments."
+            "description": "Globs relative to each of the kind's roots. * matches within one path segment; ** matches across segments."
           }
         }
       }

@@ -97,20 +97,27 @@
                        :kind   kind
                        :kinds  (vec (keys (get layout "kinds")))}))))
 
+(defn- kind-paths
+  "Paths relative to `root` of every file of `kind`, walking the kind's own
+   roots when it declares them and the layout's otherwise."
+  [root layout kind]
+  (let [res (mapv glob-regex (include-globs layout kind))]
+    (for [r (or (get-in layout ["kinds" kind "roots"])
+                (get layout "roots"))
+          p (files-under (io/file root r))
+          :when (some #(re-matches % p) res)]
+      (str r "/" p))))
+
 (defn paths
   "Paths relative to `root` of every file of `kinds`, or of the documents when
    `kinds` is empty, in C-locale byte order."
   ([root layout] (paths root layout nil))
   ([root layout kinds]
-   (let [res (mapv glob-regex (mapcat #(include-globs layout %)
-                                      (or (seq kinds) (get layout "documents"))))]
-     (->> (for [r (get layout "roots")
-                p (files-under (io/file root r))
-                :when (some #(re-matches % p) res)]
-            (str r "/" p))
-          distinct
-          (sort byte-order)
-          vec))))
+   (->> (or (seq kinds) (get layout "documents"))
+        (mapcat #(kind-paths root layout %))
+        distinct
+        (sort byte-order)
+        vec)))
 
 (defn sources
   "Every document under `root`, as Files, in the order of `paths`."
