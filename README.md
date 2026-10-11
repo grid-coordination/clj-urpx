@@ -684,7 +684,7 @@ In both, a resolution that throws inside the window becomes an interval carrying
 | `:not-in-effect` | the instant is outside the identity's lifetime, from `urpx:initialEffectiveDate` to its expiration | `:from`, `:until` |
 | `:not-modeled` | inside the lifetime with no version in force: a gap, or before the first version (`:after` nil), or after the last (`:before` nil) | `:after`, `:before`, `:from`, `:until` |
 
-Bounds are `ZonedDateTime`s and periods are half-open. A modifier that is not modeled leaves the base plan resolving alone, so a client checks each identity it composes.
+Bounds are `ZonedDateTime`s and periods are half-open. A modifier not modeled at `t` is absent from what `applicable-modifiers` returns with `:at t`, so a client checks each identity it composes.
 
 ### What may apply, and what does apply
 

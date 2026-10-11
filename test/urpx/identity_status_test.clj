@@ -203,3 +203,61 @@
   (testing "nothing zones the identity"
     (is (= :urpx.price/no-timezone
            (refusal [(dissoc m :urpx/timezoneIdentifier)] "t:m" (at 2023 1 1))))))
+
+(defn- modifier-version
+  [modifier id props]
+  (merge {:jsonld/type "urpx:RatePlanModifierVersion" :jsonld/id id
+          :urpx/forRatePlanModifier {:jsonld/id modifier}
+          :urpx/applicableToRatePlan [{:jsonld/id "t:q"}]}
+         props))
+
+(def ^:private md
+  "A modifier with a gap between two versions, the second stating no end."
+  {:jsonld/type "urpx:RatePlanModifier" :jsonld/id "t:md"
+   :urpx/timezoneIdentifier "America/Los_Angeles"
+   :urpx/initialEffectiveDate (LocalDate/of 2020 1 1)
+   :urpx/hasRatePlanModifierVersion
+   [(modifier-version "t:md" "t:md-v1" {:urpx/effectiveDateTime (LocalDateTime/of 2024 1 1 0 0)
+                                        :urpx/expirationDateTime (LocalDateTime/of 2025 1 1 0 0)})
+    (modifier-version "t:md" "t:md-v2" {:urpx/effectiveDate (LocalDate/of 2026 1 1)})]})
+
+(deftest a-modifier-identity
+  (let [docs [q md]]
+    (testing "each status"
+      (is (= {:status :in-force :version "t:md-v1" :from (at 2024 1 1) :until (at 2025 1 1)}
+             (summary (scm/identity-status-at docs "t:md" (at 2024 6 1)))))
+      (is (= {:status :not-modeled :after "t:md-v1" :before "t:md-v2"
+              :from (at 2025 1 1) :until (at 2026 1 1)}
+             (scm/identity-status-at docs "t:md" (at 2025 6 1))))
+      (is (= {:status :in-force :version "t:md-v2" :from (at 2026 1 1) :until nil}
+             (summary (scm/identity-status-at docs "t:md" (at 2027 1 1)))))
+      (is (= {:status :not-in-effect :from (at 2020 1 1) :until nil}
+             (scm/identity-status-at docs "t:md" (at 2019 1 1)))))
+    (testing "the version in force is the one applicable-modifiers takes with :at"
+      (doseq [y (range 2023 2028)
+              mo [1 6]
+              :let [t (at y mo 1)
+                    s (scm/identity-status-at docs "t:md" t)
+                    [base] (scm/plan-versions docs {:at t})]]
+        (is (= (if (= :in-force (:status s)) [(:version s)] [])
+               (scm/applicable-modifiers docs base {:at t}))
+            (str t))))
+    (testing "prepared documents answer alike"
+      (let [prepared (scm/prepare docs)]
+        (doseq [t [(at 2019 1 1) (at 2024 6 1) (at 2025 6 1) (at 2027 1 1)]]
+          (is (= (scm/identity-status-at docs "t:md" t)
+                 (scm/identity-status-at prepared "t:md" t))))))))
+
+(deftest an-identity-read-from-a-back-pointer
+  (testing "an identity stated only as a version's uncoerced back pointer"
+    (let [docs [{:jsonld/type "urpx:RatePlanVersion" :jsonld/id "t:e-v1"
+                 :urpx/forRatePlan {:jsonld/type "urpx:RatePlan" :jsonld/id "t:e"
+                                    :urpx/initialEffectiveDate "2020-01-01"
+                                    :urpx/expirationDate "2030-01-01"
+                                    :urpx/timezoneIdentifier "America/Los_Angeles"}
+                 :urpx/effectiveDateTime (LocalDateTime/of 2024 1 1 0 0)}]]
+      (is (= {:status :not-in-effect :from (at 2020 1 1) :until (at 2030 1 1)}
+             (scm/identity-status-at docs "t:e" (at 2019 1 1))))
+      (is (= {:status :not-modeled :after nil :before "t:e-v1"
+              :from (at 2020 1 1) :until (at 2024 1 1)}
+             (scm/identity-status-at docs "t:e" (at 2021 1 1)))))))

@@ -556,9 +556,10 @@
 
 (defn- identity-nodes
   "@id -> the distinct urpx:RatePlan and urpx:RatePlanModifier nodes in
-   `documents` carrying it."
+   `documents` carrying it, each coerced. A copy embedded as a version's back
+   pointer is not coerced by `urpx.load`."
   [documents]
-  (reduce (fn [m n] (update m (:jsonld/id n) (fnil conj #{}) n))
+  (reduce (fn [m n] (update m (:jsonld/id n) (fnil conj #{}) (coerce/coerce-doc n)))
           {}
           (for [d documents
                 n (tree-seq coll? seq d)

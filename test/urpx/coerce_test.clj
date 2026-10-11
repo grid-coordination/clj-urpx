@@ -492,3 +492,17 @@
               decoded (coerce/coerce s encoded)]
           (is (string? encoded) (str s ": encoded form is a string"))
           (is (= original decoded) (str s ": round-trip preserves the typed value")))))))
+
+(deftest identity-expirations-decode
+  (testing "urpx:RatePlan urpx:expirationDateTime"
+    (is (= (LocalDateTime/of 2030 1 1 12 0)
+           (:urpx/expirationDateTime
+            (coerce/coerce-doc {:jsonld/type "urpx:RatePlan" :jsonld/id "t:p"
+                                :urpx/expirationDateTime "2030-01-01T12:00:00"})))))
+  (testing "urpx:RatePlanModifier urpx:expirationDate and urpx:expirationDateTime"
+    (is (= {:urpx/expirationDate     (LocalDate/of 2030 1 1)
+            :urpx/expirationDateTime (LocalDateTime/of 2030 1 1 12 0)}
+           (select-keys (coerce/coerce-doc {:jsonld/type "urpx:RatePlanModifier" :jsonld/id "t:m"
+                                            :urpx/expirationDate "2030-01-01"
+                                            :urpx/expirationDateTime "2030-01-01T12:00:00"})
+                        [:urpx/expirationDate :urpx/expirationDateTime])))))

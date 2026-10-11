@@ -12,7 +12,8 @@
   the report's `:gaps` (when it has an `:after`) or `:before-first-version`
   (when it has none), and every row of those must be found.
 
-  Exit 0 when the two sets agree, 1 when they differ, 2 when refused."
+  Exit 0 when the two sets agree and no probe is refused, 1 otherwise, 2
+  when no corpus directory is given."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.set :as set]
