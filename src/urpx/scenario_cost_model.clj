@@ -26,7 +26,8 @@
             [urpx.coerce :as coerce]
             [urpx.index :as index]
             [urpx.price :as price]
-            [urpx.schedule :as schedule])
+            [urpx.schedule :as schedule]
+            [urpx.schema :as schema])
   (:import [java.nio.charset StandardCharsets]
            [java.security MessageDigest]
            [java.time ZonedDateTime ZoneId]))
@@ -551,7 +552,20 @@
 ;; Prepared documents
 ;; ---------------------------------------------------------------------------
 
-(defrecord Prepared [documents repeated-ids package-zones versions find-zone])
+(def ^:private identity-types #{"urpx:RatePlan" "urpx:RatePlanModifier"})
+
+(defn- identity-nodes
+  "@id -> the distinct urpx:RatePlan and urpx:RatePlanModifier nodes in
+   `documents` carrying it."
+  [documents]
+  (reduce (fn [m n] (update m (:jsonld/id n) (fnil conj #{}) n))
+          {}
+          (for [d documents
+                n (tree-seq coll? seq d)
+                :when (and (map? n) (identity-types (:jsonld/type n)) (:jsonld/id n))]
+            n)))
+
+(defrecord Prepared [documents repeated-ids package-zones versions find-zone identities])
 
 (defn prepared?
   "True if `x` is what `prepare` returns."
@@ -575,7 +589,8 @@
                                      (map (fn [kind]
                                             [kind (mapcat #(versions-in % kind) documents)]))
                                      kinds))
-      :find-zone     (zone-finder documents mode)})))
+      :find-zone     (zone-finder documents mode)
+      :identities    (delay (identity-nodes documents))})))
 
 (defn prepare
   "`documents` read once for every call that takes them.
@@ -903,6 +918,170 @@
          (map (juxt :urpx.scenario-cost-model/version-id
                     (comp set :urpx.scenario-cost-model/modifier-version-ids)))
          (enumerate documents opts))))
+
+;; ---------------------------------------------------------------------------
+;; Identity status
+;; ---------------------------------------------------------------------------
+
+(defn- version-bounds
+  "Every effective and expiration instant of the versions in `triples`, one
+   per instant, in order."
+  [triples zone-of]
+  (->> triples
+       (mapcat (fn [[_ v :as tr]]
+                 (let [zone (zone-of tr)]
+                   [(price/version-effective-at v zone) (price/version-expires-at v zone)])))
+       (remove nil?)
+       (reduce (fn [m ^ZonedDateTime z]
+                 (let [i (.toInstant z)]
+                   (cond-> m (not (contains? m i)) (assoc i z))))
+               (sorted-map))
+       vals
+       vec))
+
+(defn- stretch
+  "The run of instants around `t` over which `pick` gives what it gives at
+   `t`. `bounds` are the only instants at which `pick` can change, in order.
+
+   `:pick` is the value at `t`, `:from` and `:until` the run's bounds, nil
+   when unbounded, and `:left` and `:right` the values just outside it."
+  [bounds pick ^ZonedDateTime t]
+  (let [n     (count bounds)
+        ;; Interval 0 is before the first bound, interval k from bound k-1 to
+        ;; bound k. `pick` is constant on each, so it is read at the start.
+        at    (fn [k]
+                (cond (pos? k)  (bounds (dec k))
+                      (pos? n)  (.minusNanos ^ZonedDateTime (bounds 0) 1)
+                      :else     t))
+        node  #(if (vector? %) (second %) %)
+        k0    (count (take-while #(not (.isAfter ^ZonedDateTime % t)) bounds))
+        p0    (pick t)
+        same? #(= (node p0) (node (pick (at %))))
+        lo    (loop [k k0] (if (and (pos? k) (same? (dec k))) (recur (dec k)) k))
+        hi    (loop [k k0] (if (and (< k n) (same? (inc k))) (recur (inc k)) k))]
+    {:pick  p0
+     :from  (when (pos? lo) (bounds (dec lo)))
+     :until (when (< hi n) (bounds hi))
+     :left  (when (pos? lo) (pick (at (dec lo))))
+     :right (when (< hi n) (pick (at (inc hi))))}))
+
+(defn- lifetime
+  "`[start end]` of identity `id` read from its `nodes` in `zone`: its
+   urpx:initialEffectiveDate, and its urpx:expirationDateTime or
+   urpx:expirationDate, each nil when no node states it. Nodes stating
+   different instants for either refuse."
+  [id nodes ^ZoneId zone]
+  (let [one (fn [bound read]
+              (let [vs (vals (into (sorted-map)
+                                   (keep #(when-let [^ZonedDateTime z (read %)] [(.toInstant z) z]))
+                                   nodes))]
+                (when (< 1 (count vs))
+                  (throw (ex-info (str "Cannot read the lifetime of " (pr-str id) ": its nodes "
+                                       "state different " (name bound) " instants, "
+                                       (str/join " and " vs) ", and nothing says which is meant.")
+                                  {:reason :urpx.scenario-cost-model/conflicting-lifetime
+                                   :id     id
+                                   :bound  bound
+                                   :values (vec vs)})))
+                (first vs)))]
+    [(one :start #(schema/in-zone (:urpx/initialEffectiveDate %) zone))
+     (one :end #(price/version-expires-at % zone))]))
+
+(defn identity-status-at
+  "The status at `t` of the urpx:RatePlan or urpx:RatePlanModifier identity
+   whose @id is `id`, as a map whose `:status` is one of:
+
+     :in-force       `:version`, the snapshot in force, and `:from` and
+                     `:until`, the bounds of its time in force. `:until` is
+                     nil when nothing ends it.
+     :not-in-effect  `t` is outside the identity's lifetime, from its
+                     urpx:initialEffectiveDate to its urpx:expirationDateTime
+                     or urpx:expirationDate. `:from` and `:until` are those
+                     bounds, `:until` nil when it states none.
+     :not-modeled    inside the lifetime, and no version is in force. `:from`
+                     and `:until` bound the period, and `:after` and `:before`
+                     are the @ids of the versions in force on either side of
+                     it, nil where none is or where the lifetime bounds it.
+
+   Bounds are ZonedDateTimes, and every period is half-open.
+
+   The version in force is the one `enumerate` and `plan-versions` take with
+   `:at t`: of the versions in effect and not expired, the latest effective.
+   So a later version takes over from one still in effect, which is in force
+   again if the later one expires first, and a version stating no effective
+   instant is in force, until it expires, wherever no dated version is. The
+   lifetime is read only when no version is in force.
+
+   `documents` and `opts` are as `prepare` takes them, or the value it
+   returns. Refusals, under :urpx.scenario-cost-model unless qualified:
+
+     not-zoned-instant          `t` is not a ZonedDateTime
+     unknown-identity           no identity node and no version carries `id`
+     ambiguous-version          two snapshots tie on the latest effective
+                                instant at `t`, or beside a not-modeled period
+     no-initial-effective-date  no version is in force and no identity node
+                                states urpx:initialEffectiveDate
+     conflicting-lifetime       identity nodes state different instants for
+                                one bound
+     :urpx.price/no-timezone    nothing zones a version, or the identity when
+                                its lifetime is read
+
+   and what `prepare` refuses."
+  ([documents id t] (identity-status-at documents id t nil))
+  ([documents id t opts]
+   (when-not (instance? ZonedDateTime t)
+     (throw (ex-info (str "identity-status-at takes a ZonedDateTime, not " (pr-str t) ".")
+                     {:reason :urpx.scenario-cost-model/not-zoned-instant
+                      :value  t})))
+   (let [{:keys [versions find-zone identities]}
+         (prepared-for documents opts version-kinds "urpx.scenario-cost-model/identity-status-at")
+         triples (into [] (filter #(= id (first %))) (mapcat #(get versions %) version-kinds))
+         nodes   (vec (get @identities id))
+         _       (when (and (empty? nodes) (empty? triples))
+                   (throw (ex-info (str "No urpx:RatePlan or urpx:RatePlanModifier "
+                                        (pr-str id) " and no version of one in the documents.")
+                                   {:reason :urpx.scenario-cost-model/unknown-identity
+                                    :id     id})))
+         zone-of (zone-requirer find-zone)
+         pick    (memoize
+                  (fn [at]
+                    (try (some-> (current-versions triples at zone-of) vals first first)
+                         (catch clojure.lang.ExceptionInfo e
+                           (if (= :urpx.scenario-cost-model/ambiguous-version (:reason (ex-data e)))
+                             {::refused e}
+                             (throw e))))))
+         named   (fn [p] (if (map? p) (throw (::refused p)) (:jsonld/id (second p))))
+         {p :pick :as s} (stretch (version-bounds triples zone-of) pick t)]
+     (cond
+       (map? p)
+       (throw (::refused p))
+
+       p
+       {:status :in-force :version (second p) :from (:from s) :until (:until s)}
+
+       (not-any? :urpx/initialEffectiveDate nodes)
+       (throw (ex-info (str "No version of " (pr-str id) " is in force at " t ", and no "
+                            "node states its urpx:initialEffectiveDate, so whether it was "
+                            "in effect then has no answer.")
+                       {:reason :urpx.scenario-cost-model/no-initial-effective-date
+                        :id     id
+                        :at     t}))
+
+       :else
+       (let [zone   (or (find-zone [id (first nodes) (first nodes)])
+                        (price/require-zone {:jsonld/id id}))
+             [^ZonedDateTime start ^ZonedDateTime end] (lifetime id nodes zone)]
+         (if (or (.isBefore t start) (and end (not (.isBefore t end))))
+           {:status :not-in-effect :from start :until end}
+           (let [^ZonedDateTime from  (:from s)
+                 ^ZonedDateTime until (:until s)
+                 clip-from?  (or (nil? from) (.isBefore from start))
+                 clip-until? (and end (or (nil? until) (.isAfter until end)))]
+             {:status :not-modeled
+              :after  (when-not (or clip-from? (nil? (:left s))) (named (:left s)))
+              :before (when-not (or clip-until? (nil? (:right s))) (named (:right s)))
+              :from   (if clip-from? start from)
+              :until  (if clip-until? end until)})))))))
 
 ;; ---------------------------------------------------------------------------
 ;; urpx:ScenarioCostModel nodes

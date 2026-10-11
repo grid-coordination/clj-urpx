@@ -11,6 +11,11 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 ## [Unreleased]
 
+### Added
+
+- **`urpx.scenario-cost-model/identity-status-at`** gives a plan or modifier identity's status at an instant: `:in-force` with the version `enumerate :at` takes and the bounds of its time in force, `:not-in-effect` outside the identity's lifetime, or `:not-modeled` inside it with no version in force, naming the versions on either side.
+- `urpx.schema/RatePlan` decodes `urpx:expirationDateTime`, and `urpx.schema/RatePlanModifier` decodes `urpx:expirationDate` and `urpx:expirationDateTime`.
+
 ### Fixed
 
 - **`corpus/corpus_json.clj` walks a kind's own `roots` when the kind declares them,** and the layout's `roots` otherwise, as `corpus.json` specifies. It walked only the layout's, so a kind rooted elsewhere, such as urpx-rate-plans' `clojure-source` under `src/`, listed no files.

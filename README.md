@@ -665,6 +665,27 @@ One further refusal is about the caller rather than the corpus. `resolve-at`, `s
 
 In both, a resolution that throws inside the window becomes an interval carrying `:urpx.interval/refused` rather than aborting the horizon, and equal refusals merge. A publisher can emit the part of a window it can price and say plainly what it cannot.
 
+### Is an identity in force at an instant?
+
+`identity-status-at` says why a plan or modifier identity has or lacks a price at an instant. `documents` and `opts` are as `prepare` takes them, or its value.
+
+```clojure
+(scm/identity-status-at docs "sce:care" t) ; t in February 2026
+;; => {:status :not-modeled
+;;     :after  "sce:care-2025-11-15"
+;;     :before "sce:care-2026-03-20"
+;;     :from   <ZonedDateTime 2026-01-01T00:00-08:00[America/Los_Angeles]>
+;;     :until  <ZonedDateTime 2026-03-20T00:00-07:00[America/Los_Angeles]>}
+```
+
+| `:status` | Means | Other keys |
+|---|---|---|
+| `:in-force` | a version is in force, the one `enumerate` takes with `:at` | `:version`, `:from`, `:until` (nil when nothing ends it) |
+| `:not-in-effect` | the instant is outside the identity's lifetime, from `urpx:initialEffectiveDate` to its expiration | `:from`, `:until` |
+| `:not-modeled` | inside the lifetime with no version in force: a gap, or before the first version (`:after` nil), or after the last (`:before` nil) | `:after`, `:before`, `:from`, `:until` |
+
+Bounds are `ZonedDateTime`s and periods are half-open. A modifier that is not modeled leaves the base plan resolving alone, so a client checks each identity it composes.
+
 ### What may apply, and what does apply
 
 The library answers the first; only the caller can answer the second. `urpx:applicableToRatePlan` states which plans a modifier may apply to. Which of them a given **customer holds** is not in any document, because URPX places customer data outside its scope (`urpx:AccountServiceAgreement` carries the note "Service account and agreement data lives in customer data, not URPX").
@@ -1042,7 +1063,7 @@ clj-kondo --lint "$(clojure -Spath)" --copy-configs --skip-lint
 | `urpx.validate`      | Single-file CLI checker (`clojure -M:validate <file.jsonld>`), tri-state exit |
 | `urpx.dsl`           | Authoring DSL: `dsl-scope`, `make-builder`, named builders for every entity type |
 | `urpx.defs`          | Typed definitions: `defurpx`, `kind-schema`, `defs-of-kind` |
-| `urpx.scenario-cost-model`  | Optional enumerator: `enumerate`, `enumerate-pairs`, `identity-tuple`, `plan-versions`, `applicable-modifiers`, `offered-by`, the `one-modifier-at-most` / `every-subset`, `named-versions-narrow` / `named-versions-add` and `repeated-ids-refuse` / `repeated-ids-union` policies, and `resolve-at` / `segments-for` / `schedule-for` for prices. Requires `urpx.price`; nothing in the library requires it |
+| `urpx.scenario-cost-model`  | Optional enumerator: `enumerate`, `enumerate-pairs`, `identity-tuple`, `plan-versions`, `applicable-modifiers`, `offered-by`, `identity-status-at`, the `one-modifier-at-most` / `every-subset`, `named-versions-narrow` / `named-versions-add` and `repeated-ids-refuse` / `repeated-ids-union` policies, and `resolve-at` / `segments-for` / `schedule-for` for prices. Requires `urpx.price`; nothing in the library requires it |
 
 ## Status
 
