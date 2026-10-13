@@ -9,6 +9,23 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Added
+
+- **`PricingModel`, `GeneralRule`, `ModelCollection`, `ServiceClass` and `RateGroup`** become entity schemas, with builders `pricing-model`, `general-rule`, `model-collection`, `service-class` and `rate-group`, and `urpx.schema/CollectionRole` enforces `urpx:collectionRole`. A `PricingModel`'s `urpx:hasPlanElements` is an open map, since a partial model may name the plan's metric inputs and ledgers by reference.
+- `TariffFiling` validates the models, rules and sources it holds (`urpx:containsPricingModel`, `urpx:hasGeneralRule`, `urpx:documentedBy`), where it accepted any map.
+- Properties upstream's examples use: on `PriceSet`, `urpx:priceCurrency`, `chargeType`, `billPortion`, `hasMetricSpecification` and `hasDataSourceReference`; on `PriceDefinition`, `urpx:pursuantTo`, `hasApplicabilityGroup` and `contributedBy`; `Price.contributedBy`; on `RatePlan`, `urpx:description`, `serviceRole`, `commodity`, `offeredBy`, `hasServiceClass` and `hasRateGroup`; `RatePlanModifier.offeredBy`; `RatePlanVersion.name` and `consolidatedFrom`; on `URPXPackage`, `urpx:publishedBy`, `publicationPlatform` and `dateReceived`; `Ledger.hasCalculationMethod`.
+
+### Changed
+
+- **`clojure -M:validate` checks every entity type `urpx.schema` registers,** where it checked eleven. A file whose entities are, for example, a `TariffFiling` is now checked where it was refused.
+
+### Fixed
+
+- **Validating by name through `urpx.schema/registry` threw a `ClassCastException`** for a schema whose children Malli looks up by a non-keyword; `urpx.schema/schemas` is now an unsorted map.
+- `urpx.schema/schema-for-type` returns nil for a non-string `@type`.
+
 ## [0.53.0] — 2026-10-13
 
 ### Added

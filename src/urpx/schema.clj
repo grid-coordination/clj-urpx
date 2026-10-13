@@ -713,6 +713,10 @@
             "thirtyMinuteInterval" "hourlyInterval" "dailyInterval" "weeklyInterval"
             "monthlyInterval" "quarterlyInterval" "annualInterval" "customInterval"))
 
+(def CollectionRole
+  "urpx:CollectionRoleValue, 5 members."
+  (enum-ref "modelThread" "canonicalSet" "adHocSet" "submissionSet" "scenarioSet"))
+
 (def DynamicPricingType
   "urpx:DynamicPricingTypeValue, 6 members."
   (enum-ref "criticalPeakPricing" "demandResponsePricing" "eventDrivenPricing"
@@ -937,6 +941,8 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/name :string]
    [:urpx/description {:optional true} :string]
+   [:urpx/hasCalculationMethod {:optional true ::range "urpx:CalculationMethod"}
+    [:or CalculationMethod ExclusiveRef]]
    [:urpx/ledgerType {:optional true} Ref]
    [:urpx/referencesMetricInput
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:MetricInput"}
@@ -1036,6 +1042,18 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/name :string]
    [:urpx/description {:optional true} :string]
+   ;; GeneralRule, ApplicabilityGroup and PricingModel are defined further
+   ;; down, so these hold an inline node or a reference as an open map; the
+   ;; range still types them.
+   [:urpx/pursuantTo
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:GeneralRule"}
+    [:vector :map]]
+   [:urpx/hasApplicabilityGroup
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ApplicabilityGroup"}
+    [:vector :map]]
+   [:urpx/contributedBy
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PricingModel"}
+    [:vector :map]]
    [:urpx/hasDataSourceReference
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
     [:vector [:or DataSourceReference ExclusiveRef]]]
@@ -1533,6 +1551,25 @@
 ;; Prices
 ;; ---------------------------------------------------------------------------
 
+(def GeneralRule
+  "A rule stated once, at the tariff book level, and cited by the pricing that
+   follows it."
+  [:map
+   [:jsonld/type [:= "urpx:GeneralRule"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/generalRuleID :string]
+   [:urpx/name        {:optional true} :string]
+   [:urpx/description {:optional true} :string]
+   [:urpx/hasDataSourceReference
+    {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
+    [:vector {:min 1} [:or DataSourceReference ExclusiveRef]]]
+   [:urpx/hasApplicabilityRule
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ApplicabilityRule"}
+    [:vector [:or ApplicabilityRule ExclusiveRef]]]
+   [:urpx/contributedBy
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PricingModel"}
+    [:vector :map]]])
+
 (def Price
   "v0.2.0: many new optional value fields (adder, amount, basePrice,
    basedOnPrice, currentPrice, multiplier) and metadata
@@ -1543,6 +1580,9 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/name {:optional true} :string]
    [:urpx/description {:optional true} :string]
+   [:urpx/contributedBy
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PricingModel"}
+    [:vector :map]]
    [:urpx/hasDynamicPricing {:optional true ::range "urpx:DynamicPricing"}
     [:or DynamicPricing ExclusiveRef]]
    [:urpx/hasDataSourceReference
@@ -1640,6 +1680,16 @@
   [:map
    [:jsonld/type [:= "urpx:PriceSet"]]
    [:jsonld/id {:optional true} :string]
+   [:urpx/priceCurrency {:optional true} :string]
+   [:urpx/chargeType
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/billPortion {:optional true} Ref]
+   [:urpx/hasMetricSpecification {:optional true ::range "urpx:MetricSpecification"}
+    [:or MetricSpecification ExclusiveRef]]
+   [:urpx/hasDataSourceReference
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
+    [:vector [:or DataSourceReference ExclusiveRef]]]
    [:urpx/name {:optional true} :string]
    [:urpx/description {:optional true} :string]
    [:urpx/startDate     {:optional true} Date]
@@ -2033,6 +2083,88 @@
 ;; Plan and version
 ;; ---------------------------------------------------------------------------
 
+(def RateGroup
+  "A group of rate plans within a service class."
+  [:map
+   [:jsonld/type [:= "urpx:RateGroup"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/rateGroupIdentifier :string]
+   [:urpx/rateGroupName       :string]
+   [:urpx/parentServiceClass {:optional true ::range "urpx:ServiceClass"} :map]])
+
+(def ServiceClass
+  "A utility's class of service, as its tariff names it."
+  [:map
+   [:jsonld/type [:= "urpx:ServiceClass"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/serviceClassName    :string]
+   [:urpx/serviceClassRaw     :string]
+   [:urpx/serviceClassCleaned {:optional true} :string]
+   [:urpx/hasRateGroup
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RateGroup"}
+    [:vector [:or RateGroup ExclusiveRef]]]])
+
+(def PricingModel
+  "An authored, citable, possibly partial statement of pricing: the unit a
+   publication carries. New in v0.3.0. Consolidated into the derived
+   RatePlanVersion snapshot through urpx:consolidatedFrom."
+  [:map
+   [:jsonld/type [:= "urpx:PricingModel"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/confidence Confidence]
+   ;; An open map, not `PlanElements`: a model is partial and may name the
+   ;; metric inputs and ledgers of the plan it amends by reference, where
+   ;; `PlanElements` holds them inline for the resolver.
+   [:urpx/hasPlanElements {:optional true ::range "urpx:PlanElements"} :map]
+   [:urpx/hasPrices {:optional true ::range "urpx:Prices"}
+    [:or Prices ExclusiveRef]]
+   [:urpx/hasGeneralRule
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:GeneralRule"}
+    [:vector [:or GeneralRule ExclusiveRef]]]
+   [:urpx/pursuantTo
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:GeneralRule"}
+    [:vector [:or GeneralRule ExclusiveRef]]]
+   [:urpx/documentedBy
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
+    [:vector [:or DataSourceReference ExclusiveRef]]]
+   [:urpx/offeredBy   {:optional true ::range "urpx:Organization"} OfferingOrganization]
+   [:urpx/publishedBy {:optional true ::range "urpx:Organization"} [:or Organization ExclusiveRef]]
+   [:urpx/referencesRatePlan
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlan"}
+    [:vector :map]]
+   [:urpx/referencesRatePlanModifier
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlanModifier"}
+    [:vector :map]]
+   [:urpx/withinPublication {:optional true ::range "urpx:TariffFiling"} :map]
+   [:urpx/supersedes
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PricingModel"}
+    [:vector :map]]
+   [:urpx/replaces   {:optional true ::range "urpx:PricingModel"} :map]
+   [:urpx/replacedBy {:optional true ::range "urpx:PricingModel"} :map]
+   [:urpx/cancelledBy {:optional true ::range #{"urpx:PricingModel" "urpx:SourcePublication"}} :map]
+   [:urpx/cancelledOn         {:optional true} Date]
+   [:urpx/cancelledOnDateTime {:optional true} DateTime]
+   [:urpx/effectiveDate       {:optional true} Date]
+   [:urpx/effectiveDateTime   {:optional true} DateTime]
+   [:urpx/expectedEndDate     {:optional true} Date]
+   [:urpx/expectedEndDateTime {:optional true} DateTime]
+   [:urpx/expirationDate      {:optional true} Date]
+   [:urpx/expirationDateTime  {:optional true} DateTime]
+   [:urpx/dateModified        {:optional true} Date]
+   [:urpx/dateTimeModified    {:optional true} DateTime]])
+
+(def ModelCollection
+  "PricingModels grouped over time, in a role such as a model thread or a
+   submission set. New in v0.3.0."
+  [:map
+   [:jsonld/type [:= "urpx:ModelCollection"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/name {:optional true} :string]
+   [:urpx/collectionRole {:optional true} CollectionRole]
+   [:urpx/collectsPricingModel
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PricingModel"}
+    [:vector [:or PricingModel ExclusiveRef]]]])
+
 (def RatePlanVersion
   "v0.2.0: changeReason, serviceRole, publishedBy are now required; gains
    customerChoice, isDefault, hasModifierOptions, hasRateCase, supersedes,
@@ -2046,6 +2178,10 @@
    [:urpx/changeReason  Ref]
    [:urpx/changeDescription {:optional true} :string]
    [:urpx/description   {:optional true} :string]
+   [:urpx/name          {:optional true} :string]
+   [:urpx/consolidatedFrom
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PricingModel"}
+    [:vector [:or PricingModel ExclusiveRef]]]
    ;; sh:minCount 0 sh:maxCount 1 on both version shapes, and it was NEVER
    ;; required upstream: optional at v0.2.1, v0.3.0, v0.4.0, v0.5.0 and
    ;; v0.5.1. clj-urpx required it by its own choice, so a conformant
@@ -2125,6 +2261,18 @@
    [:jsonld/context {:optional true} Context]
    [:urpx/ratePlanUniqueIdentifier :string]
    [:urpx/name :string]
+   [:urpx/description {:optional true} :string]
+   [:urpx/serviceRole {:optional true} Ref]
+   [:urpx/commodity
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector Ref]]
+   [:urpx/offeredBy {:optional true ::range "urpx:Organization"} OfferingOrganization]
+   [:urpx/hasServiceClass
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ServiceClass"}
+    [:vector [:or ServiceClass ExclusiveRef]]]
+   [:urpx/hasRateGroup
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RateGroup"}
+    [:vector [:or RateGroup ExclusiveRef]]]
    [:urpx/initialEffectiveDate Date]
    [:urpx/effectiveDate {:optional true} Date]
    [:urpx/expirationDate {:optional true} Date]
@@ -2248,6 +2396,7 @@
    [:jsonld/context {:optional true} Context]
    [:urpx/modifierUniqueIdentifier :string]
    [:urpx/name :string]
+   [:urpx/offeredBy {:optional true ::range "urpx:Organization"} OfferingOrganization]
    [:urpx/initialEffectiveDate Date]
    [:urpx/expirationDate     {:optional true} Date]
    [:urpx/expirationDateTime {:optional true} DateTime]
@@ -2377,6 +2526,9 @@
    [:jsonld/type [:= "urpx:URPXPackage"]]
    [:jsonld/id {:optional true} :string]
    [:jsonld/context {:optional true} Context]
+   [:urpx/publishedBy {:optional true ::range "urpx:Organization"} [:or Organization ExclusiveRef]]
+   [:urpx/publicationPlatform {:optional true} :string]
+   [:urpx/dateReceived        {:optional true} Date]
    [:urpx/targetURPXVersion :string]
    [:urpx/name              {:optional true} :string]
    [:urpx/description       {:optional true} :string]
@@ -2479,7 +2631,7 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/containsPricingModel
     {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:PricingModel"}
-    [:vector :map]]
+    [:vector [:or PricingModel ExclusiveRef]]]
    [:urpx/name        {:optional true} :string]
    [:urpx/description {:optional true} :string]
    [:urpx/publishedBy {:optional true ::range "urpx:Organization"} [:or Organization ExclusiveRef]]
@@ -2500,10 +2652,10 @@
     [:vector :map]]
    [:urpx/documentedBy
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
-    [:vector :map]]
+    [:vector [:or DataSourceReference ExclusiveRef]]]
    [:urpx/hasGeneralRule
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:GeneralRule"}
-    [:vector :map]]])
+    [:vector [:or GeneralRule ExclusiveRef]]]])
 
 ;; ---------------------------------------------------------------------------
 ;; Registry
@@ -2541,7 +2693,7 @@
   "Every entity schema in this namespace, keyed by its @type as a keyword:
    `:urpx/Season` -> `Season`. A schema that admits two @type spellings is
    under both."
-  (into (sorted-map)
+  (into {}
         (for [[_ v] (ns-publics 'urpx.schema)
               :let [s @v]
               :when (vector? s)
@@ -2556,9 +2708,9 @@
 
 (defn schema-for-type
   "The entity schema for @type `t` (\"urpx:Season\"), or nil if none is
-   modeled."
+   modeled or `t` is not a string."
   [t]
-  (get schemas (type->keyword t)))
+  (when (string? t) (get schemas (type->keyword t))))
 
 (defn ranges
   "{property range} for each entry of entity schema `s` that states a

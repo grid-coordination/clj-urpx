@@ -29,17 +29,8 @@
   (:gen-class))
 
 (def ^:private schema-for
-  {"urpx:RatePlan"                 schema/RatePlan
-   "urpx:RatePlanModifier"         schema/RatePlanModifier
-   "urpx:RatePlanVersion"          schema/RatePlanVersion
-   "urpx:RatePlanModifierVersion"  schema/RatePlanModifierVersion
-   "urpx:URPXDocument"             schema/URPXDocument
-   "urpx:URPXPackage"              schema/URPXPackage
-   "urpx:ScenarioCostModel"        schema/ScenarioCostModel
-   "urpx:SourcePublication"        schema/SourcePublication
-   "urpx:TariffPublication"        schema/SourcePublication
-   "urpx:RateCase"                 schema/RateCase
-   "urpx:ProgramEnrollment"        schema/ProgramEnrollment})
+  "The schema for an entity's @type: every entity type urpx.schema registers."
+  schema/schema-for-type)
 
 (def ^:private version-types
   #{"urpx:RatePlanVersion" "urpx:RatePlanModifierVersion"})

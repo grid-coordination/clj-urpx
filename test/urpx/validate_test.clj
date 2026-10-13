@@ -289,3 +289,16 @@
            (mapv #(select-keys % [:property :range :id :types]) (:mistyped r))))
     (is (empty? (:mistyped (validate/check-file
                             (.getPath (fixtures/fixture-resource "sce-d-2026-03-20"))))))))
+
+(deftest every-registered-type-is-checked
+  (testing "a file whose only entity is a TariffFiling is checked, not refused,
+            and the PricingModel inside it is held to its schema"
+    (let [doc (fn [model]
+                (str "{" ctx ",\"@type\":\"urpx:TariffFiling\",\"@id\":\"x:tf\","
+                     "\"urpx:containsPricingModel\":[" model "]}"))
+          ok  (validate/check-file
+               (tmp-doc (doc "{\"@type\":\"urpx:PricingModel\",\"urpx:confidence\":{\"@id\":\"urpx:verified\"}}")))
+          bad (validate/check-file (tmp-doc (doc "{\"@type\":\"urpx:PricingModel\"}")))]
+      (is (= ["urpx:TariffFiling"] (mapv :type (:checked ok))))
+      (is (empty? (filter :error (:checked ok))))
+      (is (= 1 (count (filter :error (:checked bad))))))))

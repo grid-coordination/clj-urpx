@@ -130,7 +130,8 @@
     :urpx/hasPriceUpdateRule
     :urpx/hasPrices :urpx/hasProfileAlternative :urpx/hasProfileAlternatives
     :urpx/hasProgramEnrollment :urpx/hasRatePlan :urpx/hasRatePlanModifier
-    :urpx/hasRatePlanModifierVersion :urpx/hasRatePlanVersion :urpx/hasSeasons
+    :urpx/hasRateGroup :urpx/hasRatePlanModifierVersion :urpx/hasRatePlanVersion :urpx/hasSeasons
+    :urpx/hasServiceClass
     :urpx/hasServiceBracket
     :urpx/hasServiceTier :urpx/hasServiceTiers :urpx/hasTOUPeriod :urpx/hasTOUSchedule
     :urpx/hasTOUTier :urpx/hasTariffBookReference :urpx/hasTariffPublication

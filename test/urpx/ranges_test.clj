@@ -252,3 +252,32 @@
              (:urpx/gYearValue (coerce/coerce schema/CustomOperandNode
                                               {:jsonld/type "urpx:CustomOperandNode"
                                                :urpx/gYearValue "2009"})))))))
+
+(deftest classes-upstreams-examples-use
+  (let [valid? #(m/validate %1 %2 {:registry schema/registry})
+        model {:jsonld/type "urpx:PricingModel"
+               :urpx/confidence {:jsonld/id "urpx:verified"}
+               :urpx/pursuantTo [{:jsonld/id "ex:rule-1"}]}]
+    (testing "a PricingModel requires its confidence"
+      (is (valid? :urpx/PricingModel model))
+      (is (not (valid? :urpx/PricingModel (dissoc model :urpx/confidence)))))
+    (testing "a TariffFiling validates the models it contains"
+      (let [filing #(hash-map :jsonld/type "urpx:TariffFiling"
+                              :urpx/containsPricingModel [%])]
+        (is (valid? :urpx/TariffFiling (filing model)))
+        (is (not (valid? :urpx/TariffFiling (filing (dissoc model :urpx/confidence)))))
+        (is (valid? :urpx/TariffFiling (filing {:jsonld/id "ex:model"})))))
+    (testing "a GeneralRule needs an identifier and at least one source"
+      (is (valid? :urpx/GeneralRule
+                  {:jsonld/type "urpx:GeneralRule" :urpx/generalRuleID "Rule 1"
+                   :urpx/hasDataSourceReference [{:jsonld/id "ex:dsr"}]}))
+      (is (not (valid? :urpx/GeneralRule
+                       {:jsonld/type "urpx:GeneralRule" :urpx/generalRuleID "Rule 1"
+                        :urpx/hasDataSourceReference []}))))
+    (testing "a service class is a typed reference; a RateGroup is one, by
+              the v0.2.x subclass axiom"
+      (let [plan {:jsonld/type "urpx:RatePlan"
+                  :urpx/hasServiceClass [{:jsonld/id "ex:group"} {:jsonld/id "ex:summer"}]}]
+        (is (= [[:urpx/hasServiceClass 1]]
+               (map :in (schema/mistyped-references
+                         plan {"ex:group" "urpx:RateGroup" "ex:summer" "urpx:Season"}))))))))
