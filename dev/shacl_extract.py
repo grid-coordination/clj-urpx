@@ -74,6 +74,15 @@ def shape_facts(g):
                     members = [curie(g, m) for m in Collection(g, lst)]
                     break
             entry["in"] = members
+            # sh:or whose every alternative is an sh:class: a union range.
+            alts = None
+            lst = g.value(pshape, SH["or"])
+            if lst is not None:
+                from rdflib.collection import Collection
+                classes = [g.value(a, SH["class"]) for a in Collection(g, lst)]
+                if classes and all(c is not None for c in classes):
+                    alts = sorted(curie(g, c) for c in classes)
+            entry["orClasses"] = alts
             props.append(entry)
         ignored = []
         lst = g.value(shape, SH.ignoredProperties)

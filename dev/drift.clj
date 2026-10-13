@@ -90,10 +90,12 @@
                               " only-here "
                               (vec (sort (remove (set (:in p)) (:enum mine)))))))
               ;; The class a reference or inline node must be an instance of.
-              (when (and mine (not= (:class p) (:range mine)))
-                (finding :range-drift prop
-                         (str "sh:class " (or (:class p) "none") " upstream, ::range "
-                              (or (:range mine) "none") " here")))
+              (let [upstream (or (:class p) (some-> (:orClasses p) set))
+                    here     (:range mine)]
+                (when (and mine (not= upstream here))
+                  (finding :range-drift prop
+                           (str "sh:class " (or upstream "none") " upstream, ::range "
+                                (or here "none") " here"))))
               (when (and mine (:in p) (nil? (:enum mine)))
                 (finding :enum-unenforced prop
                          (str "sh:in with " (count (:in p)) " members upstream, unenforced here")))

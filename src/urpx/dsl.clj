@@ -148,6 +148,11 @@
   [x]
   (dorun (tree-seq coll? seq x)))
 
+(defn- range-name
+  "A ::range in words: a class, or its classes joined by \"or\"."
+  [r]
+  (if (set? r) (str/join " or " (sort r)) r))
+
 (defn- run-scope
   "Run `body-fn` in a fresh scope configured by `opts`, then refuse every
    keyword referenced in it whose @id no builder in it declared, and every
@@ -182,20 +187,22 @@
     (when-let [mistyped (seq (for [[k uses] (sort-by (comp str key) ranged)
                                    :let [dt (:type (get declared (id-fn k)))]
                                    [t property r] (sort uses)
-                                   :when (not (schema/instance-of? dt r))]
+                                   :when (not (schema/in-range? dt r))]
                                {:ref k :type dt :by t :property property :range r}))]
       (throw (ex-info (str "dsl-scope has mistyped references "
                            (str/join ", "
                                      (for [{:keys [ref type by property range]} mistyped]
                                        (str ref " (a " type ") from " by " "
-                                            property ", which takes a " range))))
+                                            property ", which takes a "
+                                            (range-name range)))))
                       {:mistyped (vec mistyped)})))
     result))
 
 (defn- mistyped-message
   "One `urpx.schema/mistyped-references` result, in words."
   [{:keys [in range types]}]
-  (str "a " (str/join "/" types) " at " (pr-str in) ", which takes a " range))
+  (str "a " (str/join "/" types) " at " (pr-str in) ", which takes a "
+       (range-name range)))
 
 (defmacro dsl-scope
   "Evaluate `body` in a scope where entities are named by keyword. An

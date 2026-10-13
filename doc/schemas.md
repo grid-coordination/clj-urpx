@@ -15,7 +15,7 @@ Every entity schema is a var in `urpx.schema` and is also reachable by its `@typ
 (m/validate :urpx/Season season {:registry schema/registry})
 ```
 
-A property the standard types with `sh:class` states that class as `:urpx.schema/range` in its entry properties, and `(schema/ranges schema/PriceDefinition)` returns them, `{:urpx/appliesInSeason "urpx:Season" …}`. Validating one entity cannot tell whether a reference points at a Season, since the target is elsewhere in the document. `urpx.index/mistyped-references` resolves every reference across a set of documents and reports each one, and each inline node, that is not an instance of its slot's class:
+A property the standard types with `sh:class` states that class as `:urpx.schema/range` in its entry properties, and `(schema/ranges schema/PriceDefinition)` returns them, `{:urpx/appliesInSeason "urpx:Season" …}`. A property whose shape is an `sh:or` of `sh:class` alternatives states the set, and a node of any member is in range: `urpx:basedOnPrice` takes `#{"urpx:Price" "urpx:PriceSummary"}`. Validating one entity cannot tell whether a reference points at a Season, since the target is elsewhere in the document. `urpx.index/mistyped-references` resolves every reference across a set of documents and reports each one, and each inline node, that is not an instance of its slot's class:
 
 ```clojure
 (urpx.index/mistyped-references [plan modifier])
@@ -23,7 +23,9 @@ A property the standard types with `sh:class` states that class as `:urpx.schema
 ;;      :range "urpx:Ledger" :id "ex:summer" :types ["urpx:Season"]}]
 ```
 
-A reference to a node in none of the documents is not judged. `scripts/shacl-drift.sh` checks every range against the shipped `sh:class`.
+A reference to a node in none of the documents is not judged. `scripts/shacl-drift.sh` checks every range against the shipped `sh:class` or `sh:or`.
+
+A property the schemas do not model carries no range, so references through it are not judged.
 
 ## Checking for drift against the standard
 

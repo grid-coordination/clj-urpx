@@ -166,3 +166,46 @@
     (is (= [{:in [:urpx/replacedBy] :property :urpx/replacedBy
              :range "urpx:TariffFiling" :id nil :types ["urpx:Season"]}]
            (:mistyped (ex-data e))))))
+
+(deftest union-ranges
+  (testing "an sh:or of sh:class alternatives is a set range"
+    (is (= #{"urpx:Price" "urpx:PriceSummary"}
+           (:urpx/basedOnPrice (schema/ranges schema/Price))))
+    (is (schema/in-range? "urpx:PriceSummary" #{"urpx:Price" "urpx:PriceSummary"}))
+    (is (schema/in-range? "urpx:UtilityOperator" #{"urpx:Organization" "urpx:Season"}))
+    (is (not (schema/in-range? "urpx:Ledger" #{"urpx:Price" "urpx:PriceSummary"}))))
+  (testing "a reference into another document is judged against every member"
+    (let [base {:jsonld/type "urpx:RatePlan" :jsonld/id "ex:plan"
+                :urpx/hasPrices [{:jsonld/type "urpx:Price" :jsonld/id "ex:base-price"}
+                                 {:jsonld/type "urpx:PriceSummary" :jsonld/id "ex:summary"}
+                                 {:jsonld/type "urpx:Ledger" :jsonld/id "ex:ledger"}]}
+          discount (fn [& ids]
+                     {:jsonld/type "urpx:Price" :jsonld/id "ex:discount"
+                      :urpx/basedOnPrice (mapv #(hash-map :jsonld/id %) ids)})]
+      (is (= [] (index/mistyped-references [base (discount "ex:base-price" "ex:summary")])))
+      (is (= [{:document 1 :in [:urpx/basedOnPrice 1] :property :urpx/basedOnPrice
+               :range #{"urpx:Price" "urpx:PriceSummary"} :id "ex:ledger"
+               :types ["urpx:Ledger"]}]
+             (index/mistyped-references [base (discount "ex:base-price" "ex:ledger")])))))
+  (testing "dsl-scope judges a keyword reference against every member"
+    (let [build #(dsl/dsl-scope
+                  (dsl/ledger :as :ex/commodity :name "Commodity"
+                              :ledger-type :urpx/supplyLedger)
+                  (dsl/price :as :ex/base :unit-price 0.1M
+                             :references-price-definition {:jsonld/id "x:pd"})
+                  (dsl/price :unit-price 0.9M
+                             :references-price-definition {:jsonld/id "x:pd"}
+                             :based-on-price %))]
+      (is (= [{:jsonld/id "ex:base"}] (:urpx/basedOnPrice (build :ex/base))))
+      (is (= [{:ref :ex/commodity :type "urpx:Ledger" :by "urpx:Price"
+               :property :urpx/basedOnPrice :range #{"urpx:Price" "urpx:PriceSummary"}}]
+             (:mistyped (ex-data (try (build :ex/commodity) nil
+                                      (catch clojure.lang.ExceptionInfo e e)))))))))
+
+(deftest an-adjusting-bracket-names-a-service-tier
+  (let [type-of {"ex:tier" "urpx:ServiceTier" "ex:alt" "urpx:ProfileAlternative"}
+        bracket (fn [id] {:jsonld/type "urpx:ServiceBracket"
+                          :urpx/adjustsServiceTier [{:jsonld/id id}]})]
+    (is (= [] (schema/mistyped-references (bracket "ex:tier") type-of)))
+    (is (= [[:urpx/adjustsServiceTier 0]]
+           (map :in (schema/mistyped-references (bracket "ex:alt") type-of))))))

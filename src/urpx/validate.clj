@@ -177,7 +177,8 @@
     (doseq [{:keys [holder in id types range]} mistyped]
       (println (format "  MISTYPED %s %s: %s is %s, takes %s"
                        (or holder "") (pr-str in) (or id "inline node")
-                       (str/join "/" types) range)))
+                       (str/join "/" types)
+                       (if (set? range) (str/join " or " (sort range)) range))))
     ;; Not a failure, and not silence either. An unapplied rule looks exactly
     ;; like a passed one unless it is named.
     (doseq [{:keys [rule why versions]} unchecked]

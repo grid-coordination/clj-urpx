@@ -578,7 +578,8 @@
 ;;
 ;; A property whose SHACL shape carries sh:class states that class as the
 ;; entry property ::range, e.g. [:urpx/appliesInSeason {::range "urpx:Season"}
-;; ...]. Validation never reads it: whether a reference points at a Season
+;; ...]. One whose shape is an sh:or of sh:class alternatives states the set of
+;; them, and a node of any member is in range. Validation never reads it: whether a reference points at a Season
 ;; depends on what else is in the document, which one entity cannot show.
 ;; `mistyped-references` and `urpx.dsl/dsl-scope` read it.
 ;; ---------------------------------------------------------------------------
@@ -605,6 +606,14 @@
   [t class]
   (or (= t class)
       (boolean (some #(instance-of? t %) (get subclasses class)))))
+
+(defn in-range?
+  "True if a node of @type `t` is in range `r`: an instance of class `r`, or
+   of any member when `r` is a set of classes."
+  [t r]
+  (if (set? r)
+    (boolean (some #(instance-of? t %) r))
+    (instance-of? t r)))
 
 (def Context
   "A JSON-LD @context, in any of the three forms the spec permits: an inline
@@ -937,7 +946,7 @@
    [:urpx/lowerBoundOperator {:optional true} Ref]
    [:urpx/upperBoundOperator {:optional true} Ref]
    [:urpx/adjustsServiceTier
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ServiceTier"}
     [:vector Ref]]
    [:urpx/lowerBoundOffset   {:optional true} Decimal]
    [:urpx/upperBoundOffset   {:optional true} Decimal]
@@ -1143,8 +1152,12 @@
     [:urpx/description {:optional true} :string]
     [:urpx/logicExpression {:optional true} :string]
     [:urpx/operator Ref]
-    [:urpx/leftOperand  [:ref ::Operand]]
-    [:urpx/rightOperand [:ref ::Operand]]]
+    [:urpx/leftOperand  {::range #{"urpx:CustomOperandNode" "urpx:DatatypeOperandNode"
+                                   "urpx:ObjectOperandNode" "urpx:OperationNode"}}
+     [:ref ::Operand]]
+    [:urpx/rightOperand {::range #{"urpx:CustomOperandNode" "urpx:DatatypeOperandNode"
+                                   "urpx:ObjectOperandNode" "urpx:OperationNode"}}
+     [:ref ::Operand]]]
    ::BooleanOperationNode
    [:map
     [:jsonld/type [:= "urpx:BooleanOperationNode"]]
@@ -1153,7 +1166,8 @@
     [:urpx/logicExpression {:optional true} :string]
     [:urpx/operator Ref]
     [:urpx/operandNodes
-     {:decode/urpx-jsonld single-or-vec->vec}
+     {:decode/urpx-jsonld single-or-vec->vec
+      ::range #{"urpx:BooleanOperationNode" "urpx:ComparisonNode"}}
      [:vector [:ref ::Operand]]]]})
 
 (def ComparisonNode
@@ -1177,6 +1191,7 @@
     [:jsonld/type [:= "urpx:ConditionExpression"]]
     [:jsonld/id   {:optional true} :string]
     [:urpx/rootNode
+     {::range #{"urpx:BooleanOperationNode" "urpx:ComparisonNode"}}
      [:multi {:dispatch :jsonld/type}
       ["urpx:ComparisonNode"       [:ref ::ComparisonNode]]
       ["urpx:BooleanOperationNode" [:ref ::BooleanOperationNode]]]]]])
@@ -1371,7 +1386,8 @@
    ;; plans. URPX fixes the cardinality and says nothing about multiplicity;
    ;; the conjunctive reading is what urpx:PriceSummary already provides.
    [:urpx/basedOnPrice
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec
+     ::range #{"urpx:Price" "urpx:PriceSummary"}}
     [:vector Ref]]
    [:urpx/baseQuantity {:optional true} Decimal]
    [:urpx/priceCurrency {:optional true} :string]
@@ -1626,7 +1642,9 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:SystemOperator"}
     [:vector Ref]]
    [:urpx/offers
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec
+     ::range #{"urpx:PricingModel" "urpx:RatePlan" "urpx:RatePlanModifier"
+               "urpx:RatePlanModifierVersion" "urpx:RatePlanVersion"}}
     [:vector Ref]]])
 
 (def Organization
@@ -2258,7 +2276,10 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlanModifier"}
     [:vector :map]]
    [:urpx/packages
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec
+     ::range #{"urpx:PricingModel" "urpx:RatePlan" "urpx:RatePlanModifier"
+               "urpx:RatePlanModifierVersion" "urpx:RatePlanVersion"
+               "urpx:SourcePublication" "urpx:TariffFiling"}}
     [:vector :map]]])
 
 ;; ---------------------------------------------------------------------------
@@ -2348,7 +2369,7 @@
    [:urpx/dateTimeModified   {:optional true} DateTime]
    [:urpx/cancelledOn         {:optional true} Date]
    [:urpx/cancelledOnDateTime {:optional true} DateTime]
-   [:urpx/cancelledBy {:optional true} :map]
+   [:urpx/cancelledBy {:optional true ::range #{"urpx:SourcePublication" "urpx:TariffFiling"}} :map]
    [:urpx/replacedBy  {:optional true ::range "urpx:TariffFiling"} :map]
    [:urpx/replaces    {:optional true ::range "urpx:TariffFiling"} :map]
    [:urpx/supersedes  {:optional true ::range "urpx:TariffFiling"} :map]
@@ -2418,8 +2439,8 @@
   (get schemas (type->keyword t)))
 
 (defn ranges
-  "{property class} for each entry of entity schema `s` that states a
-   ::range."
+  "{property range} for each entry of entity schema `s` that states a
+   ::range: a class, or a set of classes."
   [s]
   (into {}
         (keep (fn [[k props _]]
@@ -2446,10 +2467,12 @@
     :else [[path v]]))
 
 (defn mistyped-references
-  "Every reference and inline node in `node`, at any depth, that is not an
-   instance of the ::range of the property holding it, as
+  "Every reference and inline node in `node`, at any depth, that is not
+   `in-range?` of the ::range of the property holding it, as
 
-     {:in path :property k :range class :id @id-or-nil :types [@type ...]}
+     {:in path :property k :range r :id @id-or-nil :types [@type ...]}
+
+   where `r` is a class, or a set of classes.
 
    An inline node is judged by its own @type. A reference is judged by
    `(type-of id)`, the @type (a string or a vector) of the node the @id
@@ -2473,7 +2496,7 @@
                                 (types-of (type-of (:jsonld/id x)))
                                 (types-of (:jsonld/type x)))]
                        (cond-> (if ref? [] (mistyped-references x type-of p))
-                         (and r (seq ts) (not-any? #(instance-of? % r) ts))
+                         (and r (seq ts) (not-any? #(in-range? % r) ts))
                          (conj {:in p :property k :range r
                                 :id (:jsonld/id x) :types ts})))))
                  (members (conj path k) v)))))

@@ -9,6 +9,14 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Added
+
+- **Union ranges.** A property whose SHACL shape is an `sh:or` of `sh:class` alternatives states the set as its `:urpx.schema/range`, and `urpx.schema/in-range?` accepts an instance of any member. `mistyped-references`, `dsl-scope` and the builders now judge `urpx:basedOnPrice` (`Price` or `PriceSummary`), `urpx:offers`, `urpx:packages`, `urpx:cancelledBy`, `urpx:rootNode`, `urpx:operandNodes`, `urpx:leftOperand` and `urpx:rightOperand`.
+- `urpx:adjustsServiceTier` takes a `urpx:ServiceTier`.
+- `scripts/shacl-drift.sh` compares a union range with the shipped `sh:or`.
+
 ## [0.51.0] — 2026-10-13
 
 ### Added
