@@ -988,6 +988,7 @@ Inside a `dsl-scope`, `:as k` gives an entity the `@id` `(dsl/curie k)`, and a q
 
 - A reference may come before or after its declaration.
 - When the scope exits, every keyword referenced but not declared in it throws, in one `ex-info` naming each keyword and the builders that used it.
+- Then every keyword whose entity is not of the type its slot takes throws, under `:mistyped`. `:applies-in-season :ex/commodity`, where `:ex/commodity` is a Ledger, refuses because `urpx:appliesInSeason` takes a `urpx:Season`. A subclass passes: a `UtilityOperator` where an `Organization` is taken. A builder refuses an inline node of the wrong type the same way, without a scope.
 - An `@id` declared twice in a scope throws, whether by `:as` or by `:jsonld/id`.
 - `(dsl/dsl-scope {:id-fn f} …)` names `@id`s with `f`.
 - An entity outside the scope is referenced with a Ref map, `{:jsonld/id "…"}`.
@@ -1044,16 +1045,38 @@ The jar carries a clj-kondo config whose hook lints `defurpx` as a `def`. Import
 clj-kondo --lint "$(clojure -Spath)" --copy-configs --skip-lint
 ```
 
+## Schemas by type
+
+Every entity schema is a var in `urpx.schema` and is also reachable by its `@type`:
+
+```clojure
+(require '[malli.core :as m] '[urpx.schema :as schema])
+
+(schema/schema-for-type "urpx:Season")                    ; => schema/Season
+(:urpx/Season schema/schemas)                             ; => schema/Season
+(m/validate :urpx/Season season {:registry schema/registry})
+```
+
+A property the standard types with `sh:class` states that class as `:urpx.schema/range` in its entry properties, and `(schema/ranges schema/PriceDefinition)` returns them, `{:urpx/appliesInSeason "urpx:Season" …}`. Validating one entity cannot tell whether a reference points at a Season, since the target is elsewhere in the document. `urpx.index/mistyped-references` resolves every reference across a set of documents and reports each one, and each inline node, that is not an instance of its slot's class:
+
+```clojure
+(urpx.index/mistyped-references [plan modifier])
+;; => [{:document 0 :in [...] :property :urpx/referencesLedger
+;;      :range "urpx:Ledger" :id "ex:summer" :types ["urpx:Season"]}]
+```
+
+A reference to a node in none of the documents is not judged. `scripts/shacl-drift.sh` checks every range against the shipped `sh:class`.
+
 ## Namespace overview
 
 | Namespace        | Purpose |
 |------------------|---------|
 | `urpx.core`          | JSON-LD parsing and loading (`parse-rate-plan`, `load-rate-plan`, `load-rate-plan-version`, `parse-graph`, `load-graph`, `expand-document-entities`) |
-| `urpx.schema`    | Malli schemas for the coerced URPX entity model |
+| `urpx.schema`    | Malli schemas for the coerced URPX entity model; `schemas`, `registry` and `schema-for-type` by `@type`; `ranges`, `instance-of?`, `mistyped-references` |
 | `urpx.coverage`  | Optional reader for `urpx:CoverageClaim`: `of-version`, `of-model`, `descriptions`, `coverage-interval`, `verdict-applies?`, `claim`. Requires `urpx.index` only |
 | `urpx.load`      | `document-xf`, `documents`, `scan`: sources to coerced documents, with the discards reportable |
 | `urpx.coerce`    | Schema-driven coercion: strings → typed values; `coerce-doc` dispatches on `@type`; `validate`, `explain`; `uncoerced?` and `check-coerced!` tell a coerced document from a raw one |
-| `urpx.index`     | `build-index`, `resolve-ref`, `get-entity` for `@id` references; `versions-by-plan` for v0.5.1 back-pointers; `single` and `entities-of-type` |
+| `urpx.index`     | `build-index`, `resolve-ref`, `get-entity` for `@id` references; `versions-by-plan` for v0.5.1 back-pointers; `single` and `entities-of-type`; `mistyped-references` over a set of documents |
 | `urpx.price`         | `resolve-prices`, `resolve-modifier-prices`, `resolve-prices-with-modifiers`, `marginal-unit-rate`, `measurement-kinds`, `has-energy-ledger?`; `version-effective-at`, `version-expired-by?` and `version-covers?` are the single readers of a version window |
 | `urpx.schedule`      | `price-segments` (exact boundaries, derived); `price-schedule`, `price-schedule-days`, `price-schedule-with-modifiers`, `price-schedule-days-with-modifiers` (stepped) |
 | `urpx.tz-inference`  | `infer-zone` (opt-in fallback when `urpx:timezoneIdentifier` is absent) |
@@ -1124,7 +1147,7 @@ Check any single URPX JSON-LD file, which is what a conversion smoke test needs 
 clojure -M:validate path/to/filing.jsonld [more.jsonld ...]
 ```
 
-Wrappers are descended, so a `urpx:URPXDocument` or `urpx:URPXPackage` is checked through to the `urpx:RatePlan` inside it rather than at the wrapper metadata alone. Exit codes are tri-state so a run that checked nothing cannot read as success: `0` everything valid, `1` at least one entity failed, `2` refused because a path was unreadable or a file yielded no entity this library models.
+Wrappers are descended, so a `urpx:URPXDocument` or `urpx:URPXPackage` is checked through to the `urpx:RatePlan` inside it rather than at the wrapper metadata alone. Exit codes are tri-state so a run that checked nothing cannot read as success: `0` everything valid, `1` at least one entity failed, broke a rule the standard states, or holds a reference or inline node of the wrong type for its property (judged within the file), `2` refused because a path was unreadable or a file yielded no entity this library models.
 
 ## See also
 

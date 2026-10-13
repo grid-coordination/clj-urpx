@@ -68,6 +68,7 @@
      :required (not (:optional props))
      :vector   (vector-valued? child)
      :decoder  (boolean (:decode/urpx-jsonld props))
+     :range    (:urpx.schema/range props)
      :kind     (shallow-form child)
      :enum     (enum-members child)}))
 

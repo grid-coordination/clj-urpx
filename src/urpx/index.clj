@@ -9,7 +9,8 @@
   Note: many references point to vocabulary IRIs in the URPX ontology
   (e.g. urpx:peakTier, urpx:allDays, urpx:bundledLedger) rather than entities
   defined in the document. Those lookups return nil — callers distinguish
-  internal refs (resolve to a node) from vocabulary terms (do not).")
+  internal refs (resolve to a node) from vocabulary terms (do not)."
+  (:require [urpx.schema :as schema]))
 
 (defn- index-walk
   "Reduce over `node`, accumulating {id -> node} for every map that carries
@@ -209,3 +210,17 @@
               (sequential? node) (reduce walk acc node)
               :else acc))]
     (walk {} doc)))
+
+(defn mistyped-references
+  "`urpx.schema/mistyped-references` over each document in `docs`, raw or
+   coerced, with every reference resolved against the nodes of all of them,
+   so a reference from one document to a node in another is judged. Each
+   result carries `:document`, the index in `docs` of the document holding
+   the reference."
+  [docs]
+  (let [index (into {} (map build-index) docs)
+        type-of #(:jsonld/type (get index %))]
+    (vec (mapcat (fn [i doc]
+                   (map #(assoc % :document i)
+                        (schema/mistyped-references doc type-of)))
+                 (range) docs))))

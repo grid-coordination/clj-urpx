@@ -9,6 +9,19 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Added
+
+- **`urpx.schema/schemas`, `registry` and `schema-for-type`** name every entity schema by its `@type`, so `(m/validate :urpx/Season x {:registry schema/registry})` works.
+- **Typed references.** Each property the standard types with `sh:class` states that class as `:urpx.schema/range`, read by `urpx.schema/ranges`; `urpx.schema/instance-of?` follows the ontology's subclasses. `urpx.index/mistyped-references` reports every reference and inline node across a set of documents that is not an instance of its slot's class.
+- `scripts/shacl-drift.sh` reports a `range-drift` finding, which fails the run, where a range differs from the shipped `sh:class`.
+
+### Changed
+
+- **`urpx.dsl/dsl-scope` refuses a keyword reference to an entity of the wrong type** under `:mistyped`, and every builder refuses an inline node of the wrong type.
+- **`clojure -M:validate` fails a file** (exit `1`) holding a reference or inline node of the wrong type for its property, judged within the file, and prints each as `MISTYPED`.
+
 ## [0.50.0] — 2026-10-10
 
 ### Added

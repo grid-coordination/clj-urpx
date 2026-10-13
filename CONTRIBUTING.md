@@ -75,7 +75,7 @@ Both tiers exist because prose about code rots silently. A missing DSL builder i
 
 It is an auditor, not a generator: it emits no schemas and nothing it produces is compiled or shipped. That division is deliberate. A generator's central mapping rule can be silently vacuous, and neither compilation nor a passing test suite catches that; a diff a person reads cannot fail the same way.
 
-Findings are ranked by what they cost. `rejects-valid` and `arity` mean clj-urpx refuses documents the standard allows, which is the expensive direction; `under-validates` and `missing-required` mean the reverse. `enum-unenforced`, `missing`, `unmodeled-datatype` and `closed-upstream` are informational and never fail a run. Exit codes are tri-state: `0` no new drift, `1` new drift, `2` refused, so a run that compared nothing cannot read as clean.
+Findings are ranked by what they cost. `rejects-valid` and `arity` mean clj-urpx refuses documents the standard allows, which is the expensive direction; `under-validates` and `missing-required` mean the reverse. `range-drift` means a `::range` differs from the shipped `sh:class`, so the DSL and `mistyped-references` judge references against the wrong class. `enum-unenforced`, `missing`, `unmodeled-datatype` and `closed-upstream` are informational and never fail a run. Exit codes are tri-state: `0` no new drift, `1` new drift, `2` refused, so a run that compared nothing cannot read as clean.
 
 Deliberate divergence goes in [`dev/drift-baseline.edn`](dev/drift-baseline.edn) with a written reason. A known bug does not: silencing it there is how it stops being known.
 

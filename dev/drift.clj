@@ -89,6 +89,11 @@
                               (vec (sort (remove (set (:enum mine)) (:in p))))
                               " only-here "
                               (vec (sort (remove (set (:in p)) (:enum mine)))))))
+              ;; The class a reference or inline node must be an instance of.
+              (when (and mine (not= (:class p) (:range mine)))
+                (finding :range-drift prop
+                         (str "sh:class " (or (:class p) "none") " upstream, ::range "
+                              (or (:range mine) "none") " here")))
               (when (and mine (:in p) (nil? (:enum mine)))
                 (finding :enum-unenforced prop
                          (str "sh:in with " (count (:in p)) " members upstream, unenforced here")))
@@ -118,12 +123,12 @@
      :findings  (vec (mapcat (fn [[nm s shape _]] (compare-shape nm s shape)) pairs))}))
 
 (def ^:private severity
-  [:rejects-valid :arity :missing-required :enum-drift :under-validates
+  [:rejects-valid :arity :missing-required :enum-drift :range-drift :under-validates
    :enum-unenforced :unmodeled-datatype :missing :untranslatable :closed-upstream])
 
 (def ^:private fails?
   "Kinds that make a run fail. Informational kinds never do."
-  #{:rejects-valid :arity :missing-required :enum-drift :under-validates})
+  #{:rejects-valid :arity :missing-required :enum-drift :range-drift :under-validates})
 
 (defn- finding-key [f] [(:schema f) (:property f) (name (:kind f))])
 

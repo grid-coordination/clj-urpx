@@ -16,11 +16,15 @@
   applied in `urpx.coerce`. Reference resolution keeps :jsonld/id references
   intact; consumers dereference via an entity index.
 
-  Schemas are bare def vars referenced by symbol. The one registry is local to
-  the recursive operand tree of ComparisonNode, BooleanOperationNode and
-  ConditionExpression."
+  Schemas are bare def vars referenced by symbol. `schemas` and `registry`
+  name every entity schema by its @type, and `schema-for-type` looks one up.
+  A property the standard types with sh:class states that class as its entry
+  ::range; `mistyped-references` reports the references and inline nodes
+  outside it. The registry local to the recursive operand tree of
+  ComparisonNode, BooleanOperationNode and ConditionExpression is separate."
   (:require [clojure.string :as str]
-            [malli.core :as m])
+            [malli.core :as m]
+            [malli.registry :as mr])
   (:import [java.math BigDecimal]
            [java.time DateTimeException Duration LocalDate LocalDateTime LocalTime
             OffsetDateTime OffsetTime Period ZoneId ZoneOffset ZonedDateTime]
@@ -569,6 +573,39 @@
   [:map {:closed true}
    [:jsonld/id :string]])
 
+;; ---------------------------------------------------------------------------
+;; Ranges
+;;
+;; A property whose SHACL shape carries sh:class states that class as the
+;; entry property ::range, e.g. [:urpx/appliesInSeason {::range "urpx:Season"}
+;; ...]. Validation never reads it: whether a reference points at a Season
+;; depends on what else is in the document, which one entity cannot show.
+;; `mistyped-references` and `urpx.dsl/dsl-scope` read it.
+;; ---------------------------------------------------------------------------
+
+(def subclasses
+  "rdfs:subClassOf in the URPX ontology: each class to its direct subclasses,
+   across the releases this library accepts, v0.2.0 through v0.5.1. A node of
+   a subclass is in a range that names the class."
+  {"urpx:AdministrativeBoundary" #{"urpx:County" "urpx:Municipality" "urpx:State"}
+   "urpx:ConditionNode"          #{"urpx:BooleanOperationNode" "urpx:ComparisonNode"}
+   "urpx:Organization"           #{"urpx:EnergyServiceProvider" "urpx:RegulatoryAuthority"
+                                   "urpx:SystemOperator" "urpx:UtilityOperator"}
+   "urpx:PriceSet"               #{"urpx:PriceSetAlternative"}
+   "urpx:Profile"                #{"urpx:CustomerProfile" "urpx:ServicePointProfile"}
+   "urpx:ServiceClass"           #{"urpx:RateGroup"}
+   "urpx:URPXDocument"           #{"urpx:DERExportsDocument" "urpx:HighlyDynamicPricesDocument"
+                                   "urpx:SupplyChargesDocument" "urpx:TariffAddendumDocument"
+                                   "urpx:TariffBookDocument" "urpx:TariffStatementDocument"
+                                   "urpx:TariffSupplementDocument"}})
+
+(defn instance-of?
+  "True if a node of @type `t` is an instance of `class`: `t` is `class` or
+   one of its `subclasses`, at any depth."
+  [t class]
+  (or (= t class)
+      (boolean (some #(instance-of? t %) (get subclasses class)))))
+
 (def Context
   "A JSON-LD @context, in any of the three forms the spec permits: an inline
    definition object, an IRI string pointing at a remote context, or an array
@@ -739,7 +776,7 @@
    [:urpx/metricInputType Ref]
    ;; 0..N upstream (no sh:maxCount). Accepted as one or many; price.clj reads
    ;; one through urpx.index/single, which refuses rather than guessing.
-   [:urpx/hasMetricSpecification {:optional true} [:or MetricSpecification [:vector MetricSpecification]]]
+   [:urpx/hasMetricSpecification {:optional true ::range "urpx:MetricSpecification"} [:or MetricSpecification [:vector MetricSpecification]]]
    ;; In v0.2.0 profileMetricProperty is a Ref to a vocabulary IRI
    ;; (e.g. urpx:meterCount, urpx:departureVintage).
    [:urpx/profileMetricProperty  {:optional true} Ref]])
@@ -754,7 +791,7 @@
    ;; 0..N, read with dayType urpx:customDays (urpx-org/urpx#71).
    [:urpx/daysOfWeek {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector DayOfWeek]]
    ;; 0..N upstream. TOU matching in price.clj reads one via index/single.
-   [:urpx/appliesInSeason     {:optional true :decode/urpx-jsonld single-or-vec->vec} [:or Ref [:vector Ref]]]
+   [:urpx/appliesInSeason     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:Season"} [:or Ref [:vector Ref]]]
    [:urpx/includeHolidays     {:optional true} :boolean]
    [:urpx/includeNonHolidays  {:optional true} :boolean]])
 
@@ -767,7 +804,7 @@
    [:urpx/priority   {:optional true} Int]
    [:urpx/startDate  {:optional true} Date]
    [:urpx/endDate    {:optional true} Date]
-   [:urpx/hasTimeBracket {:decode/urpx-jsonld single-or-vec->vec} [:vector TimeBracket]]])
+   [:urpx/hasTimeBracket {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:TimeBracket"} [:vector TimeBracket]]])
 
 (def TOUTier
   [:map
@@ -775,7 +812,7 @@
    [:urpx/tierSourceName {:optional true} :string]
    [:urpx/touTierStandardName {:optional true} Ref]
    [:urpx/touTierNumber Int]
-   [:urpx/hasTOUPeriod {:decode/urpx-jsonld single-or-vec->vec} [:vector TOUPeriod]]])
+   [:urpx/hasTOUPeriod {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:TOUPeriod"} [:vector TOUPeriod]]])
 
 (def TOUSchedule
   [:map
@@ -784,10 +821,10 @@
    [:urpx/name {:optional true} :string]
    ;; v0.2.0 SHACL: referencesMetricInput is a required vector (min 1, no max).
    [:urpx/referencesMetricInput
-    {:decode/urpx-jsonld single-or-vec->vec}
+    {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:MetricInput"}
     [:vector Ref]]
-   [:urpx/hasCalendar {:optional true} Ref]
-   [:urpx/hasTOUTier {:decode/urpx-jsonld single-or-vec->vec} [:vector TOUTier]]])
+   [:urpx/hasCalendar {:optional true ::range "urpx:HolidayCalendar"} Ref]
+   [:urpx/hasTOUTier {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:TOUTier"} [:vector TOUTier]]])
 
 (def CalculationMethod
   [:map
@@ -807,7 +844,7 @@
    [:urpx/description {:optional true} :string]
    [:urpx/ledgerType {:optional true} Ref]
    [:urpx/referencesMetricInput
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:MetricInput"}
     [:vector Ref]]
    [:urpx/settlementInterval {:optional true} IsoDuration]])
 
@@ -831,7 +868,7 @@
    [:urpx/priceCurrency {:optional true} :string]
    [:urpx/primaryChargeType {:optional true} Ref]
    ;; v0.2.0: required, single. PD points to its parent Ledger.
-   [:urpx/referencesLedger Ref]
+   [:urpx/referencesLedger {::range "urpx:Ledger"} Ref]
    ;; 0..N upstream (sh:minCount 0, no sh:maxCount), and the skos:note names
    ;; PriceDefinition explicitly: "Use on PriceSetAlternative, PriceDefinition,
    ;; TOUSchedule, ServiceTiers, or ServiceBracket to scope applicability to a
@@ -841,34 +878,34 @@
    ;; evaluates. `urpx.price` reads ONE; several refuse rather than inventing a
    ;; conjunctive reading for a shape no vendored fixture has.
    [:urpx/referencesProfileAlternative
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ProfileAlternative"}
     [:vector Ref]]
    [:urpx/referencesMetricInput
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:MetricInput"}
     [:vector Ref]]
-   [:urpx/referencesServiceTier    {:optional true} Ref]
-   [:urpx/referencesServiceBracket {:optional true} Ref]
-   [:urpx/referencesTouPeriod      {:optional true} Ref]
+   [:urpx/referencesServiceTier    {:optional true ::range "urpx:ServiceTier"} Ref]
+   [:urpx/referencesServiceBracket {:optional true ::range "urpx:ServiceBracket"} Ref]
+   [:urpx/referencesTouPeriod      {:optional true ::range "urpx:TOUPeriod"} Ref]
    [:urpx/serviceTierNumber {:optional true} Int]
    [:urpx/touPeriodNumber   {:optional true} Int]
    [:urpx/baseQuantity      {:optional true} Decimal]
-   [:urpx/hasCalculationMethod {:optional true} CalculationMethod]
+   [:urpx/hasCalculationMethod {:optional true ::range "urpx:CalculationMethod"} CalculationMethod]
    [:urpx/hasRateCase
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RateCase"}
     [:vector Ref]]
    ;; v0.2.0 SHACL: PriceDefinitionShape allows urpx:appliesInSeason → Season
    ;; (sh:minCount 0, sh:class urpx:Season). Used for non-TOU seasonal pricing
    ;; where the seasonal partition isn't carried by a TOUPeriod indirection
    ;; (e.g. CPAU E-2: flat $/kWh per Summer/Winter, no TOU within periods).
    [:urpx/appliesInSeason
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:Season"}
     [:vector Ref]]
    ;; ApplicabilityRule's full shape is defined further down in the Conditions
    ;; section; we inline a minimal version here so the gMonth decoder for
    ;; :urpx/month attaches without forward-ref gymnastics. The fuller shape
    ;; (with ConditionExpression) is referenced from Price.hasApplicabilityRule.
    [:urpx/hasApplicabilityRule
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ApplicabilityRule"}
     [:vector
      [:map
       [:jsonld/type {:optional true} :string]
@@ -905,9 +942,9 @@
    [:urpx/lowerBoundOffset   {:optional true} Decimal]
    [:urpx/upperBoundOffset   {:optional true} Decimal]
    [:urpx/appliesInSeason
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:Season"}
     [:vector Ref]]
-   [:urpx/referencesProfileAlternative {:optional true} Ref]])
+   [:urpx/referencesProfileAlternative {:optional true ::range "urpx:ProfileAlternative"} Ref]])
 
 (def ServiceTier
   "v0.2.0 + 423e83f: bounds moved off ServiceTier onto attached
@@ -923,7 +960,7 @@
    [:urpx/serviceTierNumber {:optional true} Int]
    [:urpx/name {:optional true} :string]
    [:urpx/hasServiceBracket
-    {:decode/urpx-jsonld single-or-vec->vec}
+    {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:ServiceBracket"}
     [:vector ServiceBracket]]])
 
 (def ServiceTiers
@@ -962,13 +999,13 @@
    [:jsonld/type [:= "urpx:ServiceTiers"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/appliesInSeason
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:Season"}
     [:vector Ref]]
    [:urpx/referencesMetricInput
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:MetricInput"}
     [:vector Ref]]
-   [:urpx/referencesProfileAlternative {:optional true} Ref]
-   [:urpx/hasServiceTier {:decode/urpx-jsonld single-or-vec->vec} [:vector ServiceTier]]])
+   [:urpx/referencesProfileAlternative {:optional true ::range "urpx:ProfileAlternative"} Ref]
+   [:urpx/hasServiceTier {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:ServiceTier"} [:vector ServiceTier]]])
 
 (def BillingModel
   "v0.2.0: hasPriceDefinition lives at this level (not inside Ledger). A
@@ -991,16 +1028,16 @@
    [:jsonld/type [:= "urpx:BillingModel"]]
    [:urpx/prorationMethod {:optional true} :string]
    [:urpx/hasTOUSchedule
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:TOUSchedule"}
     [:vector TOUSchedule]]
    [:urpx/hasServiceTiers
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ServiceTiers"}
     [:vector ServiceTiers]]
    [:urpx/hasLedger
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:Ledger"}
     [:vector Ledger]]
    [:urpx/hasPriceDefinition
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PriceDefinition"}
     [:vector PriceDefinition]]])
 
 (def Holiday
@@ -1021,7 +1058,7 @@
    [:jsonld/type [:= "urpx:HolidayCalendar"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/hasHoliday
-    {:decode/urpx-jsonld single-or-vec->vec}
+    {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:Holiday"}
     [:vector Holiday]]])
 
 ;; PlanElements is defined further down — its hasProfileAlternatives entry
@@ -1175,7 +1212,7 @@
     {:decode/urpx-jsonld single-or-vec->vec}
     [:vector {:min 1} RdfList]]
    [:urpx/referencesMetricInput
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:MetricInput"}
     [:vector Ref]]])
 
 (def AlternativeDimensions
@@ -1185,7 +1222,7 @@
    [:jsonld/type [:= "urpx:AlternativeDimensions"]]
    [:jsonld/id   {:optional true} :string]
    [:urpx/hasAlternativeDimension
-    {:decode/urpx-jsonld single-or-vec->vec}
+    {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:AlternativeDimension"}
     [:vector AlternativeDimension]]])
 
 (def ProfileAlternative
@@ -1198,7 +1235,7 @@
    [:jsonld/id   {:optional true} :string]
    [:urpx/name :string]
    [:urpx/defaultSelectionLogic   {:optional true} :string]
-   [:urpx/hasConditionExpression  ConditionExpression]])
+   [:urpx/hasConditionExpression  {::range "urpx:ConditionExpression"} ConditionExpression]])
 
 (def ProfileAlternatives
   "Top-level declaration of a customer-profile-driven choice. Lives at
@@ -1210,9 +1247,9 @@
    [:jsonld/type [:= "urpx:ProfileAlternatives"]]
    [:jsonld/id   {:optional true} :string]
    [:urpx/name :string]
-   [:urpx/hasAlternativeDimensions AlternativeDimensions]
+   [:urpx/hasAlternativeDimensions {::range "urpx:AlternativeDimensions"} AlternativeDimensions]
    [:urpx/hasProfileAlternative
-    {:decode/urpx-jsonld single-or-vec->vec}
+    {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:ProfileAlternative"}
     [:vector ProfileAlternative]]])
 
 (def PlanElements
@@ -1223,16 +1260,16 @@
    selection that determines which alternative's prices apply."
   [:map
    [:jsonld/type [:= "urpx:PlanElements"]]
-   [:urpx/hasSeasons         {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Season]]
-   [:urpx/hasMetricInput     {:decode/urpx-jsonld single-or-vec->vec} [:vector MetricInput]]
+   [:urpx/hasSeasons         {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:Season"} [:vector Season]]
+   [:urpx/hasMetricInput     {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:MetricInput"} [:vector MetricInput]]
    ;; 0..N upstream. holidays.clj reads one via index/single. Merging several
    ;; calendars into one holiday set looks obvious but is a semantic decision
    ;; the vocabulary does not state, so it refuses instead.
-   [:urpx/hasHolidayCalendar {:optional true} [:or HolidayCalendar [:vector HolidayCalendar]]]
+   [:urpx/hasHolidayCalendar {:optional true ::range "urpx:HolidayCalendar"} [:or HolidayCalendar [:vector HolidayCalendar]]]
    [:urpx/hasProfileAlternatives
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ProfileAlternatives"}
     [:vector ProfileAlternatives]]
-   [:urpx/hasBillingModel BillingModel]])
+   [:urpx/hasBillingModel {::range "urpx:BillingModel"} BillingModel]])
 
 (def ApplicabilityGroup
   "Container for cross-cutting applicability conditions; carried on
@@ -1244,7 +1281,7 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/name {:optional true} :string]
    [:urpx/applicabilityLogic    {:optional true} :string]
-   [:urpx/hasConditionExpression {:optional true} ConditionExpression]])
+   [:urpx/hasConditionExpression {:optional true ::range "urpx:ConditionExpression"} ConditionExpression]])
 
 (def ApplicabilityRule
   [:map
@@ -1252,7 +1289,7 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/name {:optional true} :string]
    [:urpx/month {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector MonthNumber]]
-   [:urpx/hasConditionExpression {:optional true} ConditionExpression]])
+   [:urpx/hasConditionExpression {:optional true ::range "urpx:ConditionExpression"} ConditionExpression]])
 
 ;; ---------------------------------------------------------------------------
 ;; Eligibility (v0.2.0 — closed shape, ConditionExpression-driven)
@@ -1277,7 +1314,7 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
    [:urpx/hasProgramEnrollment
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ProgramEnrollment"}
     [:vector [:or ProgramEnrollment ExclusiveRef]]]])
 
 (def Scenario
@@ -1287,8 +1324,8 @@
   [:map
    [:jsonld/type [:= "urpx:Scenario"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/hasCustomerProfile {:optional true} CustomerProfile]
-   [:urpx/hasServicePointProfile {:optional true} Ref]])
+   [:urpx/hasCustomerProfile {:optional true ::range "urpx:CustomerProfile"} CustomerProfile]
+   [:urpx/hasServicePointProfile {:optional true ::range "urpx:ServicePointProfile"} Ref]])
 
 (def EligibilityRule
   "v0.2.0: closed shape. hasCustomerProfile is gone (moved to Scenario).
@@ -1298,9 +1335,9 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/name {:optional true} :string]
    [:urpx/description {:optional true} :string]
-   [:urpx/hasConditionExpression ConditionExpression]
+   [:urpx/hasConditionExpression {::range "urpx:ConditionExpression"} ConditionExpression]
    [:urpx/hasDataSourceReference
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
     [:vector Ref]]])
 
 ;; ---------------------------------------------------------------------------
@@ -1342,10 +1379,10 @@
    ;; and PriceSetAlternative models it optional too.
    ;; Both readers, urpx.price/scoped-prices and price-active-at-tou?,
    ;; nil-thread through get-in.
-   [:urpx/referencesPriceDefinition {:optional true} Ref]
-   [:urpx/referencesServiceTier    {:optional true} Ref]
-   [:urpx/referencesServiceBracket {:optional true} Ref]
-   [:urpx/referencesTouPeriod      {:optional true} Ref]
+   [:urpx/referencesPriceDefinition {:optional true ::range "urpx:PriceDefinition"} Ref]
+   [:urpx/referencesServiceTier    {:optional true ::range "urpx:ServiceTier"} Ref]
+   [:urpx/referencesServiceBracket {:optional true ::range "urpx:ServiceBracket"} Ref]
+   [:urpx/referencesTouPeriod      {:optional true ::range "urpx:TOUPeriod"} Ref]
    [:urpx/serviceTierNumber {:optional true} Int]
    [:urpx/touPeriodNumber   {:optional true} Int]
    [:urpx/startDate     {:optional true} Date]
@@ -1353,22 +1390,22 @@
    [:urpx/endDate       {:optional true} Date]
    [:urpx/endDateTime   {:optional true} DateTime]
    [:urpx/appliesInSeason
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:Season"}
     [:vector Ref]]
    ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
    [:urpx/hasApplicabilityGroup
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ApplicabilityGroup"}
     [:vector ApplicabilityGroup]]
    [:urpx/hasApplicabilityRule
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ApplicabilityRule"}
     ;; Inline rule or a bare @id ref to one defined elsewhere in the document
     ;; (RDF merges a reference with its definition). Richer schema first so an
     ;; inline node decodes through ApplicabilityRule; ExclusiveRef rather than
     ;; Ref so a malformed inline node cannot slip through the reference arm.
     [:vector [:or ApplicabilityRule ExclusiveRef]]]
-   [:urpx/hasCalculationMethod {:optional true} CalculationMethod]
+   [:urpx/hasCalculationMethod {:optional true ::range "urpx:CalculationMethod"} CalculationMethod]
    [:urpx/hasRateCase
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RateCase"}
     [:vector Ref]]])
 
 (def PriceSummary
@@ -1399,7 +1436,7 @@
    [:urpx/name {:optional true} :string]
    [:urpx/summaryAmount {:optional true} Decimal]
    [:urpx/includesPrice
-    {:decode/urpx-jsonld single-or-vec->vec}
+    {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:Price"}
     [:and [:vector [:or Price ExclusiveRef]]
      [:fn {:error/message "urpx:includesPrice is sh:minCount 2 upstream"}
       #(<= 2 (count %))]]]])
@@ -1416,19 +1453,19 @@
    [:urpx/endDateTime   {:optional true} DateTime]
    [:urpx/touPeriodNumber {:optional true} Int]
    [:urpx/serviceTierNumber {:optional true} Int]
-   [:urpx/referencesPriceDefinition {:optional true} Ref]
-   [:urpx/referencesServiceBracket  {:optional true} Ref]
+   [:urpx/referencesPriceDefinition {:optional true ::range "urpx:PriceDefinition"} Ref]
+   [:urpx/referencesServiceBracket  {:optional true ::range "urpx:ServiceBracket"} Ref]
    ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
    [:urpx/hasApplicabilityGroup
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ApplicabilityGroup"}
     [:vector ApplicabilityGroup]]
    ;; 0..N upstream. This is where a summary actually attaches: urpx:hasPriceSummary
    ;; is rdfs:domain urpx:PriceSet, so a subtotal lives beside the line items it
    ;; names rather than at the Prices container or the top of the graph.
    [:urpx/hasPriceSummary
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PriceSummary"}
     [:vector [:or PriceSummary ExclusiveRef]]]
-   [:urpx/hasPrice {:decode/urpx-jsonld single-or-vec->vec} [:vector Price]]])
+   [:urpx/hasPrice {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:Price"} [:vector Price]]])
 
 ;; Prices is defined further down — its hasPriceSetAlternatives entry
 ;; depends on PriceSetAlternatives, which depends on DataSourceReference
@@ -1483,14 +1520,14 @@
    ;; sh:class oa:Selector.
    ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
    [:urpx/hasSelector
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "oa:Selector"}
     [:vector Ref]]
-   [:urpx/sourcePublication {:optional true} Ref]
+   [:urpx/sourcePublication {:optional true ::range "urpx:SourcePublication"} Ref]
    ;; Enum membership deliberately unenforced here; see the enum issue.
    [:urpx/tariffStatementType {:optional true} Ref]
    ;; v0.2.x nesting, kept so v0.2.x filings still validate. The
    ;; flattened form above is what a v0.5.1 filing carries instead.
-   [:urpx/hasTariffBookReference {:optional true} TariffBookReference]])
+   [:urpx/hasTariffBookReference {:optional true ::range "urpx:TariffBookReference"} TariffBookReference]])
 
 ;; ---------------------------------------------------------------------------
 ;; Typed identity (URPX v0.5.1)
@@ -1563,9 +1600,9 @@
   [:map
    [:jsonld/type [:= "urpx:OrganizationIdentity"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/hasName [:or OrganizationName ExclusiveRef]]
+   [:urpx/hasName {::range "urpx:OrganizationName"} [:or OrganizationName ExclusiveRef]]
    [:urpx/hasIdentifier
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:OrganizationIdentifier"}
     [:vector [:or OrganizationIdentifier ExclusiveRef]]]
    [:urpx/identityValidFrom {:optional true} DateTime]
    [:urpx/identityValidTo   {:optional true} DateTime]])
@@ -1580,13 +1617,13 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
    [:urpx/hasIdentity
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:OrganizationIdentity"}
     [:vector [:or OrganizationIdentity ExclusiveRef]]]
    [:urpx/hasLocationDataSet
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:LocationDataSet"}
     [:vector Ref]]
    [:urpx/operatesIn
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:SystemOperator"}
     [:vector Ref]]
    [:urpx/offers
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
@@ -1627,7 +1664,7 @@
   [:map
    [:jsonld/type [:= "urpx:ModelExclusion"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/excludedModel Ref]
+   [:urpx/excludedModel {::range "urpx:PricingModel"} Ref]
    [:urpx/exclusionReason ExclusionReason]
    [:urpx/description {:optional true} :string]])
 
@@ -1666,7 +1703,7 @@
    [:urpx/endDate       {:optional true} Date]
    [:urpx/startDateTime {:optional true} DateTime]
    [:urpx/endDateTime   {:optional true} DateTime]
-   [:urpx/hasTemporalPeriod {:optional true} [:or TemporalPeriod ExclusiveRef]]])
+   [:urpx/hasTemporalPeriod {:optional true ::range "urpx:TemporalPeriod"} [:or TemporalPeriod ExclusiveRef]]])
 
 (def Evaluation
   "How a coverage claim was arrived at: who evaluated it, when, and of what
@@ -1676,10 +1713,10 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/evaluationKind {:optional true} EvaluationKind]
    [:urpx/description    {:optional true} :string]
-   [:urpx/evaluatedBy    {:optional true} [:or Organization ExclusiveRef]]
+   [:urpx/evaluatedBy    {:optional true ::range "urpx:Organization"} [:or Organization ExclusiveRef]]
    [:urpx/evaluatedOn    {:optional true} DateTime]
    [:urpx/hasModelExclusion
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ModelExclusion"}
     [:vector [:or ModelExclusion ExclusiveRef]]]])
 
 (def CoverageClaim
@@ -1702,7 +1739,7 @@
    [:urpx/stale            {:optional true} :boolean]
    [:urpx/fallbackSourced  {:optional true} :boolean]
    [:urpx/explainedBy
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:Evaluation"}
     [:vector [:or Evaluation ExclusiveRef]]]])
 
 (def PriceDefinitionReference
@@ -1713,12 +1750,12 @@
    [:jsonld/type [:= "urpx:PriceDefinitionReference"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/referenceInclusion ReferenceInclusion]
-   [:urpx/referencesPriceDefinition {:optional true} Ref]
+   [:urpx/referencesPriceDefinition {:optional true ::range "urpx:PriceDefinition"} Ref]
    [:urpx/documentedBy
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
     [:vector [:or DataSourceReference ExclusiveRef]]]
    [:urpx/resolvedFrom
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ModelCollection"}
     [:vector Ref]]])
 
 ;; ---------------------------------------------------------------------------
@@ -1768,50 +1805,50 @@
    [:urpx/touPeriodNumber   {:optional true} Int]
    ;; Multi-valued refs
    [:urpx/appliesInSeason
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:Season"}
     [:vector Ref]]
    [:urpx/referencesMetricInput
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:MetricInput"}
     [:vector Ref]]
    [:urpx/hasAlternative
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ProfileAlternative"}
     [:vector Ref]]
    [:urpx/hasRateCase
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RateCase"}
     [:vector Ref]]
    ;; Single Refs
-   [:urpx/referencesPriceDefinition   {:optional true} Ref]
-   [:urpx/referencesProfileAlternative Ref]   ; required (sh:minCount 1)
-   [:urpx/referencesServiceTier       {:optional true} Ref]
-   [:urpx/referencesServiceBracket    {:optional true} Ref]
-   [:urpx/referencesTouPeriod         {:optional true} Ref]
+   [:urpx/referencesPriceDefinition   {:optional true ::range "urpx:PriceDefinition"} Ref]
+   [:urpx/referencesProfileAlternative {::range "urpx:ProfileAlternative"} Ref]   ; required (sh:minCount 1)
+   [:urpx/referencesServiceTier       {:optional true ::range "urpx:ServiceTier"} Ref]
+   [:urpx/referencesServiceBracket    {:optional true ::range "urpx:ServiceBracket"} Ref]
+   [:urpx/referencesTouPeriod         {:optional true ::range "urpx:TOUPeriod"} Ref]
    ;; Sub-entities
    ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
    [:urpx/hasApplicabilityGroup
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ApplicabilityGroup"}
     [:vector ApplicabilityGroup]]
    [:urpx/hasApplicabilityRule
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ApplicabilityRule"}
     ;; Inline rule or a bare @id ref to one defined elsewhere in the document
     ;; (RDF merges a reference with its definition). Richer schema first so an
     ;; inline node decodes through ApplicabilityRule; ExclusiveRef rather than
     ;; Ref so a malformed inline node cannot slip through the reference arm.
     [:vector [:or ApplicabilityRule ExclusiveRef]]]
-   [:urpx/hasCalculationMethod  {:optional true} CalculationMethod]
+   [:urpx/hasCalculationMethod  {:optional true ::range "urpx:CalculationMethod"} CalculationMethod]
    [:urpx/hasDataSourceReference
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
     [:vector DataSourceReference]]
    ;; 0..N upstream (no sh:maxCount). Accepted as one or many; price.clj reads
    ;; one through urpx.index/single, which refuses rather than guessing.
-   [:urpx/hasMetricSpecification {:optional true} [:or MetricSpecification [:vector MetricSpecification]]]
+   [:urpx/hasMetricSpecification {:optional true ::range "urpx:MetricSpecification"} [:or MetricSpecification [:vector MetricSpecification]]]
    ;; 0..N upstream, same as on PriceSet: an alternative carries its own
    ;; subtotals, since which line items a summary names depends on which
    ;; alternative was selected.
    [:urpx/hasPriceSummary
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PriceSummary"}
     [:vector [:or PriceSummary ExclusiveRef]]]
    [:urpx/hasPrice
-    {:decode/urpx-jsonld single-or-vec->vec}
+    {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:Price"}
     [:vector Price]]])  ; required (sh:minCount 1)
 
 (def PriceSetAlternatives
@@ -1824,9 +1861,9 @@
    [:jsonld/id   {:optional true} :string]
    [:urpx/name             {:optional true} :string]
    [:urpx/priceMatchingKey {:optional true} :string]
-   [:urpx/referencesProfileAlternatives Ref]
+   [:urpx/referencesProfileAlternatives {::range "urpx:ProfileAlternatives"} Ref]
    [:urpx/hasPriceSetAlternative
-    {:decode/urpx-jsonld single-or-vec->vec}
+    {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:PriceSetAlternative"}
     [:vector PriceSetAlternative]]])
 
 (def Prices
@@ -1836,10 +1873,10 @@
    exposes one PriceSetAlternative per ProfileAlternative."
   [:map
    [:jsonld/type [:= "urpx:Prices"]]
-   [:urpx/hasPrice    {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Price]]
-   [:urpx/hasPriceSet {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector PriceSet]]
+   [:urpx/hasPrice    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:Price"} [:vector Price]]
+   [:urpx/hasPriceSet {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PriceSet"} [:vector PriceSet]]
    [:urpx/hasPriceSetAlternatives
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PriceSetAlternatives"}
     [:vector PriceSetAlternatives]]])
 
 (def RateCase
@@ -1893,52 +1930,52 @@
    [:urpx/isDefault         {:optional true} :boolean]
    [:urpx/minimumTenure     {:optional true} IsoDuration]
    [:urpx/url               {:optional true} :string]
-   [:urpx/publishedBy {:optional true} Organization]
-   [:urpx/offeredBy   {:optional true} OfferingOrganization]
-   [:urpx/supersedes  {:optional true} Ref]
+   [:urpx/publishedBy {:optional true ::range "urpx:Organization"} Organization]
+   [:urpx/offeredBy   {:optional true ::range "urpx:Organization"} OfferingOrganization]
+   [:urpx/supersedes  {:optional true ::range "urpx:RatePlanVersion"} Ref]
    [:urpx/hasDataSourceReference
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
     [:vector DataSourceReference]]
    [:urpx/hasEligibilityRule
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:EligibilityRule"}
     [:vector EligibilityRule]]
    [:urpx/hasRateCase
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RateCase"}
     [:vector Ref]]
    ;; URPX Decisions #084 + #090: RPV-side pointers to optional Modifier(s)
    ;; and ModifierVersion(s). Both 0..None in SHACL — surfaced here so
    ;; coerce yields them as vectors of Ref maps.
    [:urpx/hasModifierOptions
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlanModifier"}
     [:vector Ref]]
    [:urpx/hasModifierVersionOptions
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlanModifierVersion"}
     [:vector Ref]]
    [:urpx/observesHoliday
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:Holiday"}
     [:vector Ref]]
    ;; v0.5.1 coverage machinery, both sh:minCount 1 sh:maxCount 1 upstream.
    ;; STILL OPTIONAL: requiring them would reject every v0.2.x document, which
    ;; has neither term, and this library advertises v0.2.x acceptance.
    ;; Requiring these ends that promise; it is a contract decision, not a
    ;; conformance one.
-   [:urpx/forRatePlan {:optional true} Ref]
-   [:urpx/hasCoverageClaim {:optional true} [:or CoverageClaim ExclusiveRef]]
+   [:urpx/forRatePlan {:optional true ::range "urpx:RatePlan"} Ref]
+   [:urpx/hasCoverageClaim {:optional true ::range "urpx:CoverageClaim"} [:or CoverageClaim ExclusiveRef]]
    [:urpx/selfContained {:optional true} :boolean]
    [:urpx/hasPriceDefinitionReference
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PriceDefinitionReference"}
     [:vector [:or PriceDefinitionReference ExclusiveRef]]]
    ;; v0.5.1 typed identity. hasIdentifier and hasLocationDataSet are 0..N
    ;; upstream; timezoneIdentifier is maxCount 1.
    [:urpx/hasIdentifier
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlanIdentifier"}
     [:vector [:or RatePlanIdentifier ExclusiveRef]]]
    [:urpx/hasLocationDataSet
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:LocationDataSet"}
     [:vector Ref]]
    [:urpx/timezoneIdentifier {:optional true} :string]
-   [:urpx/hasPlanElements PlanElements]
-   [:urpx/hasPrices       Prices]])
+   [:urpx/hasPlanElements {::range "urpx:PlanElements"} PlanElements]
+   [:urpx/hasPrices       {::range "urpx:Prices"} Prices]])
 
 (def RatePlan
   "v0.2.0: ratePlanUniqueIdentifier is required (replaces v0.1.x
@@ -1971,10 +2008,10 @@
    ;; v0.5.1 typed identity. hasIdentifier and hasLocationDataSet are 0..N
    ;; upstream; timezoneIdentifier is maxCount 1.
    [:urpx/hasIdentifier
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlanIdentifier"}
     [:vector [:or RatePlanIdentifier ExclusiveRef]]]
    [:urpx/hasLocationDataSet
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:LocationDataSet"}
     [:vector Ref]]
    ;; 0..N upstream: sh:minCount 0 and no sh:maxCount. Accepts a single nested
    ;; snapshot or several. Deliberately NOT normalized to a vector by a decoder:
@@ -1982,7 +2019,7 @@
    ;; change the coerced shape every consumer already reads. Readers go through
    ;; `urpx.index/nested-version`, which refuses to guess when there is more
    ;; than one rather than silently resolving against an arbitrary snapshot.
-   [:urpx/hasRatePlanVersion {:optional true} [:or RatePlanVersion [:vector RatePlanVersion]]]])
+   [:urpx/hasRatePlanVersion {:optional true ::range "urpx:RatePlanVersion"} [:or RatePlanVersion [:vector RatePlanVersion]]]])
 
 ;; ---------------------------------------------------------------------------
 ;; Modifier — augments / overrides parts of an existing RatePlan
@@ -2016,17 +2053,17 @@
    [:urpx/serviceRole Ref]
    [:urpx/modifierType     {:optional true} Ref]
    [:urpx/modifierCategory {:optional true} Ref]
-   [:urpx/publishedBy {:optional true} Organization]
-   [:urpx/offeredBy   {:optional true} OfferingOrganization]
-   [:urpx/supersedes  {:optional true} Ref]
+   [:urpx/publishedBy {:optional true ::range "urpx:Organization"} Organization]
+   [:urpx/offeredBy   {:optional true ::range "urpx:Organization"} OfferingOrganization]
+   [:urpx/supersedes  {:optional true ::range "urpx:RatePlanModifierVersion"} Ref]
    [:urpx/hasDataSourceReference
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
     [:vector DataSourceReference]]
    [:urpx/hasEligibilityRule
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:EligibilityRule"}
     [:vector EligibilityRule]]
    [:urpx/hasRateCase
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RateCase"}
     [:vector Ref]]
    ;; Single Ref (one base plan) or a vector of Refs (NSE/HRA-style modifiers).
    ;; Optional per SHACL (sh:minCount 0): standalone urpx:RatePlanModifier
@@ -2034,33 +2071,33 @@
    ;; E-2-G shape) carry no applicableToRatePlan and rely on
    ;; consumer-side composition.
    [:urpx/applicableToRatePlan
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlan"}
     [:vector Ref]]
    [:urpx/applicableToRatePlanVersion
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlanVersion"}
     [:vector Ref]]
    ;; v0.5.1 coverage machinery, both sh:minCount 1 sh:maxCount 1 upstream.
    ;; STILL OPTIONAL: requiring them would reject every v0.2.x document, which
    ;; has neither term, and this library advertises v0.2.x acceptance.
    ;; Requiring these ends that promise; it is a contract decision, not a
    ;; conformance one.
-   [:urpx/forRatePlanModifier {:optional true} Ref]
-   [:urpx/hasCoverageClaim {:optional true} [:or CoverageClaim ExclusiveRef]]
+   [:urpx/forRatePlanModifier {:optional true ::range "urpx:RatePlanModifier"} Ref]
+   [:urpx/hasCoverageClaim {:optional true ::range "urpx:CoverageClaim"} [:or CoverageClaim ExclusiveRef]]
    [:urpx/selfContained {:optional true} :boolean]
    [:urpx/hasPriceDefinitionReference
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PriceDefinitionReference"}
     [:vector [:or PriceDefinitionReference ExclusiveRef]]]
    ;; v0.5.1 typed identity. hasIdentifier and hasLocationDataSet are 0..N
    ;; upstream; timezoneIdentifier is maxCount 1.
    [:urpx/hasIdentifier
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlanModifierIdentifier"}
     [:vector [:or RatePlanModifierIdentifier ExclusiveRef]]]
    [:urpx/hasLocationDataSet
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:LocationDataSet"}
     [:vector Ref]]
    [:urpx/timezoneIdentifier {:optional true} :string]
-   [:urpx/hasPlanElements PlanElements]
-   [:urpx/hasPrices       Prices]])
+   [:urpx/hasPlanElements {::range "urpx:PlanElements"} PlanElements]
+   [:urpx/hasPrices       {::range "urpx:Prices"} Prices]])
 
 (def RatePlanModifier
   "v0.2.0: modifierUniqueIdentifier is required (was per-version in v0.1.x).
@@ -2085,13 +2122,13 @@
    ;; v0.5.1 typed identity. hasIdentifier and hasLocationDataSet are 0..N
    ;; upstream; timezoneIdentifier is maxCount 1.
    [:urpx/hasIdentifier
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlanModifierIdentifier"}
     [:vector [:or RatePlanModifierIdentifier ExclusiveRef]]]
    [:urpx/hasLocationDataSet
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:LocationDataSet"}
     [:vector Ref]]
    ;; 0..N upstream, same as RatePlan/hasRatePlanVersion above.
-   [:urpx/hasRatePlanModifierVersion {:optional true} [:or RatePlanModifierVersion [:vector RatePlanModifierVersion]]]])
+   [:urpx/hasRatePlanModifierVersion {:optional true ::range "urpx:RatePlanModifierVersion"} [:or RatePlanModifierVersion [:vector RatePlanModifierVersion]]]])
 
 ;; ---------------------------------------------------------------------------
 ;; Scenario cost models
@@ -2116,12 +2153,12 @@
    [:jsonld/context {:optional true} Context]
    [:urpx/name        {:optional true} :string]
    [:urpx/description {:optional true} :string]
-   [:urpx/forScenario {:optional true} (at-most-one [:or Scenario ExclusiveRef])]
+   [:urpx/forScenario {:optional true ::range "urpx:Scenario"} (at-most-one [:or Scenario ExclusiveRef])]
    [:urpx/hasCoverageClaim
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:CoverageClaim"}
     [:vector [:or CoverageClaim ExclusiveRef]]]
    [:urpx/consumesVersion
-    {:optional true}
+    {:optional true ::range "urpx:RatePlanVersion"}
     (at-most-one [:or RatePlanVersion ExclusiveRef])]
    [:urpx/consumesModifierVersion
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
@@ -2129,7 +2166,7 @@
    [:urpx/selectsProfileAlternative
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector [:or ProfileAlternative ExclusiveRef]]]
-   [:urpx/producesResult {:optional true} (at-most-one :map)]
+   [:urpx/producesResult {:optional true ::range "urpx:ScenarioCostResult"} (at-most-one :map)]
    [:urpx/hasTemporalScope
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector [:or TemporalScope ExclusiveRef]]]])
@@ -2176,13 +2213,13 @@
    ;; or a Ref by @id. Inner entities should be validated against their own
    ;; schemas separately; here we only check the wrapper-level metadata.
    [:urpx/hasRatePlan
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlan"}
     [:vector :map]]
    [:urpx/hasRatePlanModifier
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlanModifier"}
     [:vector :map]]
    [:urpx/hasTariffPublication
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:TariffPublication"}
     [:vector :map]]])
 
 (def URPXPackage
@@ -2215,10 +2252,10 @@
    [:urpx/expirationDateTime {:optional true} DateTime]
    ;; Payload pointers: embedded entity or a Ref by @id, as on URPXDocument.
    [:urpx/hasRatePlan
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlan"}
     [:vector :map]]
    [:urpx/hasRatePlanModifier
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlanModifier"}
     [:vector :map]]
    [:urpx/packages
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
@@ -2256,7 +2293,7 @@
    [:urpx/issuingAuthority {:optional true} :string]
    [:urpx/pageReference    {:optional true} :string]
    [:urpx/publicationType  {:optional true} SourcePublicationType]
-   [:urpx/publishedBy      {:optional true} [:or Organization ExclusiveRef]]
+   [:urpx/publishedBy      {:optional true ::range "urpx:Organization"} [:or Organization ExclusiveRef]]
    [:urpx/dateApproved      {:optional true} Date]
    [:urpx/dateTimeApproved  {:optional true} DateTime]
    [:urpx/dateCreated       {:optional true} Date]
@@ -2277,13 +2314,13 @@
    [:urpx/expectedEndDate      {:optional true} Date]
    [:urpx/expectedEndDateTime  {:optional true} DateTime]
    [:urpx/hasRatePlan
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlan"}
     [:vector :map]]
    [:urpx/hasRatePlanModifier
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlanModifier"}
     [:vector :map]]
    [:urpx/hasDataSourceReference
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
     [:vector :map]]])
 
 (def TariffFiling
@@ -2298,11 +2335,11 @@
    [:jsonld/type [:= "urpx:TariffFiling"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/containsPricingModel
-    {:decode/urpx-jsonld single-or-vec->vec}
+    {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:PricingModel"}
     [:vector :map]]
    [:urpx/name        {:optional true} :string]
    [:urpx/description {:optional true} :string]
-   [:urpx/publishedBy {:optional true} [:or Organization ExclusiveRef]]
+   [:urpx/publishedBy {:optional true ::range "urpx:Organization"} [:or Organization ExclusiveRef]]
    [:urpx/effectiveDate      {:optional true} Date]
    [:urpx/effectiveDateTime  {:optional true} DateTime]
    [:urpx/expirationDate     {:optional true} Date]
@@ -2312,15 +2349,132 @@
    [:urpx/cancelledOn         {:optional true} Date]
    [:urpx/cancelledOnDateTime {:optional true} DateTime]
    [:urpx/cancelledBy {:optional true} :map]
-   [:urpx/replacedBy  {:optional true} :map]
-   [:urpx/replaces    {:optional true} :map]
-   [:urpx/supersedes  {:optional true} :map]
+   [:urpx/replacedBy  {:optional true ::range "urpx:TariffFiling"} :map]
+   [:urpx/replaces    {:optional true ::range "urpx:TariffFiling"} :map]
+   [:urpx/supersedes  {:optional true ::range "urpx:TariffFiling"} :map]
    [:urpx/cancelsPriceDefinition
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PriceDefinition"}
     [:vector :map]]
    [:urpx/documentedBy
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
     [:vector :map]]
    [:urpx/hasGeneralRule
-    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:GeneralRule"}
     [:vector :map]]])
+
+;; ---------------------------------------------------------------------------
+;; Registry
+;; ---------------------------------------------------------------------------
+
+(defn- entity-map
+  "The :map at the root of entity schema `s`, through a
+   [:schema {:registry ...}] wrapper or an [:and ...] refinement; nil if
+   there is none."
+  [s]
+  (let [s (m/deref (m/schema s))]
+    (case (m/type s)
+      :map s
+      :and (some entity-map (m/children s))
+      nil)))
+
+(defn type-literals
+  "The @type literals entity schema `s` admits: one for [:= \"urpx:X\"],
+   each member of an :enum. nil for a schema with no :jsonld/type entry."
+  [s]
+  (when-let [mp (entity-map s)]
+    (some (fn [[k _ child]]
+            (when (= :jsonld/type k)
+              (when (#{:= :enum} (m/type child))
+                (vec (m/children child)))))
+          (m/children mp))))
+
+(defn- type->keyword
+  "\"urpx:Season\" -> :urpx/Season."
+  [t]
+  (let [[prefix local] (str/split t #":" 2)]
+    (keyword prefix local)))
+
+(def schemas
+  "Every entity schema in this namespace, keyed by its @type as a keyword:
+   `:urpx/Season` -> `Season`. A schema that admits two @type spellings is
+   under both."
+  (into (sorted-map)
+        (for [[_ v] (ns-publics 'urpx.schema)
+              :let [s @v]
+              :when (vector? s)
+              t (type-literals s)]
+          [(type->keyword t) s])))
+
+(def registry
+  "Malli's default schemas plus `schemas`, for validating by name:
+
+     (m/validate :urpx/Season season {:registry schema/registry})"
+  (mr/composite-registry m/default-registry schemas))
+
+(defn schema-for-type
+  "The entity schema for @type `t` (\"urpx:Season\"), or nil if none is
+   modeled."
+  [t]
+  (get schemas (type->keyword t)))
+
+(defn ranges
+  "{property class} for each entry of entity schema `s` that states a
+   ::range."
+  [s]
+  (into {}
+        (keep (fn [[k props _]]
+                (when-let [r (::range props)] [k r])))
+        (some-> (entity-map s) m/children)))
+
+(def ^:private ranges-for-type
+  (memoize (fn [t] (some-> (schema-for-type t) ranges))))
+
+(defn- types-of
+  "The @type values of `x`: a string, a vector of them, or nil."
+  [x]
+  (cond (string? x)     [x]
+        (sequential? x) (vec x)))
+
+(defn- members
+  "[path value] for each value `v` holds at `path`: the elements of a vector,
+   the members of an RDF list, or `v` itself."
+  [path v]
+  (cond
+    (vector? v) (into [] (map-indexed (fn [i x] [(conj path i) x])) v)
+    (and (map? v) (contains? v :jsonld/list)) (members (conj path :jsonld/list)
+                                                       (:jsonld/list v))
+    :else [[path v]]))
+
+(defn mistyped-references
+  "Every reference and inline node in `node`, at any depth, that is not an
+   instance of the ::range of the property holding it, as
+
+     {:in path :property k :range class :id @id-or-nil :types [@type ...]}
+
+   An inline node is judged by its own @type. A reference is judged by
+   `(type-of id)`, the @type (a string or a vector) of the node the @id
+   names, or nil when that node is unknown; a reference to an unknown node
+   is not reported. `urpx.index/mistyped-references` supplies `type-of` from
+   a set of documents."
+  ([node type-of] (mistyped-references node type-of []))
+  ([node type-of path]
+   (let [rs (into {} (map ranges-for-type) (types-of (:jsonld/type node)))]
+     (into []
+           (mapcat
+            (fn [[k v]]
+              (when-not (= "jsonld" (namespace k))
+                (mapcat
+                 (fn [[p x]]
+                   (when (and (map? x) (not (contains? x :jsonld/value)))
+                     (let [r (get rs k)
+                           ref? (and (contains? x :jsonld/id)
+                                     (not (contains? x :jsonld/type)))
+                           ts (if ref?
+                                (types-of (type-of (:jsonld/id x)))
+                                (types-of (:jsonld/type x)))]
+                       (cond-> (if ref? [] (mistyped-references x type-of p))
+                         (and r (seq ts) (not-any? #(instance-of? % r) ts))
+                         (conj {:in p :property k :range r
+                                :id (:jsonld/id x) :types ts})))))
+                 (members (conj path k) v)))))
+           node))))

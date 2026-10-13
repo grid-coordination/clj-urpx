@@ -274,3 +274,18 @@
                                    (.getPath (fixtures/fixture-resource "sce-d-2026-03-20")))))))
   (testing "a bare plan is not"
     (is (not (#'validate/refused? {:checked [{:type "urpx:RatePlan"}]})))))
+
+(deftest a-reference-to-the-wrong-type-fails
+  (let [raw  (slurp (.getPath (fixtures/fixture-resource "sce-d-2026-03-20")))
+        doctored (str/replace-first
+                  raw
+                  #"(\"urpx:referencesLedger\": \{\s*\"@id\": \")sce:d-2026-03-20-ledger-energy-supply"
+                  "$1sce:d-2026-03-20-season-summer")
+        r (validate/check-file (tmp-doc doctored))]
+    (is (not= raw doctored) "the fixture was actually doctored")
+    (is (empty? (filter :error (:checked r))) "every schema still accepts it")
+    (is (= [{:property :urpx/referencesLedger :range "urpx:Ledger"
+             :id "sce:d-2026-03-20-season-summer" :types ["urpx:Season"]}]
+           (mapv #(select-keys % [:property :range :id :types]) (:mistyped r))))
+    (is (empty? (:mistyped (validate/check-file
+                            (.getPath (fixtures/fixture-resource "sce-d-2026-03-20"))))))))

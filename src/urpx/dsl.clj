@@ -126,7 +126,9 @@
 
      :id-fn      keyword -> @id string
      :declared   {@id {:as keyword-or-nil, :type @type}}
-     :referenced {keyword #{@type of each builder that referenced it}}"
+     :referenced {keyword #{@type of each builder that referenced it}}
+     :ranged     {keyword #{[@type property range] of each ranged slot
+                            that referenced it}}"
   nil)
 
 (defn curie
@@ -148,7 +150,8 @@
 
 (defn- run-scope
   "Run `body-fn` in a fresh scope configured by `opts`, then refuse every
-   keyword referenced in it whose @id no builder in it declared."
+   keyword referenced in it whose @id no builder in it declared, and every
+   one whose entity is not of the type its slot takes."
   [opts body-fn]
   (when-let [unknown (seq (remove #{:id-fn} (keys opts)))]
     (throw (ex-info (str "dsl-scope refuses unknown options "
@@ -156,11 +159,12 @@
                     {:unknown-options (set unknown)})))
   (let [scope (volatile! {:id-fn (:id-fn opts curie)
                           :declared {}
-                          :referenced {}})
+                          :referenced {}
+                          :ranged {}})
         result (binding [*scope* scope]
                  (doto (body-fn)
                    realize!))
-        {:keys [id-fn declared referenced]} @scope
+        {:keys [id-fn declared referenced ranged]} @scope
         unresolved (into (sorted-map-by (fn [a b]
                                           (compare (str a) (str b))))
                          (remove (fn [[k _]]
@@ -175,7 +179,23 @@
                                             (str/join ", " (sort types))
                                             ")"))))
                       {:unresolved unresolved})))
+    (when-let [mistyped (seq (for [[k uses] (sort-by (comp str key) ranged)
+                                   :let [dt (:type (get declared (id-fn k)))]
+                                   [t property r] (sort uses)
+                                   :when (not (schema/instance-of? dt r))]
+                               {:ref k :type dt :by t :property property :range r}))]
+      (throw (ex-info (str "dsl-scope has mistyped references "
+                           (str/join ", "
+                                     (for [{:keys [ref type by property range]} mistyped]
+                                       (str ref " (a " type ") from " by " "
+                                            property ", which takes a " range))))
+                      {:mistyped (vec mistyped)})))
     result))
+
+(defn- mistyped-message
+  "One `urpx.schema/mistyped-references` result, in words."
+  [{:keys [in range types]}]
+  (str "a " (str/join "/" types) " at " (pr-str in) ", which takes a " range))
 
 (defmacro dsl-scope
   "Evaluate `body` in a scope where entities are named by keyword. An
@@ -197,8 +217,12 @@
    builder inside `for` or `map` runs in the scope. Then every keyword
    referenced whose @id no builder in the scope declared is refused in one
    ex-info naming each such keyword and the @type of each builder that
-   referenced it, under `:unresolved`. A reference to an entity outside
-   the scope is a Ref map, `{:jsonld/id \"…\"}`.
+   referenced it, under `:unresolved`. Then every keyword referenced from a
+   slot whose entity is not an instance of the slot's
+   `urpx.schema/ranges` class is refused in one ex-info, under
+   `:mistyped`, as `{:ref k :type t :by @type :property p :range class}`.
+   A reference to an entity outside the scope is a Ref map,
+   `{:jsonld/id \"…\"}`, and is not judged.
 
    Each scope has its own state; an inner scope does not see the outer."
   [& body]
@@ -237,9 +261,12 @@
     id))
 
 (defn- reference!
-  "The Ref for keyword `k`, recorded as referenced by a builder of @type `t`."
-  [k t]
+  "The Ref for keyword `k`, recorded as referenced by a builder of @type `t`
+   through `property`, whose range is `r` when it states one."
+  [k t property r]
   (vswap! *scope* update-in [:referenced k] (fnil conj #{}) t)
+  (when r
+    (vswap! *scope* update-in [:ranged k] (fnil conj #{}) [t property r]))
   {:jsonld/id ((:id-fn @*scope*) k)})
 
 (defn- vocabulary-keyword?
@@ -255,18 +282,20 @@
        (= [:jsonld/list] (keys v))))
 
 (defn- resolve-refs-in-value
-  "Walk a kwarg value given to a builder of @type `t` and replace keyword
-   leaves with {:jsonld/id ...} maps. A `:urpx/X` keyword names the
-   vocabulary term `urpx:X`; inside a `dsl-scope`, any other qualified
-   keyword outside `jsonld` is a reference. Vectors and the members of an
-   `rdf-list` are walked element-wise; other shapes pass through unchanged."
-  [t v]
-  (cond
-    (vocabulary-keyword? v)               {:jsonld/id (str "urpx:" (name v))}
-    (and *scope* (local-keyword? v))      (reference! v t)
-    (vector? v)                           (mapv (partial resolve-refs-in-value t) v)
-    (list-object? v)                      (update v :jsonld/list (partial resolve-refs-in-value t))
-    :else                                 v))
+  "Walk the value `v` of `property`, given to a builder of @type `t`, and
+   replace keyword leaves with {:jsonld/id ...} maps. `r` is the property's
+   range, or nil. A `:urpx/X` keyword names the vocabulary term `urpx:X`;
+   inside a `dsl-scope`, any other qualified keyword outside `jsonld` is a
+   reference. Vectors and the members of an `rdf-list` are walked
+   element-wise; other shapes pass through unchanged."
+  [t property r v]
+  (let [walk (partial resolve-refs-in-value t property r)]
+    (cond
+      (vocabulary-keyword? v)          {:jsonld/id (str "urpx:" (name v))}
+      (and *scope* (local-keyword? v)) (reference! v t property r)
+      (vector? v)                      (mapv walk v)
+      (list-object? v)                 (update v :jsonld/list walk)
+      :else                            v)))
 
 (defn rdf-list
   "The ordered RDF list of `members`, `{:jsonld/list [...]}`, emitted as a
@@ -364,6 +393,9 @@
        field, naming the field, under `:reason ::inexact-decimal`.
      - Validates the assembled entity against the schema; throws ex-info
        (with the Malli explanation attached) on validation failure.
+     - Refuses an inline node, at any depth, that is not an instance of
+       its slot's `urpx.schema/ranges` class, under `:mistyped` as
+       `urpx.schema/mistyped-references` reports it.
 
    The schema must carry a :jsonld/type entry with shape `[:= \"urpx:X\"]`
    so the @type can be inferred.
@@ -379,6 +411,7 @@
    (let [t (entity-type schema)
          passthrough (set passthrough)
          aliases (alias-map schema)
+         ranges (schema/ranges schema)
          schema-keys (set (map first (m/entries (m/deref schema))))
          admitted? (fn [k]
                      (or (contains? schema-keys k)
@@ -406,7 +439,7 @@
                  (declare-id! id nil t))
              opts* (into {}
                          (map (fn [[k v]]
-                                [k (resolve-refs-in-value t v)]))
+                                [k (resolve-refs-in-value t k (get ranges k) v)]))
                          opts)
              raw (cond-> (assoc (strip-nils opts*) :jsonld/type t)
                    as? (assoc :jsonld/id id))
@@ -415,6 +448,10 @@
            (throw (or (inexact-decimal-error t err)
                       (ex-info (str "DSL builder produced an invalid " t)
                                {:type t :input raw :explanation err}))))
+         (when-let [mistyped (seq (schema/mistyped-references coerced (constantly nil)))]
+           (throw (ex-info (str "DSL builder for " t " was given "
+                                (str/join "; " (map mistyped-message mistyped)))
+                           {:type t :mistyped (vec mistyped)})))
          coerced)))))
 
 ;; ---------------------------------------------------------------------------

@@ -11,7 +11,10 @@
   success:
 
       0  every entity in every file coerced and validated
-      1  at least one entity failed validation
+      1  at least one entity failed validation, a file broke a rule the
+         standard states, or a reference or inline node is not of the type
+         its property takes (`urpx.index/mistyped-references`, judged
+         within each file)
       2  refused: a path was unreadable, or a file yielded no typed entity
          beyond a wrapper
 
@@ -21,6 +24,7 @@
             [urpx.coerce :as coerce]
             [urpx.core :as core]
             [urpx.coverage :as coverage]
+            [urpx.index :as index]
             [urpx.schema :as schema])
   (:gen-class))
 
@@ -120,7 +124,9 @@
 
 (defn check-file
   "Validate every entity in `path` that clj-urpx models. Returns
-   {:path :checked [{:type :id :error}] :skipped [types]}.
+   {:path :checked [{:type :id :error}] :skipped [types] :mistyped [...]},
+   where :mistyped is `urpx.index/mistyped-references` over the file's
+   top-level entities, each with the :id of the one holding it.
 
    Entities of unmodeled types are reported as skipped rather than silently
    ignored, so a file that yields nothing recognizable is visible as such."
@@ -140,14 +146,19 @@
                    {:type  (:jsonld/type e)
                     :id    (:jsonld/id e)
                     :error (coerce/explain s (coerce/coerce s e))})
-        [findings unchecked] (conformance-findings all)]
+        [findings unchecked] (conformance-findings all)
+        mistyped (for [m (index/mistyped-references top)]
+                   (-> m
+                       (assoc :holder (:jsonld/id (nth top (:document m))))
+                       (dissoc :document)))]
     {:path      path
+     :mistyped  (vec mistyped)
      :checked   (vec checked)
      :findings  findings
      :unchecked unchecked
      :skipped   (vec (remove schema-for (map :jsonld/type typed)))}))
 
-(defn- report [{:keys [path checked skipped findings unchecked]}]
+(defn- report [{:keys [path checked skipped findings unchecked mistyped]}]
   (let [bad (filter :error checked)]
     (println (format "%-58s %d checked, %d failed%s"
                      path (count checked) (count bad)
@@ -163,12 +174,16 @@
     ;; that it does and still breaks a rule the standard states.
     (doseq [{:keys [rule type id detail]} findings]
       (println (format "  NONCONFORMANT %s %s %s" (name rule) (or type "") (or id detail ""))))
+    (doseq [{:keys [holder in id types range]} mistyped]
+      (println (format "  MISTYPED %s %s: %s is %s, takes %s"
+                       (or holder "") (pr-str in) (or id "inline node")
+                       (str/join "/" types) range)))
     ;; Not a failure, and not silence either. An unapplied rule looks exactly
     ;; like a passed one unless it is named.
     (doseq [{:keys [rule why versions]} unchecked]
       (println (format "  UNCHECKED %s over %d version(s): %s" (name rule) versions
                        (str/replace why #"\s+" " "))))
-    (and (empty? bad) (empty? findings))))
+    (and (empty? bad) (empty? findings) (empty? mistyped))))
 
 (defn- refused?
   "True when `result` names an unreadable path or checked nothing beyond a
@@ -184,7 +199,7 @@
                   (try
                     (check-file p)
                     (catch Exception e
-                      {:path p :checked [] :skipped [] :findings [] :refused (.getMessage e)})))
+                      {:path p :checked [] :skipped [] :findings [] :mistyped [] :refused (.getMessage e)})))
         results (vec results)
         refused (filter refused? results)]
     (doseq [r results]
@@ -202,11 +217,12 @@
       ;; Findings count toward the exit code as much as schema errors do. They
       ;; did not at first, and the finding was therefore decoration: a file
       ;; every schema accepted and the standard rejected exited 0.
-      (some #(or (some :error (:checked %)) (seq (:findings %))) results)
+      (some #(or (some :error (:checked %)) (seq (:findings %)) (seq (:mistyped %))) results)
       (let [failed (filter #(some :error (:checked %)) results)
-            nonconf (filter #(seq (:findings %)) results)]
-        (println (format "FAILED: %d of %d file(s) had validation errors, %d nonconformant."
-                         (count failed) (count results) (count nonconf)))
+            nonconf (filter #(seq (:findings %)) results)
+            mistyped (filter #(seq (:mistyped %)) results)]
+        (println (format "FAILED: %d of %d file(s) had validation errors, %d nonconformant, %d with mistyped references."
+                         (count failed) (count results) (count nonconf) (count mistyped)))
         (System/exit 1))
 
       :else
