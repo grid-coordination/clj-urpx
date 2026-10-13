@@ -4,7 +4,7 @@
 [![md-docs](https://img.shields.io/badge/md--docs-included-green)](https://github.com/dcj/codox-md)
 [![build-provenance](https://img.shields.io/badge/build--provenance-included-blue)](https://github.com/dcj/build-provenance)
 
-Clojure library for [URPX](https://lfenergy.org/projects/utility-rate-plan-exchange-urpx/) (Utility Rate Plan Exchange) — parse, validate, and resolve prices from URPX rate plan documents (JSON-LD).
+Clojure library for [URPX](https://urpx.org) (Utility Rate Plan Exchange) — parse, validate, and resolve prices from URPX rate plan documents (JSON-LD).
 
 ## What is URPX?
 
@@ -161,7 +161,7 @@ Wrappers are descended, so a `urpx:URPXDocument` or `urpx:URPXPackage` is checke
 - [URPX standard](https://github.com/urpx-org/urpx) — ontology, SHACL shapes, tutorial, and reference test cases (the upstream specification this library targets)
 - [urpx-org/urpx-dev](https://github.com/urpx-org/urpx-dev): design-decision logs and development record for the URPX standard
 - [urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) — production corpus of California utility rate-plan filings; vendored test fixtures here are frozen specimens taken from there
-- [LF Energy URPX project page](https://lfenergy.org/projects/utility-rate-plan-exchange-urpx/) — broader context for the URPX initiative
+- [urpx.org](https://urpx.org): the URPX website
 - [`doc/dsl-tutorial.md`](doc/dsl-tutorial.md) — worked DSL examples mirroring sections of the upstream URPX tutorial
 
 ## Contributing
