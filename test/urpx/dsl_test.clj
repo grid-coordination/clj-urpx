@@ -22,7 +22,7 @@
     (is (= "urpx:Ledger"       (dsl/entity-type schema/Ledger)))
     (is (= "urpx:Holiday"      (dsl/entity-type schema/Holiday)))
     (is (= "urpx:RatePlan"     (dsl/entity-type schema/RatePlan)))
-    (is (= "urpx:URPXDocument" (dsl/entity-type schema/URPXDocument)))))
+    (is (= "urpx:URPXPackage"  (dsl/entity-type schema/URPXPackage)))))
 
 (deftest entity-type-returns-nil-on-non-entity-schema
   (testing "schemas without a :jsonld/type entry return nil (Decimal is a
@@ -556,10 +556,9 @@
       (is (= [5 6 7 8 9 10] (:urpx/month s))))))
 
 (deftest acronym-prefixes-kebab-correctly
-  (testing "schema names with acronym prefixes (URPXDocument,
+  (testing "schema names with acronym prefixes (URPXPackage,
             TOUSchedule) kebab-case correctly — boundary between an all-caps
             run and the next CamelCase word inserts a hyphen"
-    (is (some? (var-get #'urpx.dsl/urpx-document)))
     (is (some? (var-get #'urpx.dsl/urpx-package)))
     (is (some? (var-get #'urpx.dsl/tou-schedule)))
     (is (some? (var-get #'urpx.dsl/tou-period)))))
@@ -674,8 +673,12 @@
                  (dsl/organization-identity)))))
 
 (deftest a-version-takes-offered-by
-  (let [version #(dsl/rate-plan-version
+  (let [claim {:jsonld/type "urpx:CoverageClaim"
+               :urpx/completenessResult {:jsonld/id "urpx:complete"}}
+        version #(dsl/rate-plan-version
                   :offered-by %
+                  :for-rate-plan {:jsonld/id "ex:plan"}
+                  :has-coverage-claim claim
                   :change-reason :urpx/rateCase
                   :service-role :urpx/bundledServiceRole
                   :has-plan-elements {:jsonld/type "urpx:PlanElements"
@@ -685,6 +688,8 @@
                   :has-prices {:jsonld/type "urpx:Prices"})
         modifier-version #(dsl/rate-plan-modifier-version
                            :offered-by %
+                           :for-rate-plan-modifier {:jsonld/id "ex:modifier"}
+                           :has-coverage-claim claim
                            :modifier-version-number "1"
                            :change-reason :urpx/rateCase
                            :service-role :urpx/bundledServiceRole
@@ -758,7 +763,7 @@
       (is (= "urpx:CalculationMethod" (:jsonld/type cm)))
       (is (instance? java.time.Period (:urpx/intervalDuration cm)))
       (is (= "urpx:Organization" (:jsonld/type org)))))
-  (testing "rate plan + version + URPXDocument builders all produce the
+  (testing "rate plan + version + URPXPackage builders all produce the
             expected @types"
     (let [rpv (dsl/rate-plan-version :urpx/forRatePlan {:jsonld/id "ex:parent"}
                                      :urpx/hasCoverageClaim
@@ -784,15 +789,9 @@
                             :urpx/ratePlanUniqueIdentifier "P1"
                             :urpx/name "Plan One"
                             :urpx/initialEffectiveDate "2026-01-01"
-                            :urpx/hasRatePlanVersion rpv)
-          doc (dsl/urpx-document
-               :urpx/targetURPXVersion "https://example.com/urpx-v0.2.0"
-               :urpx/hasRatePlan rp)]
+                            :urpx/hasRatePlanVersion rpv)]
       (is (= "urpx:RatePlanVersion" (:jsonld/type rpv)))
       (is (= "urpx:RatePlan"        (:jsonld/type rp)))
-      (is (= "urpx:URPXDocument"    (:jsonld/type doc)))
-      (is (vector? (:urpx/hasRatePlan doc))
-          "single-or-vec→vec on URPXDocument's hasRatePlan still applies")
       (let [pkg (dsl/urpx-package
                  :urpx/targetURPXVersion "https://example.com/urpx-v0.5.1"
                  :urpx/packages rp)]
@@ -959,12 +958,7 @@
             them added the same day, so it is pinned rather than left in prose.
 
             The check follows the naming convention the ns documents: a schema
-            named X gets a builder named (camel->kebab X). There are no
-            exceptions: an earlier comment claimed SourcePublication could not
-            have one because its @type is an :enum, and that was asserted
-            without testing. entity-type returns the first enum member, which is
-            the right default for a builder, so it builds the v0.5.1 spelling
-            while the schema still validates the v0.2.x one on parse."
+            named X gets a builder named (camel->kebab X), with no exceptions."
     (let [kebab    (var-get #'urpx.dsl/camel->kebab)
           entities (into (sorted-set)
                          (keep (fn [[sym v]]
@@ -977,9 +971,4 @@
           missing  (remove #(ns-resolve 'urpx.dsl (symbol (kebab %))) entities)]
       (is (< 50 (count entities)) "sanity: urpx.schema should define many entities")
       (is (empty? missing)
-          (str "entity schemas with no DSL builder: " (pr-str (vec missing))))
-      (testing "the dual-accepting schema builds its v0.5.1 spelling, and the
-                schema still validates the v0.2.x one"
-        (is (= "urpx:SourcePublication" (:jsonld/type (dsl/source-publication :urpx/name "X"))))
-        (is (m/validate schema/SourcePublication
-                        {:jsonld/type "urpx:TariffPublication" :urpx/name "X"}))))))
+          (str "entity schemas with no DSL builder: " (pr-str (vec missing)))))))

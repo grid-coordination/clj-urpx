@@ -228,12 +228,14 @@
                   "{\"@id\":\"x:prior\",\"@type\":\"urpx:PriorRatePlan\"}]}")
         {:urpx.load/keys [documents uncoercible]} (load/scan [(src json)])
         by-id (into {} (map (juxt :jsonld/id identity)) documents)]
-    (is (= #{"x:pub" "x:old" "x:case" "x:enrol"} (set (keys by-id))))
+    (is (= #{"x:pub" "x:case" "x:enrol"} (set (keys by-id))))
     (is (= (LocalDate/of 2026 3 1) (get-in by-id ["x:pub" :urpx/effectiveDate])))
-    (is (= (LocalDate/of 2025 12 1) (get-in by-id ["x:old" :urpx/dateReceived])))
     (is (= "A.24-01-001" (get-in by-id ["x:case" :urpx/caseNumber])))
     (is (= (LocalDate/of 2025 6 1) (get-in by-id ["x:enrol" :urpx/enrollmentStartDate])))
-    (is (= [{:jsonld/type "urpx:PriorRatePlan" :jsonld/id "x:prior"}] uncoercible))))
+    (is (= #{{:jsonld/type "urpx:PriorRatePlan" :jsonld/id "x:prior"}
+             {:jsonld/type "urpx:TariffPublication" :jsonld/id "x:old"}}
+           (set uncoercible))
+        "the v0.2.x urpx:TariffPublication is no longer a document")))
 
 (deftest a-caller-can-assert-that-no-version-was-discarded
   (testing "the assertion that was unavailable before, written the way a

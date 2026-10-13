@@ -601,9 +601,9 @@
                       (assoc minimal-version
                              :urpx/forRatePlan {:jsonld/id "urpx:rp-1"}
                              :urpx/hasCoverageClaim {:jsonld/id "urpx:cc-1"}))))
-    (testing "both stay OPTIONAL while v0.2.x is accepted: v0.5.1 requires
-              them 1..1, but every v0.2.x document omits them"
-      (is (m/validate s/RatePlanVersion minimal-version)))
+    (testing "both are required, 1..1 at v0.5.1"
+      (is (not (m/validate s/RatePlanVersion (dissoc minimal-version :urpx/forRatePlan))))
+      (is (not (m/validate s/RatePlanVersion (dissoc minimal-version :urpx/hasCoverageClaim)))))
     (testing "a malformed claim cannot slip through the reference arm, because
               that arm is ExclusiveRef rather than the open Ref"
       (is (not (m/validate s/RatePlanVersion
@@ -682,9 +682,6 @@
                  :urpx/modifierUniqueIdentifier "M1"
                  :urpx/name "Mod One"
                  :urpx/initialEffectiveDate (LocalDate/of 2026 1 1)}]
-               ["URPXDocument" s/URPXDocument
-                {:jsonld/type "urpx:URPXDocument"
-                 :urpx/targetURPXVersion "https://example.com/v0.2.0"}]
                ["URPXPackage" s/URPXPackage
                 {:jsonld/type "urpx:URPXPackage"
                  :urpx/targetURPXVersion "https://example.com/v0.5.1"}]]]
@@ -700,10 +697,9 @@
 ;; v0.5.1 DataSourceReference flattening, and the publication split
 ;; ---------------------------------------------------------------------------
 
-(deftest data-source-reference-accepts-flattened-and-nested
-  (testing "v0.5.1 hoists leafStart/leafEnd/tariffStatementType inline and
-            deletes urpx:TariffBookReference; the flattened node validates with
-            no nested reference present"
+(deftest data-source-reference-validates-flattened
+  (testing "v0.5.1 carries leafStart/leafEnd/tariffStatementType inline on the
+            node"
     (let [flat {:jsonld/type "urpx:DataSourceReference"
                 :urpx/fileName "x.pdf"
                 :urpx/pageStart 1
@@ -714,34 +710,18 @@
                 :urpx/tariffStatementType {:jsonld/id "urpx:distributionStatement"}
                 :urpx/sourcePublication {:jsonld/id "pge:pub-1"}
                 :urpx/hasSelector {:jsonld/id "pge:sel-1"}}]
-      (is (nil? (m/explain s/DataSourceReference (coerce/coerce s/DataSourceReference flat))))))
-  (testing "the v0.2.x nested form still validates, since v0.2.x filings carry
-            it"
-    (let [nested {:jsonld/type "urpx:DataSourceReference"
-                  :urpx/fileName "x.pdf"
-                  :urpx/hasTariffBookReference
-                  {:jsonld/type "urpx:TariffBookReference"
-                   :urpx/pageStart 1 :urpx/pageEnd 6
-                   :urpx/leafStart "61096-E" :urpx/leafEnd "61101-E"}}]
-      (is (nil? (m/explain s/DataSourceReference (coerce/coerce s/DataSourceReference nested)))))))
+      (is (nil? (m/explain s/DataSourceReference (coerce/coerce s/DataSourceReference flat)))))))
 
-(deftest source-publication-dual-accepts-both-vocabularies
+(deftest source-publication-validates
   (let [base {:urpx/name "PG&E Electric Schedule E-1"
               :urpx/filingNumber "ELEC-4321-E"
               :urpx/issuingAuthority "CPUC"
               :urpx/publicationType {:jsonld/id "urpx:tariffBook"}}]
-    (testing "both the v0.5.1 and the v0.2.x @type validate, because a set of
-              filings migrating utility by utility carries both at once"
+    (testing "urpx:SourcePublication validates; the v0.2.x urpx:TariffPublication
+              and an unrelated @type do not"
       (is (m/validate s/SourcePublication (assoc base :jsonld/type "urpx:SourcePublication")))
-      (is (m/validate s/SourcePublication (assoc base :jsonld/type "urpx:TariffPublication"))))
-    (testing "an unrelated @type does not"
+      (is (not (m/validate s/SourcePublication (assoc base :jsonld/type "urpx:TariffPublication"))))
       (is (not (m/validate s/SourcePublication (assoc base :jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles")))))
-    (testing "the v0.2.1-only paths v0.5.1 drops are still accepted, since the
-              vendored fixtures carry them"
-      (is (m/validate s/SourcePublication
-                      (assoc base :jsonld/type "urpx:TariffPublication"
-                             :urpx/hasRatePlan [{:jsonld/id "pge:e-1"}]
-                             :urpx/hasRatePlanModifier [{:jsonld/id "pge:pcia"}]))))
     (testing "publishedBy takes an inline Organization or a bare reference, and
               a malformed organization is not waved through the reference arm"
       (is (m/validate s/SourcePublication
@@ -770,7 +750,7 @@
                                    (assoc filing :urpx/containsPricingModel
                                           {:jsonld/id "pge:pm-1"}))]
         (is (vector? (:urpx/containsPricingModel coerced)))))
-    (testing "TariffFiling is v0.5.1-only: there is no v0.2.x @type to accept"
+    (testing "a TariffPublication is not a TariffFiling"
       (is (not (m/validate s/TariffFiling (assoc filing :jsonld/type "urpx:TariffPublication")))))))
 
 ;; ---------------------------------------------------------------------------
@@ -801,18 +781,13 @@
       (is (not (m/validate schema {:jsonld/id (str/upper-case (str "urpx:" (first members)))}))
           (str label " membership is exact, not case-insensitive")))))
 
-(deftest publication-type-accepts-the-legacy-value
+(deftest publication-type-is-the-v051-list
   (testing "the 8 v0.5.1 members are accepted"
     (doseq [m ["tariffBook" "tariffStatement" "tariffSupplement" "tariffAddendum"
                "supplyCharges" "derExports" "highlyDynamicPrices" "marketPriceFeed"]]
       (is (m/validate s/SourcePublicationType {:jsonld/id (str "urpx:" m)}))))
-  (testing "urpx:regulatoryFiling is accepted as a documented legacy member: it
-            belonged to the retired 10-member urpx:PublicationTypeValue, has no
-            successor among the 8, and v0.2.x filings may carry it. Enforcing the
-            v0.5.1 list alone would reject those filings."
-    (is (m/validate s/SourcePublicationType {:jsonld/id "urpx:regulatoryFiling"})))
-  (testing "the other retired members are NOT readmitted"
-    (doseq [m ["amendment" "notice" "order" "supplement" "tariffBookLeaves"
+  (testing "the retired 10-member list's members are not admitted"
+    (doseq [m ["regulatoryFiling" "amendment" "notice" "order" "supplement" "tariffBookLeaves"
                "ratePlanPublication" "ratePlanModifierPublication"]]
       (is (not (m/validate s/SourcePublicationType {:jsonld/id (str "urpx:" m)}))
           (str "urpx:" m " must not be accepted")))))
@@ -967,8 +942,11 @@
       (is (not (m/validate s/RatePlanVersion (dissoc v :urpx/changeReason))))
       (is (not (m/validate s/RatePlanVersion (dissoc v :urpx/serviceRole))))
       (testing "and the modifier snapshot the same way"
-        (let [mv (assoc v :jsonld/type "urpx:RatePlanModifierVersion"
-                        :urpx/modifierVersionNumber "1")]
+        (let [mv (-> v
+                     (dissoc :urpx/forRatePlan)
+                     (assoc :jsonld/type "urpx:RatePlanModifierVersion"
+                            :urpx/forRatePlanModifier {:jsonld/id "ex:modifier"}
+                            :urpx/modifierVersionNumber "1"))]
           (is (m/validate s/RatePlanModifierVersion mv))
           (is (not (m/validate s/RatePlanModifierVersion (dissoc mv :urpx/serviceRole)))))))))
 

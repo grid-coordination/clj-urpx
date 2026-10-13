@@ -21,11 +21,16 @@
     :default-decoder identity
     :default-encoder identity}))
 
+(def ^:private decoder (memoize #(m/decoder % jsonld-transformer)))
+(def ^:private encoder (memoize #(m/encoder % jsonld-transformer)))
+(def ^:private validator (memoize m/validator))
+(def ^:private explainer (memoize m/explainer))
+
 (defn coerce
   "Decode a raw value against `schema` using the URPX JSON-LD transformer.
    Returns the typed value. Use `validate` afterwards if you want a strict check."
   [schema raw]
-  (m/decode schema raw jsonld-transformer))
+  ((decoder schema) raw))
 
 (defn encode
   "Encode a typed value against `schema` using the URPX JSON-LD transformer.
@@ -33,7 +38,7 @@
    string forms for the write side. Schemas without an :encode/urpx-jsonld
    property pass values through unchanged (`:default-encoder identity`)."
   [schema typed]
-  (m/encode schema typed jsonld-transformer))
+  ((encoder schema) typed))
 
 (defn coerce-rate-plan
   "Coerce a raw parsed URPX rate plan into the typed shape described by
@@ -62,19 +67,10 @@
   [raw]
   (coerce schema/RatePlanModifierVersion raw))
 
-(defn coerce-urpx-document
-  "Coerce a raw parsed URPX document wrapper into the typed shape described
-   by `urpx.schema/URPXDocument`. Validates the document-level metadata
-   (urpx:targetURPXVersion, dates, version, …) — inner urpx:hasRatePlan /
-   urpx:hasRatePlanModifier payloads are passed through as raw maps and
-   should be coerced + validated against their own schemas separately."
-  [raw]
-  (coerce schema/URPXDocument raw))
-
 (defn coerce-urpx-package
   "Coerce a raw parsed URPX package wrapper into the typed shape described by
-   `urpx.schema/URPXPackage`, the v0.3.0 rename of urpx:URPXDocument. Same
-   wrapper-level contract as `coerce-urpx-document`: inner payloads
+   `urpx.schema/URPXPackage`. Validates the package-level metadata
+   (urpx:targetURPXVersion, dates, version, …); inner payloads
    (urpx:hasRatePlan / urpx:hasRatePlanModifier / urpx:packages) pass through
    as raw maps and should be coerced against their own schemas separately."
   [raw]
@@ -88,24 +84,20 @@
 
 (defn coerce-doc
   "Dispatch on the document's :jsonld/type and coerce as a RatePlan,
-   RatePlanModifier, wrapper (urpx:URPXDocument in v0.2.x, urpx:URPXPackage
-   from v0.3.0 on), a top-level version snapshot (urpx:RatePlanVersion /
+   RatePlanModifier, urpx:URPXPackage wrapper, a top-level version snapshot (urpx:RatePlanVersion /
    urpx:RatePlanModifierVersion, which v0.5.1 documents may carry as siblings
    of the identity entity rather than nested inside it), a
-   urpx:ScenarioCostModel, a urpx:SourcePublication (or its v0.2.x spelling
-   urpx:TariffPublication), a urpx:RateCase or a urpx:ProgramEnrollment.
+   urpx:ScenarioCostModel, a urpx:SourcePublication, a urpx:RateCase or a urpx:ProgramEnrollment.
    Returns nil for other types."
   [raw]
   (case (:jsonld/type raw)
     "urpx:RatePlan"         (coerce-rate-plan raw)
     "urpx:RatePlanModifier" (coerce-rate-plan-modifier raw)
-    "urpx:URPXDocument"     (coerce-urpx-document raw)
     "urpx:URPXPackage"      (coerce-urpx-package raw)
     "urpx:RatePlanVersion"         (coerce-rate-plan-version raw)
     "urpx:RatePlanModifierVersion" (coerce-rate-plan-modifier-version raw)
     "urpx:ScenarioCostModel"       (coerce-scenario-cost-model raw)
     "urpx:SourcePublication"       (coerce schema/SourcePublication raw)
-    "urpx:TariffPublication"       (coerce schema/SourcePublication raw)
     "urpx:RateCase"                (coerce schema/RateCase raw)
     "urpx:ProgramEnrollment"       (coerce schema/ProgramEnrollment raw)
     nil))
@@ -188,10 +180,10 @@
 (defn validate
   "Validate `value` against `schema`. Returns true on success."
   [schema value]
-  (m/validate schema value))
+  ((validator schema) value))
 
 (defn explain
   "Return a Malli explanation for why `value` does not validate against `schema`,
    or nil if it does."
   [schema value]
-  (m/explain schema value))
+  ((explainer schema) value))

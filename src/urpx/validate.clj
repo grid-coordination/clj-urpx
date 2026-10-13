@@ -18,7 +18,7 @@
       2  refused: a path was unreadable, or a file yielded no typed entity
          beyond a wrapper
 
-  A urpx:URPXDocument or urpx:URPXPackage is checked at its own metadata and
+  A urpx:URPXPackage is checked at its own metadata and
   through to the urpx:RatePlan inside it."
   (:require [clojure.string :as str]
             [urpx.coerce :as coerce]
@@ -35,83 +35,27 @@
 (def ^:private version-types
   #{"urpx:RatePlanVersion" "urpx:RatePlanModifierVersion"})
 
-(defn- target-urpx-version
-  "The [major minor] of a document's urpx:targetURPXVersion, or nil when it
-   states none, or ::unparseable when it states one this cannot read.
-
-   The value is a URI naming the ontology snapshot, e.g.
-   \"https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl\"."
-  [entity]
-  (when-let [uri (:urpx/targetURPXVersion entity)]
-    (if-let [[_ maj min-] (re-find #"/v(\d+)\.(\d+)" uri)]
-      [(parse-long maj) (parse-long min-)]
-      ::unparseable)))
-
 (defn- conformance-findings
-  "Rules the STANDARD states that this library's Malli schemas deliberately do
-   not enforce, so a document can be schema-valid and still violate one.
+  "Rules the STANDARD states that this library's Malli schemas do not enforce,
+   so a document can be schema-valid and still violate one. Reported rather
+   than thrown, and reported here rather than in urpx.coverage, because reading
+   a document and judging it are different jobs. Each names the rule it checks.
 
-   Reported rather than thrown, and reported here rather than in urpx.coverage,
-   because reading a document and judging it are different jobs. Each names the
-   rule it checks.
-
-     :missing-coverage-claim   urpx:CoverageClaim is sh:minCount 1 on both
-                               version shapes from v0.5.0, and its skos:note
-                               says it is \"Required on every RatePlanVersion /
-                               RatePlanModifierVersion\". The schema leaves it
-                               optional because requiring it would reject every
-                               v0.2.x document, and v0.2.x acceptance is a
-                               contract this library advertises. So it is
-                               checked against what the DOCUMENT says it targets
-                               rather than made unconditional.
      :self-contained-disagrees urpx:selfContained may appear on the claim and on
                                the version, and \"when both are present they MUST
                                agree\". urpx.coverage reads such a document
                                without refusing, because the same note settles
                                which wins; the violated MUST is this function's
                                business.
-     :unparseable-target-version  a document states a target version this cannot
-                               read, so whether the claim rule applies is
-                               unknown. Said out loud rather than skipped.
 
-   Returns `[findings unchecked]`. A rule that could not be applied is listed
-   separately rather than reported as a violation or passed over: a bare @graph
-   bundle need not carry urpx:targetURPXVersion anywhere, and nothing requires
-   it to, so the claim rule would be UNVERIFIABLE there rather than broken.
-   Reporting such a document nonconformant would be wrong; saying nothing would
-   make an unapplied rule look like a passed one, which is the pattern this
-   repository keeps finding. The tests construct that branch.
-
-   `entities` must be the DEEP walk of a document, not its top-level entities.
-   urpx:targetURPXVersion may sit on the urpx:URPXPackage wrapper or on a node
-   inside the @graph, so a top-level read finds it in some documents and not
-   others. A shallow search once made declaring filings look undeclared, which
-   is the same mistake in miniature that this function exists to catch."
+   `entities` must be the DEEP walk of a document, so a version nested in its
+   plan is judged as well as one at the top level."
   [entities]
-  (let [target (some target-urpx-version entities)
-        v051+  (and (vector? target) (>= (compare target [0 5]) 0))
-        versions (filter #(version-types (:jsonld/type %)) entities)
-        unchecked (when (and (nil? target) (seq versions))
-                    [{:rule :missing-coverage-claim
-                      :why "the document states no urpx:targetURPXVersion, so which
-                            version's rules apply is unknown"
-                      :versions (count versions)}])]
-    [(vec
-     (concat
-      (when (= ::unparseable target)
-        [{:rule :unparseable-target-version
-          :detail (some :urpx/targetURPXVersion entities)}])
-      (when v051+
-        (for [e entities
-              :when (and (version-types (:jsonld/type e))
-                         (nil? (:urpx/hasCoverageClaim e)))]
-          {:rule :missing-coverage-claim :type (:jsonld/type e) :id (:jsonld/id e)}))
-      (for [e entities
-            :when (version-types (:jsonld/type e))
-            :let [r (try (coverage/of-version e) (catch clojure.lang.ExceptionInfo _ nil))]
-            :when (:urpx.coverage/self-contained-disagrees? r)]
-        {:rule :self-contained-disagrees :type (:jsonld/type e) :id (:jsonld/id e)})))
-     (vec unchecked)]))
+  (vec (for [e entities
+             :when (version-types (:jsonld/type e))
+             :let [r (try (coverage/of-version e) (catch clojure.lang.ExceptionInfo _ nil))]
+             :when (:urpx.coverage/self-contained-disagrees? r)]
+         {:rule :self-contained-disagrees :type (:jsonld/type e) :id (:jsonld/id e)})))
 
 (defn check-file
   "Validate every entity in `path` that clj-urpx models. Returns
@@ -137,7 +81,7 @@
                    {:type  (:jsonld/type e)
                     :id    (:jsonld/id e)
                     :error (coerce/explain s (coerce/coerce s e))})
-        [findings unchecked] (conformance-findings all)
+        findings (conformance-findings all)
         mistyped (for [m (index/mistyped-references top)]
                    (-> m
                        (assoc :holder (:jsonld/id (nth top (:document m))))
@@ -146,10 +90,9 @@
      :mistyped  (vec mistyped)
      :checked   (vec checked)
      :findings  findings
-     :unchecked unchecked
      :skipped   (vec (remove schema-for (map :jsonld/type typed)))}))
 
-(defn- report [{:keys [path checked skipped findings unchecked mistyped]}]
+(defn- report [{:keys [path checked skipped findings mistyped]}]
   (let [bad (filter :error checked)]
     (println (format "%-58s %d checked, %d failed%s"
                      path (count checked) (count bad)
@@ -170,11 +113,6 @@
                        (or holder "") (pr-str in) (or id "inline node")
                        (str/join "/" types)
                        (if (set? range) (str/join " or " (sort range)) range))))
-    ;; Not a failure, and not silence either. An unapplied rule looks exactly
-    ;; like a passed one unless it is named.
-    (doseq [{:keys [rule why versions]} unchecked]
-      (println (format "  UNCHECKED %s over %d version(s): %s" (name rule) versions
-                       (str/replace why #"\s+" " "))))
     (and (empty? bad) (empty? findings) (empty? mistyped))))
 
 (defn- refused?

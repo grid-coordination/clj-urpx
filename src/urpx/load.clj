@@ -24,7 +24,7 @@
             [urpx.index :as index]))
 
 (def ^:private payload-keys
-  [:urpx/hasRatePlan :urpx/hasRatePlanModifier :urpx/hasTariffPublication :urpx/packages])
+  [:urpx/hasRatePlan :urpx/hasRatePlanModifier :urpx/packages])
 
 (defn- stub
   "`payload` as a `{:jsonld/id id}` reference. A payload with no @id cannot be

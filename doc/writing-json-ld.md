@@ -16,14 +16,7 @@ The library also supports the inverse direction: emit URPX JSON-LD from a coerce
 ;; Standalone modifier documents
 (emit/write-rate-plan-modifier modifier)
 
-;; URPXDocument-wrapped documents. urpx:URPXDocument is the v0.2.0 wrapper
-;; class, renamed in v0.3.0, so a document using it declares a v0.2.x ontology.
-(emit/write-urpx-document
-  {:jsonld/type "urpx:URPXDocument"
-   :urpx/targetURPXVersion "https://github.com/urpx-org/urpx/raw/v0.2.0/ontology/urpx-ontology.ttl"
-   :urpx/hasRatePlan [plan]})
-
-;; urpx:URPXPackage, the v0.3.0 rename of that wrapper
+;; A urpx:URPXPackage wrapper
 (emit/write-urpx-package
   {:jsonld/type "urpx:URPXPackage"
    :urpx/targetURPXVersion "https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl"

@@ -10,8 +10,9 @@
           (:zone (urpx.tz-inference/infer-zone plan)))
 
   Inference uses utility-identifying fields on the publishing
-  Organization: `urpx:eiaId` (preferred — official US energy reporting
-  code) and `urpx:legalName` (fallback). When the utility is unknown to
+  Organization: its EIA utility id, under urpx:eiaScheme in its identity chain
+  (preferred — official US energy reporting code), and `urpx:legalName`
+  (fallback). When the utility is unknown to
   the lookup tables, or known to operate across more than one IANA
   zone, `infer-zone` returns `nil` so the caller can fail loudly rather
   than silently pick one.
@@ -44,45 +45,27 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- eia-id
-  "The EIA utility id, from either place URPX has put it.
-
-   v0.2.x carried it as urpx:eiaId directly on the Organization. v0.5.1
-   reshaped OrganizationIdentifier and moved it into the identity chain:
-   urpx:hasIdentity -> urpx:hasIdentifier -> {urpx:scheme urpx:eiaScheme,
-   skos:notation \"<id>\"}. urpx:eiaId has zero occurrences in a v0.5.1
-   document, so reading only the old key silently loses eia-id inference the
-   moment a utility migrates, and falls back to legalName without saying so.
+  "The EIA utility id, from the identity chain: urpx:hasIdentity ->
+   urpx:hasIdentifier -> {urpx:scheme urpx:eiaScheme, skos:notation \"<id>\"}.
 
    hasIdentity and hasIdentifier are both 0..N, so either may be a bare object
    or a list."
   [org]
-  (or (:urpx/eiaId org)
-      (some (fn [ident]
-              (when (= "urpx:eiaScheme" (get-in ident [:urpx/scheme :jsonld/id]))
-                (:skos/notation ident)))
-            (mapcat (comp index/as-vec :urpx/hasIdentifier)
-                    (index/as-vec (:urpx/hasIdentity org))))))
+  (some (fn [ident]
+          (when (= "urpx:eiaScheme" (get-in ident [:urpx/scheme :jsonld/id]))
+            (:skos/notation ident)))
+        (mapcat (comp index/as-vec :urpx/hasIdentifier)
+                (index/as-vec (:urpx/hasIdentity org)))))
 
 (defn- published-by
-  "Return the Organization (a map) that offers or published `plan`.
-
-   v0.5.1 moved this key. urpx:publishedBy was sh:minCount 1 on the v0.2.x
-   version shapes; at v0.5.1 it is absent from them entirely, those shapes
-   are sh:closed, and the ontology restricts urpx:publishedBy to PricingModel,
-   SourcePublication, TariffFiling and URPXPackage. The successor on a version
-   snapshot is urpx:offeredBy, sh:minCount 0 sh:maxCount 1.
-
-   Precedence: offeredBy then publishedBy on a supplied `version` snapshot,
-   then the two v0.2.x nested paths. Without the offeredBy arm, infer-zone
-   returns nil on every v0.5.1 document and does so silently, which is why the
-   snapshot arms come first."
+  "Return the Organization (a map) that offers `plan`: urpx:offeredBy on a
+   supplied `version` snapshot, else on the snapshot nested in the plan."
   ([plan] (published-by plan nil))
   ([plan version]
    (let [snapshot (or version
                       (index/nested-version plan :urpx/hasRatePlanVersion)
                       (index/nested-version plan :urpx/hasRatePlanModifierVersion))]
-     (or (:urpx/offeredBy   snapshot)
-         (:urpx/publishedBy snapshot)))))
+     (:urpx/offeredBy snapshot))))
 
 ;; ---------------------------------------------------------------------------
 ;; Public API
@@ -108,10 +91,9 @@
      :legal-name->zone  map of legalName -> IANA zone string;
                         likewise merged.
      :version           a resolved version snapshot. v0.5.1 documents may
-                        carry the snapshot top-level rather than nested, and
-                        the organization key moved from urpx:publishedBy to
-                        urpx:offeredBy on it. Without this, inference on such
-                        a document finds no organization and returns nil.
+                        carry the snapshot top-level rather than nested.
+                        Without this, inference on such a document finds no
+                        organization and returns nil.
 
    Inference does NOT consult `urpx:timezoneIdentifier` — that's the
    declared field, not inference. Callers compose:

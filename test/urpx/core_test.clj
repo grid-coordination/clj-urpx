@@ -22,7 +22,7 @@
       (is (contains? types "urpx:ProgramEnrollment")
           "PG&E E-1 references named programs (CARE, FERA, CCA, DA, TBS)")
       (is (contains? types "urpx:SourcePublication")
-          "v0.5.1 renamed urpx:TariffPublication to urpx:SourcePublication")
+          "the source the filing cites")
       (is (not (contains? types "urpx:RatePlan"))
           "the plan is embedded in the package, not a top-level sibling")))
   (testing "descending the wrapper reaches the plan and its modifier"
@@ -170,29 +170,22 @@
               "urpx:modifierUniqueIdentifier" "MB" "urpx:name" "Modifier B"
               "urpx:initialEffectiveDate" "2026-01-01"}]})
 
-(def urpx-document-with-plan
-  {"@context" context
-   "@type" "urpx:URPXDocument"
-   "@id" "x:doc"
-   "urpx:targetURPXVersion" "https://example.com/urpx-v0.2.0"
-   "urpx:hasRatePlan" plan-one})
-
-(def urpx-document-with-plan-and-modifier
-  (assoc urpx-document-with-plan "urpx:hasRatePlanModifier" modifier-m1))
-
-(def urpx-document-with-standalone-modifier
-  {"@context" context
-   "@type" "urpx:URPXDocument"
-   "@id" "x:doc"
-   "urpx:targetURPXVersion" "https://example.com/urpx-v0.2.0"
-   "urpx:hasRatePlanModifier" (assoc modifier-m1 "urpx:name" "Standalone Modifier")})
-
 (def urpx-package-with-plan
   {"@context" context
    "@type" "urpx:URPXPackage"
    "@id" "x:pkg"
    "urpx:targetURPXVersion" "https://example.com/urpx-v0.5.1"
    "urpx:hasRatePlan" plan-one})
+
+(def urpx-package-with-plan-and-modifier
+  (assoc urpx-package-with-plan "urpx:hasRatePlanModifier" modifier-m1))
+
+(def urpx-package-with-standalone-modifier
+  {"@context" context
+   "@type" "urpx:URPXPackage"
+   "@id" "x:pkg"
+   "urpx:targetURPXVersion" "https://example.com/urpx-v0.5.1"
+   "urpx:hasRatePlanModifier" (assoc modifier-m1 "urpx:name" "Standalone Modifier")})
 
 (def urpx-package-with-packages-pointer
   {"@context" context
@@ -299,53 +292,12 @@
                               (core/load-rate-plan-modifier path)))))))
 
 ;; ---------------------------------------------------------------------------
-;; URPXDocument wrapper traversal
-;; ---------------------------------------------------------------------------
-
-(deftest load-rate-plan-descends-into-urpx-document
-  (testing "a v0.2.0 URPXDocument-wrapped filing — load-rate-plan
-            traverses urpx:hasRatePlan to find the inner plan"
-    (with-temp-jsonld urpx-document-with-plan
-      (fn [path]
-        (let [plan (core/load-rate-plan path)]
-          (is (= "urpx:RatePlan" (:jsonld/type plan)))
-          (is (= "x:plan" (:jsonld/id plan))))))))
-
-(deftest load-rate-plan-modifier-descends-into-urpx-document
-  (testing "load-rate-plan-modifier traverses urpx:hasRatePlanModifier
-            on a URPXDocument-wrapped filing"
-    (with-temp-jsonld urpx-document-with-plan-and-modifier
-      (fn [path]
-        (let [m (core/load-rate-plan-modifier path)]
-          (is (= "urpx:RatePlanModifier" (:jsonld/type m)))
-          (is (= "x:mod" (:jsonld/id m))))))))
-
-(deftest load-rate-plan-modifier-from-standalone-urpx-document
-  (testing "a URPXDocument carrying only a hasRatePlanModifier
-            (no hasRatePlan) — the wrapped equivalent of a standalone modifier
-            filing — yields the modifier via load-rate-plan-modifier"
-    (with-temp-jsonld urpx-document-with-standalone-modifier
-      (fn [path]
-        (let [m (core/load-rate-plan-modifier path)]
-          (is (= "urpx:RatePlanModifier" (:jsonld/type m)))
-          (is (= "x:mod" (:jsonld/id m))))))))
-
-(deftest load-rate-plan-still-throws-on-urpx-document-without-plan
-  (testing "a URPXDocument with no inner urpx:RatePlan still
-            errors clearly (the modifier-only doc isn't a base plan)"
-    (with-temp-jsonld urpx-document-with-standalone-modifier
-      (fn [path]
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                              #"No urpx:RatePlan entity"
-                              (core/load-rate-plan path)))))))
-
-;; ---------------------------------------------------------------------------
-;; URPXPackage wrapper traversal (the v0.3.0 rename of URPXDocument)
+;; URPXPackage wrapper traversal
 ;; ---------------------------------------------------------------------------
 
 (deftest load-rate-plan-descends-into-urpx-package
-  (testing "a urpx:URPXPackage wrapper traverses urpx:hasRatePlan exactly as the
-            urpx:URPXDocument it was renamed from"
+  (testing "a urpx:URPXPackage wrapper traverses urpx:hasRatePlan to find the
+            inner plan"
     (with-temp-jsonld urpx-package-with-plan
       (fn [path]
         (let [plan (core/load-rate-plan path)]
@@ -359,6 +311,34 @@
       (fn [path]
         (is (= "x:plan" (:jsonld/id (core/load-rate-plan path))))
         (is (= "x:mod"  (:jsonld/id (core/load-rate-plan-modifier path))))))))
+
+(deftest load-rate-plan-modifier-descends-into-urpx-package
+  (testing "load-rate-plan-modifier traverses urpx:hasRatePlanModifier
+            on a URPXPackage-wrapped filing"
+    (with-temp-jsonld urpx-package-with-plan-and-modifier
+      (fn [path]
+        (let [m (core/load-rate-plan-modifier path)]
+          (is (= "urpx:RatePlanModifier" (:jsonld/type m)))
+          (is (= "x:mod" (:jsonld/id m))))))))
+
+(deftest load-rate-plan-modifier-from-standalone-urpx-package
+  (testing "a URPXPackage carrying only a hasRatePlanModifier
+            (no hasRatePlan) — the wrapped equivalent of a standalone modifier
+            filing — yields the modifier via load-rate-plan-modifier"
+    (with-temp-jsonld urpx-package-with-standalone-modifier
+      (fn [path]
+        (let [m (core/load-rate-plan-modifier path)]
+          (is (= "urpx:RatePlanModifier" (:jsonld/type m)))
+          (is (= "x:mod" (:jsonld/id m))))))))
+
+(deftest load-rate-plan-still-throws-on-urpx-package-without-plan
+  (testing "a URPXPackage with no inner urpx:RatePlan still
+            errors clearly (the modifier-only doc isn't a base plan)"
+    (with-temp-jsonld urpx-package-with-standalone-modifier
+      (fn [path]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"No urpx:RatePlan entity"
+                              (core/load-rate-plan path)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Key encoder — keyword → JSON-LD string-key form

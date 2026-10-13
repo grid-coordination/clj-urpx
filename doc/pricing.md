@@ -89,7 +89,7 @@ That makes **one moment cost one price, however it is spelled**. It did not used
 
 **Standing rule:** pass an IANA `ZoneId` like `(ZoneId/of "America/Los_Angeles")` — never a fixed offset, never the system default.
 
-**Inference fallback:** for documents that omit `urpx:timezoneIdentifier`, the optional `urpx.tz-inference/infer-zone` helper does best-effort inference from the publishing utility's `urpx:legalName` (and a caller-supplied `urpx:eiaId` table when available). It returns `nil` for unknown or multi-zone utilities so the caller fails loudly rather than silently picking one. Inference is **opt-in** — `price-schedule` does not call it automatically; compose at the call site by stating the inferred zone on the plan:
+**Inference fallback:** for documents that omit `urpx:timezoneIdentifier`, the optional `urpx.tz-inference/infer-zone` helper does best-effort inference from the publishing utility's `urpx:legalName` (and a caller-supplied EIA-id table when available). It returns `nil` for unknown or multi-zone utilities so the caller fails loudly rather than silently picking one. Inference is **opt-in** — `price-schedule` does not call it automatically; compose at the call site by stating the inferred zone on the plan:
 
 ```clojure
 (require '[urpx.tz-inference :as tz])
@@ -141,7 +141,7 @@ A bracket matches a date only when its day test and its holiday test both pass. 
 `urpx:RatePlanModifier` documents (vintage-PCIA adders, export-compensation adjusters, etc.) augment a base plan. They appear in three packaging shapes — the loader handles all three transparently:
 
 - **`@graph` bundle**: a single document holds a base `urpx:RatePlan` plus one or more sibling modifiers (PG&E filings). A `@graph` nested inside another, at any depth, is flattened into the same bundle.
-- **Wrapper**: a `urpx:URPXDocument` (the v0.2.0 wrapper class) or `urpx:URPXPackage` (its v0.3.0 rename) whose `urpx:hasRatePlanModifier` or `urpx:packages` points at the modifier.
+- **Wrapper**: a `urpx:URPXPackage` whose `urpx:hasRatePlanModifier` or `urpx:packages` points at the modifier.
 - **Standalone filing**: a document whose only entity is `urpx:RatePlanModifier` (CPAU E-2-G shape — modifier-only filings whose target linkage is expressed by consumer-side composition).
 
 Pull the modifier with `core/load-rate-plan-modifier`, parallel to `load-rate-plan`:

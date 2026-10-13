@@ -9,6 +9,26 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Removed
+
+- **URPX v0.2.x documents are no longer accepted.** clj-urpx validates against URPX v0.5.1 alone. 0.54.0 is the last release that reads v0.2.x; a consumer migrating a v0.2.x corpus can pin it as an intermediate step. Removed with it:
+  - `urpx.schema/URPXDocument`, `urpx.coerce/coerce-urpx-document`, `urpx.emit/write-urpx-document` and `urpx.dsl/urpx-document`; `urpx.core/wrapper-types` holds `urpx:URPXPackage` alone.
+  - `urpx.schema/TariffBookReference`, `urpx.dsl/tariff-book-reference` and `DataSourceReference`'s `urpx:hasTariffBookReference`.
+  - The `urpx:TariffPublication` spelling of `SourcePublication`, and the v0.2.1 properties it carried that v0.5.1 drops.
+  - `urpx:publishedBy` and `urpx:supersedes` on both version snapshots; timezone inference reads `urpx:offeredBy` only, and the EIA id only from the identity chain, not `urpx:eiaId`.
+  - The `urpx:regulatoryFiling` member of `SourcePublicationType`, and the v0.2.x-only subclass axioms.
+  - `clojure -M:validate`'s `:missing-coverage-claim` and `:unparseable-target-version` findings, and the `:unchecked` key of `urpx.validate/check-file`.
+
+### Changed
+
+- **`urpx:forRatePlan`, `urpx:forRatePlanModifier` and `urpx:hasCoverageClaim` are required** on the version snapshots, as `sh:minCount 1` at v0.5.1. The drift audit accepts three findings, down from eight.
+
+### Fixed
+
+- **`urpx.coerce/coerce`, `encode`, `validate` and `explain` compiled their schema on every call.** They now compile it once per schema. Coercing 100 `ScenarioCostModel` nodes took about 40 seconds and now takes milliseconds, so `clojure -M:validate` over a corpus report of several thousand models finishes rather than running for an hour.
+
 ## [0.54.0] — 2026-10-13
 
 ### Added

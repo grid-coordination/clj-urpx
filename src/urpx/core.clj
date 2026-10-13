@@ -134,7 +134,7 @@
     :urpx/hasServiceClass
     :urpx/hasServiceBracket
     :urpx/hasServiceTier :urpx/hasServiceTiers :urpx/hasTOUPeriod :urpx/hasTOUSchedule
-    :urpx/hasTOUTier :urpx/hasTariffBookReference :urpx/hasTariffPublication
+    :urpx/hasTOUTier
     :urpx/hasTemporalPeriod :urpx/hasTemporalScope :urpx/hasTimeBracket
     :urpx/rootNode :urpx/leftOperand :urpx/rightOperand :urpx/operandNodes
     :urpx/explainedBy :urpx/packages})
@@ -282,10 +282,8 @@
   (parse-graph src))
 
 (def wrapper-types
-  "Top-level wrapper @types that `expand-document-entities` descends through.
-   v0.3.0 renamed urpx:URPXDocument to urpx:URPXPackage; both are accepted, so
-   a corpus part-way through a wave-by-wave migration loads either way."
-  #{"urpx:URPXDocument" "urpx:URPXPackage"})
+  "Top-level wrapper @types that `expand-document-entities` descends through."
+  #{"urpx:URPXPackage"})
 
 (defn expand-document-entities
   "Public because it is the one piece a CLI or a third-party consumer needs and
@@ -293,10 +291,8 @@
    that walks a document itself would validate the wrapper metadata alone.
 
    If `entity` is one of `wrapper-types`, return its embedded payload
-   entities: urpx:hasRatePlan and urpx:hasRatePlanModifier (both wrappers),
-   urpx:hasTariffPublication (v0.2.x URPXDocument only), and urpx:packages
-   (the general containment pointer added in v0.3.0), each distinct payload
-   once. Otherwise return `[entity]` unchanged.
+   entities: urpx:hasRatePlan, urpx:hasRatePlanModifier and urpx:packages
+   (the general containment pointer), each distinct payload once. Otherwise return `[entity]` unchanged.
 
    Used by `load-rate-plan` and `load-rate-plan-modifier` to descend
    transparently through the wrapper so consumers can target inner entities
@@ -306,7 +302,6 @@
   (if (contains? wrapper-types (:jsonld/type entity))
     (vec (distinct (concat (index/as-vec (:urpx/hasRatePlan entity))
                            (index/as-vec (:urpx/hasRatePlanModifier entity))
-                           (index/as-vec (:urpx/hasTariffPublication entity))
                            (index/as-vec (:urpx/packages entity)))))
     [entity]))
 
@@ -320,9 +315,8 @@
      - Single-entity doc: top-level `@type: urpx:RatePlan`.
      - `@graph` bundle: the plan appears as one of several siblings (alongside
        RatePlanModifier(s), ProgramEnrollment, …).
-     - Wrapper: top-level `@type: urpx:URPXDocument` (v0.2.0 Decision #103)
-       or `urpx:URPXPackage` (its v0.3.0 rename), with `urpx:hasRatePlan` or
-       `urpx:packages` pointing at the plan.
+     - Wrapper: top-level `@type: urpx:URPXPackage`, with `urpx:hasRatePlan`
+       or `urpx:packages` pointing at the plan.
 
    Zero or more than one urpx:RatePlan in a single document is an error —
    use `load-graph` to inspect such documents directly."
@@ -343,8 +337,7 @@
    accepted shapes — File, URL, Reader, InputStream, path string, including
    `jar:file:...` URLs from `(io/resource ...)`). Parallel to `load-rate-plan`
    — the modifier may appear as a standalone single-entity doc, as one entity
-   in a `@graph` bundle, or under a urpx:URPXDocument / urpx:URPXPackage
-   wrapper's urpx:hasRatePlanModifier or urpx:packages pointer.
+   in a `@graph` bundle, or under a urpx:URPXPackage wrapper's urpx:hasRatePlanModifier or urpx:packages pointer.
 
    The unique urpx:RatePlanModifier is returned; zero or more than one is an
    error — use `load-graph` to inspect ambiguous documents directly."

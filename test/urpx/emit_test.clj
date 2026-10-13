@@ -76,17 +76,6 @@
     (is (= "urpx:RatePlanModifier" (get parsed "@type")))
     (is (= "M1" (get parsed "urpx:modifierUniqueIdentifier")))))
 
-(deftest write-urpx-document-returns-valid-json
-  (let [doc {:jsonld/type "urpx:URPXDocument"
-             :jsonld/id   "x:doc"
-             :urpx/targetURPXVersion "https://example.com/urpx-v0.2.0"
-             :urpx/hasRatePlan [minimal-rate-plan]}
-        parsed (json/read-str (emit/write-urpx-document doc))]
-    (is (= "urpx:URPXDocument" (get parsed "@type")))
-    (is (= "https://example.com/urpx-v0.2.0"
-           (get parsed "urpx:targetURPXVersion")))
-    (is (vector? (get parsed "urpx:hasRatePlan")))))
-
 (deftest write-urpx-package-returns-valid-json
   (let [pkg {:jsonld/type "urpx:URPXPackage"
              :jsonld/id   "x:pkg"

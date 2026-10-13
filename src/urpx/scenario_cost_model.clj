@@ -223,7 +223,7 @@
 ;; Zones
 ;; ---------------------------------------------------------------------------
 
-(def ^:private package-types #{"urpx:URPXPackage" "urpx:URPXDocument"})
+(def ^:private package-types #{"urpx:URPXPackage"})
 
 (defn- shell?
   "True for a package whose every payload is a `{:jsonld/id id}` reference.
@@ -234,8 +234,7 @@
   (and (package-types (:jsonld/type doc))
        (every? #(= [:jsonld/id] (keys %))
                (mapcat #(index/as-vec (get doc %))
-                       [:urpx/hasRatePlan :urpx/hasRatePlanModifier
-                        :urpx/hasTariffPublication :urpx/packages]))))
+                       [:urpx/hasRatePlan :urpx/hasRatePlanModifier :urpx/packages]))))
 
 (defn- check-coerced!
   "`coerce/check-coerced!` over `documents`, less the package shells."

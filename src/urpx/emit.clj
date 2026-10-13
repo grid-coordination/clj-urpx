@@ -2,7 +2,7 @@
   "Write-side: emit URPX JSON-LD from coerced Clojure entities.
 
   Symmetric to the existing parse + coerce path. Given a coerced
-  urpx:RatePlan / urpx:RatePlanModifier / urpx:URPXDocument / urpx:URPXPackage
+  urpx:RatePlan / urpx:RatePlanModifier / urpx:URPXPackage
   / urpx:ScenarioCostModel / urpx:ProgramEnrollment (or an EDN map shaped
   like one with namespaced-keyword keys + already-string values),
   emit a SHACL-valid JSON-LD string ready to write to disk or send to a
@@ -235,8 +235,7 @@
 
 (defn- pre-encode-payloads
   "A wrapper's payload-pointer schemas are deliberately loose ([:vector :map])
-   — wrapper-level validation only, per the URPXDocument / URPXPackage schema
-   design. That means malli's wrapper encoder won't recurse into inner entities
+   — wrapper-level validation only, per the URPXPackage schema design. That means malli's wrapper encoder won't recurse into inner entities
    to convert their typed leaves (BigDecimal, LocalDate, …) back to JSON-LD
    strings. Pre-encode each embedded RatePlan / RatePlanModifier through its
    own schema before handing the wrapper to the encoder. Refs
@@ -266,16 +265,6 @@
                                (coerce/encode sch v)
                                v))
                            (index/as-vec vs))))))
-
-(defn write-urpx-document
-  "Serialize a coerced urpx:URPXDocument wrapper to a JSON-LD string. Inverse of
-   urpx.coerce/coerce-urpx-document. The document's inner urpx:hasRatePlan /
-   urpx:hasRatePlanModifier payloads are emitted as embedded entities.
-
-   See `write-rate-plan` for `opts`."
-  ([document] (write-urpx-document document nil))
-  ([document opts]
-   (emit-via-schema schema/URPXDocument (pre-encode-payloads document) opts)))
 
 (defn write-urpx-package
   "Serialize a coerced urpx:URPXPackage wrapper to a JSON-LD string. Inverse of

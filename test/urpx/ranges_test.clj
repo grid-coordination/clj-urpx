@@ -28,10 +28,9 @@
     (is (= schema/Season (:urpx/Season schema/schemas)))
     (is (nil? (schema/schema-for-type "urpx:NoSuchThing")))
     (is (nil? (schema/schema-for-type "Season")) "an @type with no prefix"))
-  (testing "both @type spellings a schema admits are registered"
-    (is (= schema/SourcePublication
-           (schema/schema-for-type "urpx:SourcePublication")
-           (schema/schema-for-type "urpx:TariffPublication"))))
+  (testing "the v0.2.x urpx:TariffPublication spelling is not registered"
+    (is (= schema/SourcePublication (schema/schema-for-type "urpx:SourcePublication")))
+    (is (nil? (schema/schema-for-type "urpx:TariffPublication"))))
   (testing "the registry validates by name"
     (let [ledger {:jsonld/type "urpx:Ledger" :urpx/name "Commodity"
                   :urpx/ledgerType {:jsonld/id "urpx:supplyLedger"}}]
@@ -274,10 +273,10 @@
       (is (not (valid? :urpx/GeneralRule
                        {:jsonld/type "urpx:GeneralRule" :urpx/generalRuleID "Rule 1"
                         :urpx/hasDataSourceReference []}))))
-    (testing "a service class is a typed reference; a RateGroup is one, by
-              the v0.2.x subclass axiom"
+    (testing "a service class is a typed reference; at v0.5.1 a RateGroup is
+              not one"
       (let [plan {:jsonld/type "urpx:RatePlan"
                   :urpx/hasServiceClass [{:jsonld/id "ex:group"} {:jsonld/id "ex:summer"}]}]
-        (is (= [[:urpx/hasServiceClass 1]]
+        (is (= [[:urpx/hasServiceClass 0] [:urpx/hasServiceClass 1]]
                (map :in (schema/mistyped-references
                          plan {"ex:group" "urpx:RateGroup" "ex:summer" "urpx:Season"}))))))))

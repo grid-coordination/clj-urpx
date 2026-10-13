@@ -226,7 +226,7 @@ That list is not hypothetical. A consumer composing these by hand from an earlie
 `documents` and `scan` both yield the shells. A caller wanting only the payloads drops them:
 
 ```clojure
-(remove #(#{"urpx:URPXPackage" "urpx:URPXDocument"} (:jsonld/type %)) (load/documents sources))
+(remove #(= "urpx:URPXPackage" (:jsonld/type %)) (load/documents sources))
 ```
 
 ## What gets discarded, and how to notice

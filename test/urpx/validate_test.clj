@@ -80,39 +80,20 @@
        version-extra "}}}"))
 
 (def ^:private v051 "https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl")
-(def ^:private v021 "https://github.com/urpx-org/urpx/raw/v0.2.1/ontology/urpx-ontology.ttl")
 (def ^:private claim
   (str ",\"urpx:hasCoverageClaim\":{\"@type\":\"urpx:CoverageClaim\","
        "\"urpx:completenessResult\":{\"@id\":\"urpx:partial\"}}"))
 
-(deftest a-v051-document-must-carry-a-coverage-claim
-  (testing "urpx:CoverageClaim is sh:minCount 1 on both version shapes and its
-            skos:note says it is required on every version. This library's
-            schema leaves it OPTIONAL for a recorded reason: requiring it would
-            reject every v0.2.x document, and v0.2.x acceptance is a contract.
-
-            So the rule is checked against what the DOCUMENT says it targets
-            rather than made unconditional. That is the only way to enforce it
-            without breaking the contract, and it is why the check belongs in
-            the validator rather than in the schema."
-    (is (= [:missing-coverage-claim]
-           (mapv :rule (findings (plan-json v051 ""))))
-        "a v0.5.1 document with no claim is nonconformant")
-    (is (= [] (findings (plan-json v051 claim)))
-        "and with one, it is clean")
-    (is (= [] (findings (plan-json v021 "")))
-        "while a v0.2.x document with no claim is exactly what the contract
-         promises to accept")
-    (is (= [] (findings (plan-json nil "")))
-        "and a document stating no target says nothing to check against")))
-
-(deftest an-unreadable-target-version-is-said-out-loud
-  (testing "if a document states a target this cannot parse, whether the claim
-            rule applies is UNKNOWN. Skipping quietly would look identical to
-            passing, which is the failure mode this repository keeps finding."
-    (let [f (findings (plan-json "https://example.invalid/ontology.ttl" ""))]
-      (is (= [:unparseable-target-version] (mapv :rule f)))
-      (is (= "https://example.invalid/ontology.ttl" (:detail (first f)))))))
+(deftest a-version-without-a-coverage-claim-fails-the-schema
+  (testing "urpx:hasCoverageClaim is sh:minCount 1 on both version shapes, and
+            the schema requires it"
+    (let [errors (fn [extra]
+                   (->> (validate/check-file (tmp-doc (plan-json v051 extra)))
+                        :checked
+                        (filter #(= "urpx:RatePlan" (:type %)))
+                        first :error :errors (map :in) set))]
+      (is (contains? (errors "") [:urpx/hasRatePlanVersion :urpx/hasCoverageClaim]))
+      (is (not (contains? (errors claim) [:urpx/hasRatePlanVersion :urpx/hasCoverageClaim]))))))
 
 (deftest self-contained-must-agree-where-it-appears-twice
   (testing "urpx:selfContained may be materialized on the version alongside the
@@ -193,22 +174,10 @@
     (is (some #(= :urpx/observanceRule (last (remove #{:jsonld/id} (:in %))))
               (errors "urpx:sundayOnlyObservance")))))
 
-(deftest the-target-version-is-found-by-a-deep-walk
-  (testing "urpx:targetURPXVersion sits on the urpx:URPXPackage wrapper in most
-            filings and on a node inside the @graph in the rest, so a top-level
-            read finds it in some documents and not others.
-
-            A shallow search made four fixtures look as though they stated
-            none, which would have silently skipped the coverage-claim rule on
-            exactly the documents it applies to."
-    (let [graph-shaped (validate/check-file
-                        (.getPath (fixtures/fixture-resource "pge-e-1-2026-03-01")))
-          wrapped      (validate/check-file
-                        (.getPath (fixtures/fixture-resource "sce-d-2026-03-20")))]
-      (doseq [[nm r] [["@graph" graph-shaped] ["wrapped" wrapped]]]
-        (is (empty? (:unchecked r))
-            (str nm ": the target version was found, so the rule was applied"))
-        (is (empty? (:findings r)) (str nm ": and satisfied"))))))
+(deftest vendored-fixtures-have-no-findings
+  (doseq [n ["pge-e-1-2026-03-01" "sce-d-2026-03-20"]]
+    (is (empty? (:findings (validate/check-file (.getPath (fixtures/fixture-resource n)))))
+        n)))
 
 (deftest a-finding-reaches-the-exit-code
   (testing "or it is decoration. This was decoration at first: -main exited 1
@@ -241,7 +210,7 @@
 
 (deftest check-file-validates-the-wrapper-itself
   (testing "a wrapper's own properties are schema-checked alongside its payloads"
-    (doseq [t ["urpx:URPXPackage" "urpx:URPXDocument"]]
+    (doseq [t ["urpx:URPXPackage"]]
       (let [doc (fn [extra]
                   (str "{" ctx ",\"@id\":\"x:pkg\",\"@type\":\"" t "\"," extra
                        "\"urpx:hasRatePlan\":{\"@id\":\"x:p\",\"@type\":\"urpx:RatePlan\"}}"))
@@ -262,7 +231,7 @@
 
 (deftest a-wrapper-alone-is-refused
   (testing "a wrapper whose payload is a reference checks no plan, so -main refuses it"
-    (doseq [t ["urpx:URPXPackage" "urpx:URPXDocument"]]
+    (doseq [t ["urpx:URPXPackage"]]
       (let [r (validate/check-file
                (tmp-doc (str "{" ctx ",\"@id\":\"x:pkg\",\"@type\":\"" t "\","
                              "\"urpx:targetURPXVersion\":\"" v051 "\","

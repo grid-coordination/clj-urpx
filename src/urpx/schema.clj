@@ -628,20 +628,14 @@
 ;; ---------------------------------------------------------------------------
 
 (def subclasses
-  "rdfs:subClassOf in the URPX ontology: each class to its direct subclasses,
-   across the releases this library accepts, v0.2.0 through v0.5.1. A node of
-   a subclass is in a range that names the class."
+  "rdfs:subClassOf in the URPX v0.5.1 ontology: each class to its direct
+   subclasses. A node of a subclass is in a range that names the class."
   {"urpx:AdministrativeBoundary" #{"urpx:County" "urpx:Municipality" "urpx:State"}
    "urpx:ConditionNode"          #{"urpx:BooleanOperationNode" "urpx:ComparisonNode"}
    "urpx:Organization"           #{"urpx:EnergyServiceProvider" "urpx:RegulatoryAuthority"
                                    "urpx:SystemOperator" "urpx:UtilityOperator"}
    "urpx:PriceSet"               #{"urpx:PriceSetAlternative"}
-   "urpx:Profile"                #{"urpx:CustomerProfile" "urpx:ServicePointProfile"}
-   "urpx:ServiceClass"           #{"urpx:RateGroup"}
-   "urpx:URPXDocument"           #{"urpx:DERExportsDocument" "urpx:HighlyDynamicPricesDocument"
-                                   "urpx:SupplyChargesDocument" "urpx:TariffAddendumDocument"
-                                   "urpx:TariffBookDocument" "urpx:TariffStatementDocument"
-                                   "urpx:TariffSupplementDocument"}})
+   "urpx:Profile"                #{"urpx:CustomerProfile" "urpx:ServicePointProfile"}})
 
 (defn instance-of?
   "True if a node of @type `t` is an instance of `class`: `t` is `class` or
@@ -773,24 +767,10 @@
   (enum-ref "monday" "tuesday" "wednesday" "thursday" "friday" "saturday" "sunday"))
 
 (def SourcePublicationType
-  "urpx:SourcePublicationTypeValue, the shipped 8 members plus one legacy.
-
-   The class was urpx:SourcePublicationType at the epic baseline and is
-   Value-suffixed at v0.5.1, same 8 members. Do NOT reuse the retired
-   10-member urpx:PublicationTypeValue, which has zero occurrences at v0.5.1.
-
-   urpx:regulatoryFiling, a member of that retired class, is accepted as a
-   legacy value. Upstream's own v0.5.1 test case models an Advice Letter as
-   urpx:tariffSupplement instead. The allowance is RETAINED because removing it
-   would reject a v0.2.x urpx:TariffPublication that carries the old
-   member, and this library still advertises v0.2.x acceptance. Drop it when
-   that promise is withdrawn."
+  "urpx:SourcePublicationTypeValue, 8 members. Do NOT reuse the retired
+   10-member urpx:PublicationTypeValue, which has zero occurrences at v0.5.1."
   (enum-ref "tariffBook" "tariffStatement" "tariffSupplement" "tariffAddendum"
-            "supplyCharges" "derExports" "highlyDynamicPrices" "marketPriceFeed"
-            ;; RETAINED pending a decision: dropping it would reject a v0.2.x
-            ;; urpx:TariffPublication carrying it, and this library advertises
-            ;; v0.2.x acceptance.
-            "regulatoryFiling"))
+            "supplyCharges" "derExports" "highlyDynamicPrices" "marketPriceFeed"))
 
 (def ProgramType
   "urpx:ProgramTypeValue, 8 members."
@@ -953,19 +933,6 @@
 ;; Data source references
 ;; ---------------------------------------------------------------------------
 
-(def TariffBookReference
-  "v0.2.x only. urpx:TariffBookReference was DELETED upstream in bbaea780 and
-   has zero occurrences in the v0.5.1 ontology and SHACL; its fields moved
-   inline onto urpx:DataSourceReference, whose shape is now sh:closed. Retained
-   to validate v0.2.x filings, which this library advertises it accepts."
-  [:map
-   [:jsonld/type [:= "urpx:TariffBookReference"]]
-   [:jsonld/id {:optional true} :string]
-   [:urpx/pageStart {:optional true} Int]
-   [:urpx/pageEnd   {:optional true} Int]
-   [:urpx/leafStart {:optional true} :string]
-   [:urpx/leafEnd   {:optional true} :string]])
-
 (def DataSourceReference
   "v0.2.0: many new optional fields. mediaType is now Ref-only (no longer
    string); we list the most commonly populated fields."
@@ -1002,10 +969,7 @@
     [:vector Ref]]
    [:urpx/sourcePublication {:optional true ::range "urpx:SourcePublication"} Ref]
    ;; Enum membership deliberately unenforced here; see the enum issue.
-   [:urpx/tariffStatementType {:optional true} Ref]
-   ;; v0.2.x nesting, kept so v0.2.x filings still validate. The
-   ;; flattened form above is what a v0.5.1 filing carries instead.
-   [:urpx/hasTariffBookReference {:optional true ::range "urpx:TariffBookReference"} TariffBookReference]])
+   [:urpx/tariffStatementType {:optional true} Ref]])
 
 (def PriceUpdateRule
   "How and when a dynamic price is updated, hung off urpx:hasPriceUpdateRule."
@@ -1848,7 +1812,8 @@
 
 (def ModelExclusion
   "Something a PricingModel deliberately leaves out, and why. New in v0.5.1.
-   urpx:PricingModel is not modeled in clj-urpx, so excludedModel stays a Ref."
+   `PricingModel` is defined further down, so excludedModel is a Ref, typed by
+   its range."
   [:map
    [:jsonld/type [:= "urpx:ModelExclusion"]]
    [:jsonld/id {:optional true} :string]
@@ -1933,7 +1898,8 @@
 (def PriceDefinitionReference
   "A PriceDefinition a snapshot relies on, and whether its content is included
    here or has to be retrieved elsewhere. urpx:referenceInclusion is required.
-   urpx:ModelCollection is not modeled, so resolvedFrom stays a Ref vector."
+   `ModelCollection` is defined further down, so resolvedFrom is a Ref vector,
+   typed by its range."
   [:map
    [:jsonld/type [:= "urpx:PriceDefinitionReference"]]
    [:jsonld/id {:optional true} :string]
@@ -2204,9 +2170,7 @@
    [:urpx/isDefault         {:optional true} :boolean]
    [:urpx/minimumTenure     {:optional true} IsoDuration]
    [:urpx/url               {:optional true} :string]
-   [:urpx/publishedBy {:optional true ::range "urpx:Organization"} Organization]
    [:urpx/offeredBy   {:optional true ::range "urpx:Organization"} OfferingOrganization]
-   [:urpx/supersedes  {:optional true ::range "urpx:RatePlanVersion"} Ref]
    [:urpx/hasDataSourceReference
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
     [:vector DataSourceReference]]
@@ -2229,12 +2193,8 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:Holiday"}
     [:vector Ref]]
    ;; v0.5.1 coverage machinery, both sh:minCount 1 sh:maxCount 1 upstream.
-   ;; STILL OPTIONAL: requiring them would reject every v0.2.x document, which
-   ;; has neither term, and this library advertises v0.2.x acceptance.
-   ;; Requiring these ends that promise; it is a contract decision, not a
-   ;; conformance one.
-   [:urpx/forRatePlan {:optional true ::range "urpx:RatePlan"} Ref]
-   [:urpx/hasCoverageClaim {:optional true ::range "urpx:CoverageClaim"} [:or CoverageClaim ExclusiveRef]]
+   [:urpx/forRatePlan {::range "urpx:RatePlan"} Ref]
+   [:urpx/hasCoverageClaim {::range "urpx:CoverageClaim"} [:or CoverageClaim ExclusiveRef]]
    [:urpx/selfContained {:optional true} :boolean]
    [:urpx/hasPriceDefinitionReference
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PriceDefinitionReference"}
@@ -2341,9 +2301,7 @@
    [:urpx/serviceRole Ref]
    [:urpx/modifierType     {:optional true} Ref]
    [:urpx/modifierCategory {:optional true} Ref]
-   [:urpx/publishedBy {:optional true ::range "urpx:Organization"} Organization]
    [:urpx/offeredBy   {:optional true ::range "urpx:Organization"} OfferingOrganization]
-   [:urpx/supersedes  {:optional true ::range "urpx:RatePlanModifierVersion"} Ref]
    [:urpx/hasDataSourceReference
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
     [:vector DataSourceReference]]
@@ -2365,12 +2323,8 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlanVersion"}
     [:vector Ref]]
    ;; v0.5.1 coverage machinery, both sh:minCount 1 sh:maxCount 1 upstream.
-   ;; STILL OPTIONAL: requiring them would reject every v0.2.x document, which
-   ;; has neither term, and this library advertises v0.2.x acceptance.
-   ;; Requiring these ends that promise; it is a contract decision, not a
-   ;; conformance one.
-   [:urpx/forRatePlanModifier {:optional true ::range "urpx:RatePlanModifier"} Ref]
-   [:urpx/hasCoverageClaim {:optional true ::range "urpx:CoverageClaim"} [:or CoverageClaim ExclusiveRef]]
+   [:urpx/forRatePlanModifier {::range "urpx:RatePlanModifier"} Ref]
+   [:urpx/hasCoverageClaim {::range "urpx:CoverageClaim"} [:or CoverageClaim ExclusiveRef]]
    [:urpx/selfContained {:optional true} :boolean]
    [:urpx/hasPriceDefinitionReference
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PriceDefinitionReference"}
@@ -2463,65 +2417,13 @@
 ;; ---------------------------------------------------------------------------
 ;; Top-level wrappers carrying ontology-version metadata
 ;;
-;; urpx:URPXDocument (v0.2.x) was renamed urpx:URPXPackage in v0.3.0. Both are
-;; modeled, so a corpus part-way through a wave-by-wave migration validates
-;; either way rather than having to switch over all at once.
 ;; ---------------------------------------------------------------------------
 
-(def URPXDocument
-  "URPX v0.2.0 Decision #103: every urpx:URPXDocument carries a required
-   urpx:targetURPXVersion (xsd:anyURI) declaring the ontology version the
-   document was authored against. URPXDocumentShape (SHACL) lists many
-   optional metadata fields (dateCreated, version, hasRatePlan,
-   hasRatePlanModifier, hasTariffPublication, …) — we model only the
-   required field plus the headline payload pointers; additional metadata
-   flows through unvalidated.
-
-   Documents that aren't URPXDocument-wrapped (raw RatePlan, raw
-   RatePlanModifier, or a JSON-LD `@graph` doc with no urpx:URPXDocument
-   @type) bypass this shape — its target is the v0.2.0 wrapper class
-   itself, not every URPX serialization."
-  [:map
-   [:jsonld/type [:= "urpx:URPXDocument"]]
-   [:jsonld/id {:optional true} :string]
-   [:jsonld/context {:optional true} Context]
-   [:urpx/targetURPXVersion :string]
-   [:urpx/name              {:optional true} :string]
-   [:urpx/description       {:optional true} :string]
-   [:urpx/version           {:optional true} :string]
-   [:urpx/url               {:optional true} :string]
-   [:urpx/timezoneIdentifier {:optional true} :string]
-   [:urpx/priceCurrency     {:optional true} :string]
-   [:urpx/dateCreated       {:optional true} Date]
-   [:urpx/dateTimeCreated   {:optional true} DateTime]
-   [:urpx/effectiveDate     {:optional true} Date]
-   [:urpx/effectiveDateTime {:optional true} DateTime]
-   [:urpx/expirationDate    {:optional true} Date]
-   [:urpx/expirationDateTime {:optional true} DateTime]
-   ;; Payload pointers — embedded entity (full RatePlan / RatePlanModifier)
-   ;; or a Ref by @id. Inner entities should be validated against their own
-   ;; schemas separately; here we only check the wrapper-level metadata.
-   [:urpx/hasRatePlan
-    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlan"}
-    [:vector :map]]
-   [:urpx/hasRatePlanModifier
-    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlanModifier"}
-    [:vector :map]]
-   [:urpx/hasTariffPublication
-    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:TariffPublication"}
-    [:vector :map]]])
-
 (def URPXPackage
-  "v0.3.0 renamed urpx:URPXDocument to urpx:URPXPackage; v0.5.1 keeps the
-   class. urpx:targetURPXVersion stays required. Against URPXDocument the
-   shape drops urpx:hasTariffPublication and adds urpx:packages, the general
-   containment pointer (range: RatePlan | RatePlanModifier | RatePlanVersion |
-   RatePlanModifierVersion | PricingModel | TariffFiling | SourcePublication),
-   while retaining urpx:hasRatePlan and urpx:hasRatePlanModifier. Read from
-   urpx-shacl:URPXPackageShape at urpx-org/urpx v0.5.1.
-
-   As with URPXDocument, only the required field and the payload pointers are
-   modeled; other wrapper metadata flows through unvalidated."
+  "A package of URPX content, with its required urpx:targetURPXVersion.
+   urpx:packages is the general containment pointer, beside urpx:hasRatePlan
+   and urpx:hasRatePlanModifier. Read from urpx-shacl:URPXPackageShape at
+   urpx-org/urpx v0.5.1."
   [:map
    [:jsonld/type [:= "urpx:URPXPackage"]]
    [:jsonld/id {:optional true} :string]
@@ -2542,7 +2444,7 @@
    [:urpx/effectiveDateTime {:optional true} DateTime]
    [:urpx/expirationDate    {:optional true} Date]
    [:urpx/expirationDateTime {:optional true} DateTime]
-   ;; Payload pointers: embedded entity or a Ref by @id, as on URPXDocument.
+   ;; Payload pointers: embedded entity or a Ref by @id.
    [:urpx/hasRatePlan
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlan"}
     [:vector :map]]
@@ -2559,26 +2461,17 @@
 ;; ---------------------------------------------------------------------------
 ;; Publications and filings
 ;;
-;; v0.3.0 split the v0.2.x urpx:TariffPublication into urpx:SourcePublication,
-;; the external published source URPX cites, and urpx:TariffFiling, the URPX
-;; content unit. Both shapes are sh:closed upstream; clj-urpx does not enforce
+;; urpx:SourcePublication is the external published source URPX cites, and
+;; urpx:TariffFiling the URPX content unit. Both shapes are sh:closed upstream; clj-urpx does not enforce
 ;; closedness, so unmodeled fields flow through.
 ;; ---------------------------------------------------------------------------
 
 (def SourcePublication
   "An external published source a URPX fact cites: a tariff book, a statement,
    a market price feed. Neither a super- nor a subclass of urpx:URPXPackage;
-   they are siblings.
-
-   Dual-accept: the @type admits both the v0.5.1 urpx:SourcePublication and the
-   v0.2.x urpx:TariffPublication, because a set of filings migrating utility by
-   utility carries both at once. `urpx.dsl/source-publication` writes the first.
-
-   urpx-shacl:SourcePublicationShape requires nothing. The entries after its
-   paths are v0.2.1 TariffPublicationShape paths that v0.5.1 drops, so a v0.2.x
-   publication validates."
+   they are siblings. urpx-shacl:SourcePublicationShape requires nothing."
   [:map
-   [:jsonld/type [:enum "urpx:SourcePublication" "urpx:TariffPublication"]]
+   [:jsonld/type [:= "urpx:SourcePublication"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/name             {:optional true} :string]
    [:urpx/description      {:optional true} :string]
@@ -2602,30 +2495,14 @@
    [:urpx/effectiveDate     {:optional true} Date]
    [:urpx/effectiveDateTime {:optional true} DateTime]
    [:urpx/expirationDate    {:optional true} Date]
-   [:urpx/expirationDateTime {:optional true} DateTime]
-   ;; v0.2.1 TariffPublicationShape paths that v0.5.1 drops. Accept-if-present.
-   [:urpx/priceCurrency        {:optional true} :string]
-   [:urpx/timezoneIdentifier   {:optional true} :string]
-   [:urpx/expectedEndDate      {:optional true} Date]
-   [:urpx/expectedEndDateTime  {:optional true} DateTime]
-   [:urpx/hasRatePlan
-    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlan"}
-    [:vector :map]]
-   [:urpx/hasRatePlanModifier
-    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlanModifier"}
-    [:vector :map]]
-   [:urpx/hasDataSourceReference
-    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
-    [:vector :map]]])
+   [:urpx/expirationDateTime {:optional true} DateTime]])
 
 (def TariffFiling
   "The URPX content unit of the v0.3.0 publication split, the half that carries
-   pricing rather than citing a source. v0.5.1 only; there is no v0.2.x
-   equivalent to dual-accept.
+   pricing rather than citing a source.
 
    urpx:containsPricingModel is the shape's only required property and is
-   unbounded. urpx:PricingModel is not modeled in clj-urpx, so it and the other
-   entity-valued slots stay loose maps rather than typed schemas."
+   unbounded."
   [:map
    [:jsonld/type [:= "urpx:TariffFiling"]]
    [:jsonld/id {:optional true} :string]

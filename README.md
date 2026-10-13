@@ -125,7 +125,7 @@ That covers the consume side end-to-end. For emit and authoring, jump to [Writin
 
 ## Status
 
-Targets the **URPX v0.5.1** release while continuing to accept **v0.2.x** in full. Release history is in [CHANGELOG.md](CHANGELOG.md). [doc/status.md](doc/status.md) lists what is modeled and the known gaps.
+Targets the **URPX v0.5.1** release. Release history is in [CHANGELOG.md](CHANGELOG.md). [doc/status.md](doc/status.md) lists what is modeled and the known gaps.
 
 ## Namespace overview
 
@@ -140,7 +140,7 @@ Targets the **URPX v0.5.1** release while continuing to accept **v0.2.x** in ful
 | `urpx.price`         | `resolve-prices`, `resolve-modifier-prices`, `resolve-prices-with-modifiers`, `marginal-unit-rate`, `measurement-kinds`, `has-energy-ledger?`; `version-effective-at`, `version-expired-by?` and `version-covers?` are the single readers of a version window |
 | `urpx.schedule`      | `price-segments` (exact boundaries, derived); `price-schedule`, `price-schedule-days`, `price-schedule-with-modifiers`, `price-schedule-days-with-modifiers` (stepped) |
 | `urpx.tz-inference`  | `infer-zone` (opt-in fallback when `urpx:timezoneIdentifier` is absent) |
-| `urpx.emit`          | Write-side: `write-rate-plan`, `write-rate-plan-modifier`, `write-urpx-document`, `write-urpx-package`, `write-scenario-cost-model`, `write-program-enrollment` |
+| `urpx.emit`          | Write-side: `write-rate-plan`, `write-rate-plan-modifier`, `write-urpx-package`, `write-scenario-cost-model`, `write-program-enrollment` |
 | `urpx.validate`      | Single-file CLI checker (`clojure -M:validate <file.jsonld>`), tri-state exit |
 | `urpx.dsl`           | Authoring DSL: `dsl-scope`, `make-builder`, named builders for every entity type |
 | `urpx.defs`          | Typed definitions: `defurpx`, `kind-schema`, `defs-of-kind` |
@@ -154,7 +154,7 @@ Check any single URPX JSON-LD file, which is what a conversion smoke test needs 
 clojure -M:validate path/to/filing.jsonld [more.jsonld ...]
 ```
 
-Wrappers are descended, so a `urpx:URPXDocument` or `urpx:URPXPackage` is checked through to the `urpx:RatePlan` inside it rather than at the wrapper metadata alone. Exit codes are tri-state so a run that checked nothing cannot read as success: `0` everything valid, `1` at least one entity failed, broke a rule the standard states, or holds a reference or inline node of the wrong type for its property (judged within the file), `2` refused because a path was unreadable or a file yielded no entity this library models.
+Wrappers are descended, so a `urpx:URPXPackage` is checked through to the `urpx:RatePlan` inside it rather than at the wrapper metadata alone. Exit codes are tri-state so a run that checked nothing cannot read as success: `0` everything valid, `1` at least one entity failed, broke a rule the standard states, or holds a reference or inline node of the wrong type for its property (judged within the file), `2` refused because a path was unreadable or a file yielded no entity this library models.
 
 ## See also
 

@@ -734,8 +734,8 @@
           "and an explicit snapshot settles it")
       (testing "including when the snapshot carries NO back pointer, which is
                 the branch that has to fall back to nesting. v0.5.1 makes
-                urpx:forRatePlan sh:minCount 1, but a v0.2.x snapshot has none,
-                and that fallback is the one lookup that throws on a document
+                urpx:forRatePlan sh:minCount 1, but the resolver reads documents
+                that were never validated, and that fallback is the one lookup that throws on a document
                 nesting several. Unguarded it would refuse exactly the call
                 :version exists to rescue."
         (let [bare (dissoc pv :urpx/forRatePlan)

@@ -1189,8 +1189,9 @@
 (defn- refusal [f] (some-> (refusal-ex f) ex-data))
 
 (defn- un-nest
-  "Split a v0.2.x coerced plan into the v0.5.1 shape: an identity shell with no
-   nested version, plus a top-level snapshot pointing back via forRatePlan."
+  "Split a coerced plan with a nested version into the un-nested shape: an
+   identity shell with no nested version, plus a top-level snapshot pointing
+   back via forRatePlan."
   [plan nested-key back-key]
   (let [version (nested-key plan)]
     [(dissoc plan nested-key)

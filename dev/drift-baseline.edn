@@ -12,25 +12,7 @@
 ;; unexplained entry is indistinguishable from one added to make the gate green.
 
 {:accepted
- [;; urpx:regulatoryFiling is a member of the retired 10-member
-  ;; urpx:PublicationTypeValue with no successor among the 8 v0.5.1 members,
-  ;; and a v0.2.x filing may carry it. Enforcing the upstream list alone would
-  ;; reject that filing. Drop this entry, and the legacy member, when v0.2.x
-  ;; acceptance is withdrawn.
-  ["SourcePublication" "urpx:publicationType" "enum-drift"]
-
-  ;; forRatePlan and hasCoverageClaim are sh:minCount 1 on the version shapes at
-  ;; v0.5.1 and are held optional here.
-  ;;
-  ;; Requiring them would reject every v0.2.x document, which has neither term,
-  ;; and this library advertises v0.2.x acceptance. Flip to required and drop
-  ;; these four entries when that promise is withdrawn.
-  ["RatePlanVersion" "urpx:forRatePlan" "under-validates"]
-  ["RatePlanVersion" "urpx:hasCoverageClaim" "under-validates"]
-  ["RatePlanModifierVersion" "urpx:forRatePlanModifier" "under-validates"]
-  ["RatePlanModifierVersion" "urpx:hasCoverageClaim" "under-validates"]
-
-  ;; urpx-org/urpx#80 drops both to sh:minCount 0: a tier hosting adjusting
+ [;; urpx-org/urpx#80 drops both to sh:minCount 0: a tier hosting adjusting
   ;; brackets carries no serviceTierNumber, and a billing model that only
   ;; moves bounds carries no PriceDefinition. Held optional for the adjusting
   ;; brackets this library resolves; drop these entries once the pinned shapes

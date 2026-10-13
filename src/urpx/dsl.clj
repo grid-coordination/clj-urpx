@@ -27,10 +27,7 @@
     - a named builder for every entity-type schema in `urpx.schema`
                               (`season`, `metric-input`, `price-definition`,
                               `rate-plan`, `urpx-package`, `coverage-claim`, …),
-                              with no exceptions. Where a schema dual-accepts
-                              two @type spellings (`source-publication`), the
-                              builder sets the v0.5.1 one; the schema still
-                              validates the v0.2.x spelling on parse.
+                              with no exceptions.
 
   ## Builder semantics
 
@@ -343,7 +340,7 @@
 
 (defn- camel->kebab
   "Convert a camelCase or UpperCamelCase identifier to kebab-case.
-   Handles all-caps prefixes correctly: 'URPXDocument' → 'urpx-document',
+   Handles all-caps prefixes correctly: 'URPXPackage' → 'urpx-package',
    'TOUPeriod' → 'tou-period'. Adapted from the standard two-pass camel→kebab
    regex idiom: insert a hyphen at every boundary where an uppercase letter
    either follows a lowercase letter / digit, or starts a new word in an
@@ -524,7 +521,6 @@
 (def utility-operator          (make-builder schema/UtilityOperator))
 (def organization-identity     (make-builder schema/OrganizationIdentity))
 (def organization-name         (make-builder schema/OrganizationName))
-(def tariff-book-reference     (make-builder schema/TariffBookReference))
 (def data-source-reference     (make-builder schema/DataSourceReference))
 (def rate-case                 (make-builder schema/RateCase))
 (def program-enrollment        (make-builder schema/ProgramEnrollment))
@@ -556,7 +552,6 @@
 (def rate-plan                      (make-builder schema/RatePlan))
 (def rate-plan-modifier-version     (make-builder schema/RatePlanModifierVersion))
 (def rate-plan-modifier             (make-builder schema/RatePlanModifier))
-(def urpx-document                  (make-builder schema/URPXDocument))
 (def urpx-package                   (make-builder schema/URPXPackage))
 
 ;; Scenario cost model

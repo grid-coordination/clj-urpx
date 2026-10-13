@@ -201,7 +201,7 @@
    Three arms, in precedence order. A `version` snapshot supplied by the caller
    wins: under v0.5.1 un-nesting the snapshot is a top-level sibling of the
    identity plan, so the plan itself carries no calendar to find. Otherwise the
-   two v0.2.x nested paths are read as before. The property path below the
+   snapshot nested in the plan or modifier is read. The property path below the
    version is identical in both shapes."
   ([plan] (plan-calendar plan nil))
   ([plan version]

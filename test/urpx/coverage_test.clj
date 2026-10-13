@@ -38,11 +38,7 @@
   (testing "urpx:unknown is itself a VERDICT, meaning no evaluation has run. A
             document that asserts it has said something a document omitting the
             claim has not, so conflating them would invent a claim on the
-            publisher's behalf.
-
-            A missing claim is not refused either: hasCoverageClaim is optional
-            in this library's schema because requiring it would reject every
-            v0.2.x document, and v0.2.x acceptance is a contract."
+            publisher's behalf."
     (let [none (cov/of-version (version nil))
           unk  (cov/of-version (version {:urpx/completenessResult {:jsonld/id "urpx:unknown"}}))]
       (is (false? (:urpx.coverage/stated? none)))

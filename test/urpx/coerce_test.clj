@@ -287,49 +287,7 @@
       (is (= "pge:e-1" (:jsonld/id plan))))))
 
 ;; ---------------------------------------------------------------------------
-;; URPXDocument wrapper (Decision #103)
-;; ---------------------------------------------------------------------------
-
-(def ^:private valid-urpx-document-raw
-  {:jsonld/type "urpx:URPXDocument"
-   :jsonld/id   "ex:doc"
-   :urpx/targetURPXVersion
-   "https://github.com/urpx-org/urpx/raw/v0.2.0/ontology/urpx-ontology.ttl"
-   :urpx/hasRatePlan
-   {:jsonld/type "urpx:RatePlan" :urpx/timezoneIdentifier "America/Los_Angeles" :jsonld/id "ex:plan"}})
-
-(deftest urpx-document-validates-with-target-version
-  (testing "a URPXDocument carrying urpx:targetURPXVersion validates"
-    (let [coerced (coerce/coerce-urpx-document valid-urpx-document-raw)]
-      (is (nil? (coerce/explain schema/URPXDocument coerced)))
-      (testing "single hasRatePlan map is normalized to a vector"
-        (is (vector? (:urpx/hasRatePlan coerced)))
-        (is (= 1 (count (:urpx/hasRatePlan coerced))))))))
-
-(deftest urpx-document-rejected-when-target-version-missing
-  (testing "Decision #103: missing urpx:targetURPXVersion fails
-            Malli validation, so a retrofitted filing must add the field."
-    (let [no-version (dissoc valid-urpx-document-raw :urpx/targetURPXVersion)
-          coerced (coerce/coerce-urpx-document no-version)
-          err (coerce/explain schema/URPXDocument coerced)]
-      (is (some? err) "validation must fail")
-      (is (some #(= [:urpx/targetURPXVersion] (:in %)) (:errors err))
-          "the explanation must point at urpx:targetURPXVersion"))))
-
-(deftest urpx-document-rejected-when-target-version-not-string
-  (testing "targetURPXVersion must be a string (xsd:anyURI in SHACL)"
-    (let [bad (assoc valid-urpx-document-raw :urpx/targetURPXVersion 42)
-          err (coerce/explain schema/URPXDocument
-                              (coerce/coerce-urpx-document bad))]
-      (is (some? err)))))
-
-(deftest coerce-doc-dispatches-on-urpx-document
-  (testing "coerce-doc routes urpx:URPXDocument through coerce-urpx-document"
-    (let [coerced (coerce/coerce-doc valid-urpx-document-raw)]
-      (is (nil? (coerce/explain schema/URPXDocument coerced))))))
-
-;; ---------------------------------------------------------------------------
-;; URPXPackage wrapper (v0.3.0 rename of URPXDocument)
+;; URPXPackage wrapper
 ;; ---------------------------------------------------------------------------
 
 (def ^:private valid-urpx-package-raw
@@ -349,8 +307,8 @@
         (is (= 1 (count (:urpx/packages coerced))))))))
 
 (deftest urpx-package-rejected-when-target-version-missing
-  (testing "targetURPXVersion stays required on URPXPackage (sh:minCount 1 in
-            urpx-shacl:URPXPackageShape), as it was on URPXDocument"
+  (testing "targetURPXVersion is required on URPXPackage (sh:minCount 1 in
+            urpx-shacl:URPXPackageShape)"
     (let [no-version (dissoc valid-urpx-package-raw :urpx/targetURPXVersion)
           err (coerce/explain schema/URPXPackage
                               (coerce/coerce-urpx-package no-version))]
@@ -358,14 +316,16 @@
       (is (some #(= [:urpx/targetURPXVersion] (:in %)) (:errors err))
           "the explanation must point at urpx:targetURPXVersion"))))
 
-(deftest coerce-doc-dispatches-both-wrapper-vocabularies
-  (testing "coerce-doc routes urpx:URPXPackage through coerce-urpx-package while
-            urpx:URPXDocument keeps routing to coerce-urpx-document, so a corpus
-            part-way through a migration coerces either way"
+(deftest urpx-package-rejected-when-target-version-not-string
+  (testing "targetURPXVersion must be a string (xsd:anyURI in SHACL)"
+    (is (some? (coerce/explain schema/URPXPackage
+                               (coerce/coerce-urpx-package
+                                (assoc valid-urpx-package-raw :urpx/targetURPXVersion 42)))))))
+
+(deftest coerce-doc-dispatches-on-urpx-package
+  (testing "coerce-doc routes urpx:URPXPackage through coerce-urpx-package"
     (is (nil? (coerce/explain schema/URPXPackage
-                              (coerce/coerce-doc valid-urpx-package-raw))))
-    (is (nil? (coerce/explain schema/URPXDocument
-                              (coerce/coerce-doc valid-urpx-document-raw))))))
+                              (coerce/coerce-doc valid-urpx-package-raw))))))
 
 (deftest g-month-strings-must-be-xsd-g-month-lexical-forms
   (testing "accepted, the timezone dropped"

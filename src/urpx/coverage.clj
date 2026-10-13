@@ -274,11 +274,6 @@
    something a document that omits the claim has not. Conflating them would
    invent a claim on the publisher's behalf.
 
-   A missing claim is NOT refused either: `urpx:hasCoverageClaim` is optional in
-   this library's schema for a recorded reason, that requiring it would reject
-   every v0.2.x document, and v0.2.x acceptance is a contract this library
-   advertises.
-
    `completeness` is the IRI string as written, `\"urpx:partial\"`, rather than
    a keyword of this library's invention. It maps 1:1 to what the document says
    and needs no translation table to compare against one.
