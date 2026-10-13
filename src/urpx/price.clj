@@ -582,6 +582,16 @@
   [pd]
   (get-in pd [:urpx/hasCalculationMethod :urpx/intervalDuration]))
 
+
+(defn- dynamic-pricing
+  "A Price's urpx:hasDynamicPricing node with its 0..N properties as vectors,
+   so a one-element value reads the same written bare or as a vector."
+  [price]
+  (let [dp (:urpx/hasDynamicPricing price)]
+    (reduce (fn [dp k] (cond-> dp (contains? dp k) (update k index/as-vec)))
+            dp
+            [:urpx/priceSource :urpx/hasPriceUpdateRule])))
+
 (defn- withheld-price-entry
   "What marginal-unit-rate needs to know about a price it did not get.
 
@@ -602,7 +612,7 @@
     (cond-> {:urpx.resolved/price-definition-id (:jsonld/id pd)
              :urpx.resolved/price-id            (:jsonld/id price)}
       (:urpx/hasDynamicPricing price)
-      (assoc :urpx.resolved/dynamic-pricing (:urpx/hasDynamicPricing price))
+      (assoc :urpx.resolved/dynamic-pricing (dynamic-pricing price))
       interval
       (assoc :urpx.resolved/interval-duration interval))))
 
@@ -2434,7 +2444,7 @@
                                                 (tier-info pd price tier-cands tier-ctx))
                                          (:urpx/hasDynamicPricing price)
                                          (assoc :urpx.resolved/dynamic-pricing
-                                                (:urpx/hasDynamicPricing price))
+                                                (dynamic-pricing price))
                                          gates
                                          (assoc :urpx.resolved/condition-gated gates)))))
                            (sort-by #(or (:urpx.resolved/tier-number %) 0))
@@ -2678,7 +2688,7 @@
                                             (tier-info pd price tier-cands tier-ctx))
                                      (:urpx/hasDynamicPricing price)
                                      (assoc :urpx.resolved/dynamic-pricing
-                                            (:urpx/hasDynamicPricing price))
+                                            (dynamic-pricing price))
                                      gates
                                      (assoc :urpx.resolved/condition-gated gates)))))
                       ;; Sorted like the base path. marginal-unit-rate documents

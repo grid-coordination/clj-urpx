@@ -508,6 +508,8 @@
 
 ;; Prices
 (def price                (make-builder schema/Price))
+(def dynamic-pricing      (make-builder schema/DynamicPricing))
+(def price-update-rule    (make-builder schema/PriceUpdateRule))
 (def price-set            (make-builder schema/PriceSet))
 (def price-summary        (make-builder schema/PriceSummary))
 (def prices               (make-builder schema/Prices))

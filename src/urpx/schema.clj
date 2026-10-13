@@ -27,7 +27,7 @@
             [malli.registry :as mr])
   (:import [java.math BigDecimal]
            [java.time DateTimeException Duration LocalDate LocalDateTime LocalTime
-            OffsetDateTime OffsetTime Period ZoneId ZoneOffset ZonedDateTime]
+            OffsetDateTime OffsetTime Period Year ZoneId ZoneOffset ZonedDateTime]
            [java.time.format DateTimeFormatter DateTimeFormatterBuilder]
            [java.time.temporal ChronoField]))
 
@@ -434,6 +434,43 @@
                          :value lexical})))
       v)))
 
+
+(def ^:private xsd-g-year-lexical
+  "The xsd:gYear lexical space, XSD 1.1 Part 2 section 3.3.11, capturing the
+   year."
+  #"(-?(?:[1-9][0-9]{3,}|0[0-9]{3}))(?:Z|[+-](?:(?:0[0-9]|1[0-3]):[0-5][0-9]|14:00))?")
+
+(defn- ->g-year
+  "An xsd:gYear string, '2009' with an optional timezone, as its
+   `java.time.Year`; the timezone is dropped. Any other string, or a JSON-LD
+   value object typed xsd:gYear whose @value is not such a string, throws
+   ex-info with reason `:urpx.schema/malformed-g-year` and the value."
+  [v]
+  (let [lexical (typed-literal-value v "xsd:gYear")]
+    (if (or (string? lexical) (not= v lexical))
+      (if-let [[_ yyyy] (and (string? lexical) (re-matches xsd-g-year-lexical lexical))]
+        (try (Year/of (Integer/parseInt yyyy))
+             (catch Exception _
+               (throw (ex-info (str "Malformed xsd:gYear " (pr-str lexical)
+                                    ": outside the range of java.time.Year")
+                               {:reason :urpx.schema/malformed-g-year
+                                :datatype "xsd:gYear"
+                                :value lexical}))))
+        (throw (ex-info (str "Malformed xsd:gYear " (pr-str lexical)
+                             ": not a year of at least four digits with an optional timezone")
+                        {:reason :urpx.schema/malformed-g-year
+                         :datatype "xsd:gYear"
+                         :value lexical})))
+      v)))
+
+(defn- <-g-year
+  "`java.time.Year` -> xsd:gYear string, at least four digits."
+  [v]
+  (if (instance? Year v)
+    (let [y (.getValue ^Year v)]
+      (str (when (neg? y) "-") (format "%04d" (Math/abs y))))
+    v))
+
 (defn- integer-out-of-range
   "The ex-info refusing xsd:integer `v` as outside the range of a long."
   [v cause]
@@ -540,6 +577,12 @@
   [:and {:decode/urpx-jsonld ->g-month
          :encode/urpx-jsonld <-g-month}
    :int [:>= 1] [:<= 12]])
+
+(def GYear
+  "An xsd:gYear, decoded to `java.time.Year`."
+  [:and {:decode/urpx-jsonld ->g-year
+         :encode/urpx-jsonld <-g-year}
+   [:fn {:error/message "should be a java.time.Year"} #(instance? Year %)]])
 
 (def Int
   "An xsd:integer field — JSON parser may produce long already, but tolerate strings."
@@ -651,6 +694,41 @@
    CoverageClaim. Freshness (urpx:stale) and resolution provenance
    (urpx:fallbackSourced) are orthogonal booleans, not members here."
   (enum-ref "complete" "partial" "pending" "unsupported" "unknown" "noCoverage"))
+
+(def AggregationMethod
+  "urpx:AggregationMethodValue, 5 members."
+  (enum-ref "sum" "average" "maximum" "minimum" "median"))
+
+(def IntervalAlignment
+  "urpx:IntervalAlignmentValue, 4 members."
+  (enum-ref "calendarAligned" "billingPeriodAligned" "rollingAligned" "fixedAligned"))
+
+(def IntervalSelection
+  "urpx:IntervalSelectionValue, 3 members."
+  (enum-ref "rollingWindowSelection" "consecutivePeriodsSelection" "fixedWindowSelection"))
+
+(def IntervalType
+  "urpx:IntervalTypeValue, 11 members."
+  (enum-ref "realTimeInterval" "fiveMinuteInterval" "fifteenMinuteInterval"
+            "thirtyMinuteInterval" "hourlyInterval" "dailyInterval" "weeklyInterval"
+            "monthlyInterval" "quarterlyInterval" "annualInterval" "customInterval"))
+
+(def DynamicPricingType
+  "urpx:DynamicPricingTypeValue, 6 members."
+  (enum-ref "criticalPeakPricing" "demandResponsePricing" "eventDrivenPricing"
+            "indexBasedPricing" "realTimePricing" "timeVaryingPricing"))
+
+(def PriceSource
+  "urpx:PriceSourceValue, 7 members."
+  (enum-ref "algorithmicSource" "capacityAuctionSource" "demandForecastSource"
+            "gasIndexSource" "manualOverrideSource" "renewableForecastSource"
+            "wholesaleMarketSource"))
+
+(def UpdateFrequency
+  "urpx:UpdateFrequencyValue, 9 members."
+  (enum-ref "continuousUpdates" "dailyUpdates" "eventTriggeredUpdates" "every15Minutes"
+            "every5Minutes" "hourlyUpdates" "monthlyUpdates" "onDemandUpdates"
+            "weeklyUpdates"))
 
 (def ReferenceInclusion
   "urpx:ReferenceInclusionValue, 2 members."
@@ -775,13 +853,17 @@
    [:urpx/measurementKind {:optional true} Ref]
    [:urpx/unitOfMeasure   {:optional true} Ref]
    [:urpx/flowDirection   {:optional true} Ref]
-   [:urpx/intervalDuration {:optional true} IsoDuration]])
+   [:urpx/intervalDuration {:optional true} IsoDuration]
+   [:urpx/intervalType      {:optional true} IntervalType]
+   [:urpx/intervalAlignment {:optional true} IntervalAlignment]
+   [:urpx/intervalSelection {:optional true} IntervalSelection]])
 
 (def MetricInput
   [:map
    [:jsonld/type [:= "urpx:MetricInput"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/name :string]
+   [:urpx/description {:optional true} :string]
    [:urpx/metricInputType Ref]
    ;; 0..N upstream (no sh:maxCount). Accepted as one or many; price.clj reads
    ;; one through urpx.index/single, which refuses rather than guessing.
@@ -840,7 +922,11 @@
    [:jsonld/type [:= "urpx:CalculationMethod"]]
    [:urpx/name {:optional true} :string]
    [:urpx/description {:optional true} :string]
-   [:urpx/intervalDuration {:optional true} IsoDuration]])
+   [:urpx/intervalDuration {:optional true} IsoDuration]
+   [:urpx/aggregationMethod {:optional true} AggregationMethod]
+   [:urpx/intervalType      {:optional true} IntervalType]
+   [:urpx/intervalAlignment {:optional true} IntervalAlignment]
+   [:urpx/intervalSelection {:optional true} IntervalSelection]])
 
 (def Ledger
   "v0.2.0: Ledger no longer carries hasPriceDefinition. PriceDefinitions
@@ -857,6 +943,89 @@
     [:vector Ref]]
    [:urpx/settlementInterval {:optional true} IsoDuration]])
 
+;; ---------------------------------------------------------------------------
+;; Data source references
+;; ---------------------------------------------------------------------------
+
+(def TariffBookReference
+  "v0.2.x only. urpx:TariffBookReference was DELETED upstream in bbaea780 and
+   has zero occurrences in the v0.5.1 ontology and SHACL; its fields moved
+   inline onto urpx:DataSourceReference, whose shape is now sh:closed. Retained
+   to validate v0.2.x filings, which this library advertises it accepts."
+  [:map
+   [:jsonld/type [:= "urpx:TariffBookReference"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/pageStart {:optional true} Int]
+   [:urpx/pageEnd   {:optional true} Int]
+   [:urpx/leafStart {:optional true} :string]
+   [:urpx/leafEnd   {:optional true} :string]])
+
+(def DataSourceReference
+  "v0.2.0: many new optional fields. mediaType is now Ref-only (no longer
+   string); we list the most commonly populated fields."
+  [:map
+   [:jsonld/type [:= "urpx:DataSourceReference"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/name {:optional true} :string]
+   [:urpx/description {:optional true} :string]
+   [:urpx/url       {:optional true} :string]
+   [:urpx/accessURL {:optional true} :string]
+   [:urpx/fileName  {:optional true} :string]
+   [:urpx/mediaType {:optional true} Ref]
+   [:urpx/dataSourceType  {:optional true} Ref]
+   [:urpx/dateRetrieved   {:optional true} Date]
+   [:urpx/dateReceived    {:optional true} Date]
+   [:urpx/datePublished   {:optional true} Date]
+   [:urpx/effectiveDate   {:optional true} Date]
+   [:urpx/expirationDate  {:optional true} Date]
+   [:urpx/pageStart {:optional true} Int]
+   [:urpx/pageEnd   {:optional true} Int]
+   ;; v0.5.1 flattening (upstream bbaea780): urpx:TariffBookReference and
+   ;; urpx:TariffStatementReference were deleted and their fields hoisted
+   ;; inline onto this node, which is now sh:closed with nothing required.
+   ;; hasSelector and sourcePublication are not new, merely never modeled here.
+   [:urpx/leafStart  {:optional true} :string]
+   [:urpx/leafEnd    {:optional true} :string]
+   [:urpx/anchorLink {:optional true} :string]
+   ;; Ref, not a typed schema: oa:Selector is an external Web Annotation class
+   ;; the ontology deliberately does not import, and the shape constrains only
+   ;; sh:class oa:Selector.
+   ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
+   [:urpx/hasSelector
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "oa:Selector"}
+    [:vector Ref]]
+   [:urpx/sourcePublication {:optional true ::range "urpx:SourcePublication"} Ref]
+   ;; Enum membership deliberately unenforced here; see the enum issue.
+   [:urpx/tariffStatementType {:optional true} Ref]
+   ;; v0.2.x nesting, kept so v0.2.x filings still validate. The
+   ;; flattened form above is what a v0.5.1 filing carries instead.
+   [:urpx/hasTariffBookReference {:optional true ::range "urpx:TariffBookReference"} TariffBookReference]])
+
+(def PriceUpdateRule
+  "How and when a dynamic price is updated, hung off urpx:hasPriceUpdateRule."
+  [:map
+   [:jsonld/type [:= "urpx:PriceUpdateRule"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/name        {:optional true} :string]
+   [:urpx/description {:optional true} :string]
+   [:urpx/priority    {:optional true} Int]])
+
+(def DynamicPricing
+  "How a Price's value is set and updated, hung off urpx:hasDynamicPricing."
+  [:map
+   [:jsonld/type [:= "urpx:DynamicPricing"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/dynamicPricingType DynamicPricingType]
+   [:urpx/priceSource
+    {:optional true :decode/urpx-jsonld single-or-vec->vec}
+    [:vector PriceSource]]
+   [:urpx/updateFrequency {:optional true} UpdateFrequency]
+   [:urpx/priceCeiling    {:optional true} Decimal]
+   [:urpx/priceFloor      {:optional true} Decimal]
+   [:urpx/hasPriceUpdateRule
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PriceUpdateRule"}
+    [:vector [:or PriceUpdateRule ExclusiveRef]]]])
+
 (def PriceDefinition
   "v0.2.0: PriceDefinition gains required referencesLedger plus many properties
    that used to live on Price (priceCurrency, primaryChargeType,
@@ -867,6 +1036,9 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/name :string]
    [:urpx/description {:optional true} :string]
+   [:urpx/hasDataSourceReference
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
+    [:vector [:or DataSourceReference ExclusiveRef]]]
    ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
    [:urpx/chargeType
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
@@ -1109,6 +1281,7 @@
    [:urpx/decimalValue  {:optional true} Decimal]
    [:urpx/durationValue {:optional true} IsoDuration]
    [:urpx/gMonthValue   {:optional true} MonthNumber]
+   [:urpx/gYearValue    {:optional true} GYear]
    [:urpx/integerValue  {:optional true} Int]
    [:urpx/stringValue   {:optional true} :string]
    [:urpx/timeValue     {:optional true} Time]])
@@ -1129,6 +1302,7 @@
    [:urpx/decimalValue  {:optional true} Decimal]
    [:urpx/durationValue {:optional true} IsoDuration]
    [:urpx/gMonthValue   {:optional true} MonthNumber]
+   [:urpx/gYearValue    {:optional true} GYear]
    [:urpx/integerValue  {:optional true} Int]
    [:urpx/stringValue   {:optional true} :string]
    [:urpx/timeValue     {:optional true} Time]])
@@ -1369,6 +1543,11 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/name {:optional true} :string]
    [:urpx/description {:optional true} :string]
+   [:urpx/hasDynamicPricing {:optional true ::range "urpx:DynamicPricing"}
+    [:or DynamicPricing ExclusiveRef]]
+   [:urpx/hasDataSourceReference
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
+    [:vector [:or DataSourceReference ExclusiveRef]]]
    [:urpx/unitPrice  {:optional true} Decimal]
    [:urpx/amount     {:optional true} Decimal]
    [:urpx/basePrice  {:optional true} Decimal]
@@ -1484,66 +1663,7 @@
    [:urpx/hasPrice {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:Price"} [:vector Price]]])
 
 ;; Prices is defined further down — its hasPriceSetAlternatives entry
-;; depends on PriceSetAlternatives, which depends on DataSourceReference
-;; (defined below).
-
-;; ---------------------------------------------------------------------------
-;; Top-level metadata
-;; ---------------------------------------------------------------------------
-
-(def TariffBookReference
-  "v0.2.x only. urpx:TariffBookReference was DELETED upstream in bbaea780 and
-   has zero occurrences in the v0.5.1 ontology and SHACL; its fields moved
-   inline onto urpx:DataSourceReference, whose shape is now sh:closed. Retained
-   to validate v0.2.x filings, which this library advertises it accepts."
-  [:map
-   [:jsonld/type [:= "urpx:TariffBookReference"]]
-   [:jsonld/id {:optional true} :string]
-   [:urpx/pageStart {:optional true} Int]
-   [:urpx/pageEnd   {:optional true} Int]
-   [:urpx/leafStart {:optional true} :string]
-   [:urpx/leafEnd   {:optional true} :string]])
-
-(def DataSourceReference
-  "v0.2.0: many new optional fields. mediaType is now Ref-only (no longer
-   string); we list the most commonly populated fields."
-  [:map
-   [:jsonld/type [:= "urpx:DataSourceReference"]]
-   [:jsonld/id {:optional true} :string]
-   [:urpx/name {:optional true} :string]
-   [:urpx/description {:optional true} :string]
-   [:urpx/url       {:optional true} :string]
-   [:urpx/accessURL {:optional true} :string]
-   [:urpx/fileName  {:optional true} :string]
-   [:urpx/mediaType {:optional true} Ref]
-   [:urpx/dataSourceType  {:optional true} Ref]
-   [:urpx/dateRetrieved   {:optional true} Date]
-   [:urpx/dateReceived    {:optional true} Date]
-   [:urpx/datePublished   {:optional true} Date]
-   [:urpx/effectiveDate   {:optional true} Date]
-   [:urpx/expirationDate  {:optional true} Date]
-   [:urpx/pageStart {:optional true} Int]
-   [:urpx/pageEnd   {:optional true} Int]
-   ;; v0.5.1 flattening (upstream bbaea780): urpx:TariffBookReference and
-   ;; urpx:TariffStatementReference were deleted and their fields hoisted
-   ;; inline onto this node, which is now sh:closed with nothing required.
-   ;; hasSelector and sourcePublication are not new, merely never modeled here.
-   [:urpx/leafStart  {:optional true} :string]
-   [:urpx/leafEnd    {:optional true} :string]
-   [:urpx/anchorLink {:optional true} :string]
-   ;; Ref, not a typed schema: oa:Selector is an external Web Annotation class
-   ;; the ontology deliberately does not import, and the shape constrains only
-   ;; sh:class oa:Selector.
-   ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
-   [:urpx/hasSelector
-    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "oa:Selector"}
-    [:vector Ref]]
-   [:urpx/sourcePublication {:optional true ::range "urpx:SourcePublication"} Ref]
-   ;; Enum membership deliberately unenforced here; see the enum issue.
-   [:urpx/tariffStatementType {:optional true} Ref]
-   ;; v0.2.x nesting, kept so v0.2.x filings still validate. The
-   ;; flattened form above is what a v0.5.1 filing carries instead.
-   [:urpx/hasTariffBookReference {:optional true ::range "urpx:TariffBookReference"} TariffBookReference]])
+;; depends on PriceSetAlternatives (defined below).
 
 ;; ---------------------------------------------------------------------------
 ;; Typed identity (URPX v0.5.1)
@@ -2063,6 +2183,8 @@
    [:urpx/effectiveDate {:optional true} Date]
    [:urpx/expirationDate {:optional true} Date]
    [:urpx/expirationDateTime {:optional true} DateTime]
+   [:urpx/expectedEndDate     {:optional true} Date]
+   [:urpx/expectedEndDateTime {:optional true} DateTime]
    [:urpx/priceCurrency {:optional true} :string]
    ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
    [:urpx/commodity
@@ -2410,10 +2532,10 @@
           (m/children mp))))
 
 (defn- type->keyword
-  "\"urpx:Season\" -> :urpx/Season."
+  "\"urpx:Season\" -> :urpx/Season; an @type with no prefix, :Season."
   [t]
   (let [[prefix local] (str/split t #":" 2)]
-    (keyword prefix local)))
+    (if local (keyword prefix local) (keyword prefix))))
 
 (def schemas
   "Every entity schema in this namespace, keyed by its @type as a keyword:

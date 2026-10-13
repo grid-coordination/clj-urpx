@@ -600,7 +600,8 @@
 (deftest dynamic-pricing-surfaces-on-modifier-tier
   (testing "Event-driven modifier Price exposes :urpx.resolved/dynamic-pricing
             on its tier entry, with the DynamicPricing payload passed through
-            verbatim — type, updateFrequency, and PriceUpdateRule reachable."
+            — type, updateFrequency, and PriceUpdateRule reachable, the 0..N
+            hasPriceUpdateRule as a vector even when written bare."
     (let [plan (base-tou-rate-plan-fixture)
           modifier (event-charge-modifier-fixture)
           comb (price/resolve-prices-with-modifiers plan [modifier] (zdt 2026 7 15 17))
@@ -615,7 +616,7 @@
              (get-in tier [:urpx.resolved/dynamic-pricing
                            :urpx/updateFrequency :jsonld/id])))
       (is (some? (get-in tier [:urpx.resolved/dynamic-pricing
-                               :urpx/hasPriceUpdateRule :urpx/description]))
+                               :urpx/hasPriceUpdateRule 0 :urpx/description]))
           "nested PriceUpdateRule passes through with its prose description"))))
 
 (deftest dynamic-pricing-absent-on-non-event-tier

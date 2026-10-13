@@ -9,6 +9,21 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Added
+
+- **`urpx.schema/DynamicPricing`**, with its `DynamicPricingType`, `PriceSource` and `UpdateFrequency` enums, and `urpx.dsl/dynamic-pricing`. `Price` models `urpx:hasDynamicPricing`, and `Price` and `PriceDefinition` model `urpx:hasDataSourceReference`, so their values validate and references through them are judged by `mistyped-references`.
+- **`urpx.schema/PriceUpdateRule`** and `urpx.dsl/price-update-rule`, the value of `urpx:hasPriceUpdateRule`.
+- **`urpx.schema/GYear`**: an `xsd:gYear` decodes to `java.time.Year` and encodes back. `CustomOperandNode` and `DatatypeOperandNode` model `urpx:gYearValue`.
+- `CalculationMethod` models `urpx:aggregationMethod`, `urpx:intervalType`, `urpx:intervalAlignment` and `urpx:intervalSelection`, and `MetricSpecification` the last three, each enforcing its vocabulary (`AggregationMethod`, `IntervalType`, `IntervalAlignment`, `IntervalSelection`). `MetricInput` models `urpx:description`; `RatePlanModifierVersion` models `urpx:expectedEndDate` and `urpx:expectedEndDateTime`.
+- `urpx.schema/schema-for-type` returns nil for an `@type` with no prefix, where it threw.
+
+### Changed
+
+- **`:urpx.resolved/dynamic-pricing` carries `:urpx/priceSource` and `:urpx/hasPriceUpdateRule` as vectors,** since both are 0..N, where it passed a bare value through as written. A consumer reading `[:urpx.resolved/dynamic-pricing :urpx/hasPriceUpdateRule :urpx/description]` now reads `[... :urpx/hasPriceUpdateRule 0 :urpx/description]`.
+- `urpx.core/containment-properties` includes `urpx:hasDynamicPricing` and `urpx:hasPriceUpdateRule`.
+
 ## [0.52.0] — 2026-10-13
 
 ### Added

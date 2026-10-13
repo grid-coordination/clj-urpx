@@ -25,8 +25,8 @@
     - translate RDF-encoding paths. sh:path rdf:first is the idiom for
       \"non-empty rdf:List\" and has no counterpart in a compact JSON-LD tree.
       Those are listed as untranslatable rather than silently compared.
-    - guess at datatypes clj-urpx has no leaf for, such as xsd:gYear. They
-      are listed as unmodeled rather than assumed equivalent."
+    - guess at datatypes clj-urpx has no leaf for. They are listed as
+      unmodeled rather than assumed equivalent."
   (:require [clojure.data.json :as json]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -42,7 +42,8 @@
   "xsd datatypes clj-urpx has a typed leaf for. Anything else is reported as
    unmodeled rather than assumed to need no decoder."
   #{"xsd:string" "xsd:decimal" "xsd:integer" "xsd:boolean" "xsd:anyURI"
-    "xsd:date" "xsd:dateTime" "xsd:time" "xsd:duration" "xsd:gMonth"})
+    "xsd:date" "xsd:dateTime" "xsd:time" "xsd:duration" "xsd:gMonth"
+    "xsd:gYear"})
 
 (defn- shacl-required? [p] (and (:minCount p) (pos? (:minCount p))))
 (defn- shacl-multi?    [p] (nil? (:maxCount p)))

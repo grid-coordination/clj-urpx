@@ -26,7 +26,8 @@
   (testing "a schema is reachable by @type and by keyword"
     (is (= schema/Season (schema/schema-for-type "urpx:Season")))
     (is (= schema/Season (:urpx/Season schema/schemas)))
-    (is (nil? (schema/schema-for-type "urpx:NoSuchThing"))))
+    (is (nil? (schema/schema-for-type "urpx:NoSuchThing")))
+    (is (nil? (schema/schema-for-type "Season")) "an @type with no prefix"))
   (testing "both @type spellings a schema admits are registered"
     (is (= schema/SourcePublication
            (schema/schema-for-type "urpx:SourcePublication")
@@ -209,3 +210,45 @@
     (is (= [] (schema/mistyped-references (bracket "ex:tier") type-of)))
     (is (= [[:urpx/adjustsServiceTier 0]]
            (map :in (schema/mistyped-references (bracket "ex:alt") type-of))))))
+
+(deftest dynamic-pricing-and-data-source-references
+  (testing "Price and PriceDefinition type their data source references"
+    (is (= "urpx:DataSourceReference"
+           (:urpx/hasDataSourceReference (schema/ranges schema/Price))
+           (:urpx/hasDataSourceReference (schema/ranges schema/PriceDefinition))))
+    (is (= "urpx:DynamicPricing" (:urpx/hasDynamicPricing (schema/ranges schema/Price)))))
+  (testing "a DynamicPricing node validates its enums"
+    (let [dp {:jsonld/type "urpx:DynamicPricing"
+              :urpx/dynamicPricingType {:jsonld/id "urpx:criticalPeakPricing"}
+              :urpx/priceSource [{:jsonld/id "urpx:algorithmicSource"}]}]
+      (is (m/validate :urpx/DynamicPricing dp {:registry schema/registry}))
+      (is (not (m/validate :urpx/DynamicPricing
+                           (assoc dp :urpx/dynamicPricingType {:jsonld/id "urpx:monthly"})
+                           {:registry schema/registry})))))
+  (testing "an inline node of the wrong type under hasDataSourceReference"
+    (is (= [[:urpx/hasDataSourceReference 0]]
+           (map :in (schema/mistyped-references
+                     {:jsonld/type "urpx:Price"
+                      :urpx/hasDataSourceReference [{:jsonld/type "urpx:Season"}]}
+                     (constantly nil)))))))
+
+(deftest properties-the-corpus-uses
+  (let [valid? #(m/validate %1 %2 {:registry schema/registry})]
+    (testing "CalculationMethod and MetricSpecification enforce their interval enums"
+      (let [cm {:jsonld/type "urpx:CalculationMethod"
+                :urpx/aggregationMethod {:jsonld/id "urpx:maximum"}
+                :urpx/intervalType {:jsonld/id "urpx:fifteenMinuteInterval"}}]
+        (is (valid? :urpx/CalculationMethod cm))
+        (is (not (valid? :urpx/CalculationMethod
+                         (assoc cm :urpx/intervalType {:jsonld/id "urpx:fortnightly"}))))
+        (is (not (valid? :urpx/MetricSpecification
+                         {:jsonld/type "urpx:MetricSpecification"
+                          :urpx/intervalAlignment {:jsonld/id "urpx:sum"}})))))
+    (testing "a PriceUpdateRule is an entity with a builder"
+      (is (= {:jsonld/type "urpx:PriceUpdateRule" :urpx/name "Annual reset" :urpx/priority 1}
+             (dsl/price-update-rule :name "Annual reset" :priority 1))))
+    (testing "an operand's gYearValue decodes to a java.time.Year"
+      (is (= (java.time.Year/of 2009)
+             (:urpx/gYearValue (coerce/coerce schema/CustomOperandNode
+                                              {:jsonld/type "urpx:CustomOperandNode"
+                                               :urpx/gYearValue "2009"})))))))

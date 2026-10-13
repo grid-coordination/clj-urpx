@@ -7,7 +7,7 @@
             [urpx.schema :as schema]
             [urpx.test-fixtures :as fixtures])
   (:import [java.math BigDecimal]
-           [java.time LocalDate LocalDateTime LocalTime]))
+           [java.time LocalDate LocalDateTime LocalTime Year]))
 
 (def rate-plan-fixtures
   ["pge-e-1-2026-03-01"
@@ -377,6 +377,23 @@
       (is (= {:reason :urpx.schema/malformed-g-month :datatype "xsd:gMonth" :value s}
              (refusal schema/MonthNumber s))
           (pr-str s)))))
+
+(deftest g-year-strings-must-be-xsd-g-year-lexical-forms
+  (testing "accepted as a java.time.Year, the timezone dropped"
+    (doseq [[s y] [["2009" 2009] ["0001" 1] ["-0044" -44] ["12026" 12026]
+                   ["2009Z" 2009] ["2009-08:00" 2009] ["2009+14:00" 2009]]]
+      (is (= (Year/of y) (coerce/coerce schema/GYear s)) s)))
+  (testing "a value object typed xsd:gYear decodes by its @value"
+    (is (= (Year/of 2009)
+           (coerce/coerce schema/GYear {:jsonld/value "2009" :jsonld/type "xsd:gYear"}))))
+  (testing "refused, naming the value"
+    (doseq [s ["209" "02009" "2009 " "+2009" "2009+15:00" "20o9" "-0000x"]]
+      (is (= {:reason :urpx.schema/malformed-g-year :datatype "xsd:gYear" :value s}
+             (refusal schema/GYear s))
+          (pr-str s))))
+  (testing "encodes back to at least four digits"
+    (doseq [[y s] [[2009 "2009"] [1 "0001"] [-44 "-0044"] [12026 "12026"]]]
+      (is (= s (coerce/encode schema/GYear (Year/of y))) s))))
 
 (deftest g-month-value-objects-unwrap
   (testing "a value object typed xsd:gMonth decodes by its @value"

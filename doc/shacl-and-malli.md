@@ -55,7 +55,7 @@ It is not what ships, for three reasons.
 
 **It guesses where it should refuse.** Two defects, both structural rather than incidental:
 
-- `xsd:gYear` has no typed leaf in `urpx.schema`, so the generator emitted `:int` as a guess, and the guess cascaded into rejecting valid filings.
+- `xsd:gYear` had no typed leaf in `urpx.schema` then, so the generator emitted `:int` as a guess, and the guess cascaded into rejecting valid filings.
 - `sh:path rdf:first` is the RDF idiom for "non-empty `rdf:List`". Transliterated into a map key, it produces a schema **no compact JSON-LD document can ever satisfy**.
 
 **A generator bug is systemic where a hand-written one is local.** One bad rule is wrong at every slot it generates. A hand-written mistake more often announces itself, because you write the test while thinking about the case.
