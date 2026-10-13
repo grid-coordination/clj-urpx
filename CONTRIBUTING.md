@@ -21,7 +21,7 @@ Discussions are open-ended — a good place to think out loud or scope something
 Use [Issues](https://github.com/grid-coordination/clj-urpx/issues) for actionable changes:
 
 - Bugs in parsing, coercion, schema validation, or price resolution against real URPX fixtures
-- SHACL classes that aren't yet modeled and that a real consumer needs (`urpx:ServicePointProfile`, the non-RatePlan URPXDocument subclasses, etc. — see [README §Status](README.md#status) for the running list)
+- SHACL classes that aren't yet modeled and that a real consumer needs (`urpx:ServicePointProfile`, the non-RatePlan URPXDocument subclasses, etc. — see [doc/status.md](doc/status.md) for the running list)
 - Test failures or unexpected behavior with concrete repro steps
 - Schema gaps surfaced by a real filing (one that should validate but doesn't, or coerces into a shape the resolver can't handle)
 - Documentation errors, unclear explanations, or stale prose in `README.md`, `doc/dsl-tutorial.md`, or namespace docstrings

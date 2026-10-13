@@ -203,6 +203,6 @@ This example authors the **v0.2.x** nested shape, which URPX v0.5.1 still permit
 ## Where to look next
 
 - **`urpx.dsl` ns docstring** — concise reference for `dsl-scope`, `make-builder`, the kwarg-alias rule, and the validation contract.
-- **[Authoring URPX entities](../README.md#authoring-urpx-entities)** in the project README — the API surface in summary.
+- **[Authoring URPX entities](authoring.md)** — the API surface in summary.
 - **[`urpx.dsl-test`](../test/urpx/dsl_test.clj)** — runnable examples covering every DSL feature, including the full CPAU E-2 round-trip referenced above.
 - **Upstream [URPX Tutorial](https://github.com/urpx-org/urpx/blob/main/documentation/pages/urpx-tutorial.md)** — for the canonical URPX shapes these examples mirror.

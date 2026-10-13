@@ -20,6 +20,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 ### Changed
 
 - **`urpx.dsl/dsl-scope` refuses a keyword reference to an entity of the wrong type** under `:mistyped`, and every builder refuses an inline node of the wrong type.
+- **The README is split into guides under `doc/`**: pricing, scenario cost models, coverage, writing JSON-LD, authoring, schemas and status. The README keeps the overview, installation, getting started, a short status and a list of the guides.
 - **`clojure -M:validate` fails a file** (exit `1`) holding a reference or inline node of the wrong type for its property, judged within the file, and prints each as `MISTYPED`.
 
 ## [0.50.0] — 2026-10-10

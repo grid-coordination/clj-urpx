@@ -12,7 +12,8 @@
                          namespace, exactly as a reader working through the page
                          would. Its blocks are complete programs.
 
-    README.md            most blocks are illustrative snippets that reference
+    README.md and the    most blocks are illustrative snippets that reference
+    guides in doc/
                          bindings they never define (`plan`, `zdt`), so running
                          them is not meaningful. What IS meaningful, and what
                          actually goes wrong, is a symbol that was renamed or
@@ -114,13 +115,19 @@
       (is (= #{} (set/difference on-disk (set (vals alias->ns))))
           "every urpx.* namespace must have an alias registered in alias->ns"))))
 
+(def ^:private guides
+  "The README and the guides split out of it, checked as one text."
+  ["README.md" "doc/pricing.md" "doc/scenario-cost-models.md" "doc/coverage.md"
+   "doc/writing-json-ld.md" "doc/authoring.md" "doc/schemas.md" "doc/status.md"])
+
 (deftest readme-references-only-symbols-that-exist
-  (testing "README blocks are illustrative snippets, so running them is not
-            meaningful; they reference bindings they never define. What is
-            meaningful is that every function they name still exists. A rename
-            that leaves the prose behind is the realistic failure here."
-    (let [md (doc "README.md")]
-      (is (some? md))
+  (testing "README and guide blocks are illustrative snippets, so running them
+            is not meaningful; they reference bindings they never define. What
+            is meaningful is that every function they name still exists. A
+            rename that leaves the prose behind is the realistic failure here."
+    (let [mds (map doc guides)
+          md  (str/join "\n" mds)]
+      (is (every? some? mds) (str "every guide exists: " (pr-str guides)))
       (let [refs (referenced-symbols md)
             _    (doseq [[a _] refs] (require (alias->ns a)))
             bad  (remove (fn [[a nm]] (ns-resolve (alias->ns a) (symbol nm))) refs)]
@@ -129,9 +136,9 @@
         ;; without breaking every time a code block is edited.
         (is (<= 10 (count refs))
             (str "sanity: extractor found only " (count refs)
-                 " project functions in README blocks; it may have stopped matching"))
+                 " project functions in README and guide blocks; it may have stopped matching"))
         (is (empty? bad)
-            (str "README names functions that do not resolve: "
+            (str "README or a guide names functions that do not resolve: "
                  (pr-str (mapv (fn [[a nm]] (str a "/" nm)) bad))))))))
 
 (deftest tutorial-references-only-symbols-that-exist

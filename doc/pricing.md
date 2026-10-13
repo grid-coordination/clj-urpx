@@ -1,0 +1,441 @@
+<!--
+SPDX-FileCopyrightText: 2026 Clark Communications Corporation
+SPDX-License-Identifier: MIT
+-->
+
+# Resolving prices
+
+```clojure
+(require '[urpx.core :as core]
+         '[urpx.coerce :as coerce]
+         '[urpx.price :as price]
+         '[urpx.schedule :as schedule])
+(import '[java.time LocalDate ZoneId ZonedDateTime])
+
+;; 1. Load and coerce a URPX rate plan document. Filings are typically
+;;    @graph bundles holding a urpx:RatePlan plus sibling
+;;    urpx:RatePlanModifier and metadata entities; load-rate-plan picks
+;;    the unique RatePlan from the bundle.
+(def plan
+  (-> "path/to/urpx-rate-plan.jsonld"
+      core/load-rate-plan
+      coerce/coerce-rate-plan))
+
+;; 2. Resolve the prices that apply at a specific instant
+(def la (ZoneId/of "America/Los_Angeles"))
+(price/resolve-prices plan (ZonedDateTime/of 2026 7 15 17 0 0 0 la))
+;; =>
+;; {:urpx.resolved/season-name        "Summer"
+;;  :urpx.resolved/tou-period-name    "Summer Peak Period"
+;;  :urpx.resolved/tou-period-number  1
+;;  :urpx.resolved/ledgers
+;;  [{:urpx.resolved/ledger-name "Energy Supply Prices"
+;;    :urpx.resolved/tiers
+;;    [{:urpx.resolved/price-name "Generation Summer Peak"
+;;      :urpx.resolved/unit-price 0.20782M ...}
+;;     {:urpx.resolved/price-name "Bundled Power Charge Indifference Adjustment"
+;;      :urpx.resolved/unit-price -0.01011M ...}]}
+;;   {:urpx.resolved/ledger-name "Energy Delivery Prices"
+;;    :urpx.resolved/tiers [{:urpx.resolved/unit-price 0.20388M ...} ...]}
+;;   {:urpx.resolved/ledger-name "Adjustment Prices" ...}
+;;   {:urpx.resolved/ledger-name "Base Services Charge"
+;;    :urpx.resolved/tiers []}]}
+
+;; 3. Marginal $/kWh — sum of the lowest-tier unit-price across all ledgers
+(price/marginal-unit-rate *1)
+
+;; 4. Generate a day's worth of natural TOU intervals
+(def start (.atStartOfDay (LocalDate/of 2026 7 15) la))
+(schedule/price-schedule-days plan start 1)
+;; =>
+;; [{:tick/beginning <ZDT 2026-07-15T00:00-07:00[America/Los_Angeles]>
+;;   :tick/end       <ZDT 2026-07-15T16:00-07:00[America/Los_Angeles]>
+;;   :urpx.interval/resolved {... "Summer Off-Peak Period" ...}}
+;;  {... 16:00–21:00 "Summer Peak Period" ...}
+;;  {... 21:00–24:00 "Summer Off-Peak Period" ...}]
+```
+
+For block-tiered plans (e.g. PG&E E-1), each ledger's `:tiers` vector exposes every tier with its `:tier-lower-bound`, `:tier-upper-bound`, and `:unit-price`; the caller selects the active tier from cumulative billing-period usage.
+
+Which `urpx:ServiceBracket` states those bounds is selected per `urpx:serviceTierNumber`, honoring `urpx:appliesInSeason` and `urpx:referencesProfileAlternative` on the `urpx:ServiceTiers` container and on the bracket alike. A tier whose single candidate carries neither property short-circuits, so neither the instant nor `:profile-alternatives` is read: that is all 18 tiers of the five tiered base-plan fixtures. Bounds that selection cannot determine are withheld under `:urpx.resolved/tier-bounds-unresolved` rather than guessed, a `{:reason :scope :ids}` map whose reason is `:alternative-unselected`, `:season-not-evaluable` (a `urpx:Season` carrying no `urpx:month`, so the month gate was never evaluated) or `:no-applicable-bounds`; the entry keeps its tier number and its unit price. Two brackets, or two containers declaring one tier number, that both apply and state different bounds refuse.
+
+An adjusting `urpx:ServiceBracket`, one carrying `urpx:adjustsServiceTier` and `urpx:lowerBoundOffset` or `urpx:upperBoundOffset` in place of bounds, adds each offset to the same bound of the named tier's selected bracket when its own qualifiers, and its container's, hold. It may sit in any document of the composition and name a tier in any other; it matches the tier by `@id`, and is never a bound of the tier that hosts it. Offsets on one bound sum, and a bracket repeated by `@id` counts once. The adjusted bound replaces `:tier-lower-bound` or `:tier-upper-bound`, beside `:tier-{lower,upper}-bound-base`, `:tier-{lower,upper}-bound-offset` and `:tier-adjusting-bracket-ids`; operators are unchanged. One whose qualifiers cannot be decided withholds the bounds with `:reason :adjustment-unresolved`. A target that is missing, is not a `urpx:ServiceTier`, is one of several, or hosts adjusting brackets itself, and containers whose `urpx:MetricInput`s state different units or do not both state one, refuse at any instant; an offset on a bound the selected bracket lacks, or one leaving the lower bound above the upper, refuses where it applies.
+
+## Time and timezones
+
+The library uses `java.time.ZonedDateTime` end-to-end internally and at its input and output boundaries — DST-correct under daylight transitions because every step of the walk preserves zone, no `Instant`-to-local-time conversions in the middle of the schedule.
+
+**Everything resolves in the plan's own zone.** A URPX document usually writes its bounds — `urpx:effectiveDateTime`, `urpx:expirationDateTime`, every TOU bracket — as naive wall-clock readings with no offset. They are wall-clock *in the zone the plan declares*, so reading them in any other zone reads a different moment. `resolve-prices` therefore anchors the query in `urpx:timezoneIdentifier` before comparing anything.
+
+**A dateTime or time with an offset names its instant.** An `xsd:dateTime` written with `Z` or `-05:00` decodes to a `ZonedDateTime` in that offset and is compared as that instant, so on a Pacific plan `2026-01-10T08:00:00Z` and `2026-01-10T00:00:00` are the same bound. An `xsd:time` with an offset decodes to an `OffsetTime`, read on the query's date; each encodes back with its offset, in XSD canonical form (`+00:00` as `Z`, seconds always written, a fraction only when nonzero).
+
+**A date is a calendar day in its timezone.** An `xsd:date` decodes to the `LocalDate` it names, with or without an offset: `2026-03-01-08:00` is `2026-03-01`. Where a reader needs an instant from a date, it is midnight of that day in the plan's zone. The written offset is kept, exactly as written, in the metadata of the map holding the property, under `:urpx.schema/date-offsets` as `{property {:date LocalDate :offset offset}}`, and emit writes it back while the property still holds that date. Map equality ignores metadata, so the same date with and without an offset compares equal. A malformed literal refuses with `:urpx.schema/malformed-datetime`, `-date` or `-time`.
+
+That makes **one moment cost one price, however it is spelled**. It did not used to: until 0.31.0 the query was reduced with `.toLocalDateTime`, which kept whatever zone the caller happened to use, so the same instant written two ways gave two answers — on PG&E E-TOU-C, Peak `0.46886` asked in Pacific and Off-Peak `0.34586` asked in UTC, 36% apart, with no error and no mark.
+
+**Inputs and outputs:**
+
+- `resolve-prices` takes a `ZonedDateTime`. Its **zone is not used to interpret the document** — only the instant is. Pass whatever zone you have
+- `price-schedule` / `price-segments` and friends take a `[start, end)` window bounded by two `ZonedDateTime`s in any zone, including two different zones. Their instants bound the window, and the walk happens in the plan's zone, where resolution happens, so candidate boundaries are derived in the same frame. A bound of any other type refuses `:urpx.schedule/bound-not-zoned-date-time`, and `opts` that are not a map refuse `:urpx.schedule/opts-not-a-map`
+- The schedule output's `:tick/beginning` and `:tick/end` are `ZonedDateTime` in the plan's zone. Callers wanting a plain `java.time.Instant` invoke `.toInstant` themselves
+- The `-days` forms cover `days` calendar days in the plan's zone from `start`, so a day is 23 or 25 hours across a daylight transition
+
+```clojure
+(schedule/price-schedule-days plan start 1)                                          ; walked in the plan's zone
+(schedule/price-schedule-days plan (.withZoneSameInstant start (ZoneId/of "UTC")) 1) ; the same intervals
+```
+
+**A plan declaring no `urpx:timezoneIdentifier` is refused**, with `:reason :urpx.price/no-timezone`. Its bounds anchor to no moment, so whether an instant falls inside one has no answer; falling back to the caller's zone or the system default is what this replaces.
+
+**Standing rule:** pass an IANA `ZoneId` like `(ZoneId/of "America/Los_Angeles")` — never a fixed offset, never the system default.
+
+**Inference fallback:** for documents that omit `urpx:timezoneIdentifier`, the optional `urpx.tz-inference/infer-zone` helper does best-effort inference from the publishing utility's `urpx:legalName` (and a caller-supplied `urpx:eiaId` table when available). It returns `nil` for unknown or multi-zone utilities so the caller fails loudly rather than silently picking one. Inference is **opt-in** — `price-schedule` does not call it automatically; compose at the call site by stating the inferred zone on the plan:
+
+```clojure
+(require '[urpx.tz-inference :as tz])
+(let [zone (or (some-> plan :urpx/timezoneIdentifier ZoneId/of)
+               (:zone (tz/infer-zone plan))
+               (throw (ex-info "no timezone for this plan" {})))]
+  (schedule/price-schedule (assoc plan :urpx/timezoneIdentifier (str zone)) start end))
+```
+
+The shipped lookup tables only cover utilities used by the test suite; production deployments should supply their own (`:eia-id->zone` / `:legal-name->zone` opts).
+
+## Holiday calendar
+
+URPX `TimeBracket` carries two optional booleans — `urpx:includeHolidays` and `urpx:includeNonHolidays` — that gate whether the bracket applies on holidays, non-holidays, or both (both default to `true` when omitted, matching every day). For plans that use these gates (e.g. PG&E E-TOU-D's "weekday peak EXCLUDING holidays" pattern), the resolver picks a holiday predicate in this order:
+
+1. **Explicit `:holiday?` in opts** — caller-supplied predicate `(LocalDate -> bool)` always wins.
+2. **Embedded `urpx:HolidayCalendar`** — if the plan declares one (PG&E E-TOU-D and several CPAU filings do), `urpx.holidays/derive-predicate` builds a predicate from the calendar's `urpx:Holiday` entries (literal dates plus rule-based descriptions like "fourth Thursday of November"). No caller setup required.
+3. **Fallback** — only when both of the above are absent: every date is treated as a non-holiday. Brackets that opt out of non-holidays (`includeNonHolidays: false`, e.g. holiday-only off-peak overrides) will never match.
+
+A `urpx:Holiday`'s `urpx:observanceRule` moves its date when it falls on a weekend: `urpx:actualDateObservance` keeps it, `urpx:nearestWeekdayObservance` moves Saturday to Friday and Sunday to Monday, `urpx:mondayIfWeekendObservance` moves both to Monday, `urpx:fridayIfWeekendObservance` moves both to Friday, and `urpx:mondayIfSundayObservance` (urpx-org/urpx#77) moves Sunday to Monday and keeps Saturday. A move may cross into the adjacent year.
+
+A caller-supplied `:holiday?` overrides any embedded calendar — useful when you need a different jurisdiction's holiday set or want to inject a calendar service:
+
+```clojure
+(import '[java.time LocalDate])
+
+(def us-federal-2026
+  #{(LocalDate/of 2026 1 1)    ; New Year's Day
+    (LocalDate/of 2026 1 19)   ; Martin Luther King Jr. Day
+    (LocalDate/of 2026 2 16)   ; Presidents Day
+    (LocalDate/of 2026 5 25)   ; Memorial Day
+    (LocalDate/of 2026 6 19)   ; Juneteenth
+    (LocalDate/of 2026 7 3)    ; Independence Day (observed)
+    (LocalDate/of 2026 9 7)    ; Labor Day
+    (LocalDate/of 2026 11 11)  ; Veterans Day
+    (LocalDate/of 2026 11 26)  ; Thanksgiving
+    (LocalDate/of 2026 12 25)})  ; Christmas
+
+(price/resolve-prices plan zdt {:holiday? us-federal-2026})
+(schedule/price-schedule plan start end {:holiday? us-federal-2026})
+```
+
+A plain set of `LocalDate`s works because sets are functions; you can also pass any `(LocalDate -> bool)` function — e.g. one that delegates to an external calendar service.
+
+A bracket matches a date only when its day test and its holiday test both pass. `urpx:customDays` matches the days the bracket lists in `urpx:daysOfWeek` (urpx-org/urpx#71). Seattle City Light's Peak, Monday through Saturday except holidays, is one bracket: `urpx:customDays` listing `urpx:monday` through `urpx:saturday`, with `includeHolidays: false`. Its Mid-Peak on Sundays and holidays is two: `urpx:customDays` listing `urpx:sunday`, and `urpx:allDays` with `includeNonHolidays: false`.
+
+## Modifiers
+
+`urpx:RatePlanModifier` documents (vintage-PCIA adders, export-compensation adjusters, etc.) augment a base plan. They appear in three packaging shapes — the loader handles all three transparently:
+
+- **`@graph` bundle**: a single document holds a base `urpx:RatePlan` plus one or more sibling modifiers (PG&E filings). A `@graph` nested inside another, at any depth, is flattened into the same bundle.
+- **Wrapper**: a `urpx:URPXDocument` (the v0.2.0 wrapper class) or `urpx:URPXPackage` (its v0.3.0 rename) whose `urpx:hasRatePlanModifier` or `urpx:packages` points at the modifier.
+- **Standalone filing**: a document whose only entity is `urpx:RatePlanModifier` (CPAU E-2-G shape — modifier-only filings whose target linkage is expressed by consumer-side composition).
+
+Pull the modifier with `core/load-rate-plan-modifier`, parallel to `load-rate-plan`:
+
+```clojure
+(def modifier
+  (-> "path/to/urpx-rate-plan-modifier.jsonld"
+      core/load-rate-plan-modifier
+      coerce/coerce-rate-plan-modifier))
+
+(price/resolve-prices-with-modifiers plan [modifier] zdt)
+;; => the resolve-prices output, with each applicable modifier's ledgers
+;;    appended to :urpx.resolved/ledgers
+```
+
+`urpx:applicableToRatePlan` (modifier → base plan linkage) is optional per URPX SHACL — bundled modifiers usually declare it, standalone ones may not. `resolve-prices-with-modifiers` only includes modifiers whose `applicableToRatePlan` list contains the base plan's `@id`; modifiers without an applicableToRatePlan are skipped on the assumption that their applicability is decided externally. Pass them explicitly (or trim the list yourself) when you've verified the target.
+
+Modifier `PriceDefinition`s carrying `urpx:touPeriodNumber` are gated symmetrically with base PDs: if the modifier defines its own `urpx:hasTOUSchedule` the resolver walks it at the probe instant and gates against the modifier's resolved period; otherwise the gate uses the base RatePlan's resolved period (so e.g. a modifier whose discounts ride the base's Mid-Peak / Off-Peak periods only surfaces in those windows). A `urpx:TimeBracket` in that schedule may name a `urpx:Season` the base plan declares, and it matches when that Season's months include the instant's. Where none of the modifier's own periods covers the instant, its PDs and Prices carrying `touPeriodNumber` contribute nothing. Modifier PDs and Prices without `touPeriodNumber` are unaffected.
+
+The result-level `:urpx.resolved/season-name`, `:urpx.resolved/tou-period-name` and `:urpx.resolved/tou-period-number` are the base plan's. Each modifier ledger carries the same three keys for its own modifier: `season-name` when the modifier's own `urpx:hasSeasons` matches the instant, and the two period keys when its own `urpx:hasTOUSchedule` does. A modifier gated by the base plan's period carries no period keys; the result-level ones name it. `price-schedule` keeps a ledger's labels only where every merged step agrees, as it does the result-level ones, and `price-segments` splits where they change.
+
+Matrix-style modifiers (e.g. PG&E vintage-PCIA, one ledger with a price per departure-vintage year) surface every active price under one ledger entry; the caller picks the active value via `:urpx.resolved/price-id`. The selection dimension is carried by `urpx:PriceSetAlternatives`: each `PriceSetAlternative` names its `urpx:referencesProfileAlternative`, and the set names the `urpx:ProfileAlternatives` it discriminates on.
+
+These prices are **alternatives, not tiers**: exactly one applies to any customer. Pass `:profile-alternatives` to choose one, exactly as on the base plan path, and only the chosen alternative surfaces. Without a selection all of them surface and the ledger carries `:urpx.resolved/unselected-alternatives`; `marginal-unit-rate` then **refuses**, because an aggregate that took one of eighteen mutually-exclusive prices would be reporting an arbitrary number as the marginal rate. It refuses when the withheld prices would have entered the sum, which these do; see [What withholding costs](#what-withholding-costs-and-when-it-costs-an-answer).
+
+Prices carrying `urpx:hasDynamicPricing` (CPP Event Charges, RTP overlays, other event-driven components, applicable to base PDs and modifier PDs alike per the SHACL Price shape) are surfaced with the DynamicPricing payload attached to the resolved tier under `:urpx.resolved/dynamic-pricing`. Consumers evaluating event state at billing time read the nested `:urpx/dynamicPricingType`, `:urpx/priceSource`, `:urpx/updateFrequency`, and `:urpx/hasPriceUpdateRule`.
+
+**`marginal-unit-rate` excludes them by default.** An event charge applies only while its event is called: critical peak events are capped around 50 hours a summer against roughly 2,200 summer hours, so summing one unconditionally answers "what would this cost during an event" while reading as the ordinary rate. The default is the non-event baseline, which is what a price signal means by "the next kWh". Pass `{:include-dynamic-pricing? true}` for the during-event upper bound.
+
+Unlike the mutually-exclusive alternatives above, this has a defensible default rather than an arbitrary pick: no-event-today is the ordinary state.
+
+The resolver does **not** gate on event state, and that is a different and larger gap. A Price gated by a `urpx:ConditionExpression` (SCE PRIME-CPP's non-event credit, its grandfathered-customer credit, the DA-CRS and CCA-CRS vintage prices) still fires unconditionally, because this library does not evaluate those predicates. Excluding event-driven prices does not reach them: on SCE PRIME-CPP it leaves two ungated credits applying and the marginal rate goes negative. That number was already wrong before, mixing an event charge with credits that may not apply; it is now wrong more visibly. The fix is evaluating condition expressions, which URPX has not yet defined a consumer-facing shape for.
+
+## Derived prices and price summaries
+
+A `urpx:Price` need not state a `urpx:unitPrice`. It may instead carry `urpx:multiplier` together with `urpx:basedOnPrice`, naming the price it is computed from. That is how a percentage discount such as CARE or FERA is filed: the discount is a multiplier over a `urpx:PriceSummary`, which aggregates the line items the discount applies to via `urpx:includesPrice` (`sh:minCount 2` upstream). A summary hangs off a `urpx:PriceSet` or `urpx:PriceSetAlternative` through `urpx:hasPriceSummary`, beside the prices it names.
+
+`resolve-prices` values these automatically: the multiplier times the referenced Price's unit price, or times the sum of the summary's members **that are in effect at the instant being resolved**. Members are gated by the same season, month and TOU predicates that gate a tier, applied to each member's own `PriceDefinition`. A subtotal is turned into a unit price at an instant, so summing a winter line item into a July resolution would simply be the wrong number. This means one summary per base plan can name every discountable line item and still be correct in every TOU period; if no member is in effect, the result is `:summary-no-active-members` rather than a confident zero.
+
+Which members a summary names is the author's business, and the resolver reads the list as filed rather than inferring one.
+
+The discount and the summary often live in different filings, because the discount belongs to a program modifier while the line items belong to the base plan. `resolve-prices-with-modifiers` resolves that case, since the caller has already supplied both documents and the `@id` index spans exactly what was passed in:
+
+```clojure
+(price/resolve-prices-with-modifiers plan [care-modifier] zdt)
+;; the modifier's discount Price resolves against the base plan's PriceSummary
+```
+
+Nothing is fetched behind your back. A reference this library cannot resolve from the documents it was given is reported, never silently valued:
+
+```clojure
+;; a tier whose Price could not be valued
+#:urpx.resolved{:price-id "sdge:price-care-discount"
+                :unit-price nil
+                :unvaluable {:reason :unresolved-reference
+                             :price-id "sdge:price-care-discount"
+                             :detail "urpx:basedOnPrice names ..."}}
+```
+
+The reasons are:
+
+| reason | meaning |
+|---|---|
+| `:unresolved-reference` | no named basis is in the documents passed to the call |
+| `:ambiguous-basis` | two or more named bases are present at once, which is not a choice this library makes |
+| `:summary-member-unresolved` | a summary member is absent from these documents, or is in effect here but carries no unit price |
+| `:summary-no-active-members` | no member of the summary is in effect at this instant, so its subtotal is undefined here |
+| `:summary-ambiguous-tier` | two or more members in effect share the lowest tier number of the summary's block-tier ladder, so which rung enters the subtotal is undefined |
+| `:basis-not-valuable` | the basis resolved but has no unit price |
+| `:no-unit-price` | the Price states neither a unit price nor a multiplier and basis to derive one from |
+| `:summary-member-unselected` | a summary member's PriceDefinition is scoped to a `urpx:ProfileAlternative` in a dimension the caller chose nothing for, so excluding it would understate the subtotal and including it would overstate it |
+
+A nil unit price with no explanation would read to a consumer as free, which for a discount is the worst available answer; `marginal-unit-rate` therefore throws rather than return one.
+
+`urpx:basedOnPrice` has no `sh:maxCount` upstream, so a document may name several bases. Several values are read **disjunctively**: candidate bases, of which exactly one is expected to be present in the documents passed to the call. That is what lets a single discount Price serve a modifier applying to many base plans, naming each base's subtotal and letting the composition select by which base was actually supplied. Zero resolvable candidates remains an error, and two or more present at once reports `:ambiguous-basis`.
+
+The conjunctive reading (sum the bases) is already covered by `urpx:PriceSummary`, whose `urpx:includesPrice` is the aggregation construct. URPX fixes the cardinality of `urpx:basedOnPrice` and says nothing about what multiple values mean, so the disjunctive reading is this library's, stated here rather than left implicit.
+
+Note that this is a second, independent way to express CARE and FERA. The `urpx:ProfileAlternatives` mechanism below files the already-discounted prices directly as an alternative price set; this one files the discount as arithmetic over the undiscounted prices. Which a plan uses is the filer's choice, and a reader should expect either.
+
+## Horizons: exact price segments
+
+`marginal-unit-rate` answers "what does the next kWh cost right now". A client optimizing load wants something else: the price now **and** for the next N hours, as a piecewise-constant schedule it can hand to a solver.
+
+`price-segments` derives that from the documents:
+
+```clojure
+(schedule/price-segments plan modifiers start end opts)
+;; => [{:tick/beginning ZonedDateTime
+;;      :tick/end       ZonedDateTime
+;;      :urpx.interval/resolved {...}}   ; or :urpx.interval/refused
+;;     ...]
+```
+
+Each segment's prices are constant throughout it, segments tile the window with no gap or overlap, and the first begins exactly at `start` and the last ends exactly at `end`.
+
+**Why not just sample.** `price-schedule` walks a fixed grid and merges adjacent steps with equal prices, so its boundaries are snapped to that grid. For most plans in practice the two agree, because nearly every TOU bracket sits on an hour. That agreement is luck, not design: one filing family already carries a `23:59:59` boundary, which no hourly grid can express and a 15-minute grid would cost 288 samples a day and still miss. Segments place it exactly, and typically cost *fewer* resolutions than hourly sampling rather than more. A merged interval keeps a season or TOU period label only when it holds for the whole interval; `price-segments` splits where those labels change.
+
+**How the boundaries are found.** Temporal literals are harvested from the documents by java.time **type** rather than by property name, so a temporal property added to URPX later is picked up without changing this code. Those times are crossed with every local date the window touches, every local midnight is included unconditionally, and the zone's own DST transitions are added.
+
+Every local midnight being a candidate is what absorbs the whole family of date-granularity gates at once: day of week, holidays including observance shifting, season and month boundaries, applicability month rules, and every start, effective and expiration date. No holiday parsing, no month arithmetic, no list of properties to keep in step with the vocabulary.
+
+This is a deliberate over-approximation. An extra candidate costs one resolution and merges away; a missed one is a silently wrong boundary.
+
+**DST is handled at the instant level.** A local time inside the spring-forward gap never occurs and is clamped to the transition instant, where the obvious `ZonedDateTime/of` would instead land past it by the gap's width. A local time in the fall-back overlap occurs twice and yields **both** instants, so the repeated hour is priced twice rather than merged away. Ask for "the next 72 hours" with a `Duration` and you get 72 elapsed hours, which across a transition is 71 or 73 hours of clock face.
+
+`price-segments` additionally refuses `:uncoerced-document` when handed a document that was never run through `urpx.coerce`: it harvests candidate instants from `java.time` values, and an uncoerced document carries date-shaped *strings* instead, which would silently narrow the candidate set to midnights.
+
+**Refusals become segments.** If resolution throws partway through a horizon (most plausibly `:no-version-in-effect` at an instant before the plan existed), that stretch is reported as a segment carrying `:urpx.interval/refused` rather than aborting the window. Equal refusals merge, so an uncovered stretch is one segment and not one per candidate. `price-schedule` reports a refused step the same way and merges equal refusals into one interval.
+
+Segments merge on the **full** resolved value, not only its ledgers: a change of TOU period or season with identical prices is still a real boundary.
+
+## Which version applies
+
+A filing holds one `urpx:RatePlanVersion`, and a plan accumulates several over time. Resolving one document needs no choice and makes none: a single candidate is used as-is. Whether it *describes* the instant is reported separately, so the structural answers stay available for a filing queried outside its own window.
+
+Covering a **window** is different. A forecast client loads several versions of a plan and indexes them together, and then which one applies depends on the instant:
+
+```clojure
+(def by-plan (index/versions-by-plan [nov-filing mar-filing]))
+
+(price/resolve-prices plan zdt {:versions-by-plan by-plan})
+;; => resolved against the version in effect at zdt
+```
+
+The rule is the latest `urpx:effectiveDateTime` at or before the instant, which is inclusive, skipping any version whose `urpx:expirationDate` has passed. A version need not carry an expiration, so a version's span may be inferable only from the next version's start; that is why the rule needs a plan's whole candidate set rather than one snapshot.
+
+`urpx:expectedEndDate` is deliberately **not** read. An expected end anticipates a successor rather than terminating anything, so a version past its expected end with no successor is still the one in force.
+
+Three situations have no defensible answer and are refused rather than guessed, each carrying a `:reason`:
+
+| reason | meaning |
+|---|---|
+| `:no-version-in-effect` | nothing had taken effect by that instant; the caller asked about a window the plan does not cover |
+| `:ambiguous-version` | two candidates share the latest effective instant |
+| `:version-without-effective-instant` | a candidate states no effective instant, so it cannot be ordered against the others |
+
+Pass `:version` with a resolved snapshot to choose explicitly and bypass all of it. Candidates are deduplicated by value, so a nested snapshot and its own entry in the back-pointer index collapse to one; two genuinely different descriptions sharing an `@id` do not, and are refused rather than picked between.
+
+`:version` applies **only to the document it is a snapshot of**, identified by `urpx:forRatePlan` / `urpx:forRatePlanModifier` or by the document nesting it, and is ignored for any other. So on a composition, pinning the base plan's version leaves each modifier to resolve by its own rules rather than being handed a snapshot that is not its own. Pass a map from document `@id` to snapshot when you want to pin several explicitly:
+
+```clojure
+(price/resolve-prices-with-modifiers plan [modifier] zdt
+  {:version {"sce:d"    base-snapshot
+             "sce:care" modifier-snapshot}})
+```
+
+A `:version` that is neither a snapshot nor such a map refuses with `:version-opt-not-a-version`, rather than being quietly ignored.
+
+## A version window is checked on modifiers too
+
+`urpx:RatePlanModifierVersion` carries `urpx:effectiveDateTime` and `urpx:expirationDateTime` exactly as a plan version does, and both are read. A modifier whose version does not describe the instant has every ledger it produces marked with `:urpx.resolved/outside-version-window`, and `marginal-unit-rate` refuses rather than sum from it.
+
+Marked, not dropped. Dropping a superseded discount would quietly *raise* a bill, which is the direction nobody reports, and a caller reading tiers off a superseded filing deliberately is not blocked. The mark carries `:version-id`, `:effective` and `:expires`, and carries no instant: the caller knows which instant it asked about, and a per-instant field would make every step of a horizon walk distinct so that nothing merged.
+
+The refusal is scoped to prices that would actually enter the sum. An expired modifier whose ledgers are all non-energy, or whose only energy price is event-driven and therefore already excluded, costs the caller nothing and does not refuse — though ask for the during-event upper bound with `:include-dynamic-pricing? true` and the same document refuses, because that is when its price would be summed.
+
+## Recurring charges
+
+A `urpx:PriceDefinition` carrying its own `urpx:CalculationMethod` prices a **recurring** charge: one billed per interval rather than per unit consumed. Minimum charges, service charges, base services charges, and the per-lamp-per-month charges of a street lighting schedule.
+
+These resolve like any other price, and their tiers carry `:urpx.resolved/interval-duration`:
+
+```clojure
+#:urpx.resolved{:price-id "sce:d-2026-03-20-price-base-services-charge"
+                :unit-price 0.794M
+                :interval-duration #object[java.time.Period "P1D"]}
+```
+
+The interval travels with the number deliberately. A recurring charge's ledger is typically measured by a meter or fixture count carrying no `urpx:measurementKind` and no unit, so `0.794` alone is a figure nothing else in the result explains. Flattening a period-scoped quantity into a per-unit rate is how a $10 monthly charge becomes a wrong per-day one.
+
+They never enter `marginal-unit-rate`, which sums $/kWh: a per-interval figure is not a per-unit rate whatever its ledger is measured in.
+
+## What the marginal rate sums
+
+`marginal-unit-rate` sums across every energy ledger. **Within** a ledger it sums the additive rate components and adds the lowest rung of the block-tier ladder, if there is one.
+
+That distinction exists because a ledger is used for two different things. A block tier ladder is mutually exclusive, so only the marginal rung applies. An additive rate stack, which is how delivery charges are modeled (transmission, distribution, public purpose, wildfire NBC, and the rest), is cumulative and all of it applies.
+
+Export ledgers are excluded entirely. `urpx:flowDirection urpx:reverse` marks compensation for energy sent back, which is not a cost of the next kWh consumed; summing the two conflates a credit with a charge. Composing PG&E E-ELEC with its NBT modifier produced a large negative rate per kWh before this, because the hourly avoided-cost values on its export ledgers were added to the import rate. `urpx:net` and `urpx:bidirectional` still contribute, because excluding them would be speculation. Resolved ledgers carry `:urpx.resolved/flow-direction` when the filing declares one.
+
+`urpx:serviceTierNumber` is what separates them: a numbered tier belongs to a ladder, a bare one is a component. URPX has no vocabulary declaring which kind a ledger is, so this is the signal available rather than the signal designed. A mixed ledger contributes its bare components plus the lowest numbered rung.
+
+## Plans that price nothing per kWh
+
+`marginal-unit-rate` answers "what does the next kWh cost". Plenty of real schedules have no answer: CPAU E-14 is street lighting, priced per lamp per month and per fixture per month, with no per-kWh charge anywhere. For those it **refuses** rather than returning `0M`, because zero is not a conservative default for a question that does not apply, and it was indistinguishable from a plan whose energy ledgers genuinely sum to zero.
+
+Ask first when sweeping a corpus, so the refusal is not a tax on every caller:
+
+```clojure
+(when (price/has-energy-ledger? resolved)
+  (price/marginal-unit-rate resolved))
+
+(price/measurement-kinds resolved)
+;; => #{"urpx:energy" "urpx:demand"}   what this plan DOES price in, so a
+;;                                     caller can route rather than skip
+```
+
+Every refusal `marginal-unit-rate` makes carries a `:reason` in its `ex-data`, so a sweeping consumer can classify instead of catching everything: `:no-energy-ledger`, `:ambiguous-marginal-tier`, `:unvaluable-marginal-tier`, `:unselected-alternatives`, `:condition-gated-tier`, `:all-energy-tiers-excluded`, and `:outside-version-window`.
+
+`resolve-prices` itself carries a `:reason` on further refusals, all of them a refusal to guess rather than a failure to parse. (It can also propagate a throw from indexing, which carries no `:reason`, so classify on the key's presence rather than assuming it. A `urpx:Holiday` carrying neither `urpx:holidayDate` nor `urpx:holidayRule` refuses with `:urpx.holidays/no-date-or-rule`, and an unrecognized `urpx:holidayRule` or `urpx:observanceRule` with `:urpx.holidays/unknown-holiday-rule` or `:urpx.holidays/unknown-observance-rule`.) Five concern versions: `:urpx.price/no-version`, when no snapshot reaches the plan, neither nested nor supplied through `:version` or `:versions-by-plan`; `:no-version-in-effect`, `:ambiguous-version` and `:version-without-effective-instant`, when several snapshots cannot be ordered or none covers the instant; and `:version-opt-not-a-version`, when the `:version` opt is neither a snapshot nor a map from document `@id` to one, so there is no document it could apply to. Two concern TOU: `:urpx.price/no-tou-period`, when the plan has a `urpx:TOUSchedule` and none of its periods covers the instant, since reading on would price every period at once; and `:urpx.price/custom-days-unspecified`, when a bracket in that schedule has `urpx:dayType` `urpx:customDays` and lists no `urpx:daysOfWeek`, so the days it applies on are not stated. `:brackets` names each such bracket. The rest concern alternatives and which `urpx:ServiceBracket` states a tier's bounds, each a case where reading on would return a confident wrong number rather than fail:
+
+| reason | when |
+|---|---|
+| `:multiple-profile-alternatives` | a `PriceDefinition`, `ServiceTiers` or `ServiceBracket` names more than one alternative. `:node-type` says which |
+| `:ambiguous-profile-alternative` | the alternative such a node names is listed by two `ProfileAlternatives`, so there is no one dimension to read the caller's choice from |
+| `:unknown-profile-alternative` | `:profile-alternatives` chooses a value the container it is keyed under does not list, usually a typo or a stale id. Compared for equality it would read as a deliberate choice of a sibling cell and silently drop every definition in that dimension |
+| `:unknown-profile-alternatives-container` | a `:profile-alternatives` key names no `ProfileAlternatives` container in any version of any document being resolved, usually a typo. `:containers` lists the ones that are. Read as no selection it would withhold every price the key was meant to select |
+| `:unresolvable-season-ref` | a `urpx:appliesInSeason` ref on a `ServiceTiers` or a `ServiceBracket` matches none of the `urpx:Season` nodes reachable here, though others are, so it is a typo and the gate that selects bounds cannot be evaluated. Read as out-of-season it would leave the rung with no bounds, which a consumer reads as unbounded. Where NO Season is reachable the document that declares it was simply not passed, and the bounds are withheld with `:season-not-evaluable` instead. On a modifier's `urpx:TimeBracket` it refuses whenever the Season is declared nowhere in the documents passed, since the period in effect cannot be determined; `:season-ids` lists them |
+| `:ambiguous-service-bracket` | two `urpx:ServiceBracket`s on one tier both apply and state different bounds. `urpx:hasServiceBracket` is a set, so there is no first one to take |
+| `:ambiguous-service-tier` | two `urpx:ServiceTiers` containers declare one `urpx:serviceTierNumber` with different bounds and both apply |
+
+## What the resolver needs that SHACL does not require
+
+One property is optional in the shapes but load-bearing here, so a document can be perfectly conformant and still resolve to less than it says.
+
+| Property | If omitted |
+|---|---|
+| `urpx:referencesMetricInput` on a `urpx:Ledger` | The ledger and its tiers still resolve and still appear in `:urpx.resolved/ledgers`, so reading tiers shows no loss. But `marginal-unit-rate` decides which ledgers are energy from the referenced `MetricInput`'s `urpx:measurementKind`, so an unreferenced ledger contributes nothing and the aggregate comes back **quietly short**. If no ledger qualifies at all it refuses with `:no-energy-ledger` rather than returning a number. |
+
+It is dangerous precisely because a short sum is a legal-looking price. If a per-kWh ledger is missing from a marginal rate, check that its `MetricInput` exists and that its `urpx:measurementKind` is `urpx:energy`.
+
+**Dates are no longer in this category.** An absent `urpx:startDate` used to discard the Price at four scoping sites; it now means *no start constraint*, which is what `sh:minCount 0` says. A Price that has not started yet is still excluded. `urpx:startDateTime` is read too, in preference to `urpx:startDate`, so a filing stating its date that way is no longer priced as though it had none.
+
+## Customer-profile alternatives
+
+`urpx:ProfileAlternatives` + `urpx:PriceSetAlternatives` express declarative customer-or-configuration choices: income-tier CARE / FERA / Standard, voltage configurations, vintage-PCIA departure year, and similar. The plan declares a `urpx:ProfileAlternatives` at `PlanElements.hasProfileAlternatives` (each named alternative carries its own `hasConditionExpression`), and a sibling `urpx:PriceSetAlternatives` at `Prices.hasPriceSetAlternatives` exposes one Price-bearing `PriceSetAlternative` per alternative.
+
+This is the **selection layer**, and URPX is explicit that it is distinct from the automatic filtering layer of `urpx:ApplicabilityRule`: alternatives are mutually exclusive options requiring a choice, and the exclusivity is declared structurally rather than implied by predicates. That distinction is what makes them readable to a consumer that cannot evaluate conditions — it can see the set is exclusive, refuse to aggregate it, and be handed a selection by `@id`, without evaluating anything. A set of prices made exclusive only by `ApplicabilityRule` predicates offers no such signal and will be summed.
+
+`resolve-prices` selects the active alternative explicitly via the `:profile-alternatives` opt — a `{<ProfileAlternatives @id> <chosen ProfileAlternative @id>}` map. `resolve-prices-with-modifiers` honors the same opt on the modifier path, which is how a matrix modifier's alternatives are chosen:
+
+```clojure
+(price/resolve-prices plan zdt
+  {:profile-alternatives
+   {"pge:bsc-income-tier" "pge:bsc-care"}})
+```
+
+Without a selection an alternative's prices are **withheld**, and the ledger they would have populated survives carrying `:urpx.resolved/unselected-alternatives`. It is not silently omitted: a consumer can tell an unchosen dimension from a plan that has none. The vector carries `@id`s of whatever was held back, which is PriceDefinitions on the base-plan path, and on the modifier path either Prices (surfaced from an unselected `PriceSetAlternatives` and marked in place) or PriceDefinitions (scoped to an unchosen alternative), mixed in one vector when both apply. Read it as opaque provenance, and use `:urpx.resolved/withheld-prices` when you need the entries themselves.
+
+`marginal-unit-rate` refuses only when a withheld ledger is **energy**-measured, since withholding a per-day base charge cannot change a per-kWh figure. PG&E E-TOU-C exercises both on one plan: its income-tier alternatives feed a Base Services Charge ledger and do not refuse; its vintage-PCIA alternatives feed an energy ledger and do. Being energy-measured is necessary and not sufficient: see [What withholding costs](#what-withholding-costs-and-when-it-costs-an-answer).
+
+Programmatic evaluation of each alternative's `urpx:ConditionExpression` against a customer profile is a future enhancement.
+
+## Scoping a PriceDefinition to an alternative
+
+`urpx:referencesProfileAlternative` is read on a `urpx:PriceDefinition` as well as on a `PriceSetAlternative`, on the base plan and on modifiers alike. Five shapes carry the property upstream: those two, plus `ServiceTiers` and `ServiceBracket`, which are read where they select a tier's bounds, and `TOUSchedule`, which is not read. The definition-level one is where a multi-dimensional choice lands: one `ProfileAlternatives` container, whose single `AlternativeDimensions` wraps several `AlternativeDimension`, whose alternatives enumerate the **cells** of the cross product, with one PriceDefinition scoped to each cell.
+
+Four outcomes, given the caller's `:profile-alternatives`. That map is keyed by *container*, while a definition references an *alternative*; `urpx:hasProfileAlternative` bridges the two, so no new vocabulary is needed.
+
+| the definition | outcome |
+|---|---|
+| references no alternative | applies, as in every vendored fixture |
+| references the chosen one | applies |
+| references a **different** one in that dimension | filtered out silently: it genuinely does not apply, exactly as an out-of-season definition does not |
+| references one in a dimension nothing was chosen for | prices **withheld**, and the ledger says so |
+
+The same four outcomes decide a `ServiceTiers` container or a `ServiceBracket`, but the fourth one withholds a different thing: the tier's **bounds**, under `:urpx.resolved/tier-bounds-unresolved` with `:reason :alternative-unselected`, rather than prices on the ledger. The tier still surfaces with its number and unit price.
+
+Naming **several** alternatives on one definition refuses with `:multiple-profile-alternatives`. The shapes permit it (`sh:minCount 0`, no `sh:maxCount`) and no vendored fixture uses it; a matrix does not need it, because the conjunction already lives inside the cell. Defining a rule for a shape nothing has is how an arbitrary pick gets built in.
+
+A definition that names an alternative no `ProfileAlternatives` in the document declares is treated as the fourth row, not as an error: which one applies is unknown for the same reason, and a composition whose container lives in the other document should withhold rather than hard-fail.
+
+This does not evaluate the cells' condition expressions: a consumer names the cell by `@id`. That is the selection layer working as URPX intends. The gain is that exclusivity becomes *readable and refusable*, not that selection becomes automatic.
+
+## What withholding costs, and when it costs an answer
+
+A withheld ledger carries two keys. `:urpx.resolved/unselected-alternatives` says that something was withheld; `:urpx.resolved/withheld-prices` says what, under the same keys a resolved tier uses.
+
+`marginal-unit-rate` refuses with `:unselected-alternatives` when withholding would make its sum **short**, which it decides with the same predicate that excludes a tier from the sum. An event-driven price (`urpx:hasDynamicPricing`) or a recurring charge is already outside a non-event per-unit marginal, so withholding it changes no number and is not worth an answer. Ask for the during-event upper bound with `:include-dynamic-pricing? true` and the event price is wanted again, so the same document refuses.
+
+It also refuses when a ledger is marked but `:urpx.resolved/withheld-prices` is **empty**. Not knowing what was withheld is not evidence that it did not matter, and a guard that passes on missing evidence is not a guard.
+
+A price that is both present in `:urpx.resolved/tiers` and named by the mark contributes its own tier entry as the evidence, rather than a reconstruction of it. The two views have to be the same map: the refusal asks one and the sum takes the other, so any field that excludes one but not the other defeats the guard.
+
+The distinction is the difference between a question the caller can answer and one they cannot. A vintage-PCIA cell is an attribute of the customer: the caller knows their departure vintage, and naming it is a reasonable ask, so that refusal stands. CPAU's E-HRA cells are the utility's own reserve level and generation band, reset by council vote, which no consumer has a source for; a refusal there would be permanent, and it would be trading a correct rate for an unanswerable question.
+
+## Prices gated by a condition
+
+A `urpx:Price` may carry a `urpx:ConditionExpression`: *applies only if the customer is on a legacy vintage, only on a non-event day, only above a usage threshold*. This library does not evaluate those predicates, and a price whose predicate it cannot evaluate fires **unconditionally**, which is a silent assumption that the predicate holds.
+
+Gated tiers carry `:urpx.resolved/condition-gated`, naming each gate's `@id`, its name, and whether it hangs off the Price or the PriceDefinition. `marginal-unit-rate` **refuses** with `:condition-gated-tier` when such a price would enter its sum, because summing it reports the assumption as a number. Pass `:assume-conditions-hold? true` for the every-condition-true upper bound, exactly as `:include-dynamic-pricing? true` gives the during-event one.
+
+The guard is scoped to prices that would actually be summed. Export prices in net-billing matrices are gated because the gate *is* the lookup key (which vintage, which month, which hour); `urpx:flowDirection urpx:reverse` has kept those out of the marginal since 0.21.0, and they do not refuse it either.
+
+**Two different things reach this refusal, and only one of them is really about conditions.** SCE's CCA-CRS files twenty PCIA vintages as twenty gated prices, one per vintage year, of which exactly one applies to any customer; summing all twenty took SCE TOU-D-PRIME from `0.60067` to `0.95664` where the true range is `0.59423` to `0.62691`. That is the same defect this function already refuses when a filing states it as `urpx:PriceSetAlternatives`, which is how PG&E files the identical concept. Refusing both means the answer no longer depends on which layer a filer happened to use. Where exclusivity is what is meant, the filing wants `ProfileAlternatives`, and the choice then becomes the caller's to make rather than a predicate nobody can evaluate.
+
+## Sub-hour granularity
+
+`price-schedule` walks at hourly steps by default. For rate plans that define sub-hour TOU bracket transitions, pass `:step`:
+
+```clojure
+(import '[java.time Duration])
+(schedule/price-schedule plan start end {:step (Duration/ofMinutes 15)})
+```
+
+Adjacent steps with identical resolved ledgers are still merged, so a quarter-hour walk across an hour-aligned plan produces the same merged intervals as the hourly walk.

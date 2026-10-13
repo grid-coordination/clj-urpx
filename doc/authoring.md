@@ -1,0 +1,107 @@
+<!--
+SPDX-FileCopyrightText: 2026 Clark Communications Corporation
+SPDX-License-Identifier: MIT
+-->
+
+# Authoring URPX entities
+
+For programmatic construction or test-fixture authoring, `urpx.dsl` provides idiomatic Clojure builders for every entity-type schema in `urpx.schema`. Output is a coerced (typed) entity, ready for `urpx.price/resolve-prices`, `urpx.emit/write-*`, or any other consumer.
+
+```clojure
+(require '[urpx.dsl :as dsl])
+
+(dsl/dsl-scope
+  (let [summer (dsl/season :as :ex/summer :season-name "Summer" :month [5 6 7 8 9 10])
+        winter (dsl/season :as :ex/winter :season-name "Winter" :month [11 12 1 2 3 4])
+        ledger-comm (dsl/ledger :as :ex/ledger-commodity
+                                :name "Commodity"
+                                :ledger-type {:jsonld/id "urpx:supplyLedger"})
+        pd-cs (dsl/price-definition :as :ex/pd-commodity-summer
+                                    :name "Commodity Summer"
+                                    :applies-in-season :ex/summer
+                                    :references-ledger :ex/ledger-commodity)]
+    ;; ...assemble into a rate-plan via dsl/rate-plan, dsl/rate-plan-version, etc.
+    ))
+```
+
+The DSL handles the boring parts so authoring code stays declarative:
+
+- **`@type` is inferred** from the schema (no `:jsonld/type "urpx:Season"` boilerplate).
+- **Auto-coercion** of raw Clojure inputs through the schema's `:decode/urpx-jsonld` decoders: a BigDecimal, integer, exact ratio or xsd:decimal string → `BigDecimal` (a double or float refuses, since it has already lost the written scale: write `0.1610M` or `"0.1610"`), ISO strings → `LocalDate` / `LocalDateTime` / `LocalTime`, or the zoned forms when a dateTime or time carries an offset, `--MM` xsd:gMonth → int.
+- **Validation on construct** — every builder throws `ex-info` with the Malli explanation if the entity doesn't validate against its schema, so shape drift surfaces at the call site.
+- **Two kwarg forms** — canonical `:urpx/seasonName` or auto-derived kebab-case `:season-name` (both work, can be mixed in one call).
+- **Unknown keys refuse.** A key that is neither in the schema, a kebab-case form of one, nor `:jsonld/*` throws, naming the key and the entity type. `(dsl/make-builder schema/X {:passthrough #{…}})` builds a constructor that admits further keys.
+
+## Keyword refs
+
+Inside a `dsl-scope`, `:as k` gives an entity the `@id` `(dsl/curie k)`, and a qualified-keyword value anywhere else in the scope is a Ref to the same `@id`:
+
+```clojure
+(dsl/dsl-scope
+  (dsl/season :as :ex/summer :season-name "Summer" :month [5 6 7 8 9 10])
+  (dsl/season :as :ex/winter :season-name "Winter" :month [11 12 1 2 3 4])
+  (dsl/ledger :as :ex/commodity :name "Commodity" :ledger-type :urpx/supplyLedger)
+  (dsl/price-definition :as :ex/pd-summer
+                        :name "Summer commodity"
+                        :applies-in-season :ex/summer    ; → {:jsonld/id "ex:summer"}
+                        :references-ledger :ex/commodity))
+```
+
+- A reference may come before or after its declaration.
+- When the scope exits, every keyword referenced but not declared in it throws, in one `ex-info` naming each keyword and the builders that used it.
+- Then every keyword whose entity is not of the type its slot takes throws, under `:mistyped`. `:applies-in-season :ex/commodity`, where `:ex/commodity` is a Ledger, refuses because `urpx:appliesInSeason` takes a `urpx:Season`. A subclass passes: a `UtilityOperator` where an `Organization` is taken. A builder refuses an inline node of the wrong type the same way, without a scope.
+- An `@id` declared twice in a scope throws, whether by `:as` or by `:jsonld/id`.
+- `(dsl/dsl-scope {:id-fn f} …)` names `@id`s with `f`.
+- An entity outside the scope is referenced with a Ref map, `{:jsonld/id "…"}`.
+
+## Building from arbitrary schemas
+
+`make-builder` derives a constructor from any Malli schema with a `:jsonld/type [:= "urpx:X"]` entry — useful for ad-hoc construction or scripts that don't import every named builder:
+
+```clojure
+(let [build-tou-period (dsl/make-builder schema/TOUPeriod)]
+  (build-tou-period :urpx/name "Summer Peak"
+                    :urpx/touPeriodNumber 1
+                    :urpx/hasTimeBracket []))
+```
+
+The named builders (`season`, `metric-input`, `price-definition`, `rate-plan`, `urpx-package`, `coverage-claim`, …) are each just `(def name (make-builder schema/X))`, one for every entity-type schema in `urpx.schema` with no exceptions — a test pins that. Where a schema dual-accepts two `@type` spellings (`source-publication`), the builder sets the v0.5.1 one and the schema still validates the v0.2.x one on parse.
+
+For a longer worked walkthrough that mirrors selected examples from the upstream [URPX Tutorial](https://github.com/urpx-org/urpx/blob/main/documentation/pages/urpx-tutorial.md), see [`doc/dsl-tutorial.md`](dsl-tutorial.md) — each example shows the canonical URPX JSON-LD shape and the equivalent DSL form, with deep-links back to the upstream source section.
+
+## Typed definitions
+
+`urpx.defs/defurpx` defines a var whose value is validated against a schema chosen by a kind keyword. A corpus written as Clojure source uses it for the tables a filing states, and its generator finds every definition of a kind with `defs-of-kind`.
+
+```clojure
+(require '[urpx.defs :as defs :refer [defurpx]])
+
+(defmethod defs/kind-schema :ex/rates [_]
+  [:map-of :keyword decimal?])
+
+(defurpx :ex/rates rtc-rates
+  "Cents per kWh."
+  {:peak 16.10M :off-peak 8.05M})
+
+(defs/defs-of-kind :ex/rates ['my.corpus])   ; => [#'my.corpus/rtc-rates]
+```
+
+- **Validation at macroexpansion.** The value is checked before the `def`, so an invalid value or an unknown kind interns nothing and a failed re-evaluation keeps the previous value. The message names the kind, the var, its file and line, and each failing path:
+
+  ```
+  Invalid :ex/rates my.corpus/rtc-rates (my/corpus.clj:7)
+    at [:peak]: 16.9 should be a decimal
+  ```
+
+  The `ex-data` carries `:kind`, `:where` and the humanized `:errors`.
+- **Closed schemas.** Every map in a kind's schema is closed unless it says `{:closed false}`, so a misspelled key refuses. A map reached through a `:ref` keeps its own `:closed` property.
+- **Kinds.** `kind-schema` is a multimethod; its `:default` refuses. The kind is a keyword literal. The `urpx.kind` namespace is reserved for kinds clj-urpx defines; qualify your own kinds in your namespace.
+- **No registry.** The kind is in the var's metadata as `:urpx/kind`, with the docstring, `:file` and `:line`. `defs-of-kind` reads the vars interned in the namespaces you pass, so an unmapped var is not returned.
+
+### clj-kondo
+
+The jar carries a clj-kondo config whose hook lints `defurpx` as a `def`. Import it into a project that depends on clj-urpx:
+
+```bash
+clj-kondo --lint "$(clojure -Spath)" --copy-configs --skip-lint
+```
