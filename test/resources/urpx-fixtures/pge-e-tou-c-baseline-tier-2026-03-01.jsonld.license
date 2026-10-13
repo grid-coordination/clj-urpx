@@ -5,3 +5,5 @@ Derived from https://github.com/grid-coordination/urpx-rate-plans
 at 1e4ad46, path us/ca/pge/electricity/e-tou-c/versions/2026-03-01/rate-plan-modifier_pge_e-tou-c-baseline-tier_2026-03-01.jsonld
 Vendored as a frozen specimen. This records where the bytes came from;
 it is not a pin to be kept current.
+One edit since: an issue-tracker reference was
+removed from the modifier's urpx:description.

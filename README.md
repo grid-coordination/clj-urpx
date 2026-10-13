@@ -12,8 +12,6 @@ URPX is an [LF Energy](https://lfenergy.org/) open standard for exchanging utili
 
 The standard's source of truth — ontology, SHACL shapes, JSON-LD context, tutorial, and reference test cases — lives at [github.com/urpx-org/urpx](https://github.com/urpx-org/urpx); its design-decision logs are maintained in [urpx-org/urpx-dev](https://github.com/urpx-org/urpx-dev). This library targets the same version-pinned ontology snapshot that fixtures cite via `urpx:targetURPXVersion`.
 
-> **Repository access:** [urpx-org/urpx](https://github.com/urpx-org/urpx), [urpx-org/urpx-dev](https://github.com/urpx-org/urpx-dev) and [grid-coordination/urpx-rate-plans](https://github.com/grid-coordination/urpx-rate-plans) are not yet public. Links to them resolve once each one is.
-
 ## What does this library do?
 
 - **Parse** URPX JSON-LD rate plan documents into Clojure data structures
