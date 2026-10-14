@@ -12,7 +12,7 @@
            [javax.xml.parsers DocumentBuilderFactory]))
 
 (def lib 'energy.grid-coordination/clj-urpx)
-(def version "0.60.0-SNAPSHOT")
+(def version "0.60.0")
 (def class-dir "target/classes")
 (def ^:private description "Clojure library for URPX utility rate plan exchange")
 (def ^:private url "https://github.com/grid-coordination/clj-urpx")
