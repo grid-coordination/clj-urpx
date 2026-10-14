@@ -11,6 +11,11 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 
 ## [Unreleased]
 
+### Added
+
+- **`EnergyServiceProvider`, `RegulatoryAuthority` and `SystemOperator`**, the subclasses of `Organization`, and **`OrganizationEvent`, `OrganizationTransition` and `LocationDataSet`** become entity schemas with builders. An organization's `urpx:hasLocationDataSet` takes a `LocationDataSet` inline or by reference.
+- **`urpx.schema/AnyOrganization`** takes any of the five kinds inline, chosen by `@type`, or a reference, and every slot whose range is `urpx:Organization` uses it. `OfferingOrganization` is now an alias for it; `publishedBy` and `evaluatedBy` took a plain `Organization` only.
+
 ### Changed
 
 - **An xsd:time of `24:00` decodes to midnight**, as `24:00:00` already did, and encodes as `00:00:00`, so the DSL takes a tariff's `hh:mm` end of day as written. Other hour-24 times still refuse.

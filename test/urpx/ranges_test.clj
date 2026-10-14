@@ -280,3 +280,35 @@
         (is (= [[:urpx/hasServiceClass 0] [:urpx/hasServiceClass 1]]
                (map :in (schema/mistyped-references
                          plan {"ex:group" "urpx:RateGroup" "ex:summer" "urpx:Season"}))))))))
+
+(deftest organizations-and-places
+  (let [valid? #(m/validate %1 %2 {:registry schema/registry})
+        org    (fn [t & kvs] (into {:jsonld/type t
+                                    :urpx/organizationType {:jsonld/id "urpx:utilityOrganization"}}
+                                   (apply hash-map kvs)))]
+    (testing "every kind of organization is accepted inline where an Organization is"
+      (doseq [o [(org "urpx:Organization")
+                 (org "urpx:UtilityOperator")
+                 (org "urpx:EnergyServiceProvider" :urpx/serviceRole {:jsonld/id "urpx:supplyServiceRole"})
+                 (org "urpx:RegulatoryAuthority" :urpx/regulatoryScope {:jsonld/id "urpx:stateScope"})
+                 (org "urpx:SystemOperator")
+                 {:jsonld/id "ex:org"}]]
+        (is (valid? :urpx/TariffFiling {:jsonld/type "urpx:TariffFiling"
+                                        :urpx/containsPricingModel [{:jsonld/id "ex:pm"}]
+                                        :urpx/publishedBy o})
+            (pr-str o))))
+    (testing "each subclass requires what its shape requires"
+      (is (not (valid? :urpx/EnergyServiceProvider (org "urpx:EnergyServiceProvider"))))
+      (is (not (valid? :urpx/RegulatoryAuthority (org "urpx:RegulatoryAuthority")))))
+    (testing "a malformed organization does not pass as a reference"
+      (is (not (m/validate schema/AnyOrganization {:jsonld/id "ex:org" :urpx/legalName 42}))))
+    (testing "operatesIn names a SystemOperator"
+      (is (= [[:urpx/operatesIn 0]]
+             (map :in (schema/mistyped-references
+                       (org "urpx:UtilityOperator" :urpx/operatesIn [{:jsonld/id "ex:pge"}])
+                       {"ex:pge" "urpx:UtilityOperator"})))))
+    (testing "a location data set holds its calendars inline or by reference"
+      (is (valid? :urpx/LocationDataSet
+                  {:jsonld/type "urpx:LocationDataSet"
+                   :urpx/timezoneIdentifier "America/Los_Angeles"
+                   :urpx/hasHolidayCalendar [{:jsonld/id "ex:cal"}]})))))

@@ -565,6 +565,12 @@
 ;; Metadata
 (def organization              (make-builder schema/Organization))
 (def utility-operator          (make-builder schema/UtilityOperator))
+(def energy-service-provider   (make-builder schema/EnergyServiceProvider))
+(def regulatory-authority      (make-builder schema/RegulatoryAuthority))
+(def system-operator           (make-builder schema/SystemOperator))
+(def organization-event        (make-builder schema/OrganizationEvent))
+(def organization-transition   (make-builder schema/OrganizationTransition))
+(def location-data-set         (make-builder schema/LocationDataSet))
 (def organization-identity     (make-builder schema/OrganizationIdentity))
 (def organization-name         (make-builder schema/OrganizationName))
 (def data-source-reference     (make-builder schema/DataSourceReference))

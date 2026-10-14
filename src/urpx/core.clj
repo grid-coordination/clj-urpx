@@ -123,7 +123,8 @@
     :urpx/hasCustomerProfile :urpx/hasDataSourceReference :urpx/hasDynamicPricing
     :urpx/hasEligibilityRule
     :urpx/hasGeneralRule :urpx/hasHoliday :urpx/hasHolidayCalendar :urpx/hasIdentifier
-    :urpx/hasIdentity :urpx/hasLedger :urpx/hasMetricInput :urpx/hasMetricSpecification
+    :urpx/hasIdentity :urpx/hasLedger :urpx/hasLocationDataSet :urpx/hasMetricInput
+    :urpx/hasMetricSpecification
     :urpx/hasModelExclusion :urpx/hasName :urpx/hasPlanElements :urpx/hasPossibleValues
     :urpx/hasPrice :urpx/hasPriceDefinition :urpx/hasPriceDefinitionReference :urpx/hasPriceSet
     :urpx/hasPriceSetAlternative :urpx/hasPriceSetAlternatives :urpx/hasPriceSummary

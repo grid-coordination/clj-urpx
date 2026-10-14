@@ -1758,8 +1758,23 @@
    [:urpx/identityValidFrom {:optional true} DateTime]
    [:urpx/identityValidTo   {:optional true} DateTime]])
 
+(def LocationDataSet
+  "The time zone, daylight-saving rules and holiday calendars that apply where
+   an organization operates or a plan is offered."
+  [:map
+   [:jsonld/type [:= "urpx:LocationDataSet"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/timezoneIdentifier  {:optional true} :string]
+   [:urpx/daylightSavingRules {:optional true} :string]
+   [:urpx/expectedEndDate     {:optional true} Date]
+   [:urpx/expectedEndDateTime {:optional true} DateTime]
+   [:urpx/hasHolidayCalendar
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:HolidayCalendar"}
+    [:vector [:or HolidayCalendar ExclusiveRef]]]])
+
 (def ^:private organization-entries
-  "The properties urpx-shacl:OrganizationShape and UtilityOperatorShape share."
+  "The properties urpx-shacl:OrganizationShape and the shapes of its
+   subclasses share."
   [[:jsonld/id {:optional true} :string]
    [:urpx/legalName      {:optional true} :string]
    [:urpx/alternateName  {:optional true} :string]
@@ -1772,15 +1787,18 @@
     [:vector [:or OrganizationIdentity ExclusiveRef]]]
    [:urpx/hasLocationDataSet
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:LocationDataSet"}
-    [:vector Ref]]
-   [:urpx/operatesIn
-    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:SystemOperator"}
-    [:vector Ref]]
+    [:vector [:or LocationDataSet ExclusiveRef]]]
    [:urpx/offers
     {:optional true :decode/urpx-jsonld single-or-vec->vec
      ::range #{"urpx:PricingModel" "urpx:RatePlan" "urpx:RatePlanModifier"
                "urpx:RatePlanModifierVersion" "urpx:RatePlanVersion"}}
     [:vector Ref]]])
+
+(def ^:private operates-in
+  "urpx:operatesIn, on every organization shape but SystemOperator's."
+  [:urpx/operatesIn
+   {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:SystemOperator"}
+   [:vector Ref]])
 
 (def Organization
   "An organization. urpx-shacl:OrganizationShape is open upstream; utility
@@ -1788,19 +1806,72 @@
   (-> [:map
        [:jsonld/type [:= "urpx:Organization"]]]
       (into organization-entries)
-      (conj [:urpx/url {:optional true} :string])))
+      (conj operates-in [:urpx/url {:optional true} :string])))
 
 (def UtilityOperator
   "A urpx:Organization that operates a utility."
   (-> [:map
        [:jsonld/type [:= "urpx:UtilityOperator"]]]
       (into organization-entries)
-      (conj [:urpx/ownershipType {:optional true} Ref])))
+      (conj operates-in [:urpx/ownershipType {:optional true} Ref])))
+
+(def EnergyServiceProvider
+  "A urpx:Organization that provides energy service in a stated role, such as
+   a community choice aggregator."
+  (-> [:map
+       [:jsonld/type [:= "urpx:EnergyServiceProvider"]]]
+      (into organization-entries)
+      (conj operates-in [:urpx/serviceRole Ref])))
+
+(def RegulatoryAuthority
+  "A urpx:Organization that regulates others, such as a state commission."
+  (-> [:map
+       [:jsonld/type [:= "urpx:RegulatoryAuthority"]]]
+      (into organization-entries)
+      (conj operates-in
+            [:urpx/regulatoryScope Ref]
+            [:urpx/approves
+             {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlan"}
+             [:vector Ref]]
+            [:urpx/hasJurisdictionOver
+             {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:Organization"}
+             [:vector Ref]])))
+
+(def SystemOperator
+  "A urpx:Organization that operates a grid or market, the range of
+   urpx:operatesIn."
+  (-> [:map
+       [:jsonld/type [:= "urpx:SystemOperator"]]]
+      (into organization-entries)))
+
+(def AnyOrganization
+  "An organization of any modeled kind inline, chosen by its @type, or a
+   reference: the value of a slot whose range is urpx:Organization."
+  [:multi {:dispatch :jsonld/type}
+   ["urpx:Organization"          Organization]
+   ["urpx:UtilityOperator"       UtilityOperator]
+   ["urpx:EnergyServiceProvider" EnergyServiceProvider]
+   ["urpx:RegulatoryAuthority"   RegulatoryAuthority]
+   ["urpx:SystemOperator"        SystemOperator]
+   [::m/default                  ExclusiveRef]])
 
 (def OfferingOrganization
-  "The value of urpx:offeredBy: an Organization or a UtilityOperator inline,
-   or a reference."
-  [:or Organization UtilityOperator ExclusiveRef])
+  "`AnyOrganization`, under the name it had when it held two kinds."
+  AnyOrganization)
+
+(def OrganizationEvent
+  "An event in an organization's history, such as a merger."
+  [:map
+   [:jsonld/type [:= "urpx:OrganizationEvent"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/regulatoryApproval {:optional true} :string]])
+
+(def OrganizationTransition
+  "A change from one organization to another, such as a rename."
+  [:map
+   [:jsonld/type [:= "urpx:OrganizationTransition"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/regulatoryApproval {:optional true} :string]])
 
 ;; ---------------------------------------------------------------------------
 ;; Coverage machinery (URPX v0.5.1)
@@ -1867,7 +1938,7 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/evaluationKind {:optional true} EvaluationKind]
    [:urpx/description    {:optional true} :string]
-   [:urpx/evaluatedBy    {:optional true ::range "urpx:Organization"} [:or Organization ExclusiveRef]]
+   [:urpx/evaluatedBy    {:optional true ::range "urpx:Organization"} AnyOrganization]
    [:urpx/evaluatedOn    {:optional true} DateTime]
    [:urpx/hasModelExclusion
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ModelExclusion"}
@@ -2094,8 +2165,8 @@
    [:urpx/documentedBy
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
     [:vector [:or DataSourceReference ExclusiveRef]]]
-   [:urpx/offeredBy   {:optional true ::range "urpx:Organization"} OfferingOrganization]
-   [:urpx/publishedBy {:optional true ::range "urpx:Organization"} [:or Organization ExclusiveRef]]
+   [:urpx/offeredBy   {:optional true ::range "urpx:Organization"} AnyOrganization]
+   [:urpx/publishedBy {:optional true ::range "urpx:Organization"} AnyOrganization]
    [:urpx/referencesRatePlan
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlan"}
     [:vector :map]]
@@ -2171,7 +2242,7 @@
    [:urpx/isDefault         {:optional true} :boolean]
    [:urpx/minimumTenure     {:optional true} IsoDuration]
    [:urpx/url               {:optional true} :string]
-   [:urpx/offeredBy   {:optional true ::range "urpx:Organization"} OfferingOrganization]
+   [:urpx/offeredBy   {:optional true ::range "urpx:Organization"} AnyOrganization]
    [:urpx/hasDataSourceReference
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
     [:vector DataSourceReference]]
@@ -2227,7 +2298,7 @@
    [:urpx/commodity
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector Ref]]
-   [:urpx/offeredBy {:optional true ::range "urpx:Organization"} OfferingOrganization]
+   [:urpx/offeredBy {:optional true ::range "urpx:Organization"} AnyOrganization]
    [:urpx/hasServiceClass
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ServiceClass"}
     [:vector [:or ServiceClass ExclusiveRef]]]
@@ -2302,7 +2373,7 @@
    [:urpx/serviceRole Ref]
    [:urpx/modifierType     {:optional true} Ref]
    [:urpx/modifierCategory {:optional true} Ref]
-   [:urpx/offeredBy   {:optional true ::range "urpx:Organization"} OfferingOrganization]
+   [:urpx/offeredBy   {:optional true ::range "urpx:Organization"} AnyOrganization]
    [:urpx/hasDataSourceReference
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
     [:vector DataSourceReference]]
@@ -2351,7 +2422,7 @@
    [:jsonld/context {:optional true} Context]
    [:urpx/modifierUniqueIdentifier :string]
    [:urpx/name :string]
-   [:urpx/offeredBy {:optional true ::range "urpx:Organization"} OfferingOrganization]
+   [:urpx/offeredBy {:optional true ::range "urpx:Organization"} AnyOrganization]
    [:urpx/initialEffectiveDate Date]
    [:urpx/expirationDate     {:optional true} Date]
    [:urpx/expirationDateTime {:optional true} DateTime]
@@ -2429,7 +2500,7 @@
    [:jsonld/type [:= "urpx:URPXPackage"]]
    [:jsonld/id {:optional true} :string]
    [:jsonld/context {:optional true} Context]
-   [:urpx/publishedBy {:optional true ::range "urpx:Organization"} [:or Organization ExclusiveRef]]
+   [:urpx/publishedBy {:optional true ::range "urpx:Organization"} AnyOrganization]
    [:urpx/publicationPlatform {:optional true} :string]
    [:urpx/dateReceived        {:optional true} Date]
    [:urpx/targetURPXVersion :string]
@@ -2482,7 +2553,7 @@
    [:urpx/issuingAuthority {:optional true} :string]
    [:urpx/pageReference    {:optional true} :string]
    [:urpx/publicationType  {:optional true} SourcePublicationType]
-   [:urpx/publishedBy      {:optional true ::range "urpx:Organization"} [:or Organization ExclusiveRef]]
+   [:urpx/publishedBy      {:optional true ::range "urpx:Organization"} AnyOrganization]
    [:urpx/dateApproved      {:optional true} Date]
    [:urpx/dateTimeApproved  {:optional true} DateTime]
    [:urpx/dateCreated       {:optional true} Date]
@@ -2512,7 +2583,7 @@
     [:vector [:or PricingModel ExclusiveRef]]]
    [:urpx/name        {:optional true} :string]
    [:urpx/description {:optional true} :string]
-   [:urpx/publishedBy {:optional true ::range "urpx:Organization"} [:or Organization ExclusiveRef]]
+   [:urpx/publishedBy {:optional true ::range "urpx:Organization"} AnyOrganization]
    [:urpx/effectiveDate      {:optional true} Date]
    [:urpx/effectiveDateTime  {:optional true} DateTime]
    [:urpx/expirationDate     {:optional true} Date]
