@@ -1311,13 +1311,14 @@
 
 (def ^:private condition-registry
   "The local registry for the mutually recursive operand tree: an operand is an
-   ObjectOperandNode, DatatypeOperandNode, CustomOperandNode, ComparisonNode or
-   BooleanOperationNode, and the last two take operands."
+   ObjectOperandNode, DatatypeOperandNode, CustomOperandNode, OperationNode,
+   ComparisonNode or BooleanOperationNode, and the last three take operands."
   {::Operand
    [:multi {:dispatch :jsonld/type}
     ["urpx:ObjectOperandNode"     ObjectOperandNode]
     ["urpx:DatatypeOperandNode"   DatatypeOperandNode]
     ["urpx:CustomOperandNode"     CustomOperandNode]
+    ["urpx:OperationNode"         [:ref ::OperationNode]]
     ["urpx:ComparisonNode"        [:ref ::ComparisonNode]]
     ["urpx:BooleanOperationNode"  [:ref ::BooleanOperationNode]]]
    ::ComparisonNode
@@ -1327,6 +1328,18 @@
     [:urpx/name   {:optional true} :string]
     [:urpx/description {:optional true} :string]
     [:urpx/logicExpression {:optional true} :string]
+    [:urpx/operator Ref]
+    [:urpx/leftOperand  {::range #{"urpx:CustomOperandNode" "urpx:DatatypeOperandNode"
+                                   "urpx:ObjectOperandNode" "urpx:OperationNode"}}
+     [:ref ::Operand]]
+    [:urpx/rightOperand {::range #{"urpx:CustomOperandNode" "urpx:DatatypeOperandNode"
+                                   "urpx:ObjectOperandNode" "urpx:OperationNode"}}
+     [:ref ::Operand]]]
+   ::OperationNode
+   [:map
+    [:jsonld/type [:= "urpx:OperationNode"]]
+    [:jsonld/id   {:optional true} :string]
+    [:urpx/description {:optional true} :string]
     [:urpx/operator Ref]
     [:urpx/leftOperand  {::range #{"urpx:CustomOperandNode" "urpx:DatatypeOperandNode"
                                    "urpx:ObjectOperandNode" "urpx:OperationNode"}}
@@ -1349,9 +1362,15 @@
 (def ComparisonNode
   "A comparison of a left and a right operand by urpx:operator. Each operand
    is an ObjectOperandNode, DatatypeOperandNode, CustomOperandNode,
-   ComparisonNode or BooleanOperationNode."
+   OperationNode, ComparisonNode or BooleanOperationNode."
   [:schema {:registry condition-registry}
    (::ComparisonNode condition-registry)])
+
+(def OperationNode
+  "Arithmetic over two operands by urpx:operator (add, subtract, multiply,
+   divide), itself an operand, so a comparison can test a computed value."
+  [:schema {:registry condition-registry}
+   (::OperationNode condition-registry)])
 
 (def BooleanOperationNode
   "urpx:operator (and, or, not) over urpx:operandNodes, each an operand as in

@@ -14,6 +14,7 @@ Entries begin at 0.11.0. The ten releases before it carry no summaries in their 
 ### Added
 
 - **`ServicePointProfile`, `DistributedEnergyResource`, `AccountServiceAgreement`, `PriorRatePlan`, `BillingCycle` and `ScenarioCostResult`** become entity schemas with builders. `CustomerProfile` models the rest of its shape's properties, `urpx:hasPriorRatePlan` among them; `Ledger` models `urpx:hasBillingCycle`; `Scenario.hasServicePointProfile` and `ScenarioCostModel.producesResult` take their node inline as well as by reference.
+- **`urpx.schema/OperationNode`** and `urpx.dsl/operation-node`: arithmetic over two operands, itself an operand, so a condition can compare a computed value. It nests to any depth in the condition tree.
 
 ### Fixed
 

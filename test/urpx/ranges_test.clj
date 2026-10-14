@@ -345,3 +345,26 @@
     (testing "an account service agreement requires its effective date"
       (is (not (valid? :urpx/AccountServiceAgreement
                        {:jsonld/type "urpx:AccountServiceAgreement"}))))))
+
+(deftest condition-arithmetic
+  (let [valid? #(m/validate %1 %2 {:registry schema/registry})
+        lit    (fn [v] {:jsonld/type "urpx:DatatypeOperandNode" :urpx/decimalValue v})
+        op     (fn [o l r] {:jsonld/type "urpx:OperationNode"
+                            :urpx/operator {:jsonld/id o}
+                            :urpx/leftOperand l :urpx/rightOperand r})
+        cmp    (fn [l] {:jsonld/type "urpx:ComparisonNode"
+                        :urpx/operator {:jsonld/id "urpx:greaterThanOperator"}
+                        :urpx/leftOperand l :urpx/rightOperand (lit 100M)})]
+    (testing "a comparison may test a computed value, nested to any depth"
+      (is (valid? :urpx/ConditionExpression
+                  {:jsonld/type "urpx:ConditionExpression"
+                   :urpx/rootNode (cmp (op "urpx:multiplyOperator"
+                                           (lit 2M)
+                                           (op "urpx:addOperator" (lit 30M) (lit 25M))))})))
+    (testing "an operation needs both operands"
+      (is (not (valid? :urpx/OperationNode
+                       (dissoc (op "urpx:addOperator" (lit 1M) (lit 2M)) :urpx/rightOperand)))))
+    (testing "the DSL builds one"
+      (is (= "urpx:OperationNode"
+             (:jsonld/type (dsl/operation-node :operator :urpx/addOperator
+                                               :left-operand (lit 1M) :right-operand (lit 2M))))))))

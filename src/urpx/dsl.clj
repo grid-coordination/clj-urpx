@@ -540,6 +540,7 @@
 (def object-operand-node       (make-builder schema/ObjectOperandNode))
 (def datatype-operand-node     (make-builder schema/DatatypeOperandNode))
 (def custom-operand-node       (make-builder schema/CustomOperandNode))
+(def operation-node            (make-builder schema/OperationNode))
 (def comparison-node           (make-builder schema/ComparisonNode))
 (def boolean-operation-node    (make-builder schema/BooleanOperationNode))
 (def condition-expression      (make-builder schema/ConditionExpression))
