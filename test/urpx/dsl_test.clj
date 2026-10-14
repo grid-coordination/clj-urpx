@@ -449,6 +449,19 @@
                       (dsl/ledger :as :ex/summer :name "Commodity")))]
       (is (= {:as nil :type "urpx:Season"} (:declared-by (ex-data e)))))))
 
+(deftest the-same-node-built-twice-is-accepted
+  (testing "a node embedded in two places may be built in each, as long as
+            both builds are the same node"
+    (let [utility #(dsl/organization :as :ex/utility :legal-name "Example Utility"
+                                     :organization-type :urpx/utilityOrganization)
+          [a b] (dsl/dsl-scope [(utility) (utility)])]
+      (is (= a b))
+      (is (= "ex:utility" (:jsonld/id a)))))
+  (testing "an explicit :jsonld/id the same way"
+    (is (= 2 (count (dsl/dsl-scope
+                     [(dsl/season :jsonld/id "ex:summer" :season-name "Summer")
+                      (dsl/season :jsonld/id "ex:summer" :season-name "Summer")]))))))
+
 (deftest each-dsl-scope-has-its-own-state
   (testing "one keyword declared in two scopes"
     (is (= ["ex:summer" "ex:summer"]
@@ -972,3 +985,35 @@
       (is (< 50 (count entities)) "sanity: urpx.schema should define many entities")
       (is (empty? missing)
           (str "entity schemas with no DSL builder: " (pr-str (vec missing)))))))
+
+(deftest outside-names-nodes-built-elsewhere
+  (testing "a keyword declared :outside resolves to its @id and is judged by
+            the @type given"
+    (let [pd (dsl/dsl-scope {:outside {:pge/ledger "urpx:Ledger"
+                                       :pge/summer "urpx:Season"}}
+                            (dsl/price-definition :name "PD"
+                                                  :references-ledger :pge/ledger
+                                                  :applies-in-season :pge/summer))]
+      (is (= {:jsonld/id "pge:ledger"} (:urpx/referencesLedger pd)))
+      (is (= [{:jsonld/id "pge:summer"}] (:urpx/appliesInSeason pd)))))
+  (testing "one of the wrong type is refused"
+    (is (= [{:ref :pge/ledger :type "urpx:Ledger" :by "urpx:PriceDefinition"
+             :property :urpx/appliesInSeason :range "urpx:Season"}]
+           (:mistyped (ex-data (thrown #(dsl/dsl-scope
+                                         {:outside {:pge/ledger "urpx:Ledger"}}
+                                         (dsl/price-definition :name "PD"
+                                                               :references-ledger :pge/ledger
+                                                               :applies-in-season :pge/ledger))))))))
+  (testing "a builder in the scope may not declare it"
+    (is (= :pge/summer
+           (:as (:declared-by (ex-data (thrown #(dsl/dsl-scope
+                                                 {:outside {:pge/summer "urpx:Season"}}
+                                                 (dsl/season :as :pge/summer
+                                                             :season-name "Summer")))))))))
+  (testing "an entry that is not keyword -> @type string is refused"
+    (is (= {:outside {:pge/summer :urpx/Season}}
+           (ex-data (thrown #(dsl/dsl-scope {:outside {:pge/summer :urpx/Season}} nil)))))))
+
+(deftest literal-writes-a-value-object
+  (is (= {:jsonld/list [{:jsonld/value "2009" :jsonld/type "xsd:gYear"}]}
+         (dsl/rdf-list [(dsl/literal "2009" "xsd:gYear")]))))

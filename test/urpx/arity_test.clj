@@ -256,7 +256,7 @@
       (is (map? (:urpx/hasRatePlan wrapper))
           "sanity: and writes hasRatePlan bare, which is the shape under test")
       (let [out (emit/write-urpx-package wrapper {:context nil})]
-        (is (re-find #"\"urpx:hasRatePlan\":\s*\[\s*\{\"@type\"" out)
+        (is (re-find #"\"urpx:hasRatePlan\":\s*\[\s*\{\"@(id|type)\"" out)
             "the payload emits as a document object")
         (is (not (re-find #"\[\[\"type\"" out))
             "and not as MapEntry pairs with the @ prefixes stripped")))))

@@ -22,6 +22,7 @@
     - `dsl-scope`             macro naming entities by keyword
     - `curie`                 the default keyword -> @id function
     - `rdf-list`              an ordered RDF list value
+    - `literal`               a typed literal, a JSON-LD value object
     - `make-builder`          generator: schema → constructor function
     - `entity-type`           introspect a schema for its @type literal
     - a named builder for every entity-type schema in `urpx.schema`
@@ -123,6 +124,7 @@
 
      :id-fn      keyword -> @id string
      :declared   {@id {:as keyword-or-nil, :type @type}}
+     :nodes      {@id the node built for it}
      :referenced {keyword #{@type of each builder that referenced it}}
      :ranged     {keyword #{[@type property range] of each ranged slot
                             that referenced it}}"
@@ -155,12 +157,21 @@
    keyword referenced in it whose @id no builder in it declared, and every
    one whose entity is not of the type its slot takes."
   [opts body-fn]
-  (when-let [unknown (seq (remove #{:id-fn} (keys opts)))]
+  (when-let [unknown (seq (remove #{:id-fn :outside} (keys opts)))]
     (throw (ex-info (str "dsl-scope refuses unknown options "
                          (pr-str (vec unknown)))
                     {:unknown-options (set unknown)})))
-  (let [scope (volatile! {:id-fn (:id-fn opts curie)
-                          :declared {}
+  (when-let [bad (seq (remove (fn [[k t]] (and (local-keyword? k) (string? t)))
+                              (:outside opts)))]
+    (throw (ex-info (str "dsl-scope :outside takes {keyword @type-string}, not "
+                         (pr-str (into {} bad)))
+                    {:outside (into {} bad)})))
+  (let [id-fn (:id-fn opts curie)
+        scope (volatile! {:id-fn id-fn
+                          :declared (into {}
+                                          (map (fn [[k t]]
+                                                 [(id-fn k) {:as k :type t :outside true}]))
+                                          (:outside opts))
                           :referenced {}
                           :ranged {}})
         result (binding [*scope* scope]
@@ -207,6 +218,11 @@
 
      :id-fn   keyword -> @id string; default `curie` (`:scl/summer` ->
               \"scl:summer\")
+     :outside {keyword @type}: nodes built elsewhere, such as in another
+              document, that keywords in the scope may name. A keyword
+              here reads as a reference to `(id-fn k)` and is judged
+              against the slot's range by the @type given, as a local one
+              is; no builder in the scope may declare it.
 
    Inside the scope, a builder:
 
@@ -214,7 +230,8 @@
      - reads a qualified-keyword value outside the `urpx` and `jsonld`
        namespaces as the Ref `{:jsonld/id (id-fn k)}`;
      - refuses an @id already declared in the scope, by `:as` or by an
-       explicit `:jsonld/id`.
+       explicit `:jsonld/id`, for a different node. Building the same node
+       twice, to embed it in two places, is accepted.
 
    A reference may come before or after its declaration. When the body
    finishes, the scope realizes every lazy sequence in its value, so a
@@ -235,19 +252,37 @@
                       [{} body])]
     `(#'run-scope ~opts (fn [] ~@body))))
 
+(defn- repeated-id
+  "The ex-info refusing @id `id`, declared by `k` or a builder of @type `t`,
+   because `prior` declared it for a different node."
+  [id k t {:keys [as type]}]
+  (ex-info (str "dsl-scope: @id " (pr-str id)
+                " of " (or k t)
+                " is already declared by " (or as type))
+           {:id id
+            :as k
+            :type t
+            :declared-by {:as as :type type}}))
+
 (defn- declare-id!
   "Record that a builder of @type `t` declared @id `id`, by `:as k` when `k`
-   is given; refuse an @id already declared in the scope."
+   is given. Refuse an @id the scope already holds for another @type; one
+   of the same @type is judged by `record-node!` once the node is built."
   [id k t]
-  (when-let [{:keys [as type]} (get-in @*scope* [:declared id])]
-    (throw (ex-info (str "dsl-scope: @id " (pr-str id)
-                         " of " (or k t)
-                         " is already declared by " (or as type))
-                    {:id id
-                     :as k
-                     :type t
-                     :declared-by {:as as :type type}})))
-  (vswap! *scope* assoc-in [:declared id] {:as k :type t}))
+  (if-let [{:keys [type outside] :as prior} (get-in @*scope* [:declared id])]
+    (when (or outside (not= type t))
+      (throw (repeated-id id k t prior)))
+    (vswap! *scope* assoc-in [:declared id] {:as k :type t})))
+
+(defn- record-node!
+  "Record `node`, built for @id `id`, and refuse it when the scope already
+   holds a different node under that @id. Building one node twice, to embed
+   it in two places, yields the same node and is accepted."
+  [id k t node]
+  (let [prior (get-in @*scope* [:nodes id])]
+    (cond
+      (nil? prior)      (vswap! *scope* assoc-in [:nodes id] node)
+      (not= prior node) (throw (repeated-id id k t (get-in @*scope* [:declared id]))))))
 
 (defn- local-id
   "The @id `:as k` gives an entity of @type `t`, declared in the scope."
@@ -300,6 +335,15 @@
       (vector? v)                      (mapv walk v)
       (list-object? v)                 (update v :jsonld/list walk)
       :else                            v)))
+
+(defn literal
+  "A JSON-LD value object: the lexical form `value` typed `datatype`,
+   `{:jsonld/value value :jsonld/type datatype}`.
+
+     (dsl/rdf-list [(dsl/literal \"2009\" \"xsd:gYear\")
+                    (dsl/literal \"2010\" \"xsd:gYear\")])"
+  [value datatype]
+  {:jsonld/value value :jsonld/type datatype})
 
 (defn rdf-list
   "The ordered RDF list of `members`, `{:jsonld/list [...]}`, emitted as a
@@ -456,6 +500,8 @@
            (throw (ex-info (str "DSL builder for " t " was given "
                                 (str/join "; " (map mistyped-message mistyped)))
                            {:type t :mistyped (vec mistyped)})))
+         (when (and *scope* (some? id))
+           (record-node! id (when as? as) t coerced))
          coerced)))))
 
 ;; ---------------------------------------------------------------------------

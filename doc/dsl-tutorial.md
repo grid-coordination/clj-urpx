@@ -205,6 +205,72 @@ The result is a fully-coerced `urpx:RatePlan` ready for `urpx.price/resolve-pric
 
 The version is nested in its plan and also points back with `:for-rate-plan`. URPX v0.5.1 permits the snapshot at the top level instead, linked only by `:for-rate-plan`, with the plan and its snapshot carried together in `dsl/urpx-package`. Both load through `urpx.core/load-rate-plan`.
 
+## Example 5: typed values, a node from another document, and an @graph
+
+A modifier's alternative dimension often lists typed values and points at a metric input its base document defines. `:outside` names that node by keyword, with its `@type`, so the reference is checked against the slot's range like a local one; `dsl/literal` writes each typed value; and `urpx.emit/write-graph` writes the result as an `@graph` document.
+
+```clojure
+(require '[urpx.emit :as emit])
+
+(def vintage
+  (dsl/dsl-scope
+    {:outside {:ex/mi-departure "urpx:MetricInput"}}   ; defined in the base document
+    (dsl/alternative-dimension
+     :as :ex/dim-vintage
+     :dimension-display-name "Departure vintage"
+     :custom-dimension-property "departureVintage"
+     :has-possible-values (dsl/rdf-list [(dsl/literal "2009" "xsd:gYear")
+                                         (dsl/literal "2010" "xsd:gYear")])
+     :references-metric-input [:ex/mi-departure])))
+
+(emit/write-graph [vintage]
+                  {:context {"ex"   "https://example.org/"
+                             "urpx" "https://urpx.org/ns/ontology/"
+                             "xsd"  "http://www.w3.org/2001/XMLSchema#"}
+                   :json {:indent true :escape-slash false}})
+```
+
+writes, with every object's keys in the emitter's one order:
+
+```json
+{
+  "@context": {
+    "ex": "https://example.org/",
+    "urpx": "https://urpx.org/ns/ontology/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#"
+  },
+  "@graph": [
+    {
+      "@id": "ex:dim-vintage",
+      "@type": "urpx:AlternativeDimension",
+      "urpx:customDimensionProperty": "departureVintage",
+      "urpx:dimensionDisplayName": "Departure vintage",
+      "urpx:hasPossibleValues": [
+        {
+          "@list": [
+            {
+              "@type": "xsd:gYear",
+              "@value": "2009"
+            },
+            {
+              "@type": "xsd:gYear",
+              "@value": "2010"
+            }
+          ]
+        }
+      ],
+      "urpx:referencesMetricInput": [
+        {
+          "@id": "ex:mi-departure"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Naming `:ex/mi-departure` in a slot that takes another type refuses when the scope closes, under `:mistyped`.
+
 ## Where to look next
 
 - **`urpx.dsl` ns docstring** — concise reference for `dsl-scope`, `make-builder`, the kwarg-alias rule, and the validation contract.

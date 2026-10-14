@@ -50,9 +50,44 @@ Inside a `dsl-scope`, `:as k` gives an entity the `@id` `(dsl/curie k)`, and a q
 - A reference may come before or after its declaration.
 - When the scope exits, every keyword referenced but not declared in it throws, in one `ex-info` naming each keyword and the builders that used it.
 - Then every keyword whose entity is not of the type its slot takes throws, under `:mistyped`. `:applies-in-season :ex/commodity`, where `:ex/commodity` is a Ledger, refuses because `urpx:appliesInSeason` takes a `urpx:Season`. A subclass passes: a `UtilityOperator` where an `Organization` is taken. A builder refuses an inline node of the wrong type the same way, without a scope.
-- An `@id` declared twice in a scope throws, whether by `:as` or by `:jsonld/id`.
+- An `@id` declared twice in a scope throws, whether by `:as` or by `:jsonld/id`, unless both builds yield the same node.
 - `(dsl/dsl-scope {:id-fn f} …)` names `@id`s with `f`.
-- An entity outside the scope is referenced with a Ref map, `{:jsonld/id "…"}`.
+
+### One node in two places
+
+A node embedded in two places, such as one utility offering both a base version and a modifier, may be built in each. Both builds yield the same node, so the scope accepts the repeated `@id`; two different nodes under one `@id` still throw.
+
+```clojure
+(let [utility #(dsl/organization :as :ex/utility :legal-name "Example Utility"
+                                 :organization-type :urpx/utilityOrganization)]
+  (dsl/dsl-scope [(utility) (utility)]))
+```
+
+### Nodes built elsewhere
+
+A node from another document is named by declaring it with its `@type` under `:outside`. Its keyword then reads as a reference to `(id-fn k)` and is judged against the slot's range like a local one; a builder in the scope may not declare it.
+
+```clojure
+(dsl/dsl-scope
+  {:outside {:pge/ledger-energy "urpx:Ledger"}}
+  (dsl/price-definition :as :ex/pd-adder
+                        :name "Medical baseline adder"
+                        :references-ledger :pge/ledger-energy))   ; → {:jsonld/id "pge:ledger-energy"}
+```
+
+A raw Ref map, `{:jsonld/id "…"}`, still works anywhere and is not judged.
+
+### Typed literals
+
+`(dsl/literal "2009" "xsd:gYear")` writes a JSON-LD value object, `{:jsonld/value "2009" :jsonld/type "xsd:gYear"}`, as `urpx:hasPossibleValues` lists need:
+
+```clojure
+(dsl/rdf-list [(dsl/literal "2009" "xsd:gYear") (dsl/literal "2010" "xsd:gYear")])
+```
+
+### Writing what you built
+
+`urpx.emit/write-entity` writes any built entity; `urpx.emit/write-graph` writes several as one `@graph` document. Keys come out in one order whatever order the maps were built in, and `:json` passes options to `clojure.data.json`, so generated files are stable byte for byte. See [Writing URPX JSON-LD](writing-json-ld.md).
 
 ## Building from arbitrary schemas
 

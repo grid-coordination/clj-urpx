@@ -9,6 +9,22 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Added
+
+- **`urpx.emit/write-graph`** writes several top-level entities as one `@graph` document, with the `@context` on the document.
+- **`urpx.emit/write-entity`** writes any entity whose `@type` `urpx.schema` registers, such as a `SourcePublication` or a `RateCase`.
+- Every `write-*` takes `:json`, options passed to `clojure.data.json/write-str`, e.g. `{:indent true :escape-slash false}`.
+- **`dsl-scope` takes `:outside`, `{keyword @type}`,** naming nodes built elsewhere. Such a keyword reads as a reference and is judged against its slot's range by the `@type` given; a builder in the scope may not declare it.
+- **`urpx.dsl/literal`** writes a typed literal, `{:jsonld/value v :jsonld/type datatype}`.
+
+### Changed
+
+- **The emitter writes every object's keys in one order:** `@context`, `@id`, `@type`, other `@` keywords, then properties, each group in string order. Output no longer depends on the order a map was built in; it differs in key order from earlier releases, with the same graph.
+- **`dsl-scope` accepts an `@id` declared twice when both builds yield the same node,** so a node embedded in two places may be built in each. Two different nodes under one `@id` are still refused.
+- `write-urpx-package` encodes every `urpx:packages` entry whose `@type` `urpx.schema` registers, where it encoded `RatePlan`, `RatePlanModifier` and `ScenarioCostModel` entries only.
+
 ## [0.55.0] — 2026-10-13
 
 ### Removed

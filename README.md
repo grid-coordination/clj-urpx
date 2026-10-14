@@ -140,7 +140,7 @@ Targets the **URPX v0.5.1** release. Release history is in [CHANGELOG.md](CHANGE
 | `urpx.price`         | `resolve-prices`, `resolve-modifier-prices`, `resolve-prices-with-modifiers`, `marginal-unit-rate`, `measurement-kinds`, `has-energy-ledger?`; `version-effective-at`, `version-expired-by?` and `version-covers?` are the single readers of a version window |
 | `urpx.schedule`      | `price-segments` (exact boundaries, derived); `price-schedule`, `price-schedule-days`, `price-schedule-with-modifiers`, `price-schedule-days-with-modifiers` (stepped) |
 | `urpx.tz-inference`  | `infer-zone` (opt-in fallback when `urpx:timezoneIdentifier` is absent) |
-| `urpx.emit`          | Write-side: `write-rate-plan`, `write-rate-plan-modifier`, `write-urpx-package`, `write-scenario-cost-model`, `write-program-enrollment` |
+| `urpx.emit`          | Write-side: `write-rate-plan`, `write-rate-plan-modifier`, `write-urpx-package`, `write-scenario-cost-model`, `write-program-enrollment`; `write-entity` for any registered `@type` and `write-graph` for an `@graph` document |
 | `urpx.validate`      | Single-file CLI checker (`clojure -M:validate <file.jsonld>`), tri-state exit |
 | `urpx.dsl`           | Authoring DSL: `dsl-scope`, `make-builder`, named builders for every entity type |
 | `urpx.defs`          | Typed definitions: `defurpx`, `kind-schema`, `defs-of-kind` |

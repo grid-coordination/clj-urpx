@@ -305,3 +305,49 @@
             back (reread (emit/write-urpx-package pkg {:context nil}))]
         (is (= pkg back))
         (is (nil? (coerce/explain schema/URPXPackage back)))))))
+
+;; ---------------------------------------------------------------------------
+;; Canonical key order, write-entity and write-graph
+;; ---------------------------------------------------------------------------
+
+(deftest key-order-does-not-depend-on-construction
+  (testing "the same entity built in two key orders writes the same bytes,
+            @context, @id and @type first and properties after, in string order"
+    (let [ks  (seq minimal-rate-plan)
+          a   (into {} ks)
+          b   (into {} (reverse ks))
+          out (emit/write-rate-plan a {:context {"urpx" "https://urpx.org/ns/ontology/"}})]
+      (is (= out (emit/write-rate-plan b {:context {"urpx" "https://urpx.org/ns/ontology/"}})))
+      (is (re-find #"^\{\"@context\":\{[^}]*\},\"@id\":\"x:plan\",\"@type\":\"urpx:RatePlan\"," out))))
+  (testing "a flat entity's properties follow in string order"
+    (let [out   (emit/write-entity {:urpx/name "Advice Letter" :jsonld/id "x:al"
+                                    :urpx/filingNumber "7846-E" :jsonld/type "urpx:SourcePublication"
+                                    :urpx/description "D"}
+                                   {:context nil})
+          props (map second (re-seq #"\"(urpx:[A-Za-z]+)\":" out))]
+      (is (= ["urpx:description" "urpx:filingNumber" "urpx:name"] props))
+      (is (re-find #"^\{\"@id\":\"x:al\",\"@type\":" out)))))
+
+(deftest json-options-pass-through
+  (is (re-find #"\n  \"@id\"" (emit/write-rate-plan minimal-rate-plan {:json {:indent true}}))))
+
+(deftest write-entity-covers-every-registered-type
+  (let [pub  {:jsonld/type "urpx:SourcePublication" :jsonld/id "x:al"
+              :urpx/name "Advice Letter" :urpx/effectiveDate (LocalDate/of 2026 3 1)}
+        rc   {:jsonld/type "urpx:RateCase" :jsonld/id "x:rc" :urpx/caseNumber "A.24-01-001"}]
+    (is (= "2026-03-01" (get (json/read-str (emit/write-entity pub)) "urpx:effectiveDate")))
+    (is (= "A.24-01-001" (get (json/read-str (emit/write-entity rc)) "urpx:caseNumber")))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"No schema to emit a \"urpx:PriorRatePlan\""
+                          (emit/write-entity {:jsonld/type "urpx:PriorRatePlan"})))))
+
+(deftest write-graph-round-trips-a-fixture
+  (testing "the top-level nodes of a vendored @graph document write as one
+            @graph and read back to the same coerced nodes"
+    (let [coerce-all (fn [nodes] (mapv #(coerce/coerce (schema/schema-for-type (:jsonld/type %)) %) nodes))
+          nodes      (coerce-all (fixtures/load-graph "pge-e-1-2026-03-01"))
+          out        (emit/write-graph nodes {:context nil})
+          parsed     (json/read-str out)]
+      (is (< 1 (count nodes)) "sanity: the fixture holds several top-level nodes")
+      (is (= ["@graph"] (keys parsed)))
+      (is (= (count nodes) (count (get parsed "@graph"))))
+      (is (= nodes (coerce-all (core/parse-graph (java.io.StringReader. out))))))))

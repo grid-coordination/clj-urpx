@@ -21,7 +21,18 @@ The library also supports the inverse direction: emit URPX JSON-LD from a coerce
   {:jsonld/type "urpx:URPXPackage"
    :urpx/targetURPXVersion "https://github.com/urpx-org/urpx/raw/v0.5.1/ontology/urpx-ontology.ttl"
    :urpx/packages [plan]})
+
+;; Any entity whose @type urpx.schema registers, e.g. a SourcePublication
+(emit/write-entity publication)
+
+;; Several top-level nodes as one @graph document, the @context on the document
+(emit/write-graph [package enrollment publication rate-case])
+
+;; clojure.data.json options pass through under :json
+(emit/write-graph nodes {:json {:indent true :escape-slash false :escape-unicode false}})
 ```
+
+Every object is written with its keys in one order: `@context`, `@id`, `@type`, other `@` keywords, then properties, each group in string order. The bytes depend on the data and not on the order its maps were built in.
 
 Each function takes a coerced (or already-typed EDN) entity, runs the schema's `:encode/urpx-jsonld` transformer to convert typed leaves (`BigDecimal`, `LocalDate`, `LocalDateTime`, `ZonedDateTime`, `Duration`, integer month numbers, …) back to JSON-LD string forms, projects namespaced-keyword keys to their CURIE / `@`-reserved JSON-LD forms, and serializes via `clojure.data.json/write-str`. A typed-literal object such as `{"@value": "2026-05-01T16:00:00Z", "@type": "xsd:dateTime"}` decodes like the plain string and emits as one, typed by `default-context`.
 

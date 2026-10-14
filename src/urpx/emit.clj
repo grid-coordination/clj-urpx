@@ -17,7 +17,12 @@
        Already-string values pass through unchanged.
     2. urpx.core/keys->jsonld walks the result, converting namespaced
        keyword keys back to their CURIE / @-reserved JSON-LD forms.
-    3. clojure.data.json/write-str serializes to JSON.
+    3. Every object's keys are put in one order: @context, @id, @type,
+       other @ keywords, then properties, each group in string order. The
+       bytes written depend on the data and not on the order its maps were
+       built in.
+    4. clojure.data.json/write-str serializes to JSON, with any `:json`
+       options from opts, e.g. {:indent true :escape-slash false}.
 
   Round-trip success bar: logical/RDF-graph equivalence
   (parse → coerce → write → re-parse → re-coerce yields a structurally
@@ -41,6 +46,7 @@
   a parsed document) is preserved untouched — the default never clobbers
   a context the consumer already supplied."
   (:require [clojure.data.json :as json]
+            [clojure.string :as str]
             [urpx.coerce :as coerce]
             [urpx.core :as core]
             [urpx.index :as index]
@@ -174,6 +180,33 @@
     :else
     (assoc json-keyed-map "@context" default-context)))
 
+(defn- key-order
+  "@context, @id and @type first, then other @ keywords, then properties,
+   each group in string order."
+  [k]
+  [(case k
+     "@context" 0
+     "@id" 1
+     "@type" 2
+     (if (str/starts-with? k "@") 3 4))
+   k])
+
+(defn- canonical
+  "`x` with every object's keys in `key-order`."
+  [x]
+  (cond
+    (map? x)        (into (sorted-map-by #(compare (key-order %1) (key-order %2)))
+                          (map (fn [[k v]] [k (canonical v)]))
+                          x)
+    (sequential? x) (mapv canonical x)
+    :else           x))
+
+(defn- write-json
+  "`data` as a JSON string, keys in `key-order`, with opts' `:json` options
+   passed to clojure.data.json/write-str."
+  [data opts]
+  (apply json/write-str (canonical data) (mapcat identity (:json opts))))
+
 (defn- emit-via-schema
   "Encode `entity` via `schema`, project keys back to JSON-LD form, attach
    @context per `opts`, and serialize to a JSON-LD string. Internal helper
@@ -182,7 +215,7 @@
   (-> (coerce/encode schema entity)
       core/keys->jsonld
       (attach-context opts)
-      json/write-str))
+      (write-json opts)))
 
 (defn write-rate-plan
   "Serialize a coerced urpx:RatePlan to a JSON-LD string. Inverse of the
@@ -225,19 +258,12 @@
   ([enrollment opts]
    (emit-via-schema schema/ProgramEnrollment enrollment opts)))
 
-(def ^:private payload-schemas
-  "@type → schema for the payload entities a wrapper can embed under the
-   heterogeneous urpx:packages pointer. Entries of any other type (or bare
-   @id refs, which carry no @type) are passed through unencoded."
-  {"urpx:RatePlan"          schema/RatePlan
-   "urpx:RatePlanModifier"  schema/RatePlanModifier
-   "urpx:ScenarioCostModel" schema/ScenarioCostModel})
-
 (defn- pre-encode-payloads
   "A wrapper's payload-pointer schemas are deliberately loose ([:vector :map])
-   — wrapper-level validation only, per the URPXPackage schema design. That means malli's wrapper encoder won't recurse into inner entities
-   to convert their typed leaves (BigDecimal, LocalDate, …) back to JSON-LD
-   strings. Pre-encode each embedded RatePlan / RatePlanModifier through its
+   — wrapper-level validation only, per the URPXPackage schema design. That
+   means malli's wrapper encoder won't recurse into inner entities to convert
+   their typed leaves (BigDecimal, LocalDate, …) back to JSON-LD strings.
+   Pre-encode each embedded RatePlan / RatePlanModifier through its
    own schema before handing the wrapper to the encoder. Refs
    (:jsonld/id-only maps) survive intact — encoding skips fields the entity
    doesn't carry."
@@ -261,7 +287,7 @@
     (:urpx/packages document)
     (update :urpx/packages
             (fn [vs] (mapv (fn [v]
-                             (if-let [sch (payload-schemas (:jsonld/type v))]
+                             (if-let [sch (schema/schema-for-type (:jsonld/type v))]
                                (coerce/encode sch v)
                                v))
                            (index/as-vec vs))))))
@@ -270,10 +296,43 @@
   "Serialize a coerced urpx:URPXPackage wrapper to a JSON-LD string. Inverse of
    urpx.coerce/coerce-urpx-package. Embedded urpx:hasRatePlan /
    urpx:hasRatePlanModifier payloads are pre-encoded through their own schemas,
-   as are urpx:packages entries typed urpx:RatePlan, urpx:RatePlanModifier or
-   urpx:ScenarioCostModel; other urpx:packages entries are emitted as-is.
+   as is each urpx:packages entry whose @type `urpx.schema` registers; other
+   entries, such as bare @id references, are emitted as-is.
 
    See `write-rate-plan` for `opts`."
   ([package] (write-urpx-package package nil))
   ([package opts]
    (emit-via-schema schema/URPXPackage (pre-encode-payloads package) opts)))
+
+(defn- encode-entity
+  "`entity` encoded through the schema `urpx.schema` registers for its @type,
+   with JSON-LD keys. Refuses an entity whose @type has no schema."
+  [entity]
+  (let [t   (:jsonld/type entity)
+        sch (schema/schema-for-type t)]
+    (when-not sch
+      (throw (ex-info (str "No schema to emit a " (pr-str t))
+                      {:type t :id (:jsonld/id entity)})))
+    (core/keys->jsonld
+     (coerce/encode sch (cond-> entity
+                          (= "urpx:URPXPackage" t) pre-encode-payloads)))))
+
+(defn write-entity
+  "Serialize any coerced entity whose @type `urpx.schema` registers to a
+   JSON-LD string, encoded through that type's schema. A urpx:URPXPackage has
+   its payloads encoded as `write-urpx-package` does. Refuses an @type with no
+   schema.
+
+   See `write-rate-plan` for `opts`."
+  ([entity] (write-entity entity nil))
+  ([entity opts]
+   (write-json (attach-context (encode-entity entity) opts) opts)))
+
+(defn write-graph
+  "Serialize several coerced top-level entities as one JSON-LD document,
+   `{\"@context\" … \"@graph\" [ … ]}`, each encoded as `write-entity`
+   encodes it. The @context is placed on the document, per `opts` as in
+   `write-rate-plan`; an entity's own @context is kept on its node."
+  ([entities] (write-graph entities nil))
+  ([entities opts]
+   (write-json (attach-context {"@graph" (mapv encode-entity entities)} opts) opts)))
