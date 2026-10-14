@@ -9,6 +9,16 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Added
+
+- **`ServicePointProfile`, `DistributedEnergyResource`, `AccountServiceAgreement`, `PriorRatePlan`, `BillingCycle` and `ScenarioCostResult`** become entity schemas with builders. `CustomerProfile` models the rest of its shape's properties, `urpx:hasPriorRatePlan` among them; `Ledger` models `urpx:hasBillingCycle`; `Scenario.hasServicePointProfile` and `ScenarioCostModel.producesResult` take their node inline as well as by reference.
+
+### Fixed
+
+- **`urpx.emit/default-context` types `urpx:gYearValue` as `xsd:gYear`.** It did not, so a gYear the emitter wrote under the default context lost its datatype.
+
 ## [0.57.0] — 2026-10-13
 
 ### Added

@@ -60,8 +60,8 @@
             silently dropped"
     (let [{:keys [skipped]} (validate/check-file
                              (tmp-doc (str "{" ctx ",\"@id\":\"x:prior\","
-                                           "\"@type\":\"urpx:PriorRatePlan\"}")))]
-      (is (= ["urpx:PriorRatePlan"] skipped)))))
+                                           "\"@type\":\"urpx:NoSuchThing\"}")))]
+      (is (= ["urpx:NoSuchThing"] skipped)))))
 
 (deftest a-program-enrollment-without-a-name-fails
   (let [{:keys [checked]} (validate/check-file

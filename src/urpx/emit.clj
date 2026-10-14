@@ -13,7 +13,7 @@
     1. urpx.coerce/encode runs the schema's :encode/urpx-jsonld transformer
        — turns BigDecimal / java.time values / Duration / int-month back
        into the JSON-LD string forms (xsd:decimal, xsd:date, xsd:dateTime,
-       xsd:time, xsd:duration, xsd:gMonth).
+       xsd:time, xsd:duration, xsd:gMonth, xsd:gYear).
        Already-string values pass through unchanged.
     2. urpx.core/keys->jsonld walks the result, converting namespaced
        keyword keys back to their CURIE / @-reserved JSON-LD forms.
@@ -125,6 +125,8 @@
    "urpx:evaluatedOn"         {"@type" "xsd:dateTime"}
    "urpx:identityValidFrom"   {"@type" "xsd:dateTime"}
    "urpx:identityValidTo"     {"@type" "xsd:dateTime"}
+   "urpx:contractEffectiveDate"  {"@type" "xsd:dateTime"}
+   "urpx:contractExpirationDate" {"@type" "xsd:dateTime"}
 
    ;; xsd:time
    "urpx:startTime"  {"@type" "xsd:time"}
@@ -140,6 +142,9 @@
    ;; xsd:gMonth
    "urpx:month"       {"@type" "xsd:gMonth"}
    "urpx:gMonthValue" {"@type" "xsd:gMonth"}
+
+   ;; xsd:gYear
+   "urpx:gYearValue" {"@type" "xsd:gYear"}
 
    ;; xsd:integer
    "urpx:touTierNumber"     {"@type" "xsd:integer"}

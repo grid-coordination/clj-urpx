@@ -118,25 +118,23 @@
   "The properties whose bare @id reference `parse-graph` replaces with the node
    of that @id stated in the same document."
   #{:urpx/hasAlternativeDimension :urpx/hasAlternativeDimensions
-    :urpx/hasApplicabilityGroup :urpx/hasApplicabilityRule :urpx/hasBillingModel
-    :urpx/hasCalculationMethod :urpx/hasConditionExpression :urpx/hasCoverageClaim
-    :urpx/hasCustomerProfile :urpx/hasDataSourceReference :urpx/hasDynamicPricing
-    :urpx/hasEligibilityRule
+    :urpx/hasApplicabilityGroup :urpx/hasApplicabilityRule :urpx/hasBillingCycle
+    :urpx/hasBillingModel :urpx/hasCalculationMethod :urpx/hasConditionExpression
+    :urpx/hasCoverageClaim :urpx/hasCustomerProfile :urpx/hasDataSourceReference
+    :urpx/hasDistributedEnergyResource :urpx/hasDynamicPricing :urpx/hasEligibilityRule
     :urpx/hasGeneralRule :urpx/hasHoliday :urpx/hasHolidayCalendar :urpx/hasIdentifier
     :urpx/hasIdentity :urpx/hasLedger :urpx/hasLocationDataSet :urpx/hasMetricInput
-    :urpx/hasMetricSpecification
-    :urpx/hasModelExclusion :urpx/hasName :urpx/hasPlanElements :urpx/hasPossibleValues
-    :urpx/hasPrice :urpx/hasPriceDefinition :urpx/hasPriceDefinitionReference :urpx/hasPriceSet
+    :urpx/hasMetricSpecification :urpx/hasModelExclusion :urpx/hasName
+    :urpx/hasPlanElements :urpx/hasPossibleValues :urpx/hasPrice
+    :urpx/hasPriceDefinition :urpx/hasPriceDefinitionReference :urpx/hasPriceSet
     :urpx/hasPriceSetAlternative :urpx/hasPriceSetAlternatives :urpx/hasPriceSummary
-    :urpx/hasPriceUpdateRule
-    :urpx/hasPrices :urpx/hasProfileAlternative :urpx/hasProfileAlternatives
-    :urpx/hasProgramEnrollment :urpx/hasRatePlan :urpx/hasRatePlanModifier
-    :urpx/hasRateGroup :urpx/hasRatePlanModifierVersion :urpx/hasRatePlanVersion :urpx/hasSeasons
-    :urpx/hasServiceClass
-    :urpx/hasServiceBracket
+    :urpx/hasPriceUpdateRule :urpx/hasPrices :urpx/hasPriorRatePlan
+    :urpx/hasProfileAlternative :urpx/hasProfileAlternatives :urpx/hasProgramEnrollment
+    :urpx/hasRateGroup :urpx/hasRatePlan :urpx/hasRatePlanModifier
+    :urpx/hasRatePlanModifierVersion :urpx/hasRatePlanVersion :urpx/hasSeasons
+    :urpx/hasServiceBracket :urpx/hasServiceClass :urpx/hasServicePointProfile
     :urpx/hasServiceTier :urpx/hasServiceTiers :urpx/hasTOUPeriod :urpx/hasTOUSchedule
-    :urpx/hasTOUTier
-    :urpx/hasTemporalPeriod :urpx/hasTemporalScope :urpx/hasTimeBracket
+    :urpx/hasTOUTier :urpx/hasTemporalPeriod :urpx/hasTemporalScope :urpx/hasTimeBracket
     :urpx/rootNode :urpx/leftOperand :urpx/rightOperand :urpx/operandNodes
     :urpx/explainedBy :urpx/packages})
 

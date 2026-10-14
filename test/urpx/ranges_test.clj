@@ -312,3 +312,36 @@
                   {:jsonld/type "urpx:LocationDataSet"
                    :urpx/timezoneIdentifier "America/Los_Angeles"
                    :urpx/hasHolidayCalendar [{:jsonld/id "ex:cal"}]})))))
+
+(deftest customers-and-service-points
+  (let [valid? #(m/validate %1 %2 {:registry schema/registry})
+        der    {:jsonld/type "urpx:DistributedEnergyResource"
+                :urpx/derType {:jsonld/id "urpx:solarPV"}
+                :urpx/interconnectionStatus {:jsonld/id "urpx:interconnected"}
+                :urpx/solarCapacity 7.2M}]
+    (testing "a service point holds its resources inline or by reference"
+      (is (valid? :urpx/Scenario
+                  {:jsonld/type "urpx:Scenario"
+                   :urpx/hasServicePointProfile
+                   {:jsonld/type "urpx:ServicePointProfile"
+                    :urpx/meterCount 1
+                    :urpx/hasDistributedEnergyResource [der {:jsonld/id "ex:battery"}]}})))
+    (testing "a resource requires its type and interconnection status"
+      (is (not (valid? :urpx/DistributedEnergyResource (dissoc der :urpx/derType))))
+      (is (not (valid? :urpx/DistributedEnergyResource (dissoc der :urpx/interconnectionStatus)))))
+    (testing "a customer profile carries its prior rate plans"
+      (is (valid? :urpx/CustomerProfile
+                  {:jsonld/type "urpx:CustomerProfile"
+                   :urpx/hasPriorRatePlan [{:jsonld/type "urpx:PriorRatePlan"
+                                            :urpx/referencesRatePlan {:jsonld/id "ex:e-1"}}]
+                   :urpx/householdSize [3]
+                   :urpx/isCCACustomer [true]})))
+    (testing "a ledger's billing cycle holds its interval vocabularies"
+      (let [ledger #(hash-map :jsonld/type "urpx:Ledger" :urpx/name "Commodity"
+                              :urpx/hasBillingCycle {:jsonld/type "urpx:BillingCycle"
+                                                     :urpx/intervalType {:jsonld/id %}})]
+        (is (valid? :urpx/Ledger (ledger "urpx:monthlyInterval")))
+        (is (not (valid? :urpx/Ledger (ledger "urpx:fortnightly"))))))
+    (testing "an account service agreement requires its effective date"
+      (is (not (valid? :urpx/AccountServiceAgreement
+                       {:jsonld/type "urpx:AccountServiceAgreement"}))))))

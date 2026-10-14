@@ -142,12 +142,14 @@
       (is (= #{(get emit/default-context "urpx")} iris)))))
 
 (defn- temporal-keys
-  "Every map key under `root` whose value schema is schema/Date, DateTime or
-   Time, to the xsd datatype it encodes as."
+  "Every map key under `root` whose value schema is schema/Date, DateTime,
+   Time, MonthNumber or GYear, to the xsd datatype it encodes as."
   [root]
   (let [xsd {(m/form schema/Date)     "xsd:date"
              (m/form schema/DateTime) "xsd:dateTime"
-             (m/form schema/Time)     "xsd:time"}
+             (m/form schema/Time)     "xsd:time"
+             (m/form schema/MonthNumber) "xsd:gMonth"
+             (m/form schema/GYear)    "xsd:gYear"}
         acc (volatile! {})]
     (m/walk root
             (fn [s _ _ _]
@@ -166,6 +168,7 @@
                         (vals (ns-publics 'urpx.schema)))
           ks      (apply merge (map temporal-keys schemas))]
       (is (contains? ks :urpx/evaluatedOn))
+      (is (contains? ks :urpx/gYearValue))
       (doseq [[k t] ks]
         (is (= {"@type" t} (get emit/default-context (core/keyword->jsonld-key k)))
             (str k))))))
@@ -337,8 +340,8 @@
         rc   {:jsonld/type "urpx:RateCase" :jsonld/id "x:rc" :urpx/caseNumber "A.24-01-001"}]
     (is (= "2026-03-01" (get (json/read-str (emit/write-entity pub)) "urpx:effectiveDate")))
     (is (= "A.24-01-001" (get (json/read-str (emit/write-entity rc)) "urpx:caseNumber")))
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"No schema to emit a \"urpx:PriorRatePlan\""
-                          (emit/write-entity {:jsonld/type "urpx:PriorRatePlan"})))))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"No schema to emit a \"urpx:NoSuchThing\""
+                          (emit/write-entity {:jsonld/type "urpx:NoSuchThing"})))))
 
 (deftest write-graph-round-trips-a-fixture
   (testing "the top-level nodes of a vendored @graph document write as one

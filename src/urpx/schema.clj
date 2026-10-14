@@ -913,6 +913,23 @@
    [:urpx/intervalAlignment {:optional true} IntervalAlignment]
    [:urpx/intervalSelection {:optional true} IntervalSelection]])
 
+(def BillingCycle
+  "The billing period a ledger settles over."
+  [:map
+   [:jsonld/type [:= "urpx:BillingCycle"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/cycleStartDay       {:optional true} Int]
+   [:urpx/intervalDuration    {:optional true} IsoDuration]
+   [:urpx/intervalType        {:optional true} IntervalType]
+   [:urpx/intervalAlignment   {:optional true} IntervalAlignment]
+   [:urpx/intervalSelection   {:optional true} IntervalSelection]
+   [:urpx/startDate           {:optional true} Date]
+   [:urpx/startDateTime       {:optional true} DateTime]
+   [:urpx/endDate             {:optional true} Date]
+   [:urpx/endDateTime         {:optional true} DateTime]
+   [:urpx/expectedEndDate     {:optional true} Date]
+   [:urpx/expectedEndDateTime {:optional true} DateTime]])
+
 (def Ledger
   "v0.2.0: Ledger no longer carries hasPriceDefinition. PriceDefinitions
    live at BillingModel.hasPriceDefinition with PriceDefinition.referencesLedger
@@ -928,6 +945,8 @@
    [:urpx/referencesMetricInput
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:MetricInput"}
     [:vector Ref]]
+   [:urpx/hasBillingCycle {:optional true ::range "urpx:BillingCycle"}
+    [:or BillingCycle ExclusiveRef]]
    [:urpx/settlementInterval {:optional true} IsoDuration]])
 
 ;; ---------------------------------------------------------------------------
@@ -1467,6 +1486,19 @@
 ;; Eligibility (v0.2.0 — closed shape, ConditionExpression-driven)
 ;; ---------------------------------------------------------------------------
 
+(def PriorRatePlan
+  "A rate plan a customer was enrolled on before, for eligibility rules that
+   depend on enrollment history."
+  [:map
+   [:jsonld/type [:= "urpx:PriorRatePlan"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/referencesRatePlan  {:optional true ::range "urpx:RatePlan"} Ref]
+   [:urpx/serviceRole         {:optional true} Ref]
+   [:urpx/enrollmentStatus    {:optional true} EnrollmentStatus]
+   [:urpx/enrollmentStartDate {:optional true} Date]
+   [:urpx/enrollmentEndDate   {:optional true} Date]
+   [:urpx/minimumTenure       {:optional true} IsoDuration]])
+
 (def CustomerProfile
   "v0.2.0: greatly expanded; we list the few properties we consume plus
    hasCustomerKind which is the canonical test-case dispatch in the fixtures."
@@ -1487,7 +1519,78 @@
     [:vector Ref]]
    [:urpx/hasProgramEnrollment
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ProgramEnrollment"}
-    [:vector [:or ProgramEnrollment ExclusiveRef]]]])
+    [:vector [:or ProgramEnrollment ExclusiveRef]]]
+   [:urpx/hasPriorRatePlan
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PriorRatePlan"}
+    [:vector [:or PriorRatePlan ExclusiveRef]]]
+   [:urpx/annualIncomeRange          {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Ref]]
+   [:urpx/assistanceEligibilityLevel {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Ref]]
+   [:urpx/specialNeedsStatus         {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Ref]]
+   [:urpx/taxExemptStatus            {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Ref]]
+   [:urpx/billingCycleCode           {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector :string]]
+   [:urpx/creditRating               {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector :string]]
+   [:urpx/householdCount             {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Int]]
+   [:urpx/householdSize              {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Int]]
+   [:urpx/isCCACustomer              {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector :boolean]]
+   [:urpx/isCommunitySolarCustomer   {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector :boolean]]
+   [:urpx/occupancyCount {:optional true} Int]])
+
+(def DistributedEnergyResource
+  "Generation, storage or charging equipment at a service point."
+  [:map
+   [:jsonld/type [:= "urpx:DistributedEnergyResource"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/derType               Ref]
+   [:urpx/interconnectionStatus Ref]
+   [:urpx/connectorType         {:optional true} Ref]
+   [:urpx/inverterType          {:optional true} Ref]
+   [:urpx/panelOrientation      {:optional true} Ref]
+   [:urpx/powerRating           {:optional true} Decimal]
+   [:urpx/solarCapacity         {:optional true} Decimal]
+   [:urpx/windCapacity          {:optional true} Decimal]
+   [:urpx/storageCapacity       {:optional true} Decimal]
+   [:urpx/roundTripEfficiency   {:optional true} Decimal]
+   [:urpx/evChargingCapacity    {:optional true} Decimal]
+   [:urpx/smartChargingEnabled  {:optional true} :boolean]])
+
+(def ServicePointProfile
+  "The physical and locational attributes of a service point that eligibility
+   and pricing can depend on."
+  [:map
+   [:jsonld/type [:= "urpx:ServicePointProfile"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/billedDemand          {:optional true} Decimal]
+   [:urpx/buildingSquareFootage {:optional true} Decimal]
+   [:urpx/nominalVoltage        {:optional true} Decimal]
+   [:urpx/ratedPowerCapacity    {:optional true} Decimal]
+   [:urpx/meterCount            {:optional true} Int]
+   [:urpx/serviceClassPattern   {:optional true} :string]
+   [:urpx/connectionKind        {:optional true} Ref]
+   [:urpx/endUse                {:optional true} Ref]
+   [:urpx/geographicScope       {:optional true} Ref]
+   [:urpx/hasMeteringConfiguration {:optional true} Ref]
+   [:urpx/loadProfile           {:optional true} Ref]
+   [:urpx/phaseCodeKind         {:optional true} Ref]
+   [:urpx/premiseType           {:optional true} Ref]
+   [:urpx/seasonalPattern       {:optional true} Ref]
+   [:urpx/voltageLevel          {:optional true} Ref]
+   [:urpx/geographicZone        {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Ref]]
+   [:urpx/hasHVAC               {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Ref]]
+   [:urpx/hasCounty             {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:County"} [:vector Ref]]
+   [:urpx/hasMunicipality       {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:Municipality"} [:vector Ref]]
+   [:urpx/hasState              {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:State"} [:vector Ref]]
+   [:urpx/hasServiceTerritory   {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ServiceTerritory"} [:vector Ref]]
+   [:urpx/hasDistributedEnergyResource
+    {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DistributedEnergyResource"}
+    [:vector [:or DistributedEnergyResource ExclusiveRef]]]])
+
+(def AccountServiceAgreement
+  "The contract under which an account takes service."
+  [:map
+   [:jsonld/type [:= "urpx:AccountServiceAgreement"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/contractEffectiveDate DateTime]
+   [:urpx/contractExpirationDate {:optional true} DateTime]])
 
 (def Scenario
   "v0.2.0: NEW. EligibilityRule.hasCustomerProfile moved here. SHACL's sh:or
@@ -1497,7 +1600,8 @@
    [:jsonld/type [:= "urpx:Scenario"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/hasCustomerProfile {:optional true ::range "urpx:CustomerProfile"} CustomerProfile]
-   [:urpx/hasServicePointProfile {:optional true ::range "urpx:ServicePointProfile"} Ref]])
+   [:urpx/hasServicePointProfile {:optional true ::range "urpx:ServicePointProfile"}
+    [:or ServicePointProfile ExclusiveRef]]])
 
 (def EligibilityRule
   "v0.2.0: closed shape. hasCustomerProfile is gone (moved to Scenario).
@@ -2455,13 +2559,21 @@
   [value-schema]
   [:or value-schema [:vector {:max 1} value-schema]])
 
+(def ScenarioCostResult
+  "The cost a scenario cost model produces."
+  [:map
+   [:jsonld/type [:= "urpx:ScenarioCostResult"]]
+   [:jsonld/id {:optional true} :string]
+   [:urpx/name {:optional true} :string]
+   [:urpx/hasCoverageClaim {:optional true ::range "urpx:CoverageClaim"}
+    [:or CoverageClaim ExclusiveRef]]])
+
 (def ScenarioCostModel
   "urpx-shacl:ScenarioCostModelShape as amended by urpx-org/urpx#72: sh:closed,
    with urpx:hasTemporalScope admitted through sh:ignoredProperties.
 
    :jsonld/context is admitted so a model published as a document of its own
-   validates. urpx:ScenarioCostResult is not modeled, so producesResult stays a
-   loose map."
+   validates."
   [:map {:closed true}
    [:jsonld/type [:= "urpx:ScenarioCostModel"]]
    [:jsonld/id {:optional true} :string]
@@ -2481,7 +2593,8 @@
    [:urpx/selectsProfileAlternative
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector [:or ProfileAlternative ExclusiveRef]]]
-   [:urpx/producesResult {:optional true ::range "urpx:ScenarioCostResult"} (at-most-one :map)]
+   [:urpx/producesResult {:optional true ::range "urpx:ScenarioCostResult"}
+    (at-most-one [:or ScenarioCostResult ExclusiveRef])]
    [:urpx/hasTemporalScope
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
     [:vector [:or TemporalScope ExclusiveRef]]]])

@@ -19,6 +19,7 @@ Covered:
 - **Enum membership is enforced** on the reframe vocabularies (`completenessResult`, `referenceInclusion`, `confidence`, `evaluationKind`, `exclusionReason`, `publicationType`), transcribed from the shipped `sh:in` lists.
 - **The publication split**: `urpx:SourcePublication` and `urpx:TariffFiling`
 - **Typed identity**: `RatePlanIdentifier`, `RatePlanModifierIdentifier` and `OrganizationIdentifier` on plans, modifiers and their snapshots, each requiring `skos:notation` and `urpx:scheme`. `urpx:IdentifierScheme` is an open class upstream, so an implementer's own scheme IRI is accepted
+- **Customers and service points**: `CustomerProfile` with its prior rate plans, `ServicePointProfile` with its `DistributedEnergyResource`s, `AccountServiceAgreement`, `BillingCycle` on a `Ledger`, and `ScenarioCostResult`
 - **Organizations**: `Organization` and its subclasses `UtilityOperator`, `EnergyServiceProvider`, `RegulatoryAuthority` and `SystemOperator`, with `OrganizationEvent`, `OrganizationTransition` and `LocationDataSet`, each naming itself through `urpx:hasIdentity` → `OrganizationIdentity` → `OrganizationName` and `OrganizationIdentifier`, and `urpx:offeredBy` on both version snapshots
 - **`DataSourceReference` flattening**: v0.5.1 deleted `urpx:TariffBookReference` and `urpx:TariffStatementReference` and hoisted their fields inline
 - `Price.hasApplicabilityRule` and `PriceSetAlternative.hasApplicabilityRule` take either an inline `urpx:ApplicabilityRule` or a bare `@id` reference to one defined elsewhere in the document, since RDF merges a reference with its definition. The reference arm is closed to `@id` alone, so a malformed inline node cannot pass as a reference
@@ -45,4 +46,4 @@ Known gaps:
 - `urpx:referencesServiceBracket` on `Price`, `PriceDefinition`, `PriceSet` and `PriceSetAlternative` is modeled and round-trips, but is read by no resolver: a Price naming one bracket directly while tier selection picks a different one will disagree, with nothing in the result to say so
 - A container-level `urpx:referencesMetricInput` does not narrow a tier-number clash: two `urpx:ServiceTiers` declaring one `urpx:serviceTierNumber` with different bounds refuse even when each is scoped to a different metric
 - Programmatic interpretation of `urpx:ConditionExpression` for active-tier selection in matrix-style modifiers: the caller picks the active value by `price-id` after walking the condition tree itself
-- `urpx:ServicePointProfile` appears as a reference but is not modeled, and round-trips as an opaque map
+- `County`, `Municipality`, `State` and `ServiceTerritory` are named by reference and not modeled
