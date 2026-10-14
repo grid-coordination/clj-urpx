@@ -344,7 +344,7 @@
   {:jsonld/type "urpx:ConditionExpression"
    :urpx/rootNode
    {:jsonld/type "urpx:ComparisonNode"
-    :urpx/operator {:jsonld/id "urpx:eq"}
+    :urpx/operator {:jsonld/id "urpx:equalsOperator"}
     :urpx/leftOperand  {:jsonld/type "urpx:CustomOperandNode"
                         :urpx/customConditionProperty "incomeTier"}
     :urpx/rightOperand {:jsonld/type "urpx:CustomOperandNode"
@@ -732,7 +732,7 @@
                              :urpx/publishedBy {:jsonld/type "urpx:Organization"
                                                 :urpx/legalName "PG&E"
                                                 :urpx/organizationType
-                                                {:jsonld/id "urpx:investorOwnedUtility"}})))
+                                                {:jsonld/id "urpx:utilityOrganization"}})))
       (is (not (m/validate s/SourcePublication
                            (assoc base :jsonld/type "urpx:SourcePublication"
                                   :urpx/publishedBy {:jsonld/id "org:pge"

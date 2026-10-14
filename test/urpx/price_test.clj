@@ -975,7 +975,7 @@
 (def ^:private trivial-condition-expression
   {:jsonld/type "urpx:ConditionExpression"
    :urpx/rootNode {:jsonld/type "urpx:ComparisonNode"
-                   :urpx/operator {:jsonld/id "urpx:eq"}
+                   :urpx/operator {:jsonld/id "urpx:equalsOperator"}
                    :urpx/leftOperand  {:jsonld/type "urpx:CustomOperandNode"
                                        :urpx/customConditionProperty "incomeTier"}
                    :urpx/rightOperand {:jsonld/type "urpx:CustomOperandNode"

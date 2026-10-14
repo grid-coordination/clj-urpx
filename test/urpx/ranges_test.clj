@@ -154,7 +154,7 @@
                                            :references-ledger :ex/commodity))))))
     (is (some? (dsl/dsl-scope
                 (dsl/utility-operator :as :ex/utility
-                                      :organization-type :urpx/utility)
+                                      :organization-type :urpx/utilityOrganization)
                 (dsl/tariff-filing :contains-pricing-model []
                                    :published-by :ex/utility))))))
 
@@ -289,8 +289,8 @@
     (testing "every kind of organization is accepted inline where an Organization is"
       (doseq [o [(org "urpx:Organization")
                  (org "urpx:UtilityOperator")
-                 (org "urpx:EnergyServiceProvider" :urpx/serviceRole {:jsonld/id "urpx:supplyServiceRole"})
-                 (org "urpx:RegulatoryAuthority" :urpx/regulatoryScope {:jsonld/id "urpx:stateScope"})
+                 (org "urpx:EnergyServiceProvider" :urpx/serviceRole {:jsonld/id "urpx:retailSupplyRole"})
+                 (org "urpx:RegulatoryAuthority" :urpx/regulatoryScope {:jsonld/id "urpx:ratesRegulation"})
                  (org "urpx:SystemOperator")
                  {:jsonld/id "ex:org"}]]
         (is (valid? :urpx/TariffFiling {:jsonld/type "urpx:TariffFiling"
@@ -316,8 +316,8 @@
 (deftest customers-and-service-points
   (let [valid? #(m/validate %1 %2 {:registry schema/registry})
         der    {:jsonld/type "urpx:DistributedEnergyResource"
-                :urpx/derType {:jsonld/id "urpx:solarPV"}
-                :urpx/interconnectionStatus {:jsonld/id "urpx:interconnected"}
+                :urpx/derType {:jsonld/id "urpx:solarDER"}
+                :urpx/interconnectionStatus {:jsonld/id "urpx:interconnectedStatus"}
                 :urpx/solarCapacity 7.2M}]
     (testing "a service point holds its resources inline or by reference"
       (is (valid? :urpx/Scenario
@@ -368,3 +368,15 @@
       (is (= "urpx:OperationNode"
              (:jsonld/type (dsl/operation-node :operator :urpx/addOperator
                                                :left-operand (lit 1M) :right-operand (lit 2M))))))))
+
+(deftest vocabularies-are-enforced
+  (let [valid? #(m/validate %1 %2 {:registry schema/registry})
+        ledger #(hash-map :jsonld/type "urpx:Ledger" :urpx/name "Commodity"
+                          :urpx/ledgerType {:jsonld/id %})]
+    (is (valid? :urpx/Ledger (ledger "urpx:supplyLedger")))
+    (is (not (valid? :urpx/Ledger (ledger "urpx:bogusLedger"))))
+    (testing "a list-valued slot holds each element to the vocabulary"
+      (is (valid? :urpx/CustomerProfile {:jsonld/type "urpx:CustomerProfile"
+                                         :urpx/hasCustomerKind [{:jsonld/id "urpx:residentialKind"}]}))
+      (is (not (valid? :urpx/CustomerProfile {:jsonld/type "urpx:CustomerProfile"
+                                              :urpx/hasCustomerKind [{:jsonld/id "urpx:residential"}]}))))))

@@ -9,6 +9,13 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Changed
+
+- **Every vocabulary the v0.5.1 shapes state with `sh:in` is enforced.** 49 new schemas, one per value class (`OrganizationType`, `Commodity`, `ChargeType`, `UnitOfMeasure`, `Operator` and the rest), each built with `enum-ref`, hold their slots to the listed members, where 81 slots took any reference. A value outside its list fails validation. None of the 21,634 vocabulary values in urpx-rate-plans, the 726 in upstream's v0.5.1 examples or the 1,735 in the vendored fixtures is outside its list.
+- The drift audit sees a vocabulary held inside a vector, so list-valued slots are compared against the shipped `sh:in` like single ones.
+
 ## [0.59.0] — 2026-10-13
 
 ### Added

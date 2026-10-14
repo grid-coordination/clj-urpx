@@ -32,17 +32,20 @@
     (catch Exception _ nil)))
 
 (defn- enum-members
-  "If `child` is the enum-ref shape [:map [:jsonld/id [:enum ...]]], return the
-   members. Looks exactly two levels down and no further."
+  "If `child` is the enum-ref shape [:map [:jsonld/id [:enum ...]]], or a
+   :vector of it, return the members. Looks exactly two levels down from the
+   enum-ref and no further."
   [child]
   (try
-    (when (= :map (m/type child))
-      (some (fn [[k v]]
-              (when (= :jsonld/id k)
-                (let [inner (unwrap v)]
-                  (when (= :enum (m/type inner))
-                    (vec (m/children inner))))))
-            (m/entries child)))
+    (case (m/type child)
+      :vector (enum-members (first (m/children child)))
+      :map    (some (fn [[k v]]
+                      (when (= :jsonld/id k)
+                        (let [inner (unwrap v)]
+                          (when (= :enum (m/type inner))
+                            (vec (m/children inner))))))
+                    (m/entries child))
+      nil)
     (catch Exception _ nil)))
 
 (defn- vector-valued?

@@ -784,6 +784,285 @@
   (enum-ref "activeStatus" "expiredStatus" "inactiveStatus" "pendingStatus"
             "suspendedStatus" "terminatedStatus"))
 
+(def Accumulation
+  "urpx:AccumulationValue, 4 members."
+  (enum-ref "bulk" "delta" "instantaneous" "summation"))
+
+(def AnnualIncomeRange
+  "urpx:AnnualIncomeRangeValue, 5 members."
+  (enum-ref "highIncome" "lowIncome" "middleIncome" "moderateIncome" "veryLowIncome"))
+
+(def AssistanceEligibilityLevel
+  "urpx:AssistanceEligibilityLevelValue, 4 members."
+  (enum-ref "notQualifiedAssistance" "provisionallyQualifiedAssistance"
+            "qualifiedAssistance" "underReviewAssistance"))
+
+(def BillPortion
+  "urpx:BillPortionValue, 3 members."
+  (enum-ref "bundledPortion" "deliveryPortion" "supplyPortion"))
+
+(def BooleanOperator
+  "urpx:BooleanOperatorValue, 3 members."
+  (enum-ref "andOperator" "notOperator" "orOperator"))
+
+(def ChangeReason
+  "urpx:ChangeReasonValue, 8 members."
+  (enum-ref "changeReasonOther" "correction" "fuelAdjustment" "initial" "rateCase"
+            "regulatoryOrder" "riderUpdate" "seasonalChange"))
+
+(def ChargeCategory
+  "urpx:ChargeCategoryValue, 8 members."
+  (enum-ref "adjustment" "auxiliaryCharge" "discount" "environmental"
+            "infrastructure" "regulatory" "serviceCharge" "taxes"))
+
+(def ChargeType
+  "urpx:ChargeTypeValue, 68 members."
+  (enum-ref "adjustmentPowerCost" "adjustmentRenewable" "adjustmentTariff"
+            "ancillaryServices" "capacity" "capacityCharge" "capitalCredit"
+            "complianceCharge" "congestionCharge" "conservationCharge"
+            "contractMisc" "creditAdministrative" "creditEnergy" "creditGeneration"
+            "creditInfrastructure" "creditMisc" "creditPriceProtection"
+            "creditRenewable" "creditTariffRider" "customerCharge" "deliveryCharge"
+            "demandDirect" "demandIndirect" "demandSideManagement" "depositCredit"
+            "depositInterest" "depositRequest" "distributedGeneration"
+            "distributionCharge" "donation" "efficiencyFunding" "energyStorage"
+            "environmentalFunding" "exportCredit" "facilities" "fuelCharge"
+            "generation" "handling" "heapDiscount" "initiationCharge" "lateFee"
+            "minimumBill" "minimumCharge" "nonBypassableCharge" "powerFactorCharge"
+            "publicBenefits" "reactiveDemand" "recoverySurcharge"
+            "reliabilityCharge" "renewableFunding" "rentalFee" "serviceMetered"
+            "serviceNonMetered" "standbyCharge" "strandedCosts"
+            "systemBenefitCharge" "tariffRider" "taxAdjustment" "taxCredit"
+            "taxMisc" "taxMunicipal" "taxSales" "taxState" "taxUtility"
+            "transitionCharge" "transmission" "usageCharge" "volumetricCharge"))
+
+(def Commodity
+  "urpx:CommodityValue, 33 members."
+  (enum-ref "biomass" "cableTv" "chilledWater" "coal" "commodityOther"
+            "compressedAir" "diesel" "districtCooling" "districtHeating"
+            "electricity" "fuelOil" "gasoline" "geothermal" "hotWater"
+            "hydroelectric" "internet" "irrigation" "naturalGas" "nonPotableWater"
+            "nuclear" "potableWater" "propane" "recycling" "security" "sewage"
+            "solar" "steam" "stormwater" "telecommunications" "wasteHeat"
+            "wasteManagement" "water" "wind"))
+
+(def ConnectionKind
+  "urpx:ConnectionKindValue, 6 members."
+  (enum-ref "directConnection" "overheadConnection" "padMountedConnection"
+            "permanentConnection" "temporaryConnection" "undergroundConnection"))
+
+(def ConnectorType
+  "urpx:ConnectorTypeValue, 6 members."
+  (enum-ref "ccs" "chademo" "dcFast" "level1" "level2" "teslaSupercharger"))
+
+(def CustomerChoice
+  "urpx:CustomerChoiceValue, 2 members."
+  (enum-ref "mandatoryChoice" "voluntaryChoice"))
+
+(def CustomerKind
+  "urpx:CustomerKindValue, 7 members."
+  (enum-ref "commercialKind" "enterpriseKind" "industrialKind" "internalUseKind"
+            "nonResidentialKind" "residentialKind" "serviceProviderKind"))
+
+(def CustomerSubKind
+  "urpx:CustomerSubKindValue, 14 members."
+  (enum-ref "commercialPumping" "commercialStandard" "commercialStreetlight"
+            "energyScheduler" "energySupplier" "industrialLargeLoad"
+            "industrialStandard" "regionalOperator" "religiousInstitution"
+            "residentialFarm" "residentialMultiUnit" "residentialStandard"
+            "subsidiary" "windMachine"))
+
+(def DERType
+  "urpx:DERTypeValue, 9 members."
+  (enum-ref "evChargingDER" "generatorDER" "geothermalDER" "hydroDER" "nuclearDER"
+            "solarDER" "storageDER" "wasteDigestionDER" "windDER"))
+
+(def DataSourceType
+  "urpx:DataSourceTypeValue, 5 members."
+  (enum-ref "apiSource" "databaseSource" "manualSource" "regulatoryWebsiteSource"
+            "utilityWebsiteSource"))
+
+(def DayType
+  "urpx:DayTypeValue, 4 members."
+  (enum-ref "allDays" "customDays" "weekdayDays" "weekendDays"))
+
+(def EndUse
+  "urpx:EndUseValue, 14 members."
+  (enum-ref "agriculturalEndUse" "cookingEndUse" "dataCenterEndUse" "dryingEndUse"
+            "heatingEndUse" "lightingEndUse" "municipalEndUse" "nonheatingEndUse"
+            "otherEndUse" "refrigerationEndUse" "spaceCoolingEndUse"
+            "spaceHeatingEndUse" "streetLightingEndUse" "waterHeatingEndUse"))
+
+(def EntityType
+  "urpx:EntityTypeValue, 8 members."
+  (enum-ref "corporationEntity" "entityOther" "governmentEntity" "individualEntity"
+            "llcEntity" "nonprofitEntity" "partnershipEntity" "trustEntity"))
+
+(def FlowDirection
+  "urpx:FlowDirectionValue, 4 members."
+  (enum-ref "bidirectional" "forward" "net" "reverse"))
+
+(def GeographicScope
+  "urpx:GeographicScopeValue, 5 members."
+  (enum-ref "countyScope" "customScope" "municipalityScope" "serviceTerritoryScope"
+            "statewideScope"))
+
+(def GeographicZone
+  "urpx:GeographicZoneValue, 8 members."
+  (enum-ref "coastalZone" "desertZone" "geographicZoneOther" "industrialZone"
+            "mountainZone" "ruralZone" "suburbanZone" "urbanZone"))
+
+(def HVACKind
+  "urpx:HVACKindValue, 5 members."
+  (enum-ref "airConditioner" "airSourceHeatPump" "districtHeatingConnection"
+            "groundSourceHeatPump" "spaceHeater"))
+
+(def InterconnectionStatus
+  "urpx:InterconnectionStatusValue, 4 members."
+  (enum-ref "disconnectedStatus" "interconnectedStatus"
+            "notApplicableInterconnection" "pendingInterconnection"))
+
+(def InverterType
+  "urpx:InverterTypeValue, 5 members."
+  (enum-ref "centralInverter" "hybridInverter" "microInverter" "powerOptimizer"
+            "stringInverter"))
+
+(def LedgerType
+  "urpx:LedgerTypeValue, 8 members."
+  (enum-ref "bundledLedger" "calculatedLedger" "deliveryLedger" "distributionLedger"
+            "measuredLedger" "profileMetricLedger" "supplyLedger"
+            "transmissionLedger"))
+
+(def LoadProfile
+  "urpx:LoadProfileValue, 6 members."
+  (enum-ref "baseload" "intermittent" "loadProfileOther" "peaking" "seasonal"
+            "variable"))
+
+(def MeasurementType
+  "urpx:MeasurementTypeValue, 14 members."
+  (enum-ref "apparentPower" "current" "demand" "energy" "frequency" "power"
+            "powerFactor" "pressure" "reactiveEnergy" "reactivePower" "temperature"
+            "voltage" "volume" "volumetricFlow"))
+
+(def MediaType
+  "urpx:MediaTypeValue, 14 members."
+  (enum-ref "applicationJson" "applicationPdf" "applicationVndMsExcel"
+            "applicationVndOasisOpendocumentSpreadsheet"
+            "applicationVndOasisOpendocumentText"
+            "applicationVndOpenxmlformatsOfficedocumentSpreadsheetmlSheet"
+            "imageGif" "imageJpeg" "imagePng" "textCsv" "textHtml" "textPlain"
+            "textRtf" "textXml"))
+
+(def MeteringConfiguration
+  "urpx:MeteringConfigurationValue, 6 members."
+  (enum-ref "ami" "demandConfiguration" "interval" "manual" "netMetering" "prepaid"))
+
+(def MetricInputType
+  "urpx:MetricInputTypeValue, 5 members."
+  (enum-ref "aggregatedMetricInput" "calculatedMetricInput" "measuredMetricInput"
+            "profileMetricInput" "virtualMetricInput"))
+
+(def ModifierCategory
+  "urpx:ModifierCategoryValue, 7 members."
+  (enum-ref "billingCategory" "customerServiceCategory" "demandManagementCategory"
+            "environmentalCategory" "modifierCategoryOther" "promotionalCategory"
+            "regulatoryCategory"))
+
+(def ModifierType
+  "urpx:ModifierTypeValue, 10 members."
+  (enum-ref "addOn" "adjustment" "credit" "demandResponse" "evCharging"
+            "greenEnergy" "modifierTypeOther" "optIn" "optOut" "rider"))
+
+(def NameType
+  "urpx:NameTypeValue, 8 members."
+  (enum-ref "abbreviationName" "acronymName" "brandName" "commonName" "dbaName"
+            "formerName" "legalName" "tradeName"))
+
+(def Operator
+  "urpx:OperatorValue, 17 members."
+  (enum-ref "addOperator" "andOperator" "betweenOperator" "containsOperator"
+            "divideOperator" "equalsOperator" "greaterThanOperator"
+            "greaterThanOrEqualOperator" "inOperator" "lessThanOperator"
+            "lessThanOrEqualOperator" "multiplyOperator" "notEqualsOperator"
+            "notInOperator" "notOperator" "orOperator" "subtractOperator"))
+
+(def OrganizationType
+  "urpx:OrganizationTypeValue, 10 members."
+  (enum-ref "aggregatorOrganization" "cooperativeOrganization" "espOrganization"
+            "ippOrganization" "isoRtoOrganization" "municipalOrganization"
+            "parentOrganization" "regulatorOrganization" "utilityOrganization"
+            "vendorOrganization"))
+
+(def OwnershipType
+  "urpx:OwnershipTypeValue, 7 members."
+  (enum-ref "cooperativeOwnership" "federalOwnership" "investorOwned"
+            "municipalOwnership" "privateOwnership" "stateOwnership"
+            "tribalOwnership"))
+
+(def PanelOrientation
+  "urpx:PanelOrientationValue, 10 members."
+  (enum-ref "east" "multipleOrientations" "north" "northeast" "northwest" "south"
+            "southeast" "southwest" "tracking" "west"))
+
+(def PhaseCodeKind
+  "urpx:PhaseCodeKindValue, 25 members."
+  (enum-ref "A" "AB" "ABC" "ABCN" "ABN" "AC" "ACN" "AN" "AtoAv" "B" "BAv" "BC" "BCN"
+            "BN" "C" "CAv" "CN" "N" "NG" "S1" "S12" "S12N" "S1N" "S2" "S2N"))
+
+(def PremiseType
+  "urpx:PremiseTypeValue, 9 members."
+  (enum-ref "hospital" "manufacturing" "multiFamily" "office" "premiseTypeOther"
+            "retailStore" "school" "singleFamily" "warehouse"))
+
+(def RegulatoryScope
+  "urpx:RegulatoryScopeValue, 6 members."
+  (enum-ref "distributionRegulation" "environmentalRegulation" "marketRegulation"
+            "ratesRegulation" "safetyRegulation" "transmissionRegulation"))
+
+(def SeasonalPattern
+  "urpx:SeasonalPatternValue, 4 members."
+  (enum-ref "flatPattern" "summerPeakPattern" "variablePattern" "winterPeakPattern"))
+
+(def ServiceRole
+  "urpx:ServiceRoleValue, 8 members."
+  (enum-ref "aggregationRole" "bundledServiceRole" "communitySolarServiceRole"
+            "demandResponseRole" "distributionServiceRole" "energyEfficiencyRole"
+            "retailSupplyRole" "solarInstallationRole"))
+
+(def SpecialNeedsStatus
+  "urpx:SpecialNeedsStatusValue, 5 members."
+  (enum-ref "disabilityAccommodation" "lifeSupport" "medicalEquipment"
+            "noSpecialNeeds" "vulnerableCustomer"))
+
+(def TOUTierStandardName
+  "urpx:TOUTierStandardNameValue, 7 members."
+  (enum-ref "criticalPeakTier" "midPeakTier" "offPeakTier" "peakTier" "shoulderTier"
+            "superOffPeakTier" "superPeakTier"))
+
+(def TariffStatementType
+  "urpx:TariffStatementTypeValue, 5 members."
+  (enum-ref "distributionStatement" "fuelAdjustmentStatement"
+            "purchasedPowerStatement" "statementTypeOther" "transmissionStatement"))
+
+(def TaxExemptStatus
+  "urpx:TaxExemptStatusValue, 4 members."
+  (enum-ref "exempt" "nonExempt" "partialExempt" "pendingVerification"))
+
+(def UnitOfMeasure
+  "urpx:UnitOfMeasureValue, 55 members."
+  (enum-ref "GW" "GWh" "Gbps" "MVA" "MVAh" "MW" "MWh" "Mbps" "VA" "VAh" "VAr" "VArh"
+            "W" "Wh" "acre" "barrel" "bcf" "bit" "btu" "byte" "ccf" "cord" "count"
+            "cubicFoot" "cubicMeter" "decatherm" "gallon" "hectare" "hertz" "item"
+            "kVA" "kVAh" "kVAr" "kVArh" "kW" "kWh" "kilogallon" "kilogram"
+            "kilometer" "liter" "mcf" "metricTon" "mile" "mmbtu" "mmcf" "percent"
+            "pound" "ratio" "squareFoot" "squareMeter" "tcf" "therm" "ton"
+            "unitOther" "year"))
+
+(def VoltageLevel
+  "urpx:VoltageLevelValue, 5 members."
+  (enum-ref "distributionVoltage" "primaryVoltage" "secondaryVoltage"
+            "subTransmissionVoltage" "transmissionVoltage"))
+
 ;; ---------------------------------------------------------------------------
 ;; Program enrollment
 ;; ---------------------------------------------------------------------------
@@ -842,17 +1121,17 @@
   [:map
    [:jsonld/type [:= "urpx:MetricSpecification"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/commodity       {:optional true} Ref]
-   [:urpx/measurementKind {:optional true} Ref]
-   [:urpx/unitOfMeasure   {:optional true} Ref]
-   [:urpx/flowDirection   {:optional true} Ref]
+   [:urpx/commodity       {:optional true} Commodity]
+   [:urpx/measurementKind {:optional true} MeasurementType]
+   [:urpx/unitOfMeasure   {:optional true} UnitOfMeasure]
+   [:urpx/flowDirection   {:optional true} FlowDirection]
    [:urpx/intervalDuration {:optional true} IsoDuration]
    [:urpx/intervalType      {:optional true} IntervalType]
    [:urpx/intervalAlignment {:optional true} IntervalAlignment]
    [:urpx/intervalSelection {:optional true} IntervalSelection]
-   [:urpx/accumulationMethod {:optional true} Ref]
+   [:urpx/accumulationMethod {:optional true} Accumulation]
    [:urpx/hasCalculationMethod {:optional true ::range "urpx:CalculationMethod"} :map]
-   [:urpx/phaseCodeKind {:optional true} Ref]])
+   [:urpx/phaseCodeKind {:optional true} PhaseCodeKind]])
 
 (def MetricInput
   [:map
@@ -860,7 +1139,7 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/name :string]
    [:urpx/description {:optional true} :string]
-   [:urpx/metricInputType Ref]
+   [:urpx/metricInputType MetricInputType]
    ;; 0..N upstream (no sh:maxCount). Accepted as one or many; price.clj reads
    ;; one through urpx.index/single, which refuses rather than guessing.
    [:urpx/hasMetricSpecification {:optional true ::range "urpx:MetricSpecification"} [:or MetricSpecification [:vector MetricSpecification]]]
@@ -875,7 +1154,7 @@
    [:urpx/startTime Time]
    [:urpx/endTime Time]
    ;; v0.2.0 SHACL: dayType is required (was optional in v0.1.x).
-   [:urpx/dayType Ref]
+   [:urpx/dayType DayType]
    ;; 0..N, read with dayType urpx:customDays (urpx-org/urpx#71).
    [:urpx/daysOfWeek {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector DayOfWeek]]
    ;; 0..N upstream. TOU matching in price.clj reads one via index/single.
@@ -902,7 +1181,7 @@
   [:map
    [:jsonld/type [:= "urpx:TOUTier"]]
    [:urpx/tierSourceName {:optional true} :string]
-   [:urpx/touTierStandardName {:optional true} Ref]
+   [:urpx/touTierStandardName {:optional true} TOUTierStandardName]
    [:urpx/touTierNumber Int]
    [:urpx/hasTOUPeriod {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:TOUPeriod"} [:vector TOUPeriod]]])
 
@@ -964,7 +1243,7 @@
    [:urpx/description {:optional true} :string]
    [:urpx/hasCalculationMethod {:optional true ::range "urpx:CalculationMethod"}
     [:or CalculationMethod ExclusiveRef]]
-   [:urpx/ledgerType {:optional true} Ref]
+   [:urpx/ledgerType {:optional true} LedgerType]
    [:urpx/referencesMetricInput
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:MetricInput"}
     [:vector Ref]]
@@ -990,8 +1269,8 @@
    [:urpx/url       {:optional true} :string]
    [:urpx/accessURL {:optional true} :string]
    [:urpx/fileName  {:optional true} :string]
-   [:urpx/mediaType {:optional true} Ref]
-   [:urpx/dataSourceType  {:optional true} Ref]
+   [:urpx/mediaType {:optional true} MediaType]
+   [:urpx/dataSourceType  {:optional true} DataSourceType]
    [:urpx/dateRetrieved   {:optional true} Date]
    [:urpx/dateReceived    {:optional true} Date]
    [:urpx/datePublished   {:optional true} Date]
@@ -1014,8 +1293,7 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "oa:Selector"}
     [:vector Ref]]
    [:urpx/sourcePublication {:optional true ::range "urpx:SourcePublication"} Ref]
-   ;; Enum membership deliberately unenforced here; see the enum issue.
-   [:urpx/tariffStatementType {:optional true} Ref]
+   [:urpx/tariffStatementType {:optional true} TariffStatementType]
    [:urpx/dateApproved {:optional true} Date]
    [:urpx/dateCreated {:optional true} Date]
    [:urpx/dateModified {:optional true} Date]
@@ -1081,12 +1359,12 @@
    ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
    [:urpx/chargeType
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
-    [:vector Ref]]
-   [:urpx/chargeCategory {:optional true} Ref]
-   [:urpx/billPortion   {:optional true} Ref]
-   [:urpx/commodity     {:optional true} Ref]
+    [:vector ChargeType]]
+   [:urpx/chargeCategory {:optional true} ChargeCategory]
+   [:urpx/billPortion   {:optional true} BillPortion]
+   [:urpx/commodity     {:optional true} Commodity]
    [:urpx/priceCurrency {:optional true} :string]
-   [:urpx/primaryChargeType {:optional true} Ref]
+   [:urpx/primaryChargeType {:optional true} ChargeType]
    ;; v0.2.0: required, single. PD points to its parent Ledger.
    [:urpx/referencesLedger {::range "urpx:Ledger"} Ref]
    ;; 0..N upstream (sh:minCount 0, no sh:maxCount), and the skos:note names
@@ -1165,8 +1443,8 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/lowerBound         {:optional true} Decimal]
    [:urpx/upperBound         {:optional true} Decimal]
-   [:urpx/lowerBoundOperator {:optional true} Ref]
-   [:urpx/upperBoundOperator {:optional true} Ref]
+   [:urpx/lowerBoundOperator {:optional true} Operator]
+   [:urpx/upperBoundOperator {:optional true} Operator]
    [:urpx/adjustsServiceTier
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ServiceTier"}
     [:vector Ref]]
@@ -1386,7 +1664,7 @@
     [:urpx/name   {:optional true} :string]
     [:urpx/description {:optional true} :string]
     [:urpx/logicExpression {:optional true} :string]
-    [:urpx/operator Ref]
+    [:urpx/operator Operator]
     [:urpx/leftOperand  {::range #{"urpx:CustomOperandNode" "urpx:DatatypeOperandNode"
                                    "urpx:ObjectOperandNode" "urpx:OperationNode"}}
      [:ref ::Operand]]
@@ -1398,7 +1676,7 @@
     [:jsonld/type [:= "urpx:OperationNode"]]
     [:jsonld/id   {:optional true} :string]
     [:urpx/description {:optional true} :string]
-    [:urpx/operator Ref]
+    [:urpx/operator Operator]
     [:urpx/leftOperand  {::range #{"urpx:CustomOperandNode" "urpx:DatatypeOperandNode"
                                    "urpx:ObjectOperandNode" "urpx:OperationNode"}}
      [:ref ::Operand]]
@@ -1411,7 +1689,7 @@
     [:jsonld/id   {:optional true} :string]
     [:urpx/description {:optional true} :string]
     [:urpx/logicExpression {:optional true} :string]
-    [:urpx/operator Ref]
+    [:urpx/operator BooleanOperator]
     [:urpx/operandNodes
      {:decode/urpx-jsonld single-or-vec->vec
       ::range #{"urpx:BooleanOperationNode" "urpx:ComparisonNode"}}
@@ -1576,7 +1854,7 @@
    [:jsonld/type [:= "urpx:PriorRatePlan"]]
    [:jsonld/id {:optional true} :string]
    [:urpx/referencesRatePlan  {:optional true ::range "urpx:RatePlan"} Ref]
-   [:urpx/serviceRole         {:optional true} Ref]
+   [:urpx/serviceRole         {:optional true} ServiceRole]
    [:urpx/enrollmentStatus    {:optional true} EnrollmentStatus]
    [:urpx/enrollmentStartDate {:optional true} Date]
    [:urpx/enrollmentEndDate   {:optional true} Date]
@@ -1591,25 +1869,25 @@
    ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
    [:urpx/hasCustomerKind
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
-    [:vector Ref]]
+    [:vector CustomerKind]]
    ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
    [:urpx/hasCustomerSubKind
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
-    [:vector Ref]]
+    [:vector CustomerSubKind]]
    ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
    [:urpx/entityType
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
-    [:vector Ref]]
+    [:vector EntityType]]
    [:urpx/hasProgramEnrollment
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ProgramEnrollment"}
     [:vector [:or ProgramEnrollment ExclusiveRef]]]
    [:urpx/hasPriorRatePlan
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PriorRatePlan"}
     [:vector [:or PriorRatePlan ExclusiveRef]]]
-   [:urpx/annualIncomeRange          {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Ref]]
-   [:urpx/assistanceEligibilityLevel {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Ref]]
-   [:urpx/specialNeedsStatus         {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Ref]]
-   [:urpx/taxExemptStatus            {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Ref]]
+   [:urpx/annualIncomeRange          {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector AnnualIncomeRange]]
+   [:urpx/assistanceEligibilityLevel {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector AssistanceEligibilityLevel]]
+   [:urpx/specialNeedsStatus         {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector SpecialNeedsStatus]]
+   [:urpx/taxExemptStatus            {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector TaxExemptStatus]]
    [:urpx/billingCycleCode           {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector :string]]
    [:urpx/creditRating               {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector :string]]
    [:urpx/householdCount             {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Int]]
@@ -1623,11 +1901,11 @@
   [:map
    [:jsonld/type [:= "urpx:DistributedEnergyResource"]]
    [:jsonld/id {:optional true} :string]
-   [:urpx/derType               Ref]
-   [:urpx/interconnectionStatus Ref]
-   [:urpx/connectorType         {:optional true} Ref]
-   [:urpx/inverterType          {:optional true} Ref]
-   [:urpx/panelOrientation      {:optional true} Ref]
+   [:urpx/derType               DERType]
+   [:urpx/interconnectionStatus InterconnectionStatus]
+   [:urpx/connectorType         {:optional true} ConnectorType]
+   [:urpx/inverterType          {:optional true} InverterType]
+   [:urpx/panelOrientation      {:optional true} PanelOrientation]
    [:urpx/powerRating           {:optional true} Decimal]
    [:urpx/solarCapacity         {:optional true} Decimal]
    [:urpx/windCapacity          {:optional true} Decimal]
@@ -1648,17 +1926,17 @@
    [:urpx/ratedPowerCapacity    {:optional true} Decimal]
    [:urpx/meterCount            {:optional true} Int]
    [:urpx/serviceClassPattern   {:optional true} :string]
-   [:urpx/connectionKind        {:optional true} Ref]
-   [:urpx/endUse                {:optional true} Ref]
-   [:urpx/geographicScope       {:optional true} Ref]
-   [:urpx/hasMeteringConfiguration {:optional true} Ref]
-   [:urpx/loadProfile           {:optional true} Ref]
-   [:urpx/phaseCodeKind         {:optional true} Ref]
-   [:urpx/premiseType           {:optional true} Ref]
-   [:urpx/seasonalPattern       {:optional true} Ref]
-   [:urpx/voltageLevel          {:optional true} Ref]
-   [:urpx/geographicZone        {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Ref]]
-   [:urpx/hasHVAC               {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Ref]]
+   [:urpx/connectionKind        {:optional true} ConnectionKind]
+   [:urpx/endUse                {:optional true} EndUse]
+   [:urpx/geographicScope       {:optional true} GeographicScope]
+   [:urpx/hasMeteringConfiguration {:optional true} MeteringConfiguration]
+   [:urpx/loadProfile           {:optional true} LoadProfile]
+   [:urpx/phaseCodeKind         {:optional true} PhaseCodeKind]
+   [:urpx/premiseType           {:optional true} PremiseType]
+   [:urpx/seasonalPattern       {:optional true} SeasonalPattern]
+   [:urpx/voltageLevel          {:optional true} VoltageLevel]
+   [:urpx/geographicZone        {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector GeographicZone]]
+   [:urpx/hasHVAC               {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector HVACKind]]
    [:urpx/hasCounty             {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:County"} [:vector Ref]]
    [:urpx/hasMunicipality       {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:Municipality"} [:vector Ref]]
    [:urpx/hasState              {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:State"} [:vector Ref]]
@@ -1797,16 +2075,16 @@
    [:urpx/hasRateCase
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RateCase"}
     [:vector Ref]]
-   [:urpx/billPortion {:optional true} Ref]
+   [:urpx/billPortion {:optional true} BillPortion]
    [:urpx/billingCycleCode {:optional true} :string]
-   [:urpx/chargeCategory {:optional true} Ref]
-   [:urpx/chargeType {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Ref]]
-   [:urpx/commodity {:optional true} Ref]
+   [:urpx/chargeCategory {:optional true} ChargeCategory]
+   [:urpx/chargeType {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector ChargeType]]
+   [:urpx/commodity {:optional true} Commodity]
    [:urpx/expectedEndDate {:optional true} Date]
    [:urpx/expectedEndDateTime {:optional true} DateTime]
    [:urpx/hasMetricSpecification {:optional true ::range "urpx:MetricSpecification"} [:or MetricSpecification ExclusiveRef]]
    [:urpx/priceMatchingKey {:optional true} :string]
-   [:urpx/primaryChargeType {:optional true} Ref]
+   [:urpx/primaryChargeType {:optional true} ChargeType]
    [:urpx/referencesMetricInput {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:MetricInput"} [:vector [:or MetricInput ExclusiveRef]]]
    [:urpx/sunsetOn {:optional true} Date]
    [:urpx/sunsetOnDateTime {:optional true} DateTime]])
@@ -1851,8 +2129,8 @@
    [:urpx/priceCurrency {:optional true} :string]
    [:urpx/chargeType
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
-    [:vector Ref]]
-   [:urpx/billPortion {:optional true} Ref]
+    [:vector ChargeType]]
+   [:urpx/billPortion {:optional true} BillPortion]
    [:urpx/hasMetricSpecification {:optional true ::range "urpx:MetricSpecification"}
     [:or MetricSpecification ExclusiveRef]]
    [:urpx/hasDataSourceReference
@@ -1883,8 +2161,8 @@
    [:urpx/appliesInSeason {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:Season"} [:vector [:or Season ExclusiveRef]]]
    [:urpx/baseQuantity {:optional true} Decimal]
    [:urpx/billingCycleCode {:optional true} :string]
-   [:urpx/chargeCategory {:optional true} Ref]
-   [:urpx/commodity {:optional true} Ref]
+   [:urpx/chargeCategory {:optional true} ChargeCategory]
+   [:urpx/commodity {:optional true} Commodity]
    [:urpx/contributedBy {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PricingModel"} [:vector :map]]
    [:urpx/expectedEndDate {:optional true} Date]
    [:urpx/expectedEndDateTime {:optional true} DateTime]
@@ -1894,7 +2172,7 @@
    [:urpx/hasRateCase {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RateCase"} [:vector Ref]]
    [:urpx/multiplier {:optional true} Decimal]
    [:urpx/priceMatchingKey {:optional true} :string]
-   [:urpx/primaryChargeType {:optional true} Ref]
+   [:urpx/primaryChargeType {:optional true} ChargeType]
    [:urpx/referencesMetricInput {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:MetricInput"} [:vector [:or MetricInput ExclusiveRef]]]
    [:urpx/referencesServiceTier {:optional true ::range "urpx:ServiceTier"} [:or ServiceTier ExclusiveRef]]
    [:urpx/referencesTouPeriod {:optional true ::range "urpx:TOUPeriod"} [:or TOUPeriod ExclusiveRef]]
@@ -1967,7 +2245,7 @@
    [:urpx/abbreviation {:optional true} :string]
    [:urpx/isCanonical  {:optional true} :boolean]
    [:urpx/isPreferred  {:optional true} :boolean]
-   [:urpx/nameType     {:optional true} Ref]])
+   [:urpx/nameType     {:optional true} NameType]])
 
 (def OrganizationIdentity
   "An organization's name and identifiers over a validity window, hung off
@@ -2002,10 +2280,10 @@
   [[:jsonld/id {:optional true} :string]
    [:urpx/legalName      {:optional true} :string]
    [:urpx/alternateName  {:optional true} :string]
-   [:urpx/organizationType Ref]
+   [:urpx/organizationType OrganizationType]
    [:urpx/commodity
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
-    [:vector Ref]]
+    [:vector Commodity]]
    [:urpx/hasIdentity
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:OrganizationIdentity"}
     [:vector [:or OrganizationIdentity ExclusiveRef]]]
@@ -2037,7 +2315,7 @@
   (-> [:map
        [:jsonld/type [:= "urpx:UtilityOperator"]]]
       (into organization-entries)
-      (conj operates-in [:urpx/ownershipType {:optional true} Ref])))
+      (conj operates-in [:urpx/ownershipType {:optional true} OwnershipType])))
 
 (def EnergyServiceProvider
   "A urpx:Organization that provides energy service in a stated role, such as
@@ -2045,7 +2323,7 @@
   (-> [:map
        [:jsonld/type [:= "urpx:EnergyServiceProvider"]]]
       (into organization-entries)
-      (conj operates-in [:urpx/serviceRole Ref])))
+      (conj operates-in [:urpx/serviceRole ServiceRole])))
 
 (def RegulatoryAuthority
   "A urpx:Organization that regulates others, such as a state commission."
@@ -2053,7 +2331,7 @@
        [:jsonld/type [:= "urpx:RegulatoryAuthority"]]]
       (into organization-entries)
       (conj operates-in
-            [:urpx/regulatoryScope Ref]
+            [:urpx/regulatoryScope RegulatoryScope]
             [:urpx/approves
              {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlan"}
              [:vector Ref]]
@@ -2102,8 +2380,7 @@
 ;;
 ;; A version snapshot states what it does and does not cover, so a consumer can
 ;; tell a complete resolution from a partial one. Read from urpx-shacl at
-;; urpx-org/urpx v0.5.1. Enum-valued slots stay bare Refs here; membership
-;; enforcement is a separate concern.
+;; urpx-org/urpx v0.5.1.
 ;; ---------------------------------------------------------------------------
 
 (def ModelExclusion
@@ -2236,13 +2513,13 @@
    [:urpx/multiplier   {:optional true} Decimal]
    [:urpx/baseQuantity {:optional true} Decimal]
    ;; Refs
-   [:urpx/billPortion       {:optional true} Ref]
-   [:urpx/chargeCategory    {:optional true} Ref]
+   [:urpx/billPortion       {:optional true} BillPortion]
+   [:urpx/chargeCategory    {:optional true} ChargeCategory]
    [:urpx/chargeType
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
-    [:vector Ref]]
-   [:urpx/commodity         {:optional true} Ref]
-   [:urpx/primaryChargeType {:optional true} Ref]
+    [:vector ChargeType]]
+   [:urpx/commodity         {:optional true} Commodity]
+   [:urpx/primaryChargeType {:optional true} ChargeType]
    ;; Dates / times
    [:urpx/startDate     {:optional true} Date]
    [:urpx/endDate       {:optional true} Date]
@@ -2438,7 +2715,7 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/version       {:optional true} :string]
    [:urpx/versionNumber {:optional true} :string]
-   [:urpx/changeReason  Ref]
+   [:urpx/changeReason  ChangeReason]
    [:urpx/changeDescription {:optional true} :string]
    [:urpx/description   {:optional true} :string]
    [:urpx/name          {:optional true} :string]
@@ -2461,9 +2738,9 @@
    ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
    [:urpx/commodity
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
-    [:vector Ref]]
-   [:urpx/serviceRole       Ref]
-   [:urpx/customerChoice    {:optional true} Ref]
+    [:vector Commodity]]
+   [:urpx/serviceRole       ServiceRole]
+   [:urpx/customerChoice    {:optional true} CustomerChoice]
    [:urpx/isDefault         {:optional true} :boolean]
    [:urpx/minimumTenure     {:optional true} IsoDuration]
    [:urpx/url               {:optional true} :string]
@@ -2526,10 +2803,10 @@
    [:urpx/ratePlanUniqueIdentifier :string]
    [:urpx/name :string]
    [:urpx/description {:optional true} :string]
-   [:urpx/serviceRole {:optional true} Ref]
+   [:urpx/serviceRole {:optional true} ServiceRole]
    [:urpx/commodity
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
-    [:vector Ref]]
+    [:vector Commodity]]
    [:urpx/offeredBy {:optional true ::range "urpx:Organization"} AnyOrganization]
    [:urpx/hasServiceClass
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ServiceClass"}
@@ -2594,7 +2871,7 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/modifierVersionNumber :string]
    [:urpx/version    {:optional true} :string]
-   [:urpx/changeReason  Ref]
+   [:urpx/changeReason  ChangeReason]
    [:urpx/changeDescription {:optional true} :string]
    [:urpx/description {:optional true} :string]
    ;; sh:minCount 0 sh:maxCount 1 on both version shapes, and it was NEVER
@@ -2611,10 +2888,10 @@
    ;; 0..N upstream (sh:minCount 0, no sh:maxCount); nothing in src/ reads it.
    [:urpx/commodity
     {:optional true :decode/urpx-jsonld single-or-vec->vec}
-    [:vector Ref]]
-   [:urpx/serviceRole Ref]
-   [:urpx/modifierType     {:optional true} Ref]
-   [:urpx/modifierCategory {:optional true} Ref]
+    [:vector Commodity]]
+   [:urpx/serviceRole ServiceRole]
+   [:urpx/modifierType     {:optional true} ModifierType]
+   [:urpx/modifierCategory {:optional true} ModifierCategory]
    [:urpx/offeredBy   {:optional true ::range "urpx:Organization"} AnyOrganization]
    [:urpx/hasDataSourceReference
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
@@ -2698,7 +2975,7 @@
    ;; 0..N upstream, same as RatePlan/hasRatePlanVersion above.
    [:urpx/hasRatePlanModifierVersion {:optional true ::range "urpx:RatePlanModifierVersion"} [:or RatePlanModifierVersion [:vector RatePlanModifierVersion]]]
    [:urpx/applicableToRateGroup {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RateGroup"} [:vector [:or RateGroup ExclusiveRef]]]
-   [:urpx/commodity {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Ref]]
+   [:urpx/commodity {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Commodity]]
    [:urpx/dateApproved {:optional true} Date]
    [:urpx/dateCreated {:optional true} Date]
    [:urpx/datePublished {:optional true} Date]
@@ -2710,7 +2987,7 @@
    [:urpx/effectiveDateTime {:optional true} DateTime]
    [:urpx/hasServiceClass {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ServiceClass"} [:vector [:or ServiceClass ExclusiveRef]]]
    [:urpx/isReferencedByPricingModel {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PricingModel"} [:vector [:or PricingModel ExclusiveRef]]]
-   [:urpx/serviceRole {:optional true} Ref]])
+   [:urpx/serviceRole {:optional true} ServiceRole]])
 
 ;; ---------------------------------------------------------------------------
 ;; Scenario cost models

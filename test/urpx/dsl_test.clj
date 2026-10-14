@@ -599,7 +599,7 @@
 (deftest condition-expression-accepts-short-keys
   (let [ce (dsl/condition-expression
             :root-node {:jsonld/type "urpx:ComparisonNode"
-                        :urpx/operator {:jsonld/id "urpx:equalTo"}
+                        :urpx/operator {:jsonld/id "urpx:equalsOperator"}
                         :urpx/leftOperand {:jsonld/type "urpx:CustomOperandNode"
                                            :urpx/customConditionProperty "x"}
                         :urpx/rightOperand {:jsonld/type "urpx:CustomOperandNode"
@@ -770,7 +770,7 @@
           cm (dsl/calculation-method :urpx/intervalDuration "P1M")
           org (dsl/organization
                :urpx/legalName "Pacific Gas & Electric"
-               :urpx/organizationType {:jsonld/id "urpx:investorOwnedUtility"})]
+               :urpx/organizationType {:jsonld/id "urpx:utilityOrganization"})]
       (is (= "urpx:TimeBracket" (:jsonld/type tb)))
       (is (nil? (coerce/explain schema/TimeBracket tb)))
       (is (= "urpx:CalculationMethod" (:jsonld/type cm)))
