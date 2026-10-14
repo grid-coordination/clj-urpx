@@ -9,7 +9,7 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
-## [Unreleased]
+## [0.57.0] — 2026-10-13
 
 ### Added
 
@@ -1009,6 +1009,7 @@ Retargets the library to **URPX v0.5.1** (`urpx-org/urpx` at `95eb8e22`) while c
 
 - The unused `com.apicatalog/titanium-json-ld` dependency, which was also non-functional as declared (no `jakarta.json` implementation was supplied).
 
+[0.57.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.57.0
 [0.56.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.56.0
 [0.55.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.55.0
 [0.54.0]: https://github.com/grid-coordination/clj-urpx/releases/tag/v0.54.0
