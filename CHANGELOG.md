@@ -9,6 +9,17 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Added
+
+- **Every property the v0.5.1 shapes state on a modeled class is now in its schema,** 147 of them across 22 schemas: lifecycle dates and dateTimes, names and descriptions, references such as `contributedBy`, `applicableToRateGroup` and `referencesGeneralRule` (typed by their ranges), and vocabulary-valued slots, which take a reference until their vocabularies are enforced. The drift audit reports no missing property.
+- **Every `write-*` takes `:minimal-context true`,** keeping only the term definitions the document uses, from the default context or a given one, and every prefix declaration. A document's `@context` then changes only when its content does, not when the default context grows.
+
+### Changed
+
+- **`urpx.emit/default-context` types `urpx:dateTimeRetrieved`, `urpx:sunsetOn` and `urpx:sunsetOnDateTime`.** A document whose `@context` extends the default gains these three terms, unless it is written with `:minimal-context`.
+
 ## [0.58.0] — 2026-10-13
 
 ### Added

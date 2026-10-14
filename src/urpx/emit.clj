@@ -42,6 +42,10 @@
     - opts has `:context nil` → emit no @context (used by round-trip tests
       where the input doesn't carry one and `=`-equality would mismatch).
 
+  With `:minimal-context true`, the default or given context keeps only the
+  term definitions the document uses, and every prefix declaration, so the
+  context a document carries changes only when its content does.
+
   An @context already on the input entity (`:jsonld/context`, e.g. from
   a parsed document) is preserved untouched — the default never clobbers
   a context the consumer already supplied."
@@ -108,6 +112,7 @@
    "urpx:cancelledOn"          {"@type" "xsd:date"}
    "urpx:enrollmentStartDate"  {"@type" "xsd:date"}
    "urpx:enrollmentEndDate"    {"@type" "xsd:date"}
+   "urpx:sunsetOn"             {"@type" "xsd:date"}
 
    ;; xsd:dateTime
    "urpx:effectiveDateTime"   {"@type" "xsd:dateTime"}
@@ -125,6 +130,8 @@
    "urpx:evaluatedOn"         {"@type" "xsd:dateTime"}
    "urpx:identityValidFrom"   {"@type" "xsd:dateTime"}
    "urpx:identityValidTo"     {"@type" "xsd:dateTime"}
+   "urpx:dateTimeRetrieved"   {"@type" "xsd:dateTime"}
+   "urpx:sunsetOnDateTime"    {"@type" "xsd:dateTime"}
    "urpx:contractEffectiveDate"  {"@type" "xsd:dateTime"}
    "urpx:contractExpirationDate" {"@type" "xsd:dateTime"}
 
@@ -167,23 +174,44 @@
    "urpx:includeHolidays"    {"@type" "xsd:boolean"}
    "urpx:includeNonHolidays" {"@type" "xsd:boolean"}})
 
+(defn- used-keys
+  "Every map key anywhere in `x`."
+  [x]
+  (cond
+    (map? x)        (into (set (keys x)) (mapcat used-keys) (vals x))
+    (sequential? x) (into #{} (mapcat used-keys) x)
+    :else           #{}))
+
+(defn- minimal
+  "`ctx` without the term definitions, entries whose value is a map, that name
+   a key `data` never uses. Prefix declarations and other string-valued
+   entries stay."
+  [ctx data]
+  (let [used (used-keys data)]
+    (into {} (remove (fn [[k v]] (and (map? v) (not (used k))))) ctx)))
+
 (defn- attach-context
   "If the entity already carries an @context (from round-tripping parsed
    data), leave it. Otherwise resolve the caller's :context preference:
-   absent → default; explicit map → that; explicit nil → no @context."
+   absent → default; explicit map → that; explicit nil → no @context. With
+   `:minimal-context true` in opts, the attached context keeps only the term
+   definitions the document uses."
   [json-keyed-map opts]
-  (cond
-    (contains? json-keyed-map "@context")
-    json-keyed-map
+  (let [attach (fn [ctx]
+                 (assoc json-keyed-map "@context"
+                        (cond-> ctx (:minimal-context opts) (minimal json-keyed-map))))]
+    (cond
+      (contains? json-keyed-map "@context")
+      json-keyed-map
 
-    (and (contains? opts :context) (nil? (:context opts)))
-    json-keyed-map
+      (and (contains? opts :context) (nil? (:context opts)))
+      json-keyed-map
 
-    (:context opts)
-    (assoc json-keyed-map "@context" (:context opts))
+      (:context opts)
+      (attach (:context opts))
 
-    :else
-    (assoc json-keyed-map "@context" default-context)))
+      :else
+      (attach default-context))))
 
 (defn- key-order
   "@context, @id and @type first, then other @ keywords, then properties,

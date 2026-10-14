@@ -354,3 +354,31 @@
       (is (= ["@graph"] (keys parsed)))
       (is (= (count nodes) (count (get parsed "@graph"))))
       (is (= nodes (coerce-all (core/parse-graph (java.io.StringReader. out))))))))
+
+(deftest minimal-context-keeps-only-used-terms
+  (let [ctx-of #(get (json/read-str %) "@context")
+        full   (ctx-of (emit/write-rate-plan minimal-rate-plan))
+        small  (ctx-of (emit/write-rate-plan minimal-rate-plan {:minimal-context true}))]
+    (testing "a term the plan uses stays, one it does not is dropped"
+      (is (contains? small "urpx:initialEffectiveDate"))
+      (is (contains? full "urpx:contractEffectiveDate"))
+      (is (not (contains? small "urpx:contractEffectiveDate"))))
+    (testing "every prefix declaration stays"
+      (is (= (into {} (filter (comp string? val)) full)
+             (into {} (filter (comp string? val)) small))))
+    (testing "a caller's context is pruned the same way, its prefixes kept"
+      (let [c (ctx-of (emit/write-rate-plan minimal-rate-plan
+                                            {:context (assoc emit/default-context
+                                                             "pge" "https://example.org/pge/"
+                                                             "urpx:sunsetOn" {"@type" "xsd:date"})
+                                             :minimal-context true}))]
+        (is (= "https://example.org/pge/" (get c "pge")))
+        (is (not (contains? c "urpx:sunsetOn")))))
+    (testing "write-graph prunes against every node"
+      (let [c (ctx-of (emit/write-graph [minimal-rate-plan
+                                         {:jsonld/type "urpx:SourcePublication"
+                                          :urpx/dateReceived (LocalDate/of 2026 1 1)}]
+                                        {:minimal-context true}))]
+        (is (contains? c "urpx:initialEffectiveDate"))
+        (is (contains? c "urpx:dateReceived"))
+        (is (not (contains? c "urpx:contractEffectiveDate")))))))

@@ -828,7 +828,15 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/seasonName :string]
    [:urpx/month {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector MonthNumber]]
-   [:urpx/yearlyRecurrence {:optional true} :boolean]])
+   [:urpx/yearlyRecurrence {:optional true} :boolean]
+   [:urpx/effectiveDate {:optional true} Date]
+   [:urpx/effectiveDateTime {:optional true} DateTime]
+   [:urpx/endDate {:optional true} Date]
+   [:urpx/endDateTime {:optional true} DateTime]
+   [:urpx/expirationDate {:optional true} Date]
+   [:urpx/expirationDateTime {:optional true} DateTime]
+   [:urpx/startDate {:optional true} Date]
+   [:urpx/startDateTime {:optional true} DateTime]])
 
 (def MetricSpecification
   [:map
@@ -841,7 +849,10 @@
    [:urpx/intervalDuration {:optional true} IsoDuration]
    [:urpx/intervalType      {:optional true} IntervalType]
    [:urpx/intervalAlignment {:optional true} IntervalAlignment]
-   [:urpx/intervalSelection {:optional true} IntervalSelection]])
+   [:urpx/intervalSelection {:optional true} IntervalSelection]
+   [:urpx/accumulationMethod {:optional true} Ref]
+   [:urpx/hasCalculationMethod {:optional true ::range "urpx:CalculationMethod"} :map]
+   [:urpx/phaseCodeKind {:optional true} Ref]])
 
 (def MetricInput
   [:map
@@ -855,7 +866,8 @@
    [:urpx/hasMetricSpecification {:optional true ::range "urpx:MetricSpecification"} [:or MetricSpecification [:vector MetricSpecification]]]
    ;; In v0.2.0 profileMetricProperty is a Ref to a vocabulary IRI
    ;; (e.g. urpx:meterCount, urpx:departureVintage).
-   [:urpx/profileMetricProperty  {:optional true} Ref]])
+   [:urpx/profileMetricProperty  {:optional true} Ref]
+   [:urpx/hasCalculationMethod {:optional true ::range "urpx:CalculationMethod"} :map]])
 
 (def TimeBracket
   [:map
@@ -880,7 +892,11 @@
    [:urpx/priority   {:optional true} Int]
    [:urpx/startDate  {:optional true} Date]
    [:urpx/endDate    {:optional true} Date]
-   [:urpx/hasTimeBracket {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:TimeBracket"} [:vector TimeBracket]]])
+   [:urpx/hasTimeBracket {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:TimeBracket"} [:vector TimeBracket]]
+   [:urpx/endDateTime {:optional true} DateTime]
+   [:urpx/expectedEndDate {:optional true} Date]
+   [:urpx/expectedEndDateTime {:optional true} DateTime]
+   [:urpx/startDateTime {:optional true} DateTime]])
 
 (def TOUTier
   [:map
@@ -900,7 +916,12 @@
     {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:MetricInput"}
     [:vector Ref]]
    [:urpx/hasCalendar {:optional true ::range "urpx:HolidayCalendar"} Ref]
-   [:urpx/hasTOUTier {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:TOUTier"} [:vector TOUTier]]])
+   [:urpx/hasTOUTier {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:TOUTier"} [:vector TOUTier]]
+   [:urpx/effectiveDate {:optional true} Date]
+   [:urpx/effectiveDateTime {:optional true} DateTime]
+   [:urpx/expirationDate {:optional true} Date]
+   [:urpx/expirationDateTime {:optional true} DateTime]
+   [:urpx/referencesProfileAlternative {:optional true ::range "urpx:ProfileAlternative"} :map]])
 
 (def CalculationMethod
   [:map
@@ -911,7 +932,9 @@
    [:urpx/aggregationMethod {:optional true} AggregationMethod]
    [:urpx/intervalType      {:optional true} IntervalType]
    [:urpx/intervalAlignment {:optional true} IntervalAlignment]
-   [:urpx/intervalSelection {:optional true} IntervalSelection]])
+   [:urpx/intervalSelection {:optional true} IntervalSelection]
+   [:urpx/calculatedBasedOn {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:MetricInput"} [:vector [:or MetricInput ExclusiveRef]]]
+   [:urpx/calculationFormula {:optional true} :string]])
 
 (def BillingCycle
   "The billing period a ledger settles over."
@@ -947,7 +970,10 @@
     [:vector Ref]]
    [:urpx/hasBillingCycle {:optional true ::range "urpx:BillingCycle"}
     [:or BillingCycle ExclusiveRef]]
-   [:urpx/settlementInterval {:optional true} IsoDuration]])
+   [:urpx/settlementInterval {:optional true} IsoDuration]
+   [:urpx/contributedBy {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PricingModel"} [:vector :map]]
+   [:urpx/sunsetOn {:optional true} Date]
+   [:urpx/sunsetOnDateTime {:optional true} DateTime]])
 
 ;; ---------------------------------------------------------------------------
 ;; Data source references
@@ -989,7 +1015,18 @@
     [:vector Ref]]
    [:urpx/sourcePublication {:optional true ::range "urpx:SourcePublication"} Ref]
    ;; Enum membership deliberately unenforced here; see the enum issue.
-   [:urpx/tariffStatementType {:optional true} Ref]])
+   [:urpx/tariffStatementType {:optional true} Ref]
+   [:urpx/dateApproved {:optional true} Date]
+   [:urpx/dateCreated {:optional true} Date]
+   [:urpx/dateModified {:optional true} Date]
+   [:urpx/dateTimeApproved {:optional true} DateTime]
+   [:urpx/dateTimeCreated {:optional true} DateTime]
+   [:urpx/dateTimeModified {:optional true} DateTime]
+   [:urpx/dateTimePublished {:optional true} DateTime]
+   [:urpx/dateTimeReceived {:optional true} DateTime]
+   [:urpx/dateTimeRetrieved {:optional true} DateTime]
+   [:urpx/effectiveDateTime {:optional true} DateTime]
+   [:urpx/expirationDateTime {:optional true} DateTime]])
 
 (def PriceUpdateRule
   "How and when a dynamic price is updated, hung off urpx:hasPriceUpdateRule."
@@ -1095,7 +1132,18 @@
       [:jsonld/id   {:optional true} :string]
       [:urpx/name   {:optional true} :string]
       [:urpx/month  {:optional true} [:vector MonthNumber]]
-      [:urpx/hasConditionExpression {:optional true} :any]]]]])
+      [:urpx/hasConditionExpression {:optional true} :any]]]]
+   [:urpx/basedOnPrice {:optional true :decode/urpx-jsonld single-or-vec->vec ::range #{"urpx:Price" "urpx:PriceSummary"}} [:vector :map]]
+   [:urpx/billingCycleCode {:optional true} :string]
+   [:urpx/effectiveDate {:optional true} Date]
+   [:urpx/effectiveDateTime {:optional true} DateTime]
+   [:urpx/expirationDate {:optional true} Date]
+   [:urpx/expirationDateTime {:optional true} DateTime]
+   [:urpx/hasMetricSpecification {:optional true ::range "urpx:MetricSpecification"} [:or MetricSpecification ExclusiveRef]]
+   [:urpx/priceMatchingKey {:optional true} :string]
+   [:urpx/referencesProfileAlternatives {:optional true ::range "urpx:ProfileAlternatives"} :map]
+   [:urpx/sunsetOn {:optional true} Date]
+   [:urpx/sunsetOnDateTime {:optional true} DateTime]])
 
 (def ServiceBracket
   "v0.2.0 + 423e83f: contextual boundary definition for a ServiceTier.
@@ -1188,7 +1236,13 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:MetricInput"}
     [:vector Ref]]
    [:urpx/referencesProfileAlternative {:optional true ::range "urpx:ProfileAlternative"} Ref]
-   [:urpx/hasServiceTier {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:ServiceTier"} [:vector ServiceTier]]])
+   [:urpx/hasServiceTier {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:ServiceTier"} [:vector ServiceTier]]
+   [:urpx/description {:optional true} :string]
+   [:urpx/effectiveDate {:optional true} Date]
+   [:urpx/effectiveDateTime {:optional true} DateTime]
+   [:urpx/expirationDate {:optional true} Date]
+   [:urpx/expirationDateTime {:optional true} DateTime]
+   [:urpx/name {:optional true} :string]])
 
 (def BillingModel
   "v0.2.0: hasPriceDefinition lives at this level (not inside Ledger). A
@@ -1242,7 +1296,11 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/hasHoliday
     {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:Holiday"}
-    [:vector Holiday]]])
+    [:vector Holiday]]
+   [:urpx/effectiveDate {:optional true} Date]
+   [:urpx/effectiveDateTime {:optional true} DateTime]
+   [:urpx/expirationDate {:optional true} Date]
+   [:urpx/expirationDateTime {:optional true} DateTime]])
 
 ;; PlanElements is defined further down — its hasProfileAlternatives entry
 ;; depends on ProfileAlternatives, which depends on ConditionExpression
@@ -1389,7 +1447,9 @@
      {::range #{"urpx:BooleanOperationNode" "urpx:ComparisonNode"}}
      [:multi {:dispatch :jsonld/type}
       ["urpx:ComparisonNode"       [:ref ::ComparisonNode]]
-      ["urpx:BooleanOperationNode" [:ref ::BooleanOperationNode]]]]]])
+      ["urpx:BooleanOperationNode" [:ref ::BooleanOperationNode]]]]
+    [:urpx/description {:optional true} :string]
+    [:urpx/name {:optional true} :string]]])
 
 ;; ---------------------------------------------------------------------------
 ;; ProfileAlternatives — declarative customer-or-configuration choice
@@ -1499,7 +1559,11 @@
    [:jsonld/id {:optional true} :string]
    [:urpx/name {:optional true} :string]
    [:urpx/month {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector MonthNumber]]
-   [:urpx/hasConditionExpression {:optional true ::range "urpx:ConditionExpression"} ConditionExpression]])
+   [:urpx/hasConditionExpression {:optional true ::range "urpx:ConditionExpression"} ConditionExpression]
+   [:urpx/contributedBy {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PricingModel"} [:vector :map]]
+   [:urpx/description {:optional true} :string]
+   [:urpx/sunsetOn {:optional true} Date]
+   [:urpx/sunsetOnDateTime {:optional true} DateTime]])
 
 ;; ---------------------------------------------------------------------------
 ;; Eligibility (v0.2.0 — closed shape, ConditionExpression-driven)
@@ -1633,7 +1697,10 @@
    [:urpx/hasConditionExpression {::range "urpx:ConditionExpression"} ConditionExpression]
    [:urpx/hasDataSourceReference
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:DataSourceReference"}
-    [:vector Ref]]])
+    [:vector Ref]]
+   [:urpx/contributedBy {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PricingModel"} [:vector :map]]
+   [:urpx/sunsetOn {:optional true} Date]
+   [:urpx/sunsetOnDateTime {:optional true} DateTime]])
 
 ;; ---------------------------------------------------------------------------
 ;; Prices
@@ -1729,7 +1796,20 @@
    [:urpx/hasCalculationMethod {:optional true ::range "urpx:CalculationMethod"} CalculationMethod]
    [:urpx/hasRateCase
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RateCase"}
-    [:vector Ref]]])
+    [:vector Ref]]
+   [:urpx/billPortion {:optional true} Ref]
+   [:urpx/billingCycleCode {:optional true} :string]
+   [:urpx/chargeCategory {:optional true} Ref]
+   [:urpx/chargeType {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Ref]]
+   [:urpx/commodity {:optional true} Ref]
+   [:urpx/expectedEndDate {:optional true} Date]
+   [:urpx/expectedEndDateTime {:optional true} DateTime]
+   [:urpx/hasMetricSpecification {:optional true ::range "urpx:MetricSpecification"} [:or MetricSpecification ExclusiveRef]]
+   [:urpx/priceMatchingKey {:optional true} :string]
+   [:urpx/primaryChargeType {:optional true} Ref]
+   [:urpx/referencesMetricInput {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:MetricInput"} [:vector [:or MetricInput ExclusiveRef]]]
+   [:urpx/sunsetOn {:optional true} Date]
+   [:urpx/sunsetOnDateTime {:optional true} DateTime]])
 
 (def PriceSummary
   "An aggregation of Prices into a subtotal, referenced by another Price's
@@ -1798,7 +1878,28 @@
    [:urpx/hasPriceSummary
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PriceSummary"}
     [:vector [:or PriceSummary ExclusiveRef]]]
-   [:urpx/hasPrice {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:Price"} [:vector Price]]])
+   [:urpx/hasPrice {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:Price"} [:vector Price]]
+   [:urpx/adder {:optional true} Decimal]
+   [:urpx/appliesInSeason {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:Season"} [:vector [:or Season ExclusiveRef]]]
+   [:urpx/baseQuantity {:optional true} Decimal]
+   [:urpx/billingCycleCode {:optional true} :string]
+   [:urpx/chargeCategory {:optional true} Ref]
+   [:urpx/commodity {:optional true} Ref]
+   [:urpx/contributedBy {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PricingModel"} [:vector :map]]
+   [:urpx/expectedEndDate {:optional true} Date]
+   [:urpx/expectedEndDateTime {:optional true} DateTime]
+   [:urpx/hasAlternative {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ProfileAlternative"} [:vector Ref]]
+   [:urpx/hasApplicabilityRule {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ApplicabilityRule"} [:vector [:or ApplicabilityRule ExclusiveRef]]]
+   [:urpx/hasCalculationMethod {:optional true ::range "urpx:CalculationMethod"} [:or CalculationMethod ExclusiveRef]]
+   [:urpx/hasRateCase {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RateCase"} [:vector Ref]]
+   [:urpx/multiplier {:optional true} Decimal]
+   [:urpx/priceMatchingKey {:optional true} :string]
+   [:urpx/primaryChargeType {:optional true} Ref]
+   [:urpx/referencesMetricInput {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:MetricInput"} [:vector [:or MetricInput ExclusiveRef]]]
+   [:urpx/referencesServiceTier {:optional true ::range "urpx:ServiceTier"} [:or ServiceTier ExclusiveRef]]
+   [:urpx/referencesTouPeriod {:optional true ::range "urpx:TOUPeriod"} [:or TOUPeriod ExclusiveRef]]
+   [:urpx/sunsetOn {:optional true} Date]
+   [:urpx/sunsetOnDateTime {:optional true} DateTime]])
 
 ;; Prices is defined further down — its hasPriceSetAlternatives entry
 ;; depends on PriceSetAlternatives (defined below).
@@ -2198,7 +2299,8 @@
     [:vector [:or PriceSummary ExclusiveRef]]]
    [:urpx/hasPrice
     {:decode/urpx-jsonld single-or-vec->vec ::range "urpx:Price"}
-    [:vector Price]]])  ; required (sh:minCount 1)
+    [:vector Price]]  ; required (sh:minCount 1)
+   [:urpx/sunsetOn {:optional true} Date]])
 
 (def PriceSetAlternatives
   "Top-level container for a customer-profile-driven price selection.
@@ -2404,7 +2506,14 @@
     [:vector Ref]]
    [:urpx/timezoneIdentifier {:optional true} :string]
    [:urpx/hasPlanElements {::range "urpx:PlanElements"} PlanElements]
-   [:urpx/hasPrices       {::range "urpx:Prices"} Prices]])
+   [:urpx/hasPrices       {::range "urpx:Prices"} Prices]
+   [:urpx/applicableToRatePlan {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlan"} [:vector :map]]
+   [:urpx/applicableToRatePlanVersion {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlanVersion"} [:vector :map]]
+   [:urpx/dateCreated {:optional true} Date]
+   [:urpx/dateTimeCreated {:optional true} DateTime]
+   [:urpx/expectedEndDate {:optional true} Date]
+   [:urpx/expectedEndDateTime {:optional true} DateTime]
+   [:urpx/referencesGeneralRule {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:GeneralRule"} [:vector [:or GeneralRule ExclusiveRef]]]])
 
 (def RatePlan
   "v0.2.0: ratePlanUniqueIdentifier is required (replaces v0.1.x
@@ -2460,7 +2569,17 @@
    ;; change the coerced shape every consumer already reads. Readers go through
    ;; `urpx.index/nested-version`, which refuses to guess when there is more
    ;; than one rather than silently resolving against an arbitrary snapshot.
-   [:urpx/hasRatePlanVersion {:optional true ::range "urpx:RatePlanVersion"} [:or RatePlanVersion [:vector RatePlanVersion]]]])
+   [:urpx/hasRatePlanVersion {:optional true ::range "urpx:RatePlanVersion"} [:or RatePlanVersion [:vector RatePlanVersion]]]
+   [:urpx/applicableToRateGroup {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RateGroup"} [:vector [:or RateGroup ExclusiveRef]]]
+   [:urpx/applicableToRatePlan {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RatePlan"} [:vector :map]]
+   [:urpx/dateApproved {:optional true} Date]
+   [:urpx/dateCreated {:optional true} Date]
+   [:urpx/datePublished {:optional true} Date]
+   [:urpx/dateTimeApproved {:optional true} DateTime]
+   [:urpx/dateTimeCreated {:optional true} DateTime]
+   [:urpx/dateTimePublished {:optional true} DateTime]
+   [:urpx/effectiveDateTime {:optional true} DateTime]
+   [:urpx/isReferencedByPricingModel {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PricingModel"} [:vector [:or PricingModel ExclusiveRef]]]])
 
 ;; ---------------------------------------------------------------------------
 ;; Modifier — augments / overrides parts of an existing RatePlan
@@ -2534,7 +2653,18 @@
     [:vector Ref]]
    [:urpx/timezoneIdentifier {:optional true} :string]
    [:urpx/hasPlanElements {::range "urpx:PlanElements"} PlanElements]
-   [:urpx/hasPrices       {::range "urpx:Prices"} Prices]])
+   [:urpx/hasPrices       {::range "urpx:Prices"} Prices]
+   [:urpx/consolidatedFrom {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PricingModel"} [:vector [:or PricingModel ExclusiveRef]]]
+   [:urpx/dateApproved {:optional true} Date]
+   [:urpx/dateCreated {:optional true} Date]
+   [:urpx/datePublished {:optional true} Date]
+   [:urpx/dateTimeApproved {:optional true} DateTime]
+   [:urpx/dateTimeCreated {:optional true} DateTime]
+   [:urpx/dateTimePublished {:optional true} DateTime]
+   [:urpx/minimumTenure {:optional true} IsoDuration]
+   [:urpx/name {:optional true} :string]
+   [:urpx/referencesGeneralRule {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:GeneralRule"} [:vector [:or GeneralRule ExclusiveRef]]]
+   [:urpx/url {:optional true} :string]])
 
 (def RatePlanModifier
   "v0.2.0: modifierUniqueIdentifier is required (was per-version in v0.1.x).
@@ -2566,7 +2696,21 @@
     {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:LocationDataSet"}
     [:vector Ref]]
    ;; 0..N upstream, same as RatePlan/hasRatePlanVersion above.
-   [:urpx/hasRatePlanModifierVersion {:optional true ::range "urpx:RatePlanModifierVersion"} [:or RatePlanModifierVersion [:vector RatePlanModifierVersion]]]])
+   [:urpx/hasRatePlanModifierVersion {:optional true ::range "urpx:RatePlanModifierVersion"} [:or RatePlanModifierVersion [:vector RatePlanModifierVersion]]]
+   [:urpx/applicableToRateGroup {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:RateGroup"} [:vector [:or RateGroup ExclusiveRef]]]
+   [:urpx/commodity {:optional true :decode/urpx-jsonld single-or-vec->vec} [:vector Ref]]
+   [:urpx/dateApproved {:optional true} Date]
+   [:urpx/dateCreated {:optional true} Date]
+   [:urpx/datePublished {:optional true} Date]
+   [:urpx/dateTimeApproved {:optional true} DateTime]
+   [:urpx/dateTimeCreated {:optional true} DateTime]
+   [:urpx/dateTimePublished {:optional true} DateTime]
+   [:urpx/description {:optional true} :string]
+   [:urpx/effectiveDate {:optional true} Date]
+   [:urpx/effectiveDateTime {:optional true} DateTime]
+   [:urpx/hasServiceClass {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:ServiceClass"} [:vector [:or ServiceClass ExclusiveRef]]]
+   [:urpx/isReferencedByPricingModel {:optional true :decode/urpx-jsonld single-or-vec->vec ::range "urpx:PricingModel"} [:vector [:or PricingModel ExclusiveRef]]]
+   [:urpx/serviceRole {:optional true} Ref]])
 
 ;; ---------------------------------------------------------------------------
 ;; Scenario cost models
@@ -2660,7 +2804,10 @@
      ::range #{"urpx:PricingModel" "urpx:RatePlan" "urpx:RatePlanModifier"
                "urpx:RatePlanModifierVersion" "urpx:RatePlanVersion"
                "urpx:SourcePublication" "urpx:TariffFiling"}}
-    [:vector :map]]])
+    [:vector :map]]
+   [:urpx/dateTimeReceived {:optional true} DateTime]
+   [:urpx/expectedEndDate {:optional true} Date]
+   [:urpx/expectedEndDateTime {:optional true} DateTime]])
 
 ;; ---------------------------------------------------------------------------
 ;; Publications and filings

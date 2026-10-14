@@ -32,6 +32,13 @@ The library also supports the inverse direction: emit URPX JSON-LD from a coerce
 (emit/write-graph nodes {:json {:indent true :escape-slash false :escape-unicode false}})
 ```
 
+`:minimal-context true` keeps only the term definitions a document uses, from the default context or one you pass, and every prefix declaration. A document's context then changes only when its content does, not each time the library learns a new property:
+
+```clojure
+(emit/write-graph nodes {:context (merge emit/default-context my-prefixes)
+                         :minimal-context true})
+```
+
 Every object is written with its keys in one order: `@context`, `@id`, `@type`, other `@` keywords, then properties, each group in string order. The bytes depend on the data and not on the order its maps were built in.
 
 Each function takes a coerced (or already-typed EDN) entity, runs the schema's `:encode/urpx-jsonld` transformer to convert typed leaves (`BigDecimal`, `LocalDate`, `LocalDateTime`, `ZonedDateTime`, `Duration`, integer month numbers, …) back to JSON-LD string forms, projects namespaced-keyword keys to their CURIE / `@`-reserved JSON-LD forms, and serializes via `clojure.data.json/write-str`. A typed-literal object such as `{"@value": "2026-05-01T16:00:00Z", "@type": "xsd:dateTime"}` decodes like the plain string and emits as one, typed by `default-context`.
