@@ -350,14 +350,15 @@
        v)
       v)))
 
-(def ^:private end-of-day #"^24:00:00(?:\.0+)?(?=$|Z|[+-])")
+(def ^:private end-of-day #"^24:00(?::00(?:\.0+)?)?(?=$|Z|[+-])")
 
 (defn- ->time
   "xsd:time. Without an offset, a LocalTime; with one, an OffsetTime.
 
    `24:00:00` (with any fraction of zeros) is the same value as `00:00:00`
    (XSD 1.1 Part 2, 3.3.8), so it decodes to midnight and encodes back as
-   `00:00:00`."
+   `00:00:00`. `24:00` decodes the same way, as `hh:mm` without seconds
+   does for every other hour."
   [v]
   (let [v (literal-value v)]
     (if (string? v)

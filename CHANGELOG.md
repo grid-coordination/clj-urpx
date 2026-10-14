@@ -9,6 +9,12 @@ Notable changes to [`energy.grid-coordination/clj-urpx`](https://clojars.org/ene
 
 Entries begin at 0.11.0. The ten releases before it carry no summaries in their release commits, and reconstructing them from the commit log would be guesswork rather than history; see `git log` and the `v0.1.0`–`v0.10.0` tags for what actually landed.
 
+## [Unreleased]
+
+### Changed
+
+- **An xsd:time of `24:00` decodes to midnight**, as `24:00:00` already did, and encodes as `00:00:00`, so the DSL takes a tariff's `hh:mm` end of day as written. Other hour-24 times still refuse.
+
 ## [0.56.0] — 2026-10-13
 
 ### Added

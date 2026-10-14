@@ -17,7 +17,7 @@
 (defn- at [y m d h mi] (ZonedDateTime/of y m d h mi 0 0 la))
 
 (deftest end-of-day-decodes-to-midnight
-  (doseq [lex ["24:00:00" "24:00:00.0" "24:00:00.000"]]
+  (doseq [lex ["24:00:00" "24:00:00.0" "24:00:00.000" "24:00"]]
     (is (= LocalTime/MIDNIGHT (coerce/coerce schema/Time lex)) lex))
   (testing "with an offset, midnight at that offset"
     (is (= (OffsetTime/of LocalTime/MIDNIGHT ZoneOffset/UTC)
@@ -26,7 +26,7 @@
            (coerce/coerce schema/Time "24:00:00.00+05:00")))))
 
 (deftest other-hour-24-forms-refuse
-  (doseq [lex ["24:00" "24:00:01" "24:00:00.5" "24:01:00" "x24:00:00"]]
+  (doseq [lex ["24:00:01" "24:00:00.5" "24:01:00" "24:01" "x24:00:00" "24:0"]]
     (let [e (try (coerce/coerce schema/Time lex) nil
                  (catch clojure.lang.ExceptionInfo e e))]
       (is (= :urpx.schema/malformed-time (:reason (ex-data e))) lex)
